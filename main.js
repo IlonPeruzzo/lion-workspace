@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, powerMonitor } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -7,6 +7,27 @@ const { exec, spawn } = require('child_process');
 
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
+
+/* ═══════════════════════════════════════════════════════════════════
+   DATA MIGRATION — merge data from old "controle-videos" folder
+   into current "lion-workspace" if it has no client data yet.
+   This must run BEFORE app is ready.
+   ═══════════════════════════════════════════════════════════════════ */
+const oldName = 'controle-videos';
+const currentUD = app.getPath('userData');
+const oldUD = path.join(path.dirname(currentUD), oldName);
+// Only migrate once: copy old leveldb files if current folder is empty/new
+if (fs.existsSync(oldUD) && currentUD !== oldUD) {
+    const curLS = path.join(currentUD, 'Local Storage', 'leveldb');
+    const oldLS = path.join(oldUD, 'Local Storage', 'leveldb');
+    if (fs.existsSync(oldLS) && !fs.existsSync(curLS)) {
+        try {
+            fs.mkdirSync(path.join(currentUD, 'Local Storage'), { recursive: true });
+            fs.cpSync(oldLS, curLS, { recursive: true });
+            console.log('Migrated localStorage from controle-videos to lion-workspace');
+        } catch (e) { console.warn('Migration copy failed:', e); }
+    }
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    FOREGROUND PROCESS DETECTION (platform-aware)
@@ -37,7 +58,7 @@ if (isWin) {
         "    $n=(Get-Process -Id $p -EA 0).ProcessName",
         "    if($n){[IO.File]::WriteAllText($f,$n)}",
         "  }catch{}",
-        "  Start-Sleep -Milliseconds 1200",
+        "  Start-Sleep -Milliseconds 600",
         "}"
     ].join("\n"));
 
@@ -97,38 +118,57 @@ let focusInterval = null;
 let originalBounds = null;
 
 /* ═══════ Allowed / Work apps ═══════ */
-const ALLOWED_APPS = [
+const BASE_ALLOWED = [
     'lion workspace', 'electron',
     // Adobe Suite
     'adobe premiere pro', 'premiere pro', 'premiere', 'afterfx', 'after effects',
     'photoshop', 'illustrator', 'indesign', 'lightroom', 'media encoder',
     'adobe audition', 'audition', 'animate', 'adobe animate', 'character animator',
-    'adobe xd', 'substance', 'adobe bridge', 'bridge',
-    // 3D / VFX
+    'adobe xd', 'substance', 'adobe bridge', 'bridge', 'acrobat',
+    // 3D / VFX / Motion
     'cinema 4d', 'cinema4d', 'c4d', 'blender', 'davinci resolve', 'resolve',
     'nuke', 'fusion', 'houdini', 'maya', '3ds max', 'zbrush', 'unreal', 'unity',
-    // Windows system
+    'modo', 'katana', 'mari', 'natron', 'hitfilm', 'vegas pro', 'vegas',
+    // Audio
+    'fl studio', 'ableton', 'reaper', 'audacity', 'logic pro', 'pro tools', 'cubase',
+    // Design / UI
+    'figma', 'sketch', 'canva', 'coreldraw', 'affinity', 'gimp', 'inkscape', 'krita',
+    // Code / Dev (optional for some editors)
+    'visual studio code', 'code', 'cursor', 'sublime', 'notepad++', 'terminal', 'powershell', 'cmd',
+    // File / System (always allowed)
     'explorer', 'files', 'searchui', 'shellexperiencehost',
     'startmenuexperiencehost', 'applicationframehost',
-    'textinputhost', 'runtimebroker', 'taskmgr',
+    'textinputhost', 'runtimebroker', 'taskmgr', 'settings',
     // macOS system
     'finder', 'spotlight', 'system preferences', 'system settings',
     'activity monitor'
 ];
 
 const WORK_APPS_TIMER = [
+    // Adobe Suite
     'adobe', 'premiere', 'afterfx', 'after effects', 'photoshop',
+    'illustrator', 'indesign', 'lightroom', 'media encoder', 'audition',
+    'animate', 'substance', 'bridge', 'cephtmlengine',
+    // 3D / VFX
     'cinema 4d', 'cinema4d', 'c4d', 'blender', 'resolve', 'davinci',
     'nuke', 'houdini', 'maya', 'zbrush', 'unreal', 'unity',
-    'illustrator', 'indesign', 'lightroom', 'media encoder', 'audition',
-    'animate', 'substance', 'bridge', 'fusion', '3ds max', 'cephtmlengine',
-    // macOS-only apps
-    'final cut', 'motion', 'compressor', 'logic pro'
+    'fusion', '3ds max', 'modo', 'katana', 'mari', 'natron',
+    // Video
+    'vegas', 'hitfilm', 'capcut', 'final cut', 'motion', 'compressor',
+    // Design
+    'figma', 'sketch', 'canva', 'affinity', 'gimp', 'inkscape', 'krita',
+    // Audio
+    'fl studio', 'ableton', 'reaper', 'pro tools', 'cubase', 'logic pro', 'audacity'
 ];
+
+// Dynamic whitelist from renderer (user-added apps)
+let userWhitelist = [];
 
 function isAllowedProcess(name) {
     const lower = name.toLowerCase();
-    return ALLOWED_APPS.some(a => lower.includes(a));
+    if (BASE_ALLOWED.some(a => lower.includes(a))) return true;
+    if (userWhitelist.some(a => lower.includes(a.toLowerCase()))) return true;
+    return false;
 }
 
 function isWorkApp(name) {
@@ -221,8 +261,14 @@ ipcMain.handle('focus-start', () => {
 
     if (mainWin && !mainWin.isDestroyed()) {
         originalBounds = mainWin.getBounds();
-        mainWin.setAlwaysOnTop(true, 'screen-saver');
-        mainWin.setFullScreen(true);
+        if (isMac) {
+            // Mac: use simpleFullScreen to avoid Spaces animation conflict
+            mainWin.setSimpleFullScreen(true);
+            mainWin.setAlwaysOnTop(true, 'floating');
+        } else {
+            mainWin.setAlwaysOnTop(true, 'screen-saver');
+            mainWin.setFullScreen(true);
+        }
     }
     createOverlays();
     focusInterval = setInterval(checkForegroundWindow, 1200);
@@ -238,14 +284,111 @@ ipcMain.handle('focus-stop', () => {
     destroyOverlays();
 
     if (mainWin && !mainWin.isDestroyed()) {
-        if (!wasExternal) mainWin.setFullScreen(false);
+        if (!wasExternal) {
+            if (isMac) {
+                mainWin.setSimpleFullScreen(false);
+            } else {
+                mainWin.setFullScreen(false);
+            }
+        }
         mainWin.setAlwaysOnTop(false);
-        if (originalBounds) { mainWin.setBounds(originalBounds); originalBounds = null; }
+        // Wait for transition before restoring bounds (Mac animation)
+        if (originalBounds) {
+            setTimeout(() => {
+                if (mainWin && !mainWin.isDestroyed() && originalBounds) {
+                    mainWin.setBounds(originalBounds);
+                    originalBounds = null;
+                }
+            }, isMac ? 400 : 100);
+        }
     }
     return true;
 });
 
 ipcMain.handle('focus-is-active', () => focusActive);
+
+ipcMain.handle('focus-set-whitelist', (event, list) => {
+    userWhitelist = Array.isArray(list) ? list : [];
+    return true;
+});
+
+// List running processes for app linking
+ipcMain.handle('list-running-processes', () => {
+    return new Promise(resolve => {
+        if (isWin) {
+            exec('powershell -NoProfile -WindowStyle Hidden -Command "Get-Process | Where-Object {$_.MainWindowTitle -ne \'\'} | Select-Object ProcessName, MainWindowTitle, Path | ConvertTo-Json"',
+                { windowsHide: true, timeout: 8000 },
+                (err, stdout) => {
+                    if (err) { resolve([]); return; }
+                    try {
+                        let procs = JSON.parse(stdout || '[]');
+                        if (!Array.isArray(procs)) procs = [procs];
+                        resolve(procs.map(p => ({
+                            name: p.ProcessName || '',
+                            title: p.MainWindowTitle || '',
+                            path: p.Path || ''
+                        })).filter(p => p.name && p.name !== 'Lion Workspace'));
+                    } catch { resolve([]); }
+                });
+        } else if (isMac) {
+            exec("osascript -e 'tell application \"System Events\" to get name of every application process whose background only is false'",
+                { timeout: 5000 },
+                (err, stdout) => {
+                    if (err) { resolve([]); return; }
+                    try {
+                        const raw = (stdout || '').trim();
+                        // Output: "Finder, Safari, Chrome, ..." or "{Finder, Safari, ...}"
+                        const cleaned = raw.replace(/^\{|\}$/g, '');
+                        const names = cleaned.split(', ')
+                            .map(n => n.trim())
+                            .filter(n => n && n !== 'Lion Workspace' && n !== 'Electron');
+                        resolve([...new Set(names)].map(n => ({ name: n, title: n, path: `/Applications/${n}.app` })));
+                    } catch { resolve([]); }
+                });
+        } else { resolve([]); }
+    });
+});
+
+// Launch app by executable path
+ipcMain.handle('launch-by-path', (event, exePath) => {
+    if (!exePath) return false;
+    // Sanitize path
+    const safePath = exePath.replace(/[;|`$()&]/g, '');
+    if (isWin) {
+        exec(`start "" "${safePath}"`, { windowsHide: true });
+    } else if (isMac) {
+        // On Mac, detect .app bundles vs executables
+        if (safePath.endsWith('.app')) {
+            exec(`open -a "${safePath}"`);
+        } else {
+            exec(`open "${safePath}"`);
+        }
+    }
+    if (focusActive) {
+        const wasActive = focusActive;
+        focusActive = false;
+        setTimeout(() => { focusActive = wasActive; }, 5000);
+    }
+    return true;
+});
+
+// Find installed path for an app (Windows: searches Program Files; macOS: /Applications)
+ipcMain.handle('find-app-path', (event, appName) => {
+    // Sanitize input
+    const safe = (appName || '').replace(/[;|`$()&'"\\]/g, '');
+    if (!safe) return Promise.resolve('');
+    return new Promise(resolve => {
+        if (isWin) {
+            exec(`powershell -NoProfile -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files','C:\\Program Files (x86)' -Directory -ErrorAction SilentlyContinue | Where-Object {$_.Name -like '*${safe}*'} | Select-Object -First 1; if($p){$e=Get-ChildItem $p.FullName -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($e){$e.FullName}}"`,
+                { windowsHide: true, timeout: 10000 },
+                (err, stdout) => resolve((stdout || '').trim() || ''));
+        } else if (isMac) {
+            exec(`find /Applications -maxdepth 2 -name "*${safe}*.app" -print -quit 2>/dev/null`,
+                { timeout: 3000 },
+                (err, stdout) => resolve((stdout || '').trim() || ''));
+        } else { resolve(''); }
+    });
+});
 
 ipcMain.handle('focus-start-external', () => {
     if (focusActive) return true;
@@ -263,19 +406,42 @@ ipcMain.handle('focus-start-external', () => {
 /* ═══════ IPC — Timer foreground auto-pause ═══════ */
 let timerFgInterval = null;
 let timerFgPaused = false;
+let fgMissCount = 0;          // Grace period: must miss consecutive checks before pausing
+const FG_MISS_THRESHOLD = 2;  // Need 2 consecutive misses (~2.4s) before pausing
+
+const IDLE_THRESHOLD_SECS = 45; // Pause timer if no mouse/keyboard for 45 seconds (system-wide)
 
 function checkTimerForeground() {
     if (!mainWin || mainWin.isDestroyed()) return;
 
+    // Check system-wide idle time (works even when user is in Premiere)
+    let systemIdle = 0;
+    try { systemIdle = powerMonitor.getSystemIdleTime(); } catch(e) {}
+
+    if (systemIdle >= IDLE_THRESHOLD_SECS) {
+        // User hasn't touched mouse/keyboard for 45s — pause even if in work app
+        if (!timerFgPaused) {
+            timerFgPaused = true;
+            mainWin.webContents.send('timer-fg-pause');
+        }
+        return;
+    }
+
     getFgProc(procName => {
         if (!procName || !mainWin || mainWin.isDestroyed()) return;
 
-        if (!isWorkApp(procName) && !timerFgPaused) {
-            timerFgPaused = true;
-            mainWin.webContents.send('timer-fg-pause');
-        } else if (isWorkApp(procName) && timerFgPaused) {
-            timerFgPaused = false;
-            mainWin.webContents.send('timer-fg-resume');
+        if (!isWorkApp(procName)) {
+            fgMissCount++;
+            if (fgMissCount >= FG_MISS_THRESHOLD && !timerFgPaused) {
+                timerFgPaused = true;
+                mainWin.webContents.send('timer-fg-pause');
+            }
+        } else {
+            fgMissCount = 0;
+            if (timerFgPaused) {
+                timerFgPaused = false;
+                mainWin.webContents.send('timer-fg-resume');
+            }
         }
     });
 }
@@ -288,8 +454,9 @@ ipcMain.handle('check-foreground', () => {
 
 ipcMain.handle('timer-fg-start', () => {
     timerFgPaused = false;
+    fgMissCount = 0;
     if (!timerFgInterval) {
-        timerFgInterval = setInterval(checkTimerForeground, 2500);
+        timerFgInterval = setInterval(checkTimerForeground, 1200);
     }
     return true;
 });
@@ -308,6 +475,21 @@ ipcMain.handle('launch-app', (event, appName) => {
             'aftereffects': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Adobe\\*After*' -Recurse -Filter 'AfterFX.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
             'photoshop': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Adobe\\*Photoshop*' -Recurse -Filter 'Photoshop.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
             'cinema4d': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Maxon*' -Recurse -Filter 'Cinema 4D.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'illustrator': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Adobe\\*Illustrator*' -Recurse -Filter 'Illustrator.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'lightroom': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Adobe\\*Lightroom*' -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object {$_.Name -like '*Lightroom*'} | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'mediaencoder': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Adobe\\*Media Encoder*' -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object {$_.Name -like '*Media Encoder*'} | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'audition': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Adobe\\*Audition*' -Recurse -Filter 'Audition.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'blender': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Blender*' -Recurse -Filter 'blender.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}else{Start-Process 'shell:AppsFolder' -ArgumentList 'Blender'}"`,
+            'resolve': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\Blackmagic*' -Recurse -Filter 'Resolve.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'figma': `powershell -WindowStyle Hidden -Command "Start-Process 'shell:AppsFolder' -ArgumentList 'Figma'"`,
+            'obs': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files\\obs-studio*' -Recurse -Filter 'obs64.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'audacity': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files*\\Audacity*' -Recurse -Filter 'Audacity.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'vegas': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files*\\VEGAS*' -Recurse -Filter 'vegas*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'gimp': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files*\\GIMP*' -Recurse -Filter 'gimp*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'inkscape': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files*\\Inkscape*' -Recurse -Filter 'inkscape.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'krita': `powershell -WindowStyle Hidden -Command "$p=Get-ChildItem 'C:\\Program Files*\\Krita*' -Recurse -Filter 'krita.exe' -ErrorAction SilentlyContinue | Select-Object -First 1; if($p){Start-Process $p.FullName}"`,
+            'capcut': `powershell -WindowStyle Hidden -Command "Start-Process 'shell:AppsFolder' -ArgumentList 'CapCut'"`,
+            'canva': `powershell -WindowStyle Hidden -Command "Start-Process 'https://www.canva.com'"`,
             'explorer': 'explorer.exe'
         };
         const cmd = shellCmds[appName];
@@ -318,6 +500,21 @@ ipcMain.handle('launch-app', (event, appName) => {
             'aftereffects': 'open -a "Adobe After Effects" 2>/dev/null',
             'photoshop': 'open -a "Adobe Photoshop" 2>/dev/null',
             'cinema4d': 'open -a "Cinema 4D" 2>/dev/null',
+            'illustrator': 'open -a "Adobe Illustrator" 2>/dev/null',
+            'lightroom': 'open -a "Adobe Lightroom Classic" 2>/dev/null || open -a "Adobe Lightroom" 2>/dev/null',
+            'mediaencoder': 'open -a "Adobe Media Encoder" 2>/dev/null',
+            'audition': 'open -a "Adobe Audition" 2>/dev/null',
+            'blender': 'open -a "Blender" 2>/dev/null',
+            'resolve': 'open -a "DaVinci Resolve" 2>/dev/null',
+            'figma': 'open -a "Figma" 2>/dev/null',
+            'obs': 'open -a "OBS" 2>/dev/null || open -a "OBS Studio" 2>/dev/null',
+            'audacity': 'open -a "Audacity" 2>/dev/null',
+            'vegas': 'echo "Vegas Pro nao disponivel no macOS"',
+            'gimp': 'open -a "GIMP-2.10" 2>/dev/null || open -a "GIMP" 2>/dev/null',
+            'inkscape': 'open -a "Inkscape" 2>/dev/null',
+            'krita': 'open -a "Krita" 2>/dev/null',
+            'capcut': 'open -a "CapCut" 2>/dev/null',
+            'canva': 'open "https://www.canva.com"',
             'explorer': 'open ~'
         };
         const cmd = macCmds[appName];
@@ -333,6 +530,13 @@ ipcMain.handle('launch-app', (event, appName) => {
     return true;
 });
 
+ipcMain.handle('open-external', (event, url) => {
+    if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+        require('electron').shell.openExternal(url);
+    }
+    return true;
+});
+
 ipcMain.handle('open-folder', () => {
     if (focusActive) {
         const wasActive = focusActive;
@@ -340,6 +544,277 @@ ipcMain.handle('open-folder', () => {
         setTimeout(() => { focusActive = wasActive; }, 8000);
     }
     exec(isWin ? 'explorer.exe' : 'open ~', { windowsHide: true });
+    return true;
+});
+
+/* ═══════ YouTube Downloader (yt-dlp) ═══════ */
+const ytDlpDir = path.join(app.getPath('userData'), 'yt-dlp');
+const ytDlpBin = isWin ? path.join(ytDlpDir, 'yt-dlp.exe') : path.join(ytDlpDir, 'yt-dlp');
+const ffmpegBin = isWin ? path.join(ytDlpDir, 'ffmpeg.exe') : path.join(ytDlpDir, 'ffmpeg');
+let ytDownloadProc = null;
+let ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', status: 'idle', error: '' };
+
+function ytDlpReady() { return fs.existsSync(ytDlpBin); }
+function ffmpegReady() { return fs.existsSync(ffmpegBin); }
+
+function downloadBinary(url, dest) {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(dest);
+        const request = require('https').get(url, { headers: { 'User-Agent': 'LionWorkspace/1.0' } }, (response) => {
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                file.close();
+                fs.unlinkSync(dest);
+                downloadBinary(response.headers.location, dest).then(resolve).catch(reject);
+                return;
+            }
+            if (response.statusCode !== 200) { file.close(); reject(new Error('HTTP ' + response.statusCode)); return; }
+            response.pipe(file);
+            file.on('finish', () => { file.close(); resolve(); });
+        });
+        request.on('error', reject);
+        request.setTimeout(120000, () => { request.destroy(); reject(new Error('Timeout')); });
+    });
+}
+
+async function ensureYtDlp() {
+    if (!fs.existsSync(ytDlpDir)) fs.mkdirSync(ytDlpDir, { recursive: true });
+    if (ytDlpReady()) return true;
+    const url = isWin
+        ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+        : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos';
+    try {
+        const dest = isWin ? ytDlpBin : ytDlpBin;
+        await downloadBinary(url, dest);
+        if (!isWin) fs.chmodSync(dest, '755');
+        return true;
+    } catch (e) { console.error('yt-dlp download failed:', e.message); return false; }
+}
+
+async function ensureFfmpeg() {
+    if (ffmpegReady()) return true;
+    // Try to find system ffmpeg first
+    const systemFfmpeg = await new Promise(resolve => {
+        exec(isWin ? 'where ffmpeg' : 'which ffmpeg', { timeout: 5000 }, (err, stdout) => {
+            resolve(err ? '' : (stdout || '').trim().split('\n')[0].trim());
+        });
+    });
+    if (systemFfmpeg) {
+        // Symlink or copy to our dir
+        try {
+            if (isWin) { fs.copyFileSync(systemFfmpeg, ffmpegBin); }
+            else { fs.symlinkSync(systemFfmpeg, ffmpegBin); }
+            return true;
+        } catch (e) {}
+    }
+    // Download ffmpeg-essentials (small build)
+    const ffUrl = isWin
+        ? 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
+        : 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz';
+    // For simplicity, on Mac try brew ffmpeg or skip (yt-dlp works without it for many formats)
+    if (isMac) return false;
+    // On Windows, download and extract
+    try {
+        const zipPath = path.join(ytDlpDir, 'ffmpeg.zip');
+        await downloadBinary(ffUrl, zipPath);
+        // Extract using PowerShell
+        await new Promise((resolve, reject) => {
+            exec(`powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${ytDlpDir}\\ffmpeg-extract' -Force; $f=Get-ChildItem '${ytDlpDir}\\ffmpeg-extract' -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1; Copy-Item $f.FullName '${ffmpegBin}' -Force"`,
+                { windowsHide: true, timeout: 120000 },
+                (err) => { if (err) reject(err); else resolve(); });
+        });
+        // Cleanup
+        try { fs.unlinkSync(zipPath); } catch {}
+        try { fs.rmSync(path.join(ytDlpDir, 'ffmpeg-extract'), { recursive: true, force: true }); } catch {}
+        return fs.existsSync(ffmpegBin);
+    } catch (e) { console.error('ffmpeg download failed:', e.message); return false; }
+}
+
+// Strip playlist/index params from YouTube URLs — keep only the video ID
+function cleanYtUrl(raw) {
+    try {
+        const u = new URL(raw);
+        if (u.hostname.includes('youtube.com') && u.searchParams.has('v')) {
+            return u.origin + u.pathname + '?v=' + u.searchParams.get('v');
+        }
+    } catch (e) {}
+    return raw;
+}
+
+ipcMain.handle('yt-ensure-deps', async () => {
+    const yt = await ensureYtDlp();
+    const ff = ffmpegReady() || await ensureFfmpeg();
+    return { ytdlp: yt, ffmpeg: ff };
+});
+
+ipcMain.handle('yt-get-info', async (event, url) => {
+    url = cleanYtUrl(url);
+    if (!ytDlpReady()) { const ok = await ensureYtDlp(); if (!ok) return { error: 'yt-dlp não disponível' }; }
+    return new Promise(resolve => {
+        const args = ['--no-download', '--print-json', '--no-warnings', '--no-playlist'];
+        if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
+        args.push(url);
+        const proc = spawn(ytDlpBin, args, { windowsHide: true });
+        let out = '', errOut = '';
+        proc.stdout.on('data', d => out += d);
+        proc.stderr.on('data', d => errOut += d);
+        proc.on('close', code => {
+            if (code !== 0) { resolve({ error: errOut || 'Erro ao obter info' }); return; }
+            try {
+                const info = JSON.parse(out);
+                const formats = (info.formats || [])
+                    .filter(f => f.vcodec !== 'none' || f.acodec !== 'none')
+                    .map(f => ({
+                        id: f.format_id,
+                        ext: f.ext,
+                        quality: f.format_note || f.resolution || '',
+                        fps: f.fps || 0,
+                        vcodec: f.vcodec,
+                        acodec: f.acodec,
+                        filesize: f.filesize || f.filesize_approx || 0,
+                        hasVideo: f.vcodec !== 'none',
+                        hasAudio: f.acodec !== 'none'
+                    }));
+                resolve({
+                    title: info.title || '',
+                    thumbnail: info.thumbnail || '',
+                    duration: info.duration || 0,
+                    uploader: info.uploader || '',
+                    formats: formats
+                });
+            } catch (e) { resolve({ error: 'Erro ao parsear info' }); }
+        });
+        proc.on('error', e => resolve({ error: e.message }));
+        setTimeout(() => { try { proc.kill(); } catch {} }, 30000);
+    });
+});
+
+ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime, endTime }) => {
+    url = cleanYtUrl(url);
+    if (!ytDlpReady()) return { error: 'yt-dlp não disponível' };
+    if (ytDownloadProc) return { error: 'Download já em andamento' };
+
+    const outputPath = outputDir || (isWin ? path.join(os.homedir(), 'Downloads') : path.join(os.homedir(), 'Downloads'));
+    const args = [
+        '-o', path.join(outputPath, '%(title)s.%(ext)s'),
+        '--newline', '--no-warnings',
+        '--no-mtime', '--no-playlist',
+        '--windows-filenames'
+    ];
+    if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
+
+    // Partial download (time range)
+    if (startTime || endTime) {
+        const st = startTime || '0';
+        const et = endTime || 'inf';
+        args.push('--download-sections', '*' + st + '-' + et);
+        args.push('--force-keyframes-at-cuts');
+    }
+
+    if (format === 'mp3') {
+        args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
+    } else if (format === '4k') {
+        args.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+    } else if (format === '1080') {
+        args.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+    } else if (format === '720') {
+        args.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+    } else {
+        // best quality — prefer H.264 for Premiere compatibility
+        args.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+    }
+    args.push(url);
+
+    ytProgress = { active: true, percent: 0, speed: '', eta: '', title: '', status: 'downloading', error: '', outputDir: outputPath };
+
+    ytDownloadProc = spawn(ytDlpBin, args, { windowsHide: true });
+    let lastFile = '';
+
+    ytDownloadProc.stdout.on('data', d => {
+        const lines = d.toString().split('\n');
+        for (const line of lines) {
+            // [download]  45.2% of  120.50MiB at  5.32MiB/s ETA 00:12
+            const m = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
+            if (m) {
+                ytProgress.percent = parseFloat(m[1]);
+                ytProgress.speed = m[3];
+                ytProgress.eta = m[4];
+            }
+            // [download] Destination: /path/to/file.mp4
+            const dm = line.match(/\[download\] Destination: (.+)/);
+            if (dm) lastFile = dm[1].trim();
+            // [Merger] Merging formats into "path/to/final.mp4" — this is the REAL final file
+            const mm = line.match(/\[Merger\] Merging formats into "(.+)"/);
+            if (mm) lastFile = mm[1].trim();
+            // [ExtractAudio] Destination: path/to/file.mp3
+            const am = line.match(/\[ExtractAudio\] Destination: (.+)/);
+            if (am) lastFile = am[1].trim();
+            // [Merger] or [ExtractAudio] status
+            if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
+                ytProgress.status = 'merging';
+                ytProgress.percent = 99;
+            }
+            // Already downloaded
+            if (line.includes('has already been downloaded')) {
+                ytProgress.percent = 100;
+                ytProgress.status = 'done';
+            }
+        }
+        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+    });
+
+    ytDownloadProc.stderr.on('data', d => {
+        const err = d.toString().trim();
+        if (err) ytProgress.error = err;
+    });
+
+    ytDownloadProc.on('close', code => {
+        ytDownloadProc = null;
+        if (code === 0) {
+            // If lastFile is empty or doesn't exist, find newest file in output dir
+            if (!lastFile || !fs.existsSync(lastFile)) {
+                try {
+                    const files = fs.readdirSync(outputPath)
+                        .map(f => ({ name: f, full: path.join(outputPath, f), stat: fs.statSync(path.join(outputPath, f)) }))
+                        .filter(f => f.stat.isFile() && /\.(mp4|mkv|webm|mp3|m4a)$/i.test(f.name))
+                        .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
+                    if (files.length > 0) lastFile = files[0].full;
+                } catch (e) {}
+            }
+            ytProgress.percent = 100;
+            ytProgress.status = 'done';
+            ytProgress.active = false;
+            ytProgress.file = lastFile;
+        } else {
+            ytProgress.status = 'error';
+            ytProgress.active = false;
+            if (!ytProgress.error) ytProgress.error = 'Download falhou (código ' + code + ')';
+        }
+        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+    });
+
+    ytDownloadProc.on('error', e => {
+        ytDownloadProc = null;
+        ytProgress.status = 'error';
+        ytProgress.active = false;
+        ytProgress.error = e.message;
+        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+    });
+
+    return { ok: true };
+});
+
+ipcMain.handle('yt-cancel', () => {
+    if (ytDownloadProc) { ytDownloadProc.kill(); ytDownloadProc = null; }
+    ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', status: 'cancelled', error: '' };
+    return true;
+});
+
+ipcMain.handle('yt-progress', () => ytProgress);
+
+ipcMain.handle('yt-open-folder', (event, folderPath) => {
+    const dir = folderPath || (isWin ? path.join(os.homedir(), 'Downloads') : path.join(os.homedir(), 'Downloads'));
+    if (isWin) exec(`explorer.exe "${dir}"`, { windowsHide: true });
+    else exec(`open "${dir}"`);
     return true;
 });
 
@@ -370,19 +845,141 @@ function startSyncServer() {
             return;
         }
 
+        // YouTube downloader HTTP endpoints (for plugin)
+        if (req.method === 'GET' && req.url === '/yt/progress') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(ytProgress));
+            return;
+        }
+
         if (req.method === 'POST') {
             let body = '';
             req.on('data', chunk => body += chunk);
-            req.on('end', () => {
+            req.on('end', async () => {
                 let data = {};
                 try { data = JSON.parse(body || '{}'); } catch (e) {}
                 const command = req.url.replace(/^\//, '');
+
+                // YouTube downloader HTTP API
+                if (command === 'yt/info' && data.url) {
+                    try {
+                        const cleanUrl = cleanYtUrl(data.url);
+                        await ensureYtDlp();
+                        const result = await new Promise(resolve => {
+                            const args = ['--no-download', '--print-json', '--no-warnings', '--no-playlist'];
+                            if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
+                            args.push(cleanUrl);
+                            const proc = spawn(ytDlpBin, args, { windowsHide: true });
+                            let out = '', errOut = '';
+                            proc.stdout.on('data', d => out += d);
+                            proc.stderr.on('data', d => errOut += d);
+                            proc.on('close', code => {
+                                if (code !== 0) { resolve({ error: errOut || 'Erro' }); return; }
+                                try {
+                                    const info = JSON.parse(out);
+                                    resolve({ title: info.title || '', thumbnail: info.thumbnail || '', duration: info.duration || 0, uploader: info.uploader || '' });
+                                } catch { resolve({ error: 'Parse error' }); }
+                            });
+                            proc.on('error', e => resolve({ error: e.message }));
+                            setTimeout(() => { try { proc.kill(); } catch {} }, 30000);
+                        });
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify(result));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message }));
+                    }
+                    return;
+                }
+                if (command === 'yt/download' && data.url) {
+                    // Start download directly from main process
+                    const cleanDlUrl = cleanYtUrl(data.url);
+                    if (ytDownloadProc) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Download já em andamento' }));
+                        return;
+                    }
+                    // Reuse the IPC handler logic
+                    try {
+                        if (!ytDlpReady()) await ensureYtDlp();
+                        const outputPath = (data.outputDir && fs.existsSync(data.outputDir)) ? data.outputDir : (isWin ? path.join(os.homedir(), 'Downloads') : path.join(os.homedir(), 'Downloads'));
+                        const dlArgs = ['-o', path.join(outputPath, '%(title)s.%(ext)s'), '--newline', '--no-warnings', '--no-mtime', '--no-playlist', '--windows-filenames'];
+                        if (ffmpegReady()) dlArgs.push('--ffmpeg-location', path.dirname(ffmpegBin));
+                        // Partial download (time range)
+                        if (data.startTime || data.endTime) {
+                            const st = data.startTime || '0';
+                            const et = data.endTime || 'inf';
+                            dlArgs.push('--download-sections', '*' + st + '-' + et);
+                            dlArgs.push('--force-keyframes-at-cuts');
+                        }
+                        const fmt = data.format || 'best';
+                        if (fmt === 'mp3') { dlArgs.push('-x', '--audio-format', 'mp3', '--audio-quality', '0'); }
+                        else if (fmt === '4k') { dlArgs.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
+                        else if (fmt === '1080') { dlArgs.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
+                        else if (fmt === '720') { dlArgs.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
+                        else { dlArgs.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
+                        dlArgs.push(cleanDlUrl);
+
+                        ytProgress = { active: true, percent: 0, speed: '', eta: '', title: '', status: 'downloading', error: '', outputDir: outputPath };
+                        ytDownloadProc = spawn(ytDlpBin, dlArgs, { windowsHide: true });
+                        let lastFile = '';
+                        ytDownloadProc.stdout.on('data', d => {
+                            const lines = d.toString().split('\n');
+                            for (const line of lines) {
+                                const m = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
+                                if (m) { ytProgress.percent = parseFloat(m[1]); ytProgress.speed = m[3]; ytProgress.eta = m[4]; }
+                                const dm = line.match(/\[download\] Destination: (.+)/);
+                                if (dm) lastFile = dm[1].trim();
+                                // [Merger] Merging formats into "path/to/final.mp4" — REAL final file
+                                const mm = line.match(/\[Merger\] Merging formats into "(.+)"/);
+                                if (mm) lastFile = mm[1].trim();
+                                // [ExtractAudio] Destination: path/to/file.mp3
+                                const am = line.match(/\[ExtractAudio\] Destination: (.+)/);
+                                if (am) lastFile = am[1].trim();
+                                if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) { ytProgress.status = 'merging'; ytProgress.percent = 99; }
+                                if (line.includes('has already been downloaded')) { ytProgress.percent = 100; ytProgress.status = 'done'; }
+                            }
+                            if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+                        });
+                        ytDownloadProc.stderr.on('data', d => { const err = d.toString().trim(); if (err) ytProgress.error = err; });
+                        ytDownloadProc.on('close', code => {
+                            ytDownloadProc = null;
+                            if (code === 0) {
+                                if (!lastFile || !fs.existsSync(lastFile)) {
+                                    try {
+                                        const files = fs.readdirSync(outputPath)
+                                            .map(f => ({ name: f, full: path.join(outputPath, f), stat: fs.statSync(path.join(outputPath, f)) }))
+                                            .filter(f => f.stat.isFile() && /\.(mp4|mkv|webm|mp3|m4a)$/i.test(f.name))
+                                            .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
+                                        if (files.length > 0) lastFile = files[0].full;
+                                    } catch (e) {}
+                                }
+                                ytProgress.percent = 100; ytProgress.status = 'done'; ytProgress.active = false; ytProgress.file = lastFile;
+                            } else {
+                                ytProgress.status = 'error'; ytProgress.active = false;
+                                if (!ytProgress.error) ytProgress.error = 'Falhou (código ' + code + ')';
+                            }
+                            if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+                        });
+                        ytDownloadProc.on('error', e => { ytDownloadProc = null; ytProgress.status = 'error'; ytProgress.active = false; ytProgress.error = e.message; });
+                    } catch (e) { ytProgress.status = 'error'; ytProgress.error = e.message; }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
+                if (command === 'yt/cancel') {
+                    if (ytDownloadProc) { ytDownloadProc.kill(); ytDownloadProc = null; }
+                    ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', status: 'cancelled', error: '' };
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
 
                 // Auto-manage timer foreground check from HTTP commands
                 if (command === 'timer/start') {
                     timerFgPaused = false;
                     if (!timerFgInterval) {
-                        timerFgInterval = setInterval(checkTimerForeground, 2500);
+                        timerFgInterval = setInterval(checkTimerForeground, 1200);
                     }
                 } else if (command === 'timer/stop') {
                     if (timerFgInterval) { clearInterval(timerFgInterval); timerFgInterval = null; }
@@ -419,7 +1016,84 @@ app.on('before-quit', () => {
 app.whenReady().then(() => {
     createWindow();
     startSyncServer();
+    autoInstallPremierePlugin();
 });
+
+// Auto-install Premiere plugin on startup (works on both Mac and Windows)
+function autoInstallPremierePlugin() {
+    try {
+        // Find the plugin source (bundled with app in extraResources)
+        let pluginSrc = path.join(process.resourcesPath, 'premiere-plugin');
+        if (!fs.existsSync(pluginSrc)) {
+            // Dev mode: plugin is next to the app
+            pluginSrc = path.join(__dirname, 'premiere-plugin');
+        }
+        if (!fs.existsSync(pluginSrc)) return;
+
+        // Determine CEP extensions folder
+        let cepDir;
+        if (isMac) {
+            cepDir = path.join(os.homedir(), 'Library', 'Application Support', 'Adobe', 'CEP', 'extensions');
+        } else {
+            cepDir = path.join(process.env.APPDATA || '', 'Adobe', 'CEP', 'extensions');
+        }
+        const pluginDest = path.join(cepDir, 'com.lionworkspace.premiere');
+
+        // Check if plugin needs update (compare manifest or just overwrite)
+        if (!fs.existsSync(path.join(pluginDest, 'host', 'index.jsx')) ||
+            !fs.existsSync(path.join(pluginDest, 'client', 'index.html'))) {
+            // Plugin missing or incomplete — install it
+        } else {
+            // Check if source is newer
+            try {
+                const srcStat = fs.statSync(path.join(pluginSrc, 'client', 'index.html'));
+                const dstStat = fs.statSync(path.join(pluginDest, 'client', 'index.html'));
+                if (srcStat.mtimeMs <= dstStat.mtimeMs) return; // Already up to date
+            } catch (e) { /* install anyway */ }
+        }
+
+        // Create directories
+        fs.mkdirSync(path.join(pluginDest, 'CSXS'), { recursive: true });
+        fs.mkdirSync(path.join(pluginDest, 'client'), { recursive: true });
+        fs.mkdirSync(path.join(pluginDest, 'host'), { recursive: true });
+
+        // Copy files recursively
+        const copyDir = (src, dst) => {
+            fs.mkdirSync(dst, { recursive: true });
+            for (const item of fs.readdirSync(src)) {
+                const s = path.join(src, item);
+                const d = path.join(dst, item);
+                if (fs.statSync(s).isDirectory()) {
+                    copyDir(s, d);
+                } else {
+                    fs.copyFileSync(s, d);
+                }
+            }
+        };
+        copyDir(path.join(pluginSrc, 'CSXS'), path.join(pluginDest, 'CSXS'));
+        copyDir(path.join(pluginSrc, 'client'), path.join(pluginDest, 'client'));
+        copyDir(path.join(pluginSrc, 'host'), path.join(pluginDest, 'host'));
+
+        // Copy .debug if exists
+        const debugFile = path.join(pluginSrc, '.debug');
+        if (fs.existsSync(debugFile)) fs.copyFileSync(debugFile, path.join(pluginDest, '.debug'));
+
+        // Enable CEP debug mode (unsigned extensions)
+        if (isMac) {
+            for (let v = 9; v <= 14; v++) {
+                exec(`defaults write com.adobe.CSXS.${v} PlayerDebugMode 1`, () => {});
+            }
+        } else {
+            for (let v = 9; v <= 14; v++) {
+                exec(`reg add "HKCU\\SOFTWARE\\Adobe\\CSXS.${v}" /v PlayerDebugMode /t REG_SZ /d 1 /f`, () => {});
+            }
+        }
+
+        console.log('Premiere plugin installed to:', pluginDest);
+    } catch (e) {
+        console.log('Plugin auto-install skipped:', e.message);
+    }
+}
 
 app.on('window-all-closed', () => {
     if (!isMac) app.quit();

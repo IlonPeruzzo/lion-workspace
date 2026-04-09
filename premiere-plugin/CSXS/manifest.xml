@@ -19,6 +19,7 @@
             <DispatchInfo>
                 <Resources>
                     <MainPath>./client/index.html</MainPath>
+                    <ScriptPath>./host/index.jsx</ScriptPath>
                 </Resources>
                 <Lifecycle>
                     <AutoVisible>true</AutoVisible>

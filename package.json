@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win portable"
+    "build": "electron-builder --win portable",
+    "build:mac": "electron-builder --mac --x64 --arm64",
+    "build:all": "electron-builder --win portable --mac"
   },
   "build": {
     "appId": "com.lionworkspace.app",
@@ -16,10 +18,17 @@
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "identity": null,
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "darkModeSupport": true
     },
     "files": [
       "main.js",
@@ -30,11 +39,14 @@
       {
         "from": "premiere-plugin",
         "to": "premiere-plugin",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
   "devDependencies": {
+    "@electron/packager": "^19.1.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   }

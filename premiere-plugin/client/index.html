@@ -63,6 +63,15 @@
         .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
 
         .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
+        .yt-q{padding:2px 7px;border-radius:5px;border:1px solid rgba(190,242,100,.08);background:rgba(255,255,255,.02);color:#888;font-size:.58rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s}
+        .yt-q:hover{background:rgba(190,242,100,.04);border-color:rgba(190,242,100,.15)}
+        .yt-q.active{background:rgba(190,242,100,.1);border-color:rgba(190,242,100,.3);color:#bef264}
+        .plat-btn{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
+        .plat-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+        .plat-btn.active{border-color:rgba(190,242,100,.4);background:rgba(190,242,100,.08)}
+        .plat-btn svg{width:14px;height:14px}
+        .time-input{width:58px;padding:3px 5px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.6rem;font-family:inherit;outline:none;text-align:center}
+        .time-input::placeholder{color:#555}
         .footer{text-align:center;margin-top:6px;font-size:.58rem;color:#3a3a3a;letter-spacing:.2px}
     </style>
 </head>
@@ -102,10 +111,104 @@
         <div class="focus-note">Modo Foco: escurece telas e bloqueia apps</div>
     </div>
 
+    <!-- Multi-platform Downloader -->
+    <div class="section">
+        <div class="section-title">Download</div>
+        <!-- Platform selector -->
+        <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center">
+            <button class="plat-btn active" id="platYT" onclick="ytSetPlatform('youtube')" title="YouTube">
+                <svg viewBox="0 0 24 24" fill="#f43f5e"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </button>
+            <button class="plat-btn" id="platIG" onclick="ytSetPlatform('instagram')" title="Instagram">
+                <svg viewBox="0 0 24 24" fill="#e1306c"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+            </button>
+            <button class="plat-btn" id="platTW" onclick="ytSetPlatform('twitter')" title="Twitter / X">
+                <svg viewBox="0 0 24 24" fill="#fff"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </button>
+        </div>
+        <!-- URL + Buscar -->
+        <div style="display:flex;gap:4px;margin-bottom:6px">
+            <input type="text" id="ytUrlPlugin" placeholder="Cole a URL..." style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.7rem;font-family:inherit;outline:none" onkeydown="if(event.key==='Enter')ytPluginFetch()" oninput="ytAutoDetectPlatform()">
+            <button class="btn btn-go" onclick="ytPluginFetch()" id="ytFetchBtn" style="padding:6px 10px;font-size:.66rem;white-space:nowrap">Buscar</button>
+        </div>
+
+        <!-- Preview (hidden until fetched) -->
+        <div id="ytPreview" style="display:none;margin-bottom:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px;padding:8px;overflow:hidden">
+            <div style="display:flex;gap:8px">
+                <img id="ytThumbPlugin" src="" style="width:90px;height:52px;object-fit:cover;border-radius:5px;background:#1a1a1a;flex-shrink:0">
+                <div style="flex:1;min-width:0;overflow:hidden">
+                    <div id="ytTitlePlugin" style="font-size:.7rem;font-weight:600;color:#eee;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"></div>
+                    <div style="display:flex;gap:6px;margin-top:3px">
+                        <span id="ytUploaderPlugin" style="font-size:.58rem;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+                        <span id="ytDurPlugin" style="font-size:.58rem;color:#bef264;font-weight:600;flex-shrink:0"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Format -->
+            <div style="display:flex;gap:3px;margin-top:8px;flex-wrap:wrap">
+                <button class="yt-q active" data-q="best" onclick="ytPluginFmt(this)">Melhor</button>
+                <button class="yt-q" data-q="4k" onclick="ytPluginFmt(this)">4K</button>
+                <button class="yt-q" data-q="1080" onclick="ytPluginFmt(this)">1080p</button>
+                <button class="yt-q" data-q="720" onclick="ytPluginFmt(this)">720p</button>
+                <button class="yt-q" data-q="mp3" onclick="ytPluginFmt(this)">MP3</button>
+            </div>
+
+            <!-- Time range (trim) -->
+            <div id="ytTrimSection" style="margin-top:8px;display:flex;align-items:center;gap:6px">
+                <div style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600;white-space:nowrap">Cortar</div>
+                <input type="text" class="time-input" id="ytStartTime" placeholder="00:00" title="Inicio (ex: 1:30)">
+                <span style="color:#555;font-size:.6rem">ate</span>
+                <input type="text" class="time-input" id="ytEndTime" placeholder="Fim" title="Fim (ex: 3:45)">
+                <span id="ytTrimInfo" style="font-size:.5rem;color:#555;white-space:nowrap"></span>
+            </div>
+
+            <!-- Save location -->
+            <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Salvar em</div>
+                <div style="display:flex;gap:3px">
+                    <button class="yt-q active" id="ytLocProj" onclick="ytPluginLoc('project')">Pasta do Projeto</button>
+                    <button class="yt-q" id="ytLocDown" onclick="ytPluginLoc('downloads')">Downloads</button>
+                </div>
+                <div id="ytProjPath" style="font-size:.52rem;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%"></div>
+            </div>
+
+            <!-- Auto-import -->
+            <label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;font-size:.62rem;color:#aaa">
+                <input type="checkbox" id="ytAutoImport" checked style="accent-color:#bef264;width:12px;height:12px">
+                Importar no projeto automaticamente
+            </label>
+
+            <!-- Download button -->
+            <button class="btn btn-go" onclick="ytPluginDownload()" id="ytPluginBtn" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-top:8px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Baixar
+            </button>
+        </div>
+
+        <!-- Progress -->
+        <div id="ytPluginProgress" style="display:none;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px;padding:8px;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                <span id="ytProgressTitle" style="font-size:.62rem;font-weight:600;color:#eee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
+                <button class="yt-q" onclick="ytPluginCancel()" style="font-size:.52rem;padding:1px 6px;color:#f43f5e;border-color:rgba(244,63,94,.2);flex-shrink:0;margin-left:4px">X</button>
+            </div>
+            <div style="background:rgba(255,255,255,.06);border-radius:4px;height:6px;overflow:hidden;margin-bottom:4px">
+                <div id="ytPluginBar" style="height:100%;background:linear-gradient(90deg,#bef264,#22c55e);border-radius:4px;transition:width .3s;width:0%"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.56rem;color:#888">
+                <span id="ytPluginPct">0%</span>
+                <span id="ytPluginSpeed"></span>
+                <span id="ytPluginStat"></span>
+            </div>
+        </div>
+    </div>
+
     <div class="footer">Lion Workspace Sync</div>
 
+    <script src="CSInterface.js"></script>
     <script>
     var API='http://127.0.0.1:9847';
+    var csInterface=new CSInterface();
     var selProj='';
     var lastCardsJSON='';
     var lastPipeJSON='';
@@ -121,8 +224,12 @@
         lastCardsJSON=json;
         if(!cards||!cards.length){
             el.innerHTML='<div class="proj-empty">Nenhum servico ativo</div>';
+            selProj='';
             return;
         }
+        // If selProj doesn't match any card, clear it
+        var hasMatch=cards.some(function(c){return c.value===selProj});
+        if(!hasMatch)selProj='';
         el.innerHTML=cards.map(function(c){
             var isSel=c.value===selProj;
             var stg=c.stageCSS||'background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)';
@@ -173,15 +280,24 @@
 
     function timerStart(){
         if(timerState.paused){
-            cmd('timer/start');
+            if(!selProj){showMsg('Selecione um video primeiro!');return}
+            cmd('timer/resume');
         } else if(!timerState.running){
-            if(!selProj)return;
+            if(!selProj){showMsg('Selecione um video primeiro!');return}
             var x=new XMLHttpRequest();
             x.open('POST',API+'/timer/start');
             x.setRequestHeader('Content-Type','application/json');
             x.send(JSON.stringify({project:selProj}));
             setTimeout(poll,300);
         }
+    }
+
+    function showMsg(text){
+        var old=document.getElementById('_toast');if(old)old.remove();
+        var d=document.createElement('div');d.id='_toast';
+        d.style.cssText='position:fixed;top:10px;left:10px;right:10px;padding:8px 12px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;font-size:.72rem;font-weight:600;text-align:center;z-index:999;animation:fadeIn .2s';
+        d.textContent=text;document.body.appendChild(d);
+        setTimeout(function(){d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(function(){d.remove()},300)},2500);
     }
 
     function pomoStart(){
@@ -201,8 +317,8 @@
         document.getElementById('conn').className='status ok';
         document.getElementById('conn').textContent='Conectado';
 
-        // Sync selection from app
-        if(state.selectedProject&&state.selectedProject!==selProj){
+        // Sync selection from app — only when timer is actively running (not paused)
+        if(state.selectedProject&&state.selectedProject!==selProj&&t.running&&!t.paused&&!t.appPaused){
             selProj=state.selectedProject;
             lastCardsJSON='';
         }
@@ -238,9 +354,9 @@
             tSub.textContent='Parado';
         }
 
-        // Auto-select current timer project
-        if(t.running&&t.project&&t.project!==selProj){
-            selProj=t.project;
+        // Auto-select current timer project (by regId) — only when actively running
+        if(t.running&&!t.paused&&!t.appPaused&&t.regId&&t.regId!==selProj){
+            selProj=t.regId;
             lastCardsJSON='';
         }
 
@@ -250,13 +366,13 @@
         var btnStop=document.getElementById('tStop');
 
         if(t.paused){
-            btnStart.textContent='Retomar';btnStart.disabled=false;
+            btnStart.textContent='Retomar';btnStart.disabled=!selProj;
             btnPause.disabled=true;btnStop.disabled=false;
         } else if(t.running){
             btnStart.textContent='Iniciar';btnStart.disabled=true;
             btnPause.disabled=false;btnStop.disabled=false;
         } else {
-            btnStart.textContent='Iniciar';btnStart.disabled=false;
+            btnStart.textContent='Iniciar';btnStart.disabled=!selProj;
             btnPause.disabled=true;btnStop.disabled=true;
         }
 
@@ -310,6 +426,257 @@
         x.send('{}');
         setTimeout(poll,300);
     }
+
+    // Prevent Space/Enter from accidentally triggering focused buttons
+    document.addEventListener('keydown',function(e){
+        if((e.key===' '||e.key==='Enter')&&e.target.tagName==='BUTTON'){
+            e.preventDefault();e.stopPropagation();
+        }
+    },true);
+
+    // Multi-platform Downloader
+    var ytPluginFormat='best';
+    var ytPluginPolling=false;
+    var ytPluginLoc_='project'; // 'project' or 'downloads'
+    var ytPluginInfo=null;
+    var ytProjFolder='';
+    var ytLastFile='';
+    var ytPlatform='youtube'; // 'youtube', 'instagram', 'twitter'
+
+    function ytSetPlatform(p){
+        ytPlatform=p;
+        document.getElementById('platYT').classList.toggle('active',p==='youtube');
+        document.getElementById('platIG').classList.toggle('active',p==='instagram');
+        document.getElementById('platTW').classList.toggle('active',p==='twitter');
+        var ph='Cole a URL...';
+        if(p==='youtube') ph='Cole a URL do YouTube...';
+        else if(p==='instagram') ph='Cole a URL do Instagram...';
+        else if(p==='twitter') ph='Cole a URL do Twitter/X...';
+        document.getElementById('ytUrlPlugin').placeholder=ph;
+    }
+
+    function ytAutoDetectPlatform(){
+        var url=document.getElementById('ytUrlPlugin').value.toLowerCase();
+        if(url.includes('youtube.com')||url.includes('youtu.be')) ytSetPlatform('youtube');
+        else if(url.includes('instagram.com')) ytSetPlatform('instagram');
+        else if(url.includes('twitter.com')||url.includes('x.com')) ytSetPlatform('twitter');
+    }
+
+    // Get Premiere project folder (safe — never crashes if CEP unavailable)
+    function ytGetProjectFolder(){
+        try{
+            if(typeof csInterface==='undefined'||!csInterface||!window.__adobe_cep__) {
+                ytProjFolder='';
+                var el=document.getElementById('ytProjPath');
+                if(el) el.textContent='CEP não disponível';
+                return;
+            }
+            csInterface.evalScript('getProjectFolder()',function(result){
+                var el=document.getElementById('ytProjPath');
+                if(result&&result!=='EvalScript_Error'&&result!=='CEP_NOT_AVAILABLE'&&result!=='undefined'&&result!==''){
+                    ytProjFolder=result;
+                    if(el) el.textContent=result;
+                } else {
+                    ytProjFolder='';
+                    if(el) el.textContent='Nenhum projeto aberto';
+                }
+            });
+        }catch(e){ytProjFolder=''}
+    }
+    // Check project folder periodically (delay first check)
+    setInterval(ytGetProjectFolder,5000);
+    setTimeout(ytGetProjectFolder,2000);
+
+    function ytPluginFmt(btn){
+        // Only toggle within the same group (format buttons inside preview)
+        var parent=btn.parentNode;
+        var siblings=parent.querySelectorAll('.yt-q[data-q]');
+        for(var i=0;i<siblings.length;i++) siblings[i].classList.remove('active');
+        btn.classList.add('active');
+        if(btn.getAttribute('data-q')) ytPluginFormat=btn.getAttribute('data-q');
+    }
+
+    function ytPluginLoc(loc){
+        ytPluginLoc_=loc;
+        document.getElementById('ytLocProj').classList.toggle('active',loc==='project');
+        document.getElementById('ytLocDown').classList.toggle('active',loc==='downloads');
+    }
+
+    function ytPluginFetch(){
+        var url=document.getElementById('ytUrlPlugin').value.trim();
+        if(!url){showMsg('Cole uma URL!');return}
+        var btn=document.getElementById('ytFetchBtn');
+        btn.disabled=true;btn.textContent='Buscando...';
+        document.getElementById('ytPreview').style.display='none';
+
+        var x=new XMLHttpRequest();
+        x.timeout=60000;
+        x.onload=function(){
+            try{
+                var info=JSON.parse(x.responseText);
+                if(info.error){showMsg(info.error);btn.disabled=false;btn.textContent='Buscar';return}
+                ytPluginInfo=info;
+                document.getElementById('ytThumbPlugin').src=info.thumbnail||'';
+                document.getElementById('ytTitlePlugin').textContent=info.title||'Sem título';
+                document.getElementById('ytUploaderPlugin').textContent=info.uploader||'';
+                var dur=info.duration||0;
+                var mm=Math.floor(dur/60);var ss=dur%60;
+                document.getElementById('ytDurPlugin').textContent=mm+':'+(ss<10?'0':'')+ss;
+                document.getElementById('ytPreview').style.display='';
+                // Set trim end placeholder to full duration
+                var endPh=mm+':'+(ss<10?'0':'')+ss;
+                document.getElementById('ytEndTime').placeholder=endPh;
+                document.getElementById('ytTrimInfo').textContent='Total: '+endPh;
+                // Show/hide trim for non-Instagram (IG is usually short)
+                document.getElementById('ytTrimSection').style.display=(ytPlatform==='instagram')?'none':'flex';
+                ytGetProjectFolder();
+            }catch(e){showMsg('Erro ao processar resposta')}
+            btn.disabled=false;btn.textContent='Buscar';
+        };
+        x.onerror=function(){showMsg('Lion Workspace desconectado');btn.disabled=false;btn.textContent='Buscar'};
+        x.ontimeout=function(){showMsg('Timeout - tente novamente');btn.disabled=false;btn.textContent='Buscar'};
+        x.open('POST',API+'/yt/info');
+        x.setRequestHeader('Content-Type','application/json');
+        x.send(JSON.stringify({url:url}));
+    }
+
+    function ytPluginDownload(){
+        var url=document.getElementById('ytUrlPlugin').value.trim();
+        if(!url){showMsg('Cole uma URL!');return}
+        var btn=document.getElementById('ytPluginBtn');
+        btn.disabled=true;
+
+        // Determine output dir
+        var outDir='';
+        if(ytPluginLoc_==='project'&&ytProjFolder){
+            outDir=ytProjFolder;
+        }
+        // else empty = defaults to Downloads in main.js
+
+        document.getElementById('ytPluginProgress').style.display='';
+        document.getElementById('ytProgressTitle').textContent=ytPluginInfo?ytPluginInfo.title:'Baixando...';
+        document.getElementById('ytPluginBar').style.width='0%';
+        document.getElementById('ytPluginPct').textContent='0%';
+        document.getElementById('ytPluginSpeed').textContent='';
+        document.getElementById('ytPluginStat').textContent='Iniciando...';
+
+        var x=new XMLHttpRequest();
+        x.open('POST',API+'/yt/download');
+        x.setRequestHeader('Content-Type','application/json');
+        x.onload=function(){
+            ytPluginPolling=true;
+        };
+        x.onerror=function(){btn.disabled=false;showMsg('Erro de conexão')};
+        var startT=document.getElementById('ytStartTime').value.trim();
+        var endT=document.getElementById('ytEndTime').value.trim();
+        var payload={url:url,format:ytPluginFormat,outputDir:outDir};
+        if(startT) payload.startTime=startT;
+        if(endT) payload.endTime=endT;
+        x.send(JSON.stringify(payload));
+    }
+
+    function ytPluginCancel(){
+        var x=new XMLHttpRequest();
+        x.open('POST',API+'/yt/cancel');
+        x.setRequestHeader('Content-Type','application/json');
+        x.send('{}');
+        ytPluginPolling=false;
+        document.getElementById('ytPluginBtn').disabled=false;
+        document.getElementById('ytPluginStat').textContent='Cancelado';
+        document.getElementById('ytPluginStat').style.color='#f43f5e';
+    }
+
+    function ytPluginImport(filePath){
+        if(!filePath){showMsg('Erro: caminho vazio');return}
+        var autoImport=document.getElementById('ytAutoImport').checked;
+        if(!autoImport)return;
+        if(!window.__adobe_cep__||typeof csInterface==='undefined'){showMsg('CEP indisponivel');return}
+        showMsg('Importando: '+filePath.split(/[/\\]/).pop());
+        // Wait for file to be fully written/closed by yt-dlp + ffmpeg merge
+        setTimeout(function(){
+            try{
+                // Use backslashes on Windows for ExtendScript File() compatibility
+                var safePath=filePath.replace(/\//g,'\\\\').replace(/\\/g,'\\\\');
+                // First try: simple import to root (most compatible)
+                var script='try{var f=new File("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'");'
+                    +'if(!f.exists)"FILE_NOT_FOUND:"+f.fsName;'
+                    +'else{app.project.importFiles([f.fsName]);'
+                    +'"OK:"+f.fsName}}catch(e){"ERR:"+e.toString()}';
+                csInterface.evalScript(script,function(result){
+                    if(result&&result.indexOf('OK:')===0){
+                        // Imported to root, now try to move to bin
+                        var importedPath=result.substring(3);
+                        showMsg('Importado!');
+                        // Move to YouTube Downloads bin
+                        setTimeout(function(){
+                            var moveScript='try{var bin=findOrCreateBin("YouTube Downloads");'
+                                +'var root=app.project.rootItem;'
+                                +'for(var i=root.children.numItems-1;i>=0;i--){'
+                                +'var c=root.children[i];'
+                                +'if(c.type!==2){try{c.moveBin(bin);}catch(e){}break;}}'
+                                +'"MOVED"}catch(e){"MOVE_ERR:"+e.toString()}';
+                            csInterface.evalScript(moveScript,function(r2){});
+                        },500);
+                    } else if(result&&result.indexOf('FILE_NOT_FOUND')===0){
+                        showMsg('Arquivo nao encontrado - tentando novamente...');
+                        setTimeout(function(){
+                            csInterface.evalScript(script,function(r2){
+                                showMsg('Retry: '+r2);
+                            });
+                        },3000);
+                    } else {
+                        showMsg('Import: '+(result||'sem resposta'));
+                    }
+                });
+            }catch(e){showMsg('Erro JS: '+e)}
+        },3000);
+    }
+
+    function ytPluginPollProgress(){
+        if(!ytPluginPolling)return;
+        var x=new XMLHttpRequest();
+        x.timeout=2000;
+        x.onload=function(){
+            try{
+                var p=JSON.parse(x.responseText);
+                var bar=document.getElementById('ytPluginBar');
+                var pct=document.getElementById('ytPluginPct');
+                var spd=document.getElementById('ytPluginSpeed');
+                var stat=document.getElementById('ytPluginStat');
+                if(!bar)return;
+                bar.style.width=Math.min(p.percent||0,100)+'%';
+                pct.textContent=Math.round(p.percent||0)+'%';
+                spd.textContent=p.speed||'';
+                if(p.status==='merging'){stat.textContent='Mesclando...';stat.style.color='#f59e0b'}
+                else if(p.status==='done'){
+                    stat.textContent='Concluído!';stat.style.color='#22c55e';
+                    bar.style.width='100%';pct.textContent='100%';
+                    document.getElementById('ytPluginBtn').disabled=false;
+                    ytPluginPolling=false;
+                    ytLastFile=p.file||'';
+                    // Auto-import into Premiere project
+                    if(ytLastFile){
+                        ytPluginImport(ytLastFile);
+                    } else {
+                        showMsg('Download OK mas caminho do arquivo vazio');
+                    }
+                }else if(p.status==='error'){
+                    stat.textContent='Erro';stat.style.color='#f43f5e';
+                    document.getElementById('ytPluginBtn').disabled=false;
+                    ytPluginPolling=false;
+                }else if(p.status==='cancelled'){
+                    stat.textContent='Cancelado';stat.style.color='#f43f5e';
+                    document.getElementById('ytPluginBtn').disabled=false;
+                    ytPluginPolling=false;
+                }else{
+                    stat.textContent=p.eta?'ETA: '+p.eta:'';
+                    stat.style.color='#888';
+                }
+            }catch(e){}
+        };
+        x.open('GET',API+'/yt/progress');x.send();
+    }
+    setInterval(ytPluginPollProgress,1200);
 
     setInterval(poll,1000);
     poll();
