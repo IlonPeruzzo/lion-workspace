@@ -1,0 +1,7 @@
+node_modules/
+dist/
+build/
+*.exe
+*.dmg
+.debug
+checkfg.ps1

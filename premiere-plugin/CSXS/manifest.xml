@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.lionworkspace.premiere" ExtensionBundleVersion="1.0.0" ExtensionBundleName="Lion Workspace">
+    <ExtensionList>
+        <Extension Id="com.lionworkspace.premiere.panel" Version="1.0.0"/>
+    </ExtensionList>
+    <ExecutionEnvironment>
+        <HostList>
+            <Host Name="PPRO" Version="[23.0,99.9]"/>
+        </HostList>
+        <LocaleList>
+            <Locale Code="All"/>
+        </LocaleList>
+        <RequiredRuntimeList>
+            <RequiredRuntime Name="CSXS" Version="11.0"/>
+        </RequiredRuntimeList>
+    </ExecutionEnvironment>
+    <DispatchInfoList>
+        <Extension Id="com.lionworkspace.premiere.panel">
+            <DispatchInfo>
+                <Resources>
+                    <MainPath>./client/index.html</MainPath>
+                </Resources>
+                <Lifecycle>
+                    <AutoVisible>true</AutoVisible>
+                </Lifecycle>
+                <UI>
+                    <Type>Panel</Type>
+                    <Menu>Lion Workspace</Menu>
+                    <Geometry>
+                        <Size>
+                            <Height>420</Height>
+                            <Width>280</Width>
+                        </Size>
+                        <MinSize>
+                            <Height>300</Height>
+                            <Width>240</Width>
+                        </MinSize>
+                    </Geometry>
+                </UI>
+            </DispatchInfo>
+        </Extension>
+    </DispatchInfoList>
+</ExtensionManifest>

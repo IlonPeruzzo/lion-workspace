@@ -1,0 +1,41 @@
+{
+  "name": "lion-workspace",
+  "version": "1.0.0",
+  "description": "Lion Workspace - Gestao para Editores de Video",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.lionworkspace.app",
+    "productName": "Lion Workspace",
+    "win": {
+      "target": "portable",
+      "sign": false
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "identity": null,
+      "category": "public.app-category.productivity"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html"
+    ],
+    "extraResources": [
+      {
+        "from": "premiere-plugin",
+        "to": "premiere-plugin",
+        "filter": ["**/*"]
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

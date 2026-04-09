@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Lion Workspace</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+            background:#232323;color:#f5f5f5;padding:10px;min-height:100vh;
+            user-select:none;-webkit-user-select:none;
+        }
+        ::-webkit-scrollbar{width:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(190,242,100,.2);border-radius:2px}
+
+        .logo{font-size:.95rem;font-weight:800;color:#f5f5f5;text-align:center;margin-bottom:8px;letter-spacing:-.3px}
+        .logo span{color:#bef264}
+        .status{text-align:center;padding:5px 10px;border-radius:8px;margin-bottom:10px;font-size:.7rem;font-weight:600;transition:all .3s}
+        .status.ok{background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.15)}
+        .status.off{background:rgba(244,63,94,.1);color:#f43f5e;border:1px solid rgba(244,63,94,.15)}
+
+        .section{background:rgba(255,255,255,.03);border:1px solid rgba(190,242,100,.08);border-radius:10px;padding:12px;margin-bottom:8px}
+        .section-title{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:8px;font-weight:600}
+
+        .proj-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:8px;padding-right:2px}
+        .proj-empty{text-align:center;font-size:.7rem;color:#555;padding:14px 0}
+        .pc{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);cursor:pointer;transition:all .15s}
+        .pc:hover{border-color:rgba(190,242,100,.18);background:rgba(190,242,100,.03)}
+        .pc.sel{border-color:#bef264;background:rgba(190,242,100,.07)}
+        .pc-name{font-size:.78rem;font-weight:600;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .pc-cli{font-size:.66rem;color:#888;margin-top:2px}
+        .pc-stage{display:inline-block;font-size:.56rem;padding:1px 7px;border-radius:8px;margin-top:3px;font-weight:600;letter-spacing:.2px}
+
+        .timer-display{font-size:2.1rem;font-weight:800;text-align:center;letter-spacing:-1px;color:#bef264;margin:4px 0;font-variant-numeric:tabular-nums}
+        .timer-display.app-paused{color:#636363}
+        .timer-sub{text-align:center;font-size:.72rem;color:#888;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+        .timer-sub.app-paused{color:#f59e0b}
+
+        .pomo-phase{text-align:center;margin-bottom:2px}
+        .phase-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.66rem;font-weight:700;letter-spacing:.3px}
+        .cycles{text-align:center;margin-top:5px;display:flex;gap:3px;justify-content:center}
+        .dot{width:7px;height:7px;border-radius:50%;background:#bef264}
+
+        .controls{display:flex;gap:5px;margin-top:8px}
+        .btn{flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .12s;letter-spacing:-.2px}
+        .btn:active{transform:scale(.95)}
+        .btn-go{background:#bef264;color:#0a0a0a}
+        .btn-go:hover{background:#d9f99d}
+        .btn-stop{background:rgba(244,63,94,.1);color:#f43f5e;border:1px solid rgba(244,63,94,.1)}
+        .btn-stop:hover{background:rgba(244,63,94,.2)}
+        .btn-pause{background:rgba(245,158,11,.08);color:#f59e0b;border:1px solid rgba(245,158,11,.1)}
+        .btn-pause:hover{background:rgba(245,158,11,.18)}
+        .btn:disabled{opacity:.2;cursor:default;transform:none}
+
+        /* Pipeline */
+        .pipe-section{margin-top:8px;border-top:1px solid rgba(190,242,100,.06);padding-top:8px}
+        .pipe-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.4px;color:#555;margin-bottom:6px;font-weight:600}
+        .pipe-chips{display:flex;flex-wrap:wrap;gap:4px}
+        .pipe-chip{font-size:.58rem;padding:3px 8px;border-radius:8px;cursor:pointer;font-weight:600;transition:all .15s;letter-spacing:.1px;border:1px solid transparent;display:inline-flex;align-items:center;gap:2px}
+        .pipe-chip svg{width:10px;height:10px;vertical-align:middle}
+        .pipe-chip:hover{transform:scale(1.05)}
+        .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
+
+        .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
+        .footer{text-align:center;margin-top:6px;font-size:.58rem;color:#3a3a3a;letter-spacing:.2px}
+    </style>
+</head>
+<body>
+    <div class="logo">Lion <span>Workspace</span></div>
+    <div class="status off" id="conn">Desconectado</div>
+
+    <!-- Timer -->
+    <div class="section">
+        <div class="section-title">Timer do Projeto</div>
+        <div class="proj-list" id="projList"><div class="proj-empty">Nenhum servico ativo</div></div>
+        <div class="timer-display" id="tDisp">00:00:00</div>
+        <div class="timer-sub" id="tSub">Parado</div>
+        <div class="controls">
+            <button class="btn btn-go" id="tStart" onclick="timerStart()">Iniciar</button>
+            <button class="btn btn-pause" id="tPause" onclick="cmd('timer/pause')" disabled>Pausar</button>
+            <button class="btn btn-stop" id="tStop" onclick="cmd('timer/stop')" disabled>Parar</button>
+        </div>
+        <!-- Pipeline -->
+        <div class="pipe-section" id="pipeSection" style="display:none">
+            <div class="pipe-title">Pipeline</div>
+            <div class="pipe-chips" id="pipeChips"></div>
+        </div>
+    </div>
+
+    <!-- Pomodoro -->
+    <div class="section">
+        <div class="section-title">Pomodoro</div>
+        <div class="pomo-phase"><span class="phase-badge" id="pBadge" style="background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)">FOCO</span></div>
+        <div class="timer-display" id="pDisp">25:00</div>
+        <div class="cycles" id="pCyc"></div>
+        <div class="controls">
+            <button class="btn btn-go" id="pStart" onclick="pomoStart()">Iniciar</button>
+            <button class="btn btn-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled>Pausar</button>
+            <button class="btn btn-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled>Reset</button>
+        </div>
+        <div class="focus-note">Modo Foco: escurece telas e bloqueia apps</div>
+    </div>
+
+    <div class="footer">Lion Workspace Sync</div>
+
+    <script>
+    var API='http://127.0.0.1:9847';
+    var selProj='';
+    var lastCardsJSON='';
+    var lastPipeJSON='';
+    var timerState={running:false,paused:false,appPaused:false};
+    var pomoState={running:false,paused:false};
+
+    function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+    function renderCards(cards){
+        var el=document.getElementById('projList');
+        var json=JSON.stringify(cards||[])+selProj;
+        if(json===lastCardsJSON)return;
+        lastCardsJSON=json;
+        if(!cards||!cards.length){
+            el.innerHTML='<div class="proj-empty">Nenhum servico ativo</div>';
+            return;
+        }
+        el.innerHTML=cards.map(function(c){
+            var isSel=c.value===selProj;
+            var stg=c.stageCSS||'background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)';
+            if(!stg)stg='background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)';
+            return '<div class="pc'+(isSel?' sel':'')+'" onclick="pick(\''+c.value.replace(/'/g,"\\'")+'\')">'
+                +'<div class="pc-name">'+esc(c.nome)+'</div>'
+                +'<div class="pc-cli">'+esc(c.cliente)+'</div>'
+                +'<div class="pc-stage" style="'+stg+'">'+esc(c.etapa||'Sem etapa')+'</div>'
+                +'</div>';
+        }).join('');
+    }
+
+    function renderPipeline(pipe){
+        var sec=document.getElementById('pipeSection');
+        var el=document.getElementById('pipeChips');
+        if(!pipe||!pipe.stages||!pipe.stages.length){
+            sec.style.display='none';lastPipeJSON='';return;
+        }
+        sec.style.display='';
+        var json=JSON.stringify(pipe);
+        if(json===lastPipeJSON)return;
+        lastPipeJSON=json;
+        el.innerHTML=pipe.stages.map(function(s){
+            var isCurrent=s.name===pipe.etapa;
+            var css=s.css||'background:rgba(190,242,100,.08);color:#bef264';
+            if(!css)css='background:rgba(190,242,100,.08);color:#bef264';
+            var icon=s.icon||'';
+            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+icon+' '+esc(s.name)+'</span>';
+        }).join('');
+    }
+
+    function setStage(regId,etapa){
+        var x=new XMLHttpRequest();
+        x.open('POST',API+'/timer/set-stage');
+        x.setRequestHeader('Content-Type','application/json');
+        x.send(JSON.stringify({regId:regId,etapa:etapa}));
+        setTimeout(poll,300);
+    }
+
+    function pick(val){
+        selProj=val;
+        lastCardsJSON='';
+        var x=new XMLHttpRequest();
+        x.open('POST',API+'/timer/select');
+        x.setRequestHeader('Content-Type','application/json');
+        x.send(JSON.stringify({project:val}));
+    }
+
+    function timerStart(){
+        if(timerState.paused){
+            cmd('timer/start');
+        } else if(!timerState.running){
+            if(!selProj)return;
+            var x=new XMLHttpRequest();
+            x.open('POST',API+'/timer/start');
+            x.setRequestHeader('Content-Type','application/json');
+            x.send(JSON.stringify({project:selProj}));
+            setTimeout(poll,300);
+        }
+    }
+
+    function pomoStart(){
+        if(pomoState.paused){
+            cmd('pomodoro/start');
+        } else if(!pomoState.running){
+            var x=new XMLHttpRequest();
+            x.open('POST',API+'/pomodoro/start');
+            x.setRequestHeader('Content-Type','application/json');
+            x.send(JSON.stringify({fromPlugin:true}));
+            setTimeout(poll,300);
+        }
+    }
+
+    function ui(state){
+        if(!state)return;
+        document.getElementById('conn').className='status ok';
+        document.getElementById('conn').textContent='Conectado';
+
+        // Sync selection from app
+        if(state.selectedProject&&state.selectedProject!==selProj){
+            selProj=state.selectedProject;
+            lastCardsJSON='';
+        }
+
+        // Project cards
+        renderCards(state.projectCards||[]);
+
+        // Pipeline
+        renderPipeline(state.pipeline||null);
+
+        // Timer
+        var t=state.timer||{};
+        timerState={running:t.running,paused:t.paused,appPaused:t.appPaused};
+        var tDisp=document.getElementById('tDisp');
+        var tSub=document.getElementById('tSub');
+        tDisp.textContent=t.display||'00:00:00';
+
+        if(t.appPaused){
+            tDisp.className='timer-display app-paused';
+            tSub.className='timer-sub app-paused';
+            tSub.textContent='Pausado (fora do Premiere)';
+        } else if(t.running&&t.paused){
+            tDisp.className='timer-display';
+            tSub.className='timer-sub';
+            tSub.textContent='Pausado: '+(t.project||'');
+        } else if(t.running){
+            tDisp.className='timer-display';
+            tSub.className='timer-sub';
+            tSub.textContent='Trabalhando: '+(t.project||'');
+        } else {
+            tDisp.className='timer-display';
+            tSub.className='timer-sub';
+            tSub.textContent='Parado';
+        }
+
+        // Auto-select current timer project
+        if(t.running&&t.project&&t.project!==selProj){
+            selProj=t.project;
+            lastCardsJSON='';
+        }
+
+        // Timer buttons
+        var btnStart=document.getElementById('tStart');
+        var btnPause=document.getElementById('tPause');
+        var btnStop=document.getElementById('tStop');
+
+        if(t.paused){
+            btnStart.textContent='Retomar';btnStart.disabled=false;
+            btnPause.disabled=true;btnStop.disabled=false;
+        } else if(t.running){
+            btnStart.textContent='Iniciar';btnStart.disabled=true;
+            btnPause.disabled=false;btnStop.disabled=false;
+        } else {
+            btnStart.textContent='Iniciar';btnStart.disabled=false;
+            btnPause.disabled=true;btnStop.disabled=true;
+        }
+
+        // Pomodoro
+        var p=state.pomodoro||{};
+        pomoState={running:p.running,paused:p.paused};
+        document.getElementById('pDisp').textContent=p.display||'25:00';
+        var b=document.getElementById('pBadge');
+        if(p.phase==='break'){
+            b.textContent='PAUSA';b.style.background='rgba(34,211,238,.08)';b.style.color='#22d3ee';b.style.borderColor='rgba(34,211,238,.15)';
+        }else{
+            b.textContent='FOCO';b.style.background='rgba(190,242,100,.08)';b.style.color='#bef264';b.style.borderColor='rgba(190,242,100,.15)';
+        }
+
+        var pStart=document.getElementById('pStart');
+        var pPause=document.getElementById('pPause');
+        var pReset=document.getElementById('pReset');
+
+        if(p.paused){
+            pStart.textContent='Retomar';pStart.disabled=false;
+            pPause.disabled=true;pReset.disabled=false;
+        } else if(p.running){
+            pStart.textContent='Iniciar';pStart.disabled=true;
+            pPause.disabled=false;pReset.disabled=false;
+        } else {
+            pStart.textContent='Iniciar';pStart.disabled=false;
+            pPause.disabled=true;pReset.disabled=true;
+        }
+
+        var dots='';for(var i=0;i<Math.min(p.cycle||0,8);i++)dots+='<span class="dot"></span>';
+        document.getElementById('pCyc').innerHTML=dots;
+    }
+
+    function disc(){
+        document.getElementById('conn').className='status off';
+        document.getElementById('conn').textContent='Desconectado';
+    }
+
+    function poll(){
+        var x=new XMLHttpRequest();
+        x.timeout=2000;
+        x.onload=function(){try{ui(JSON.parse(x.responseText))}catch(e){disc()}};
+        x.onerror=disc;x.ontimeout=disc;
+        x.open('GET',API+'/state');x.send();
+    }
+
+    function cmd(c){
+        var x=new XMLHttpRequest();
+        x.open('POST',API+'/'+c);
+        x.setRequestHeader('Content-Type','application/json');
+        x.send('{}');
+        setTimeout(poll,300);
+    }
+
+    setInterval(poll,1000);
+    poll();
+    </script>
+</body>
+</html>
