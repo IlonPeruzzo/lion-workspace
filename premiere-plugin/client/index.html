@@ -72,6 +72,60 @@
         .plat-btn svg{width:14px;height:14px}
         .time-input{width:58px;padding:3px 5px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.6rem;font-family:inherit;outline:none;text-align:center}
         .time-input::placeholder{color:#555}
+
+        /* Anchor Point Grid */
+        .anchor-wrap{
+            position:relative;width:150px;height:90px;
+            background:rgba(255,255,255,.02);
+            border:2px dashed rgba(190,242,100,.2);
+            border-radius:6px;
+            margin:0 auto;
+            box-shadow:inset 0 0 20px rgba(190,242,100,.03);
+        }
+        .anchor-wrap::before{
+            content:'';position:absolute;left:50%;top:0;bottom:0;
+            width:1px;background:rgba(190,242,100,.08);
+        }
+        .anchor-wrap::after{
+            content:'';position:absolute;top:50%;left:0;right:0;
+            height:1px;background:rgba(190,242,100,.08);
+        }
+        .anchor-grid{
+            position:absolute;inset:0;
+            display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+            padding:8px;gap:0;
+        }
+        .anchor-dot{
+            width:14px;height:14px;border-radius:50%;
+            border:2px solid rgba(190,242,100,.35);
+            background:rgba(20,20,20,.8);
+            cursor:pointer;padding:0;
+            transition:all .15s;
+            justify-self:center;align-self:center;
+            position:relative;z-index:2;
+        }
+        .anchor-dot:hover{background:rgba(190,242,100,.25);border-color:#bef264;transform:scale(1.25)}
+        .anchor-dot.active{background:#bef264;border-color:#bef264;box-shadow:0 0 0 3px rgba(190,242,100,.2),0 0 12px rgba(190,242,100,.4);transform:scale(1.15)}
+        .anchor-dot[data-pos="tl"]{justify-self:start;align-self:start}
+        .anchor-dot[data-pos="tc"]{justify-self:center;align-self:start}
+        .anchor-dot[data-pos="tr"]{justify-self:end;align-self:start}
+        .anchor-dot[data-pos="cl"]{justify-self:start;align-self:center}
+        .anchor-dot[data-pos="cr"]{justify-self:end;align-self:center}
+        .anchor-dot[data-pos="bl"]{justify-self:start;align-self:end}
+        .anchor-dot[data-pos="bc"]{justify-self:center;align-self:end}
+        .anchor-dot[data-pos="br"]{justify-self:end;align-self:end}
+
+        .mini-check{
+            width:12px;height:12px;border-radius:3px;
+            border:1.5px solid rgba(190,242,100,.3);
+            display:flex;align-items:center;justify-content:center;
+            background:rgba(255,255,255,.02);flex-shrink:0;
+            transition:all .15s;
+        }
+        .mini-check.active{background:#bef264;border-color:#bef264}
+        .mini-check svg{display:none}
+        .mini-check.active svg{display:block}
+
         .footer{text-align:center;margin-top:6px;font-size:.58rem;color:#3a3a3a;letter-spacing:.2px}
     </style>
 </head>
@@ -81,34 +135,44 @@
 
     <!-- Timer -->
     <div class="section">
-        <div class="section-title">Timer do Projeto</div>
-        <div class="proj-list" id="projList"><div class="proj-empty">Nenhum servico ativo</div></div>
-        <div class="timer-display" id="tDisp">00:00:00</div>
-        <div class="timer-sub" id="tSub">Parado</div>
-        <div class="controls">
-            <button class="btn btn-go" id="tStart" onclick="timerStart()">Iniciar</button>
-            <button class="btn btn-pause" id="tPause" onclick="cmd('timer/pause')" disabled>Pausar</button>
-            <button class="btn btn-stop" id="tStop" onclick="cmd('timer/stop')" disabled>Parar</button>
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('timerBody')">
+            Timer do Projeto
+            <svg id="timerChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <!-- Pipeline -->
-        <div class="pipe-section" id="pipeSection" style="display:none">
-            <div class="pipe-title">Pipeline</div>
-            <div class="pipe-chips" id="pipeChips"></div>
+        <div id="timerBody">
+            <div class="proj-list" id="projList"><div class="proj-empty">Nenhum servico ativo</div></div>
+            <div class="timer-display" id="tDisp">00:00:00</div>
+            <div class="timer-sub" id="tSub">Parado</div>
+            <div class="controls">
+                <button class="btn btn-go" id="tStart" onclick="timerStart()">Iniciar</button>
+                <button class="btn btn-pause" id="tPause" onclick="cmd('timer/pause')" disabled>Pausar</button>
+                <button class="btn btn-stop" id="tStop" onclick="cmd('timer/stop')" disabled>Parar</button>
+            </div>
+            <!-- Pipeline -->
+            <div class="pipe-section" id="pipeSection" style="display:none">
+                <div class="pipe-title">Pipeline</div>
+                <div class="pipe-chips" id="pipeChips"></div>
+            </div>
         </div>
     </div>
 
     <!-- Pomodoro -->
     <div class="section">
-        <div class="section-title">Pomodoro</div>
-        <div class="pomo-phase"><span class="phase-badge" id="pBadge" style="background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)">FOCO</span></div>
-        <div class="timer-display" id="pDisp">25:00</div>
-        <div class="cycles" id="pCyc"></div>
-        <div class="controls">
-            <button class="btn btn-go" id="pStart" onclick="pomoStart()">Iniciar</button>
-            <button class="btn btn-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled>Pausar</button>
-            <button class="btn btn-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled>Reset</button>
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('pomoBody')">
+            Pomodoro
+            <svg id="pomoChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <div class="focus-note">Modo Foco: escurece telas e bloqueia apps</div>
+        <div id="pomoBody">
+            <div class="pomo-phase"><span class="phase-badge" id="pBadge" style="background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)">FOCO</span></div>
+            <div class="timer-display" id="pDisp">25:00</div>
+            <div class="cycles" id="pCyc"></div>
+            <div class="controls">
+                <button class="btn btn-go" id="pStart" onclick="pomoStart()">Iniciar</button>
+                <button class="btn btn-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled>Pausar</button>
+                <button class="btn btn-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled>Reset</button>
+            </div>
+            <div class="focus-note">Modo Foco: escurece telas e bloqueia apps</div>
+        </div>
     </div>
 
     <!-- Multi-platform Downloader -->
@@ -134,19 +198,26 @@
 
         <!-- Preview (hidden until fetched) -->
         <div id="ytPreview" style="display:none;margin-bottom:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px;padding:8px;overflow:hidden">
-            <div style="display:flex;gap:8px">
-                <img id="ytThumbPlugin" src="" style="width:90px;height:52px;object-fit:cover;border-radius:5px;background:#1a1a1a;flex-shrink:0">
-                <div style="flex:1;min-width:0;overflow:hidden">
-                    <div id="ytTitlePlugin" style="font-size:.7rem;font-weight:600;color:#eee;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"></div>
-                    <div style="display:flex;gap:6px;margin-top:3px">
-                        <span id="ytUploaderPlugin" style="font-size:.58rem;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-                        <span id="ytDurPlugin" style="font-size:.58rem;color:#bef264;font-weight:600;flex-shrink:0"></span>
+            <!-- Header with minimize -->
+            <div onclick="ytTogglePreview()" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px">
+                <div style="display:flex;gap:8px;flex:1;min-width:0;align-items:center;overflow:hidden">
+                    <img id="ytThumbPlugin" src="" style="width:36px;height:36px;object-fit:cover;border-radius:5px;background:#1a1a1a;flex-shrink:0">
+                    <div style="flex:1;min-width:0;overflow:hidden">
+                        <div id="ytTitlePlugin" style="font-size:.66rem;font-weight:600;color:#eee;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+                        <div style="display:flex;gap:6px;margin-top:1px">
+                            <span id="ytUploaderPlugin" style="font-size:.54rem;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+                            <span id="ytDurPlugin" style="font-size:.54rem;color:#bef264;font-weight:600;flex-shrink:0"></span>
+                        </div>
                     </div>
                 </div>
+                <svg id="ytPreviewChev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
 
+            <!-- Collapsible body -->
+            <div id="ytPreviewBody">
+
             <!-- Format -->
-            <div style="display:flex;gap:3px;margin-top:8px;flex-wrap:wrap">
+            <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">
                 <button class="yt-q active" data-q="best" onclick="ytPluginFmt(this)">Melhor</button>
                 <button class="yt-q" data-q="4k" onclick="ytPluginFmt(this)">4K</button>
                 <button class="yt-q" data-q="1080" onclick="ytPluginFmt(this)">1080p</button>
@@ -178,19 +249,25 @@
                 <input type="checkbox" id="ytAutoImport" checked style="accent-color:#bef264;width:12px;height:12px">
                 Importar no projeto automaticamente
             </label>
+            <label style="display:flex;align-items:center;gap:5px;margin-top:4px;cursor:pointer;font-size:.62rem;color:#aaa">
+                <input type="checkbox" id="ytAutoTimeline" style="accent-color:#bef264;width:12px;height:12px">
+                Colocar na timeline automaticamente
+            </label>
 
             <!-- Download button -->
             <button class="btn btn-go" onclick="ytPluginDownload()" id="ytPluginBtn" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-top:8px">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Baixar
             </button>
+            </div><!-- /ytPreviewBody -->
         </div>
 
         <!-- Progress -->
         <div id="ytPluginProgress" style="display:none;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px;padding:8px;margin-bottom:6px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
                 <span id="ytProgressTitle" style="font-size:.62rem;font-weight:600;color:#eee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
-                <button class="yt-q" onclick="ytPluginCancel()" style="font-size:.52rem;padding:1px 6px;color:#f43f5e;border-color:rgba(244,63,94,.2);flex-shrink:0;margin-left:4px">X</button>
+                <button class="yt-q" id="ytCancelBtn" onclick="ytPluginCancel()" style="font-size:.52rem;padding:1px 6px;color:#f43f5e;border-color:rgba(244,63,94,.2);flex-shrink:0;margin-left:4px">X</button>
+                <button class="yt-q" id="ytCloseBtn" onclick="ytPluginCloseProgress()" style="display:none;font-size:.52rem;padding:1px 6px;color:#888;border-color:rgba(255,255,255,.1);flex-shrink:0;margin-left:4px">Fechar</button>
             </div>
             <div style="background:rgba(255,255,255,.06);border-radius:4px;height:6px;overflow:hidden;margin-bottom:4px">
                 <div id="ytPluginBar" style="height:100%;background:linear-gradient(90deg,#bef264,#22c55e);border-radius:4px;transition:width .3s;width:0%"></div>
@@ -200,6 +277,142 @@
                 <span id="ytPluginSpeed"></span>
                 <span id="ytPluginStat"></span>
             </div>
+        </div>
+    </div>
+
+    <!-- Keyframe Curve Editor -->
+    <div class="section">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('easingBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><path d="M3 20C3 20 7 20 10 12C13 4 21 4 21 4"/></svg>
+                Easing / Curvas
+            </span>
+            <svg id="easingChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="easingBody">
+            <!-- Curve canvas -->
+            <div style="position:relative;margin-bottom:8px">
+                <canvas id="curveCanvas" width="240" height="240" style="width:100%;height:auto;border-radius:8px;background:#1a1a1a;border:1px solid rgba(190,242,100,.08);cursor:crosshair"></canvas>
+                <div style="position:absolute;bottom:6px;right:6px;display:flex;gap:3px">
+                    <button class="yt-q" onclick="curveFlipH()" title="Espelhar horizontal" style="font-size:.5rem;padding:1px 5px">↔</button>
+                    <button class="yt-q" onclick="curveFlipV()" title="Espelhar vertical" style="font-size:.5rem;padding:1px 5px">↕</button>
+                    <button class="yt-q" onclick="curveReset()" title="Resetar" style="font-size:.5rem;padding:1px 5px">⟲</button>
+                </div>
+            </div>
+
+            <!-- Easing type: In / Out / InOut -->
+            <div style="display:flex;gap:3px;margin-bottom:6px">
+                <button class="yt-q active" id="easeIn" onclick="setEaseDir('in')">Ease In</button>
+                <button class="yt-q" id="easeOut" onclick="setEaseDir('out')">Ease Out</button>
+                <button class="yt-q" id="easeInOut" onclick="setEaseDir('inout')">In-Out</button>
+            </div>
+
+            <!-- Preset categories -->
+            <div style="display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap" id="presetBtns">
+                <button class="yt-q active" onclick="setPreset('cubic',this)">Cubic</button>
+                <button class="yt-q" onclick="setPreset('sine',this)">Sine</button>
+                <button class="yt-q" onclick="setPreset('quad',this)">Quad</button>
+                <button class="yt-q" onclick="setPreset('quart',this)">Quart</button>
+                <button class="yt-q" onclick="setPreset('quint',this)">Quint</button>
+                <button class="yt-q" onclick="setPreset('expo',this)">Expo</button>
+                <button class="yt-q" onclick="setPreset('circ',this)">Circ</button>
+                <button class="yt-q" onclick="setPreset('back',this)">Back</button>
+                <button class="yt-q" onclick="setPreset('elastic',this)">Elastic</button>
+                <button class="yt-q" onclick="setPreset('bounce',this)">Bounce</button>
+                <button class="yt-q" onclick="setPreset('custom',this)" id="presetCustomBtn">Custom</button>
+            </div>
+
+            <!-- Coordinate display -->
+            <div style="display:flex;gap:6px;margin-bottom:6px;font-size:.54rem;color:#888;align-items:center">
+                <span>P1: (<span id="cp1x">0.25</span>, <span id="cp1y">0.10</span>)</span>
+                <span>P2: (<span id="cp2x">0.25</span>, <span id="cp2y">1.00</span>)</span>
+                <span style="flex:1"></span>
+                <span id="curveCSS" style="color:#555;cursor:pointer;font-size:.48rem" onclick="copyCurveCSS()" title="Copiar CSS">cubic-bezier()</span>
+            </div>
+
+            <!-- Saved presets -->
+            <div style="margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Meus Presets</span>
+                    <div style="display:flex;gap:3px">
+                        <button class="yt-q" onclick="saveCurrentPreset()" title="Salvar preset atual" style="font-size:.5rem;padding:1px 6px;color:#bef264;border-color:rgba(190,242,100,.2)">+ Salvar</button>
+                        <button class="yt-q" id="presetEditBtn" onclick="togglePresetEdit()" title="Editar/deletar" style="font-size:.5rem;padding:1px 6px">Editar</button>
+                    </div>
+                </div>
+                <div id="savedPresetsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(36px,1fr));gap:4px;max-height:120px;overflow-y:auto;padding:2px"></div>
+                <div id="noPresets" style="text-align:center;font-size:.54rem;color:#444;padding:8px 0">Nenhum preset salvo</div>
+            </div>
+
+            <!-- Apply mode -->
+            <div style="display:flex;gap:3px;margin-bottom:6px">
+                <button class="yt-q active" id="applyBetween" onclick="setApplyMode('between')">Entre 2 keys</button>
+                <button class="yt-q" id="applyAll" onclick="setApplyMode('all')">Todos os keys</button>
+            </div>
+
+            <!-- Apply button -->
+            <button class="btn btn-go" onclick="applyEasing()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 20C3 20 7 20 10 12C13 4 21 4 21 4"/><polyline points="15 4 21 4 21 10"/></svg>
+                Aplicar Easing
+            </button>
+            <div id="easingMsg" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px"></div>
+        </div>
+    </div>
+
+    <!-- Anchor Point Pro -->
+    <div class="section">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('anchorBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <line x1="12" y1="2" x2="12" y2="5"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                    <line x1="2" y1="12" x2="5" y2="12"/>
+                    <line x1="19" y1="12" x2="22" y2="12"/>
+                </svg>
+                Anchor Point
+            </span>
+            <svg id="anchorChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="anchorBody">
+            <div style="font-size:.58rem;color:#666;margin-bottom:10px;text-align:center;line-height:1.4">
+                Move o ponto de ancoragem sem deslocar o clip visualmente
+            </div>
+
+            <!-- 3x3 Anchor Grid -->
+            <div class="anchor-wrap" id="anchorWrap">
+                <div class="anchor-grid">
+                    <button class="anchor-dot" data-pos="tl" onclick="setAnchor('tl')" title="Canto Superior Esquerdo"></button>
+                    <button class="anchor-dot" data-pos="tc" onclick="setAnchor('tc')" title="Centro Superior"></button>
+                    <button class="anchor-dot" data-pos="tr" onclick="setAnchor('tr')" title="Canto Superior Direito"></button>
+                    <button class="anchor-dot" data-pos="cl" onclick="setAnchor('cl')" title="Meio Esquerda"></button>
+                    <button class="anchor-dot active" data-pos="cc" onclick="setAnchor('cc')" title="Centro"></button>
+                    <button class="anchor-dot" data-pos="cr" onclick="setAnchor('cr')" title="Meio Direita"></button>
+                    <button class="anchor-dot" data-pos="bl" onclick="setAnchor('bl')" title="Canto Inferior Esquerdo"></button>
+                    <button class="anchor-dot" data-pos="bc" onclick="setAnchor('bc')" title="Centro Inferior"></button>
+                    <button class="anchor-dot" data-pos="br" onclick="setAnchor('br')" title="Canto Inferior Direito"></button>
+                </div>
+            </div>
+
+            <!-- Position labels -->
+            <div style="display:flex;justify-content:space-between;font-size:.5rem;color:#444;margin:4px 8px 10px;letter-spacing:.3px">
+                <span>←</span><span id="anchorLabel">Centro</span><span>→</span>
+            </div>
+
+            <!-- Compensate checkbox -->
+            <div style="display:flex;align-items:center;gap:6px;font-size:.62rem;color:#aaa;cursor:pointer;margin-bottom:8px;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.05)" onclick="toggleCompensate()">
+                <div id="anchorCompCheck" class="mini-check active">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <span>Manter clip no lugar (compensar posição)</span>
+            </div>
+
+            <!-- Quick Keyframe Buttons -->
+            <div style="display:flex;gap:4px;margin-bottom:6px">
+                <button class="yt-q" onclick="anchorKeyframe()" title="Adicionar keyframe no anchor point atual" style="flex:1;padding:5px">+ Keyframe</button>
+                <button class="yt-q" onclick="anchorReset()" title="Resetar para centro" style="flex:1;padding:5px">⟲ Reset</button>
+            </div>
+
+            <div id="anchorMsg" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px"></div>
         </div>
     </div>
 
@@ -214,6 +427,23 @@
     var lastPipeJSON='';
     var timerState={running:false,paused:false,appPaused:false};
     var pomoState={running:false,paused:false};
+
+    function toggleSection(id){
+        var el=document.getElementById(id);
+        if(!el)return;
+        var isHidden=el.style.display==='none';
+        el.style.display=isHidden?'':'none';
+        // Map body id -> chev id
+        var chevMap={
+            'timerBody':'timerChev',
+            'pomoBody':'pomoChev',
+            'easingBody':'easingChev',
+            'anchorBody':'anchorChev'
+        };
+        var chevId=chevMap[id]||id.replace('Body','Chev');
+        var chev=document.getElementById(chevId);
+        if(chev) chev.style.transform=isHidden?'':'rotate(-90deg)';
+    }
 
     function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
@@ -487,6 +717,15 @@
     setInterval(ytGetProjectFolder,5000);
     setTimeout(ytGetProjectFolder,2000);
 
+    function ytTogglePreview(){
+        var body=document.getElementById('ytPreviewBody');
+        var chev=document.getElementById('ytPreviewChev');
+        if(!body)return;
+        var isHidden=body.style.display==='none';
+        body.style.display=isHidden?'':'none';
+        if(chev) chev.style.transform=isHidden?'':'rotate(-90deg)';
+    }
+
     function ytPluginFmt(btn){
         // Only toggle within the same group (format buttons inside preview)
         var parent=btn.parentNode;
@@ -559,6 +798,8 @@
         document.getElementById('ytPluginPct').textContent='0%';
         document.getElementById('ytPluginSpeed').textContent='';
         document.getElementById('ytPluginStat').textContent='Iniciando...';
+        document.getElementById('ytCancelBtn').style.display='';
+        document.getElementById('ytCloseBtn').style.display='none';
 
         var x=new XMLHttpRequest();
         x.open('POST',API+'/yt/download');
@@ -570,8 +811,9 @@
         var startT=document.getElementById('ytStartTime').value.trim();
         var endT=document.getElementById('ytEndTime').value.trim();
         var payload={url:url,format:ytPluginFormat,outputDir:outDir};
-        if(startT) payload.startTime=startT;
-        if(endT) payload.endTime=endT;
+        // Only send trim times if user actually typed something meaningful
+        if(startT&&startT!=='0'&&startT!=='00:00'&&startT!=='0:00') payload.startTime=startT;
+        if(endT&&endT!=='inf') payload.endTime=endT;
         x.send(JSON.stringify(payload));
     }
 
@@ -584,6 +826,12 @@
         document.getElementById('ytPluginBtn').disabled=false;
         document.getElementById('ytPluginStat').textContent='Cancelado';
         document.getElementById('ytPluginStat').style.color='#f43f5e';
+        document.getElementById('ytCancelBtn').style.display='none';
+        document.getElementById('ytCloseBtn').style.display='';
+    }
+
+    function ytPluginCloseProgress(){
+        document.getElementById('ytPluginProgress').style.display='none';
     }
 
     function ytPluginImport(filePath){
@@ -591,12 +839,11 @@
         var autoImport=document.getElementById('ytAutoImport').checked;
         if(!autoImport)return;
         if(!window.__adobe_cep__||typeof csInterface==='undefined'){showMsg('CEP indisponivel');return}
+        var autoTimeline=document.getElementById('ytAutoTimeline').checked;
         showMsg('Importando: '+filePath.split(/[/\\]/).pop());
         // Wait for file to be fully written/closed by yt-dlp + ffmpeg merge
         setTimeout(function(){
             try{
-                // Use backslashes on Windows for ExtendScript File() compatibility
-                var safePath=filePath.replace(/\//g,'\\\\').replace(/\\/g,'\\\\');
                 // First try: simple import to root (most compatible)
                 var script='try{var f=new File("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'");'
                     +'if(!f.exists)"FILE_NOT_FOUND:"+f.fsName;'
@@ -604,8 +851,6 @@
                     +'"OK:"+f.fsName}}catch(e){"ERR:"+e.toString()}';
                 csInterface.evalScript(script,function(result){
                     if(result&&result.indexOf('OK:')===0){
-                        // Imported to root, now try to move to bin
-                        var importedPath=result.substring(3);
                         showMsg('Importado!');
                         // Move to YouTube Downloads bin
                         setTimeout(function(){
@@ -615,13 +860,38 @@
                                 +'var c=root.children[i];'
                                 +'if(c.type!==2){try{c.moveBin(bin);}catch(e){}break;}}'
                                 +'"MOVED"}catch(e){"MOVE_ERR:"+e.toString()}';
-                            csInterface.evalScript(moveScript,function(r2){});
+                            csInterface.evalScript(moveScript,function(r2){
+                                // After moving to bin, insert into timeline if checked
+                                if(autoTimeline){
+                                    setTimeout(function(){
+                                        var tlScript='insertClipToTimeline("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'")';
+                                        csInterface.evalScript(tlScript,function(r3){
+                                            if(r3==='OK') showMsg('Adicionado na timeline!');
+                                            else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequence aberta');
+                                            else showMsg('Timeline: '+(r3||'erro'));
+                                        });
+                                    },800);
+                                }
+                            });
                         },500);
                     } else if(result&&result.indexOf('FILE_NOT_FOUND')===0){
                         showMsg('Arquivo nao encontrado - tentando novamente...');
                         setTimeout(function(){
                             csInterface.evalScript(script,function(r2){
-                                showMsg('Retry: '+r2);
+                                if(r2&&r2.indexOf('OK:')===0){
+                                    showMsg('Importado! (2a tentativa)');
+                                    if(autoTimeline){
+                                        setTimeout(function(){
+                                            var tlScript='insertClipToTimeline("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'")';
+                                            csInterface.evalScript(tlScript,function(r3){
+                                                if(r3==='OK') showMsg('Adicionado na timeline!');
+                                                else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequence aberta');
+                                            });
+                                        },1500);
+                                    }
+                                } else {
+                                    showMsg('Retry: '+(r2||'sem resposta'));
+                                }
                             });
                         },3000);
                     } else {
@@ -649,25 +919,28 @@
                 spd.textContent=p.speed||'';
                 if(p.status==='merging'){stat.textContent='Mesclando...';stat.style.color='#f59e0b'}
                 else if(p.status==='done'){
-                    stat.textContent='Concluído!';stat.style.color='#22c55e';
+                    stat.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="11" fill="#22c55e" opacity="0.15"/><circle cx="12" cy="12" r="11" stroke="#22c55e" stroke-width="1.5" fill="none"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="vertical-align:middle">Concluído!</span>';
+                    stat.style.color='#22c55e';
                     bar.style.width='100%';pct.textContent='100%';
                     document.getElementById('ytPluginBtn').disabled=false;
                     ytPluginPolling=false;
+                    document.getElementById('ytCancelBtn').style.display='none';
+                    document.getElementById('ytCloseBtn').style.display='';
                     ytLastFile=p.file||'';
-                    // Auto-import into Premiere project
-                    if(ytLastFile){
-                        ytPluginImport(ytLastFile);
-                    } else {
-                        showMsg('Download OK mas caminho do arquivo vazio');
-                    }
+                    if(ytLastFile) ytPluginImport(ytLastFile);
+                    else showMsg('Download OK mas caminho do arquivo vazio');
                 }else if(p.status==='error'){
-                    stat.textContent='Erro';stat.style.color='#f43f5e';
+                    stat.textContent=p.error?'Erro: '+p.error.substring(0,40):'Erro';stat.style.color='#f43f5e';
                     document.getElementById('ytPluginBtn').disabled=false;
                     ytPluginPolling=false;
+                    document.getElementById('ytCancelBtn').style.display='none';
+                    document.getElementById('ytCloseBtn').style.display='';
                 }else if(p.status==='cancelled'){
                     stat.textContent='Cancelado';stat.style.color='#f43f5e';
                     document.getElementById('ytPluginBtn').disabled=false;
                     ytPluginPolling=false;
+                    document.getElementById('ytCancelBtn').style.display='none';
+                    document.getElementById('ytCloseBtn').style.display='';
                 }else{
                     stat.textContent=p.eta?'ETA: '+p.eta:'';
                     stat.style.color='#888';
@@ -680,6 +953,514 @@
 
     setInterval(poll,1000);
     poll();
+
+    // ===== KEYFRAME CURVE EDITOR =====
+    var curveCP1={x:0.25,y:0.10};
+    var curveCP2={x:0.25,y:1.00};
+    var curveDir='in'; // in, out, inout
+    var curveApplyMode='between';
+    var curveDragging=null; // 'cp1' or 'cp2'
+    var curvePresetName='cubic';
+
+    // Easing presets (control points for ease-in variants)
+    var easingPresets={
+        linear:    {in:{cp1:{x:0.25,y:0.25},cp2:{x:0.75,y:0.75}},out:{cp1:{x:0.25,y:0.25},cp2:{x:0.75,y:0.75}},inout:{cp1:{x:0.25,y:0.25},cp2:{x:0.75,y:0.75}}},
+        sine:      {in:{cp1:{x:0.47,y:0},cp2:{x:0.745,y:0.715}},out:{cp1:{x:0.39,y:0.575},cp2:{x:0.565,y:1}},inout:{cp1:{x:0.445,y:0.05},cp2:{x:0.55,y:0.95}}},
+        quad:      {in:{cp1:{x:0.55,y:0.085},cp2:{x:0.68,y:0.53}},out:{cp1:{x:0.25,y:0.46},cp2:{x:0.45,y:0.94}},inout:{cp1:{x:0.455,y:0.03},cp2:{x:0.515,y:0.955}}},
+        cubic:     {in:{cp1:{x:0.55,y:0.055},cp2:{x:0.675,y:0.19}},out:{cp1:{x:0.215,y:0.61},cp2:{x:0.355,y:1}},inout:{cp1:{x:0.645,y:0.045},cp2:{x:0.355,y:1}}},
+        quart:     {in:{cp1:{x:0.895,y:0.03},cp2:{x:0.685,y:0.22}},out:{cp1:{x:0.165,y:0.84},cp2:{x:0.44,y:1}},inout:{cp1:{x:0.77,y:0},cp2:{x:0.175,y:1}}},
+        quint:     {in:{cp1:{x:0.755,y:0.05},cp2:{x:0.855,y:0.06}},out:{cp1:{x:0.23,y:1},cp2:{x:0.32,y:1}},inout:{cp1:{x:0.86,y:0},cp2:{x:0.07,y:1}}},
+        expo:      {in:{cp1:{x:0.95,y:0.05},cp2:{x:0.795,y:0.035}},out:{cp1:{x:0.19,y:1},cp2:{x:0.22,y:1}},inout:{cp1:{x:1,y:0},cp2:{x:0,y:1}}},
+        circ:      {in:{cp1:{x:0.6,y:0.04},cp2:{x:0.98,y:0.335}},out:{cp1:{x:0.075,y:0.82},cp2:{x:0.165,y:1}},inout:{cp1:{x:0.785,y:0.135},cp2:{x:0.15,y:0.86}}},
+        back:      {in:{cp1:{x:0.6,y:-0.28},cp2:{x:0.735,y:0.045}},out:{cp1:{x:0.175,y:0.885},cp2:{x:0.32,y:1.275}},inout:{cp1:{x:0.68,y:-0.55},cp2:{x:0.265,y:1.55}}},
+        elastic:   {in:{cp1:{x:0.5,y:-0.5},cp2:{x:0.75,y:-0.15}},out:{cp1:{x:0.25,y:1.15},cp2:{x:0.5,y:1.5}},inout:{cp1:{x:0.5,y:-0.5},cp2:{x:0.5,y:1.5}}},
+        bounce:    {in:{cp1:{x:0.4,y:0},cp2:{x:0.7,y:0.2}},out:{cp1:{x:0.3,y:0.8},cp2:{x:0.6,y:1}},inout:{cp1:{x:0.5,y:0},cp2:{x:0.5,y:1}}}
+    };
+
+    function setPreset(name,btn){
+        curvePresetName=name;
+        // Toggle active on preset buttons
+        var btns=document.getElementById('presetBtns').querySelectorAll('.yt-q');
+        for(var i=0;i<btns.length;i++) btns[i].classList.remove('active');
+        if(btn) btn.classList.add('active');
+        if(name==='custom') return; // Keep current custom points
+        var p=easingPresets[name];
+        if(!p) return;
+        var d=p[curveDir]||p['in'];
+        curveCP1={x:d.cp1.x,y:d.cp1.y};
+        curveCP2={x:d.cp2.x,y:d.cp2.y};
+        drawCurve();
+        updateCoords();
+    }
+
+    function setEaseDir(dir){
+        curveDir=dir;
+        document.getElementById('easeIn').classList.toggle('active',dir==='in');
+        document.getElementById('easeOut').classList.toggle('active',dir==='out');
+        document.getElementById('easeInOut').classList.toggle('active',dir==='inout');
+        if(curvePresetName!=='custom') setPreset(curvePresetName,null);
+        else drawCurve();
+    }
+
+    function setApplyMode(mode){
+        curveApplyMode=mode;
+        document.getElementById('applyBetween').classList.toggle('active',mode==='between');
+        document.getElementById('applyAll').classList.toggle('active',mode==='all');
+    }
+
+    function drawCurve(){
+        var canvas=document.getElementById('curveCanvas');
+        if(!canvas) return;
+        var ctx=canvas.getContext('2d');
+        var w=canvas.width,h=canvas.height;
+        var pad=20;
+        var gw=w-2*pad,gh=h-2*pad;
+
+        ctx.clearRect(0,0,w,h);
+
+        // Background grid
+        ctx.strokeStyle='rgba(190,242,100,.06)';
+        ctx.lineWidth=1;
+        for(var i=0;i<=4;i++){
+            var x=pad+gw*(i/4);
+            var y=pad+gh*(i/4);
+            ctx.beginPath();ctx.moveTo(x,pad);ctx.lineTo(x,pad+gh);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(pad+gw,y);ctx.stroke();
+        }
+
+        // Diagonal reference line
+        ctx.strokeStyle='rgba(255,255,255,.08)';
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();
+        ctx.moveTo(pad,pad+gh);
+        ctx.lineTo(pad+gw,pad);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Convert control points to canvas coords
+        function toCanvas(p){return{x:pad+p.x*gw,y:pad+gh-p.y*gh}}
+        var start=toCanvas({x:0,y:0});
+        var end=toCanvas({x:1,y:1});
+        var c1=toCanvas(curveCP1);
+        var c2=toCanvas(curveCP2);
+
+        // Control point lines
+        ctx.strokeStyle='rgba(190,242,100,.3)';
+        ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.lineTo(c1.x,c1.y);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(end.x,end.y);ctx.lineTo(c2.x,c2.y);ctx.stroke();
+
+        // Bezier curve
+        ctx.strokeStyle='#bef264';
+        ctx.lineWidth=2.5;
+        ctx.beginPath();
+        ctx.moveTo(start.x,start.y);
+        ctx.bezierCurveTo(c1.x,c1.y,c2.x,c2.y,end.x,end.y);
+        ctx.stroke();
+
+        // Start/end points
+        ctx.fillStyle='#fff';
+        ctx.beginPath();ctx.arc(start.x,start.y,3,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(end.x,end.y,3,0,Math.PI*2);ctx.fill();
+
+        // Control point handles
+        // CP1 - green
+        ctx.fillStyle='#bef264';
+        ctx.strokeStyle='#fff';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.arc(c1.x,c1.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+        // CP2 - cyan
+        ctx.fillStyle='#22d3ee';
+        ctx.beginPath();ctx.arc(c2.x,c2.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+        // Labels
+        ctx.fillStyle='rgba(255,255,255,.3)';
+        ctx.font='9px sans-serif';
+        ctx.textAlign='left';
+        ctx.fillText('0',pad-3,pad+gh+12);
+        ctx.fillText('1',pad+gw-3,pad-5);
+    }
+
+    function updateCoords(){
+        document.getElementById('cp1x').textContent=curveCP1.x.toFixed(2);
+        document.getElementById('cp1y').textContent=curveCP1.y.toFixed(2);
+        document.getElementById('cp2x').textContent=curveCP2.x.toFixed(2);
+        document.getElementById('cp2y').textContent=curveCP2.y.toFixed(2);
+        document.getElementById('curveCSS').textContent='cubic-bezier('+curveCP1.x.toFixed(2)+','+curveCP1.y.toFixed(2)+','+curveCP2.x.toFixed(2)+','+curveCP2.y.toFixed(2)+')';
+    }
+
+    function copyCurveCSS(){
+        var txt='cubic-bezier('+curveCP1.x.toFixed(2)+','+curveCP1.y.toFixed(2)+','+curveCP2.x.toFixed(2)+','+curveCP2.y.toFixed(2)+')';
+        try{navigator.clipboard.writeText(txt)}catch(e){}
+        var el=document.getElementById('curveCSS');
+        el.style.color='#bef264';setTimeout(function(){el.style.color='#555'},800);
+    }
+
+    function curveFlipH(){
+        curveCP1={x:1-curveCP1.x,y:curveCP1.y};
+        curveCP2={x:1-curveCP2.x,y:curveCP2.y};
+        curvePresetName='custom';
+        activateCustomBtn();
+        drawCurve();updateCoords();
+    }
+    function curveFlipV(){
+        curveCP1={x:curveCP1.x,y:1-curveCP1.y};
+        curveCP2={x:curveCP2.x,y:1-curveCP2.y};
+        curvePresetName='custom';
+        activateCustomBtn();
+        drawCurve();updateCoords();
+    }
+    function curveReset(){
+        curveCP1={x:0.25,y:0.10};curveCP2={x:0.25,y:1.00};
+        curvePresetName='cubic';
+        setPreset('cubic',document.getElementById('presetBtns').querySelector('.yt-q'));
+        drawCurve();updateCoords();
+    }
+    function activateCustomBtn(){
+        var btns=document.getElementById('presetBtns').querySelectorAll('.yt-q');
+        for(var i=0;i<btns.length;i++) btns[i].classList.remove('active');
+        document.getElementById('presetCustomBtn').classList.add('active');
+    }
+
+    // Mouse interaction on canvas
+    (function(){
+        var canvas=document.getElementById('curveCanvas');
+        if(!canvas) return;
+        var pad=20;
+
+        function getMousePos(e){
+            var rect=canvas.getBoundingClientRect();
+            var scaleX=canvas.width/rect.width;
+            var scaleY=canvas.height/rect.height;
+            return{x:(e.clientX-rect.left)*scaleX,y:(e.clientY-rect.top)*scaleY};
+        }
+        function toNorm(px){
+            var gw=canvas.width-2*pad,gh=canvas.height-2*pad;
+            return{x:Math.max(-0.3,Math.min(1.3,(px.x-pad)/gw)),y:Math.max(-0.5,Math.min(1.5,1-(px.y-pad)/gh))};
+        }
+        function dist(a,b){return Math.sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y))}
+        function toCanvas(p){
+            var gw=canvas.width-2*pad,gh=canvas.height-2*pad;
+            return{x:pad+p.x*gw,y:pad+gh-p.y*gh};
+        }
+
+        canvas.addEventListener('mousedown',function(e){
+            var mp=getMousePos(e);
+            var c1=toCanvas(curveCP1);
+            var c2=toCanvas(curveCP2);
+            if(dist(mp,c1)<14) curveDragging='cp1';
+            else if(dist(mp,c2)<14) curveDragging='cp2';
+        });
+        canvas.addEventListener('mousemove',function(e){
+            if(!curveDragging) return;
+            var mp=getMousePos(e);
+            var np=toNorm(mp);
+            if(curveDragging==='cp1'){curveCP1.x=np.x;curveCP1.y=np.y;}
+            else{curveCP2.x=np.x;curveCP2.y=np.y;}
+            curvePresetName='custom';
+            activateCustomBtn();
+            drawCurve();updateCoords();
+        });
+        canvas.addEventListener('mouseup',function(){curveDragging=null});
+        canvas.addEventListener('mouseleave',function(){curveDragging=null});
+    })();
+
+    // Initial draw
+    drawCurve();
+    updateCoords();
+
+    // Apply easing to Premiere keyframes
+    function showEasingMsg(msg,color){
+        var el=document.getElementById('easingMsg');
+        el.textContent=msg;
+        el.style.color=color||'#888';
+        clearTimeout(el._t);
+        el._t=setTimeout(function(){el.textContent=''},4000);
+    }
+
+    function applyEasing(){
+        if(!window.__adobe_cep__||typeof csInterface==='undefined'){
+            showEasingMsg('CEP indisponivel','#f43f5e');
+            return;
+        }
+        var cp1x=curveCP1.x,cp1y=curveCP1.y,cp2x=curveCP2.x,cp2y=curveCP2.y;
+        var mode=curveApplyMode; // 'between' or 'all'
+
+        showEasingMsg('Aplicando easing...','#f59e0b');
+
+        var script='applyBezierEasing('+cp1x.toFixed(4)+','+cp1y.toFixed(4)+','+cp2x.toFixed(4)+','+cp2y.toFixed(4)+',"'+mode+'")';
+        csInterface.evalScript(script,function(result){
+            if(result&&result.indexOf('OK')===0){
+                var parts=result.split(':');
+                showEasingMsg('Easing aplicado! ('+( parts[1]||'')+ ' keys)','#22c55e');
+            }else if(result==='NO_SEQUENCE'){
+                showEasingMsg('Nenhuma sequence aberta','#f43f5e');
+            }else if(result==='NO_SELECTION'){
+                showEasingMsg('Selecione um clip na timeline','#f43f5e');
+            }else if(result==='NO_KEYS'){
+                showEasingMsg('Clip sem keyframes — adicione keyframes primeiro','#f43f5e');
+            }else{
+                showEasingMsg(result||'Erro ao aplicar','#f43f5e');
+            }
+        });
+    }
+
+    // ===== SAVED PRESETS SYSTEM =====
+    var savedPresets=[];
+    var presetEditMode=false;
+
+    function loadSavedPresets(){
+        try{
+            var data=localStorage.getItem('lw_easing_presets');
+            if(data) savedPresets=JSON.parse(data);
+        }catch(e){savedPresets=[]}
+        renderSavedPresets();
+    }
+
+    function saveSavedPresets(){
+        try{localStorage.setItem('lw_easing_presets',JSON.stringify(savedPresets))}catch(e){}
+    }
+
+    function saveCurrentPreset(){
+        var name=prompt('Nome do preset:');
+        if(!name||!name.trim()) return;
+        savedPresets.push({
+            name:name.trim(),
+            cp1:{x:curveCP1.x,y:curveCP1.y},
+            cp2:{x:curveCP2.x,y:curveCP2.y},
+            dir:curveDir
+        });
+        saveSavedPresets();
+        renderSavedPresets();
+        showEasingMsg('Preset "'+name.trim()+'" salvo!','#22c55e');
+    }
+
+    function loadPreset(idx){
+        if(presetEditMode) return;
+        if(idx<0||idx>=savedPresets.length) return;
+        var p=savedPresets[idx];
+        curveCP1={x:p.cp1.x,y:p.cp1.y};
+        curveCP2={x:p.cp2.x,y:p.cp2.y};
+        if(p.dir) setEaseDir(p.dir);
+        curvePresetName='custom';
+        activateCustomBtn();
+        drawCurve();
+        updateCoords();
+    }
+
+    function deletePreset(idx){
+        if(idx<0||idx>=savedPresets.length) return;
+        var name=savedPresets[idx].name;
+        savedPresets.splice(idx,1);
+        saveSavedPresets();
+        renderSavedPresets();
+        showEasingMsg('Preset "'+name+'" removido','#f43f5e');
+    }
+
+    function togglePresetEdit(){
+        presetEditMode=!presetEditMode;
+        var btn=document.getElementById('presetEditBtn');
+        if(presetEditMode){
+            btn.style.color='#f43f5e';btn.style.borderColor='rgba(244,63,94,.3)';btn.textContent='Pronto';
+        }else{
+            btn.style.color='';btn.style.borderColor='';btn.textContent='Editar';
+        }
+        renderSavedPresets();
+    }
+
+    // Draw mini curve thumbnail on a small canvas
+    function drawMiniCurve(canvas,cp1,cp2){
+        var ctx=canvas.getContext('2d');
+        var w=canvas.width,h=canvas.height;
+        var pad=3;
+        var gw=w-2*pad,gh=h-2*pad;
+        ctx.clearRect(0,0,w,h);
+
+        // Background
+        ctx.fillStyle='#1a1a1a';
+        ctx.fillRect(0,0,w,h);
+
+        // Subtle grid
+        ctx.strokeStyle='rgba(190,242,100,.06)';
+        ctx.lineWidth=0.5;
+        ctx.beginPath();ctx.moveTo(pad,pad+gh/2);ctx.lineTo(pad+gw,pad+gh/2);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(pad+gw/2,pad);ctx.lineTo(pad+gw/2,pad+gh);ctx.stroke();
+
+        // Diagonal ref
+        ctx.strokeStyle='rgba(255,255,255,.06)';
+        ctx.lineWidth=0.5;
+        ctx.setLineDash([2,2]);
+        ctx.beginPath();ctx.moveTo(pad,pad+gh);ctx.lineTo(pad+gw,pad);ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Curve
+        var sx=pad,sy=pad+gh;
+        var ex=pad+gw,ey=pad;
+        var c1x=pad+cp1.x*gw,c1y=pad+gh-cp1.y*gh;
+        var c2x=pad+cp2.x*gw,c2y=pad+gh-cp2.y*gh;
+
+        ctx.strokeStyle='#bef264';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx,sy);
+        ctx.bezierCurveTo(c1x,c1y,c2x,c2y,ex,ey);
+        ctx.stroke();
+
+        // Points
+        ctx.fillStyle='#fff';
+        ctx.beginPath();ctx.arc(sx,sy,1.5,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();
+    }
+
+    function renderSavedPresets(){
+        var grid=document.getElementById('savedPresetsGrid');
+        var noMsg=document.getElementById('noPresets');
+        if(!grid) return;
+        grid.innerHTML='';
+
+        if(savedPresets.length===0){
+            if(noMsg) noMsg.style.display='';
+            return;
+        }
+        if(noMsg) noMsg.style.display='none';
+
+        for(var i=0;i<savedPresets.length;i++){
+            (function(idx){
+                var p=savedPresets[idx];
+                var item=document.createElement('div');
+                item.style.cssText='position:relative;cursor:pointer;border-radius:4px;border:1px solid rgba(190,242,100,.08);overflow:hidden;transition:all .12s;background:#1a1a1a';
+                item.title=p.name;
+
+                // Mini canvas
+                var cv=document.createElement('canvas');
+                cv.width=36;cv.height=36;
+                cv.style.cssText='width:100%;height:auto;display:block';
+                item.appendChild(cv);
+
+                // Name label
+                var label=document.createElement('div');
+                label.style.cssText='font-size:.42rem;color:#888;text-align:center;padding:1px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(0,0,0,.4)';
+                label.textContent=p.name;
+                item.appendChild(label);
+
+                if(presetEditMode){
+                    // Delete button overlay
+                    var del=document.createElement('div');
+                    del.style.cssText='position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,63,94,.15);display:flex;align-items:center;justify-content:center;cursor:pointer';
+                    del.innerHTML='<span style="color:#f43f5e;font-size:.7rem;font-weight:800">X</span>';
+                    del.onclick=function(e){e.stopPropagation();deletePreset(idx)};
+                    item.appendChild(del);
+                }else{
+                    item.onmouseenter=function(){item.style.borderColor='rgba(190,242,100,.3)'};
+                    item.onmouseleave=function(){item.style.borderColor='rgba(190,242,100,.08)'};
+                    item.onclick=function(){loadPreset(idx)};
+                }
+
+                grid.appendChild(item);
+
+                // Draw the mini curve after appended to DOM
+                setTimeout(function(){drawMiniCurve(cv,p.cp1,p.cp2)},10);
+            })(i);
+        }
+    }
+
+    // Load presets on init
+    loadSavedPresets();
+
+    // ============================================
+    // ANCHOR POINT PRO
+    // ============================================
+    var anchorCompensate=true;
+    var anchorCurrent='cc';
+
+    var anchorLabels={
+        'tl':'Sup. Esquerdo','tc':'Sup. Centro','tr':'Sup. Direito',
+        'cl':'Meio Esquerdo','cc':'Centro','cr':'Meio Direito',
+        'bl':'Inf. Esquerdo','bc':'Inf. Centro','br':'Inf. Direito'
+    };
+
+    function toggleCompensate(){
+        anchorCompensate=!anchorCompensate;
+        var el=document.getElementById('anchorCompCheck');
+        if(el){
+            if(anchorCompensate) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+    }
+
+    function showAnchorMsg(msg,color){
+        var el=document.getElementById('anchorMsg');
+        if(!el) return;
+        el.textContent=msg;
+        el.style.color=color||'#555';
+        setTimeout(function(){
+            if(el.textContent===msg) el.textContent='';
+        },3500);
+    }
+
+    function setAnchor(pos){
+        anchorCurrent=pos;
+        // Highlight active dot
+        var dots=document.querySelectorAll('.anchor-dot');
+        for(var i=0;i<dots.length;i++){
+            if(dots[i].getAttribute('data-pos')===pos) dots[i].classList.add('active');
+            else dots[i].classList.remove('active');
+        }
+        // Update label
+        var lblEl=document.getElementById('anchorLabel');
+        if(lblEl) lblEl.textContent=anchorLabels[pos]||'-';
+
+        if(!csInterface){
+            showAnchorMsg('CEP indisponivel','#f43f5e');
+            return;
+        }
+
+        showAnchorMsg('Aplicando...','#f59e0b');
+        var script='setClipAnchorPoint("'+pos+'",'+(anchorCompensate?'true':'false')+')';
+        csInterface.evalScript(script,function(result){
+            var r=String(result||'');
+            if(r.indexOf('OK')===0){
+                var parts=r.split(':');
+                var n=parts[1]||'1';
+                showAnchorMsg('Anchor aplicado em '+n+' clip(s)','#22c55e');
+            } else if(r==='NO_SEQUENCE'){
+                showAnchorMsg('Nenhuma sequence aberta','#f43f5e');
+            } else if(r==='NO_SELECTION'){
+                showAnchorMsg('Selecione um clip na timeline','#f43f5e');
+            } else if(r==='NO_APPLIED'){
+                showAnchorMsg('Não foi possível aplicar (sem Motion?)','#f43f5e');
+            } else if(r==='NO_PROJECT'){
+                showAnchorMsg('Nenhum projeto aberto','#f43f5e');
+            } else {
+                showAnchorMsg(r||'Erro ao aplicar','#f43f5e');
+            }
+        });
+    }
+
+    function anchorReset(){
+        setAnchor('cc');
+    }
+
+    function anchorKeyframe(){
+        if(!csInterface){
+            showAnchorMsg('CEP indisponivel','#f43f5e');
+            return;
+        }
+        showAnchorMsg('Adicionando keyframe...','#f59e0b');
+        csInterface.evalScript('addAnchorKeyframe()',function(result){
+            var r=String(result||'');
+            if(r.indexOf('OK')===0){
+                var parts=r.split(':');
+                showAnchorMsg('Keyframe adicionado ('+(parts[1]||'1')+' clips)','#22c55e');
+            } else if(r==='NO_SELECTION'){
+                showAnchorMsg('Selecione um clip','#f43f5e');
+            } else {
+                showAnchorMsg(r||'Erro','#f43f5e');
+            }
+        });
+    }
+
     </script>
 </body>
 </html>
