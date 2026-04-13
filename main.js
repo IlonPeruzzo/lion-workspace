@@ -3,8 +3,10 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { exec, spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const { createClient } = require('@supabase/supabase-js');
 
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
@@ -1174,10 +1176,302 @@ ipcMain.handle('install-update', () => {
     autoUpdater.quitAndInstall(false, true);
 });
 
+/* ═══════ Auth & License ═══════ */
+const SUPABASE_URL = 'https://rxwprlqskwylhvpjiung.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4d3BybHFza3d5bGh2cGppdW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjYyNTcsImV4cCI6MjA5MTM0MjI1N30.0ej5GjmfzCMu9odw6R6mjU6GTAvdjUu2vQ5t6dsJYkM';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        storage: {
+            getItem: (key) => {
+                try {
+                    const filePath = path.join(app.getPath('userData'), 'auth-storage.json');
+                    if (!fs.existsSync(filePath)) return null;
+                    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                    return data[key] || null;
+                } catch { return null; }
+            },
+            setItem: (key, value) => {
+                try {
+                    const filePath = path.join(app.getPath('userData'), 'auth-storage.json');
+                    let data = {};
+                    try { data = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch {}
+                    data[key] = value;
+                    fs.writeFileSync(filePath, JSON.stringify(data));
+                } catch {}
+            },
+            removeItem: (key) => {
+                try {
+                    const filePath = path.join(app.getPath('userData'), 'auth-storage.json');
+                    let data = {};
+                    try { data = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch {}
+                    delete data[key];
+                    fs.writeFileSync(filePath, JSON.stringify(data));
+                } catch {}
+            }
+        }
+    }
+});
+
+// Device fingerprint (stable per machine)
+function getDeviceFingerprint() {
+    const cpus = os.cpus();
+    const cpuModel = cpus.length > 0 ? cpus[0].model : 'unknown';
+    const nets = os.networkInterfaces();
+    let mac = '';
+    for (const ifaces of Object.values(nets)) {
+        for (const iface of ifaces) {
+            if (!iface.internal && iface.mac && iface.mac !== '00:00:00:00:00:00') {
+                mac = iface.mac;
+                break;
+            }
+        }
+        if (mac) break;
+    }
+    const raw = `${os.hostname()}-${cpuModel}-${mac}-${os.platform()}-${os.arch()}`;
+    return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+// License cache for offline grace period
+const LICENSE_CACHE_FILE = 'license-cache.json';
+
+function getLicenseCache() {
+    try {
+        const filePath = path.join(app.getPath('userData'), LICENSE_CACHE_FILE);
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch { return null; }
+}
+
+function setLicenseCache(data) {
+    try {
+        const filePath = path.join(app.getPath('userData'), LICENSE_CACHE_FILE);
+        fs.writeFileSync(filePath, JSON.stringify({ ...data, cached_at: new Date().toISOString() }));
+    } catch {}
+}
+
+function clearLicenseCache() {
+    try {
+        const filePath = path.join(app.getPath('userData'), LICENSE_CACHE_FILE);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch {}
+}
+
+// IPC: Login
+ipcMain.handle('auth-login', async (_, email, password) => {
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) return { success: false, error: error.message };
+
+        // Register/update device
+        const fingerprint = getDeviceFingerprint();
+        await supabase.from('devices').upsert({
+            user_id: data.user.id,
+            fingerprint,
+            name: os.hostname(),
+            platform: os.platform(),
+            os_version: os.release(),
+            hostname: os.hostname(),
+            cpu_model: os.cpus()[0]?.model || 'unknown',
+            app_version: app.getVersion(),
+            last_seen_at: new Date().toISOString(),
+            last_heartbeat_at: new Date().toISOString()
+        }, { onConflict: 'user_id,fingerprint' });
+
+        return {
+            success: true,
+            user: { id: data.user.id, email: data.user.email }
+        };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
+// IPC: Logout
+ipcMain.handle('auth-logout', async () => {
+    try {
+        await supabase.auth.signOut();
+        clearLicenseCache();
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
+// IPC: Get current session/user
+ipcMain.handle('auth-get-session', async () => {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return { authenticated: false };
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { authenticated: false };
+
+        // Get profile
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url, email')
+            .eq('id', user.id)
+            .single();
+
+        return {
+            authenticated: true,
+            user: {
+                id: user.id,
+                email: user.email,
+                full_name: profile?.full_name || '',
+                avatar_url: profile?.avatar_url || ''
+            }
+        };
+    } catch {
+        return { authenticated: false };
+    }
+});
+
+// IPC: Check license/subscription status
+ipcMain.handle('auth-check-license', async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            // Check offline cache
+            const cache = getLicenseCache();
+            if (cache) {
+                const cachedDate = new Date(cache.cached_at);
+                const daysSince = (Date.now() - cachedDate.getTime()) / (1000 * 60 * 60 * 24);
+                if (daysSince <= 7 && cache.valid) {
+                    return { ...cache, offline: true };
+                }
+            }
+            return { valid: false, reason: 'not_authenticated' };
+        }
+
+        // Check subscription
+        const { data: sub } = await supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('user_id', user.id)
+            .in('status', ['active', 'trialing'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (!sub) {
+            // No active subscription — still allow access (trial/free tier)
+            const result = { valid: true, plan: 'free', status: 'free' };
+            setLicenseCache(result);
+            return result;
+        }
+
+        // Check device
+        const fingerprint = getDeviceFingerprint();
+        const { data: device } = await supabase
+            .from('devices')
+            .select('blocked')
+            .eq('user_id', user.id)
+            .eq('fingerprint', fingerprint)
+            .single();
+
+        if (device?.blocked) {
+            return { valid: false, reason: 'device_blocked' };
+        }
+
+        // Update heartbeat
+        await supabase
+            .from('devices')
+            .update({
+                last_heartbeat_at: new Date().toISOString(),
+                last_seen_at: new Date().toISOString(),
+                app_version: app.getVersion()
+            })
+            .eq('user_id', user.id)
+            .eq('fingerprint', fingerprint);
+
+        const result = {
+            valid: true,
+            plan: sub.plan,
+            status: sub.status,
+            current_period_end: sub.current_period_end
+        };
+        setLicenseCache(result);
+        return result;
+    } catch (err) {
+        // Offline — check cache
+        const cache = getLicenseCache();
+        if (cache) {
+            const cachedDate = new Date(cache.cached_at);
+            const daysSince = (Date.now() - cachedDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSince <= 7 && cache.valid) {
+                return { ...cache, offline: true };
+            }
+        }
+        return { valid: false, reason: 'offline_expired', error: err.message };
+    }
+});
+
+// IPC: Signup
+ipcMain.handle('auth-signup', async (_, email, password, fullName) => {
+    try {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName } }
+        });
+        if (error) return { success: false, error: error.message };
+        return {
+            success: true,
+            needsConfirmation: !data.session,
+            user: data.user ? { id: data.user.id, email: data.user.email } : null
+        };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
+// IPC: Forgot password
+ipcMain.handle('auth-forgot-password', async (_, email) => {
+    try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: 'https://app.lionwork.com.br/reset-password'
+        });
+        if (error) return { success: false, error: error.message };
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
+// Heartbeat every 5 minutes (keep device alive)
+let heartbeatInterval = null;
+function startHeartbeat() {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const fingerprint = getDeviceFingerprint();
+            await supabase
+                .from('devices')
+                .update({
+                    last_heartbeat_at: new Date().toISOString(),
+                    last_seen_at: new Date().toISOString(),
+                    app_version: app.getVersion()
+                })
+                .eq('user_id', user.id)
+                .eq('fingerprint', fingerprint);
+        } catch {}
+    }, 5 * 60 * 1000);
+}
+
+function stopHeartbeat() {
+    if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+}
+
 /* ═══════ App lifecycle ═══════ */
 app.on('before-quit', () => {
     app.isQuitting = true;
     stopFgDaemon();
+    stopHeartbeat();
 });
 
 app.whenReady().then(() => {
@@ -1185,6 +1479,7 @@ app.whenReady().then(() => {
     startSyncServer();
     autoInstallPremierePlugin();
     setupAutoUpdater();
+    startHeartbeat();
 });
 
 // Auto-install Premiere plugin on startup (works on both Mac and Windows)

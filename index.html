@@ -379,9 +379,96 @@
         .update-banner .ub-btn{background:#bef264;color:#0a0a0a;border:none;padding:4px 12px;border-radius:6px;font-size:.78rem;font-weight:600;cursor:pointer;transition:opacity .2s}
         .update-banner .ub-btn:hover{opacity:.85}
         .update-banner .ub-close{background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;font-size:1.1rem;line-height:1}
+
+        /* Login screen */
+        .login-screen{position:fixed;inset:0;background:#050505;display:flex;align-items:center;justify-content:center;z-index:9999;-webkit-app-region:drag}
+        .login-screen.hidden{display:none}
+        .login-card{width:380px;padding:40px;-webkit-app-region:no-drag}
+        .login-card .logo{text-align:center;margin-bottom:32px}
+        .login-card .logo h1{font-size:1.6rem;font-weight:800;color:#f5f5f5;letter-spacing:-.5px}
+        .login-card .logo h1 span{color:#bef264}
+        .login-card .logo p{font-size:.82rem;color:#636363;margin-top:6px}
+        .login-card .login-form{display:flex;flex-direction:column;gap:14px}
+        .login-card .login-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;font-size:.88rem;color:#f5f5f5;outline:none;transition:border-color .2s;font-family:inherit}
+        .login-card .login-input:focus{border-color:rgba(190,242,100,.4)}
+        .login-card .login-input::placeholder{color:#525252}
+        .login-card .login-btn{background:#bef264;color:#0a0a0a;border:none;padding:12px;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s;font-family:inherit}
+        .login-card .login-btn:hover{opacity:.9}
+        .login-card .login-btn:disabled{opacity:.5;cursor:not-allowed}
+        .login-card .login-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:.82rem;display:none}
+        .login-card .login-error.show{display:block}
+        .login-card .login-links{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+        .login-card .login-links a{color:#636363;font-size:.78rem;text-decoration:none;cursor:pointer;transition:color .2s}
+        .login-card .login-links a:hover{color:#bef264}
+        .login-card .login-divider{text-align:center;color:#525252;font-size:.75rem;margin:8px 0;position:relative}
+        .login-card .login-divider::before,.login-card .login-divider::after{content:'';position:absolute;top:50%;width:calc(50% - 20px);height:1px;background:rgba(255,255,255,.06)}
+        .login-card .login-divider::before{left:0}
+        .login-card .login-divider::after{right:0}
+        .login-card .login-secondary{background:none;border:1px solid rgba(255,255,255,.08);color:#a3a3a3;padding:10px;border-radius:10px;font-size:.82rem;cursor:pointer;transition:all .2s;font-family:inherit;width:100%}
+        .login-card .login-secondary:hover{border-color:rgba(190,242,100,.2);color:#f5f5f5}
+        .login-loading{display:flex;align-items:center;justify-content:center;gap:8px}
+        .login-spinner{width:16px;height:16px;border:2px solid rgba(10,10,10,.2);border-top-color:#0a0a0a;border-radius:50%;animation:spin .6s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .login-success{background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.2);color:#bef264;padding:10px 14px;border-radius:8px;font-size:.82rem;display:none}
+        .login-success.show{display:block}
     </style>
 </head>
 <body>
+
+<!-- Login Screen -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-card">
+        <div class="logo">
+            <h1>Lion <span>Workspace</span></h1>
+            <p>Faça login para continuar</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginFormView">
+            <div class="login-form">
+                <div class="login-error" id="loginError"></div>
+                <input class="login-input" type="email" id="loginEmail" placeholder="Email" autocomplete="email">
+                <input class="login-input" type="password" id="loginPassword" placeholder="Senha" autocomplete="current-password">
+                <button class="login-btn" id="loginBtn" onclick="doLogin()">Entrar</button>
+                <div class="login-links">
+                    <a onclick="showForgotPassword()">Esqueci minha senha</a>
+                    <a onclick="showSignup()">Criar conta</a>
+                </div>
+                <div class="login-divider">ou</div>
+                <button class="login-secondary" onclick="window.electronAPI.openExternal('https://app.lionwork.com.br/signup')">Criar conta no site</button>
+            </div>
+        </div>
+
+        <!-- Signup Form -->
+        <div id="signupFormView" style="display:none">
+            <div class="login-form">
+                <div class="login-error" id="signupError"></div>
+                <div class="login-success" id="signupSuccess"></div>
+                <input class="login-input" type="text" id="signupName" placeholder="Nome completo">
+                <input class="login-input" type="email" id="signupEmail" placeholder="Email">
+                <input class="login-input" type="password" id="signupPassword" placeholder="Senha (mínimo 8 caracteres)">
+                <button class="login-btn" id="signupBtn" onclick="doSignup()">Criar conta</button>
+                <div class="login-links">
+                    <a onclick="showLogin()">Já tenho conta</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Forgot Password Form -->
+        <div id="forgotFormView" style="display:none">
+            <div class="login-form">
+                <div class="login-error" id="forgotError"></div>
+                <div class="login-success" id="forgotSuccess"></div>
+                <p style="font-size:.82rem;color:#a3a3a3;margin-bottom:4px">Digite seu email para receber o link de recuperação.</p>
+                <input class="login-input" type="email" id="forgotEmail" placeholder="Email">
+                <button class="login-btn" id="forgotBtn" onclick="doForgotPassword()">Enviar link</button>
+                <div class="login-links">
+                    <a onclick="showLogin()">Voltar ao login</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Update notification banner -->
 <div class="update-banner" id="updateBanner">
@@ -895,6 +982,18 @@
     <div class="config-panel">
         <div class="cp-header"><h3>Configurações</h3><button class="cp-close" onclick="fecharConfig()">&times;</button></div>
 
+        <!-- Account info -->
+        <div id="accountSection" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.08);border-radius:10px;margin-bottom:16px">
+            <div>
+                <div style="font-size:.82rem;font-weight:600;color:var(--text1)" id="accountName">—</div>
+                <div style="font-size:.72rem;color:var(--text3)" id="accountEmail">—</div>
+            </div>
+            <button class="btn btn-o" onclick="doLogout()" style="font-size:.72rem;padding:4px 10px;color:#f87171;border-color:rgba(248,113,113,.2)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Sair
+            </button>
+        </div>
+
         <div class="card-title">Seus Dados (Invoice)</div>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
             <div class="fg"><label>Nome Completo</label><input type="text" id="cfgNome" placeholder="Seu nome completo" style="font-size:.82rem"></div>
@@ -1163,6 +1262,200 @@
 </div>
 
 <script>
+/* ═══════ AUTH SYSTEM ═══════ */
+const loginScreen = document.getElementById('loginScreen');
+const appContainer = document.querySelector('.app');
+
+// Hide app until auth check
+if (appContainer) appContainer.style.display = 'none';
+
+async function checkAuth() {
+    if (!window.auth) {
+        // No auth bridge (dev mode) — show app directly
+        showApp();
+        return;
+    }
+
+    try {
+        const session = await window.auth.getSession();
+        if (session.authenticated) {
+            // Update account info in settings
+            if (session.user) {
+                document.getElementById('accountName').textContent = session.user.full_name || 'Usuário';
+                document.getElementById('accountEmail').textContent = session.user.email || '';
+            }
+            showApp();
+        } else {
+            showLoginScreen();
+        }
+    } catch {
+        showLoginScreen();
+    }
+}
+
+function showApp() {
+    loginScreen.classList.add('hidden');
+    if (appContainer) appContainer.style.display = '';
+}
+
+function showLoginScreen() {
+    loginScreen.classList.remove('hidden');
+    if (appContainer) appContainer.style.display = 'none';
+}
+
+// Login form navigation
+function showLogin() {
+    document.getElementById('loginFormView').style.display = '';
+    document.getElementById('signupFormView').style.display = 'none';
+    document.getElementById('forgotFormView').style.display = 'none';
+    document.querySelector('.login-card .logo p').textContent = 'Faça login para continuar';
+}
+function showSignup() {
+    document.getElementById('loginFormView').style.display = 'none';
+    document.getElementById('signupFormView').style.display = '';
+    document.getElementById('forgotFormView').style.display = 'none';
+    document.querySelector('.login-card .logo p').textContent = 'Crie sua conta';
+}
+function showForgotPassword() {
+    document.getElementById('loginFormView').style.display = 'none';
+    document.getElementById('signupFormView').style.display = 'none';
+    document.getElementById('forgotFormView').style.display = '';
+    document.querySelector('.login-card .logo p').textContent = 'Recuperar senha';
+}
+
+async function doLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errorEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+
+    if (!email || !password) {
+        errorEl.textContent = 'Preencha email e senha';
+        errorEl.classList.add('show');
+        return;
+    }
+
+    errorEl.classList.remove('show');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="login-loading"><span class="login-spinner"></span> Entrando...</span>';
+
+    const result = await window.auth.login(email, password);
+
+    if (result.success) {
+        // Update account info
+        const session = await window.auth.getSession();
+        if (session.user) {
+            document.getElementById('accountName').textContent = session.user.full_name || 'Usuário';
+            document.getElementById('accountEmail').textContent = session.user.email || '';
+        }
+        showApp();
+    } else {
+        let msg = result.error || 'Erro ao fazer login';
+        if (msg.includes('Invalid login')) msg = 'Email ou senha incorretos';
+        errorEl.textContent = msg;
+        errorEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+    }
+}
+
+async function doSignup() {
+    const name = document.getElementById('signupName').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const errorEl = document.getElementById('signupError');
+    const successEl = document.getElementById('signupSuccess');
+    const btn = document.getElementById('signupBtn');
+
+    if (!email || !password) {
+        errorEl.textContent = 'Preencha todos os campos';
+        errorEl.classList.add('show');
+        successEl.classList.remove('show');
+        return;
+    }
+    if (password.length < 8) {
+        errorEl.textContent = 'Senha deve ter no mínimo 8 caracteres';
+        errorEl.classList.add('show');
+        successEl.classList.remove('show');
+        return;
+    }
+
+    errorEl.classList.remove('show');
+    successEl.classList.remove('show');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="login-loading"><span class="login-spinner"></span> Criando...</span>';
+
+    const result = await window.auth.signup(email, password, name);
+
+    btn.disabled = false;
+    btn.textContent = 'Criar conta';
+
+    if (result.success) {
+        if (result.needsConfirmation) {
+            successEl.textContent = 'Conta criada! Verifique seu email para confirmar.';
+            successEl.classList.add('show');
+            errorEl.classList.remove('show');
+        } else {
+            showApp();
+        }
+    } else {
+        let msg = result.error || 'Erro ao criar conta';
+        if (msg.includes('already registered')) msg = 'Este email já está cadastrado';
+        errorEl.textContent = msg;
+        errorEl.classList.add('show');
+    }
+}
+
+async function doForgotPassword() {
+    const email = document.getElementById('forgotEmail').value.trim();
+    const errorEl = document.getElementById('forgotError');
+    const successEl = document.getElementById('forgotSuccess');
+    const btn = document.getElementById('forgotBtn');
+
+    if (!email) {
+        errorEl.textContent = 'Digite seu email';
+        errorEl.classList.add('show');
+        return;
+    }
+
+    errorEl.classList.remove('show');
+    successEl.classList.remove('show');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="login-loading"><span class="login-spinner"></span> Enviando...</span>';
+
+    const result = await window.auth.forgotPassword(email);
+
+    btn.disabled = false;
+    btn.textContent = 'Enviar link';
+
+    if (result.success) {
+        successEl.textContent = 'Link de recuperação enviado para seu email!';
+        successEl.classList.add('show');
+    } else {
+        errorEl.textContent = result.error || 'Erro ao enviar email';
+        errorEl.classList.add('show');
+    }
+}
+
+async function doLogout() {
+    if (!window.auth) return;
+    await window.auth.logout();
+    showLoginScreen();
+    // Clear form fields
+    document.getElementById('loginEmail').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('loginError').classList.remove('show');
+}
+
+// Enter key on login fields
+document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
+document.getElementById('signupPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doSignup(); });
+document.getElementById('forgotEmail').addEventListener('keydown', e => { if (e.key === 'Enter') doForgotPassword(); });
+
+// Run auth check on load
+checkAuth();
+
 // ===== ESTADO =====
 let cliRaw = JSON.parse(localStorage.getItem('vc_clientes')||'[]');
 let clientes = cliRaw.map(c => typeof c==='string' ? {nome:c,internacional:false,yt:'',tt:'',ig:''} : {yt:'',tt:'',ig:'',...c});

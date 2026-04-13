@@ -43,3 +43,12 @@ contextBridge.exposeInMainWorld('appUpdater', {
     installUpdate: () => ipcRenderer.invoke('install-update'),
     onUpdateStatus: (cb) => ipcRenderer.on('update-status', (event, data) => cb(data))
 });
+
+contextBridge.exposeInMainWorld('auth', {
+    login: (email, password) => ipcRenderer.invoke('auth-login', email, password),
+    signup: (email, password, fullName) => ipcRenderer.invoke('auth-signup', email, password, fullName),
+    logout: () => ipcRenderer.invoke('auth-logout'),
+    getSession: () => ipcRenderer.invoke('auth-get-session'),
+    checkLicense: () => ipcRenderer.invoke('auth-check-license'),
+    forgotPassword: (email) => ipcRenderer.invoke('auth-forgot-password', email)
+});
