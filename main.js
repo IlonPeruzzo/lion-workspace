@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const { exec, spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
@@ -702,25 +703,37 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
     ];
     if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
 
-    // Partial download (time range)
-    if (startTime || endTime) {
-        const st = startTime || '0';
-        const et = endTime || 'inf';
-        args.push('--download-sections', '*' + st + '-' + et);
-        args.push('--force-keyframes-at-cuts');
-    }
+    // Trim info (will be applied AFTER download with ffmpeg -c copy)
+    const wantTrim = ffmpegReady() && ((startTime && startTime !== '0' && startTime !== '00:00' && startTime !== '0:00') || (endTime && endTime !== 'inf'));
+    const trimStart = startTime || '0';
+    const trimEnd = endTime || '';
 
+    const hasFfmpeg = ffmpegReady();
     if (format === 'mp3') {
         args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
-    } else if (format === '4k') {
-        args.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
-    } else if (format === '1080') {
-        args.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
-    } else if (format === '720') {
-        args.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+    } else if (hasFfmpeg) {
+        // ffmpeg available — download best video+audio separately, merge to mp4
+        if (format === '4k') {
+            args.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]');
+        } else if (format === '1080') {
+            args.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]');
+        } else if (format === '720') {
+            args.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]');
+        } else {
+            args.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best');
+        }
+        args.push('-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
     } else {
-        // best quality — prefer H.264 for Premiere compatibility
-        args.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+        // No ffmpeg — use single stream (video+audio combined, no merge needed)
+        if (format === '4k') {
+            args.push('-f', 'best[height<=2160][ext=mp4]/best[height<=2160]/best');
+        } else if (format === '1080') {
+            args.push('-f', 'best[height<=1080][ext=mp4]/best[height<=1080]/best');
+        } else if (format === '720') {
+            args.push('-f', 'best[height<=720][ext=mp4]/best[height<=720]/best');
+        } else {
+            args.push('-f', 'best[ext=mp4]/best');
+        }
     }
     args.push(url);
 
@@ -780,6 +793,44 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
                     if (files.length > 0) lastFile = files[0].full;
                 } catch (e) {}
             }
+
+            // Trim with ffmpeg -c copy (instant, no re-encode)
+            if (wantTrim && lastFile && fs.existsSync(lastFile)) {
+                ytProgress.status = 'merging';
+                ytProgress.percent = 99;
+                if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+
+                const ext = path.extname(lastFile);
+                const trimmed = lastFile.replace(ext, '_cut' + ext);
+                const ffArgs = ['-y', '-i', lastFile];
+                if (trimStart && trimStart !== '0') ffArgs.push('-ss', trimStart);
+                if (trimEnd) ffArgs.push('-to', trimEnd);
+                ffArgs.push('-c', 'copy', '-avoid_negative_ts', 'make_zero', trimmed);
+
+                const ffProc = spawn(ffmpegBin, ffArgs, { windowsHide: true });
+                ffProc.on('close', fc => {
+                    if (fc === 0 && fs.existsSync(trimmed)) {
+                        // Replace original with trimmed
+                        try { fs.unlinkSync(lastFile); } catch (e) {}
+                        try { fs.renameSync(trimmed, lastFile); } catch (e) { lastFile = trimmed; }
+                    }
+                    ytProgress.percent = 100;
+                    ytProgress.status = 'done';
+                    ytProgress.active = false;
+                    ytProgress.file = lastFile;
+                    if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+                });
+                ffProc.on('error', () => {
+                    // Trim failed but download OK — return original
+                    ytProgress.percent = 100;
+                    ytProgress.status = 'done';
+                    ytProgress.active = false;
+                    ytProgress.file = lastFile;
+                    if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+                });
+                return; // Don't emit done yet, wait for ffmpeg
+            }
+
             ytProgress.percent = 100;
             ytProgress.status = 'done';
             ytProgress.active = false;
@@ -905,19 +956,27 @@ function startSyncServer() {
                         const outputPath = (data.outputDir && fs.existsSync(data.outputDir)) ? data.outputDir : (isWin ? path.join(os.homedir(), 'Downloads') : path.join(os.homedir(), 'Downloads'));
                         const dlArgs = ['-o', path.join(outputPath, '%(title)s.%(ext)s'), '--newline', '--no-warnings', '--no-mtime', '--no-playlist', '--windows-filenames'];
                         if (ffmpegReady()) dlArgs.push('--ffmpeg-location', path.dirname(ffmpegBin));
-                        // Partial download (time range)
-                        if (data.startTime || data.endTime) {
-                            const st = data.startTime || '0';
-                            const et = data.endTime || 'inf';
-                            dlArgs.push('--download-sections', '*' + st + '-' + et);
-                            dlArgs.push('--force-keyframes-at-cuts');
-                        }
+                        // Trim info (will be applied AFTER download with ffmpeg -c copy)
+                        const hasStart = data.startTime && data.startTime !== '0' && data.startTime !== '00:00' && data.startTime !== '0:00';
+                        const hasEnd = data.endTime && data.endTime !== 'inf';
+                        const wantTrim = ffmpegReady() && (hasStart || hasEnd);
+                        const trimStart = data.startTime || '0';
+                        const trimEnd = data.endTime || '';
                         const fmt = data.format || 'best';
+                        const hasFf = ffmpegReady();
                         if (fmt === 'mp3') { dlArgs.push('-x', '--audio-format', 'mp3', '--audio-quality', '0'); }
-                        else if (fmt === '4k') { dlArgs.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
-                        else if (fmt === '1080') { dlArgs.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
-                        else if (fmt === '720') { dlArgs.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
-                        else { dlArgs.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best', '-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4'); }
+                        else if (hasFf) {
+                            if (fmt === '4k') dlArgs.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]');
+                            else if (fmt === '1080') dlArgs.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]');
+                            else if (fmt === '720') dlArgs.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]');
+                            else dlArgs.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best');
+                            dlArgs.push('-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+                        } else {
+                            if (fmt === '4k') dlArgs.push('-f', 'best[height<=2160][ext=mp4]/best[height<=2160]/best');
+                            else if (fmt === '1080') dlArgs.push('-f', 'best[height<=1080][ext=mp4]/best[height<=1080]/best');
+                            else if (fmt === '720') dlArgs.push('-f', 'best[height<=720][ext=mp4]/best[height<=720]/best');
+                            else dlArgs.push('-f', 'best[ext=mp4]/best');
+                        }
                         dlArgs.push(cleanDlUrl);
 
                         ytProgress = { active: true, percent: 0, speed: '', eta: '', title: '', status: 'downloading', error: '', outputDir: outputPath };
@@ -954,6 +1013,42 @@ function startSyncServer() {
                                         if (files.length > 0) lastFile = files[0].full;
                                     } catch (e) {}
                                 }
+
+                                // Trim with ffmpeg -c copy (instant, no re-encode)
+                                if (wantTrim && lastFile && fs.existsSync(lastFile)) {
+                                    ytProgress.status = 'merging';
+                                    ytProgress.percent = 99;
+                                    if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+
+                                    const ext = path.extname(lastFile);
+                                    const trimmed = lastFile.replace(ext, '_cut' + ext);
+                                    const ffArgs = ['-y', '-i', lastFile];
+                                    if (trimStart && trimStart !== '0') ffArgs.push('-ss', trimStart);
+                                    if (trimEnd) ffArgs.push('-to', trimEnd);
+                                    ffArgs.push('-c', 'copy', '-avoid_negative_ts', 'make_zero', trimmed);
+
+                                    const ffProc = spawn(ffmpegBin, ffArgs, { windowsHide: true });
+                                    ffProc.on('close', fc => {
+                                        if (fc === 0 && fs.existsSync(trimmed)) {
+                                            try { fs.unlinkSync(lastFile); } catch (e) {}
+                                            try { fs.renameSync(trimmed, lastFile); } catch (e) { lastFile = trimmed; }
+                                        }
+                                        ytProgress.percent = 100;
+                                        ytProgress.status = 'done';
+                                        ytProgress.active = false;
+                                        ytProgress.file = lastFile;
+                                        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+                                    });
+                                    ffProc.on('error', () => {
+                                        ytProgress.percent = 100;
+                                        ytProgress.status = 'done';
+                                        ytProgress.active = false;
+                                        ytProgress.file = lastFile;
+                                        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+                                    });
+                                    return; // Don't emit done yet, wait for ffmpeg
+                                }
+
                                 ytProgress.percent = 100; ytProgress.status = 'done'; ytProgress.active = false; ytProgress.file = lastFile;
                             } else {
                                 ytProgress.status = 'error'; ytProgress.active = false;
@@ -1007,6 +1102,78 @@ function startSyncServer() {
     });
 }
 
+/* ═══════ Auto-Updater ═══════ */
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.logger = console;
+
+function setupAutoUpdater() {
+    autoUpdater.on('checking-for-update', () => {
+        sendUpdateStatus('checking');
+    });
+
+    autoUpdater.on('update-available', (info) => {
+        sendUpdateStatus('available', { version: info.version });
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        sendUpdateStatus('not-available');
+    });
+
+    autoUpdater.on('download-progress', (progress) => {
+        sendUpdateStatus('downloading', {
+            percent: Math.round(progress.percent),
+            transferred: progress.transferred,
+            total: progress.total
+        });
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+        sendUpdateStatus('downloaded', { version: info.version });
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error('Auto-updater error:', err);
+        sendUpdateStatus('error', { message: err.message });
+    });
+
+    // Check for updates after a short delay (let the app finish loading)
+    setTimeout(() => {
+        autoUpdater.checkForUpdates().catch(err => {
+            console.log('Update check skipped:', err.message);
+        });
+    }, 5000);
+
+    // Re-check every 4 hours
+    setInterval(() => {
+        autoUpdater.checkForUpdates().catch(() => {});
+    }, 4 * 60 * 60 * 1000);
+}
+
+function sendUpdateStatus(status, data = {}) {
+    if (mainWin && !mainWin.isDestroyed()) {
+        mainWin.webContents.send('update-status', { status, ...data });
+    }
+}
+
+// IPC: get app version
+ipcMain.handle('get-app-version', () => app.getVersion());
+
+// IPC: check for updates manually
+ipcMain.handle('check-for-updates', async () => {
+    try {
+        const result = await autoUpdater.checkForUpdates();
+        return { success: true, version: result?.updateInfo?.version };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
+// IPC: install downloaded update (restart)
+ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall(false, true);
+});
+
 /* ═══════ App lifecycle ═══════ */
 app.on('before-quit', () => {
     app.isQuitting = true;
@@ -1017,6 +1184,7 @@ app.whenReady().then(() => {
     createWindow();
     startSyncServer();
     autoInstallPremierePlugin();
+    setupAutoUpdater();
 });
 
 // Auto-install Premiere plugin on startup (works on both Mac and Windows)

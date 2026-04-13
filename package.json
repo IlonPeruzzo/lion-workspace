@@ -1,23 +1,56 @@
 {
   "name": "lion-workspace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lion Workspace - Gestao para Editores de Video",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win portable",
-    "build:mac": "electron-builder --mac --x64 --arm64",
-    "build:all": "electron-builder --win portable --mac"
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --publish never",
+    "release:win": "electron-builder --win --publish always",
+    "release:mac": "electron-builder --mac --publish always",
+    "release": "electron-builder --win --mac --publish always",
+    "version:patch": "npm version patch && git push && git push --tags",
+    "version:minor": "npm version minor && git push && git push --tags",
+    "version:major": "npm version major && git push && git push --tags"
   },
   "build": {
     "appId": "com.lionworkspace.app",
     "productName": "Lion Workspace",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "IlonPeruzzo",
+        "repo": "lion-workspace"
+      }
+    ],
     "win": {
-      "target": "portable",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "sign": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "Lion Workspace"
     },
     "mac": {
       "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
         {
           "target": "zip",
           "arch": [
@@ -29,6 +62,22 @@
       "identity": null,
       "category": "public.app-category.productivity",
       "darkModeSupport": true
+    },
+    "dmg": {
+      "background": null,
+      "iconSize": 100,
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "files": [
       "main.js",
@@ -44,6 +93,9 @@
         ]
       }
     ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@electron/packager": "^19.1.0",
