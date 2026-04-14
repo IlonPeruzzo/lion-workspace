@@ -703,10 +703,19 @@
             </div>
             <div id="meiAlertaPrevio" style="display:none;margin-top:10px;padding:10px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:8px;font-size:.8rem;color:#f59e0b"></div>
         </div>
+        <!-- Seletor global de mes do Dashboard -->
+        <div id="dashMonthBar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap;padding:10px 14px;background:linear-gradient(135deg,rgba(190,242,100,.06),rgba(15,15,15,.6));border:1px solid rgba(190,242,100,.12);border-radius:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span style="font-weight:700;font-size:.82rem;color:var(--text2)">Período:</span>
+                <select id="dashMonthSel" onchange="onDashMonthChange()" style="background:rgba(15,15,15,.7);border:1px solid rgba(190,242,100,.2);color:var(--text);padding:6px 14px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;outline:none;transition:all .2s"></select>
+            </div>
+            <div style="font-size:.7rem;color:var(--text3)">Afeta todos os indicadores abaixo</div>
+        </div>
         <div class="stats">
             <div class="stat"><div class="val" id="sVid">0</div><div class="lbl">Serviços (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sVidDia">0</div><div class="lbl" style="font-size:.62rem">Hoje</div></div></div>
             <div class="stat" style="position:relative"><div class="val" id="sBruto">R$ 0</div><div id="sBrutoPend" style="display:none;font-size:.65rem;color:var(--orange);margin-top:2px"></div><div class="lbl">Bruto (Mês)</div><button onclick="toggleStatCurr('bruto');event.stopPropagation()" id="btnCurrBruto" style="position:absolute;top:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s" title="Alternar moeda">BRL</button><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sBrutoDia">R$ 0</div><div class="lbl" style="font-size:.62rem">Hoje</div></div></div>
-            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showTaxasInfo();event.stopPropagation()">?</span><div class="val" id="sTaxas">$ 0</div><div class="lbl">Taxas</div><div class="info-panel" id="taxasInfoPanel"></div><span id="eyeTaxas" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><button onclick="toggleStatCurr('taxas');event.stopPropagation()" id="btnCurrTaxas" style="position:absolute;bottom:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s;z-index:2" title="Alternar moeda">BRL</button></div>
+            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showTaxasInfo();event.stopPropagation()">?</span><div class="val" id="sTaxas">R$ 0</div><div class="lbl">Taxas</div><div class="info-panel" id="taxasInfoPanel"></div><span id="eyeTaxas" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><button onclick="toggleStatCurr('taxas');event.stopPropagation()" id="btnCurrTaxas" style="position:absolute;bottom:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s;z-index:2" title="Alternar moeda">BRL</button></div>
             <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showImpInfo();event.stopPropagation()">?</span><div class="val" id="sImp">R$ 0</div><div class="lbl">Impostos</div><div class="info-panel" id="impInfoPanel"></div><span id="eyeImp" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><button onclick="toggleStatCurr('imp');event.stopPropagation()" id="btnCurrImp" style="position:absolute;bottom:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s;z-index:2" title="Alternar moeda">BRL</button></div>
             <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><div class="val" id="sLiq">R$ 0</div><div class="lbl">Líquido</div><span id="eyeLiq" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><button onclick="toggleStatCurr('liq');event.stopPropagation()" id="btnCurrLiq" style="position:absolute;bottom:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s;z-index:2" title="Alternar moeda">BRL</button></div>
             <div class="stat"><div class="val" id="sCli">0</div><div class="lbl">Clientes</div></div>
@@ -769,18 +778,14 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
                     <h3 style="margin:0">Faturamento Mensal</h3>
                     <div style="display:inline-flex;background:rgba(190,242,100,.06);border:1px solid rgba(190,242,100,.15);border-radius:8px;overflow:hidden">
-                        <button type="button" id="chartCurALL" onclick="setChartCurrency('ALL')" class="chart-cur-btn active" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(190,242,100,.18);color:#bef264;transition:all .2s">Todos</button>
-                        <button type="button" id="chartCurBRL" onclick="setChartCurrency('BRL')" class="chart-cur-btn" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);transition:all .2s">R$ Reais</button>
+                        <button type="button" id="chartCurBRL" onclick="setChartCurrency('BRL')" class="chart-cur-btn active" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(190,242,100,.18);color:#bef264;transition:all .2s">R$ Reais</button>
                         <button type="button" id="chartCurUSD" onclick="setChartCurrency('USD')" class="chart-cur-btn" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);transition:all .2s">$ Dólares</button>
                     </div>
                 </div>
                 <canvas id="chartFat"></canvas>
             </div>
             <div class="chart-card">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">
-                    <h3 style="margin:0">Servicos por Cliente</h3>
-                    <select id="chartMonthSel" onchange="onChartMonthChange()" style="background:rgba(15,15,15,.6);border:1px solid rgba(190,242,100,.15);color:var(--text);padding:4px 10px;border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer;font-family:inherit;outline:none;transition:all .2s"></select>
-                </div>
+                <h3 id="chartCliTitle" style="margin:0 0 12px 0">Servicos por Cliente</h3>
                 <canvas id="chartCli" style="max-height:220px"></canvas>
                 <div id="chartCliLegend" class="chart-legend"></div>
             </div>
@@ -791,7 +796,7 @@
             <!-- Resumo Taxas + Impostos por Vídeo -->
             <div class="card" style="margin-top:4px">
                 <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('taxasResumoContainer',this)">
-                    <div class="card-title" style="margin:0">Taxas e Impostos por Serviço (Mes Atual)</div>
+                    <div class="card-title" id="taxasResumoTitle" style="margin:0">Taxas e Impostos por Serviço</div>
                     <span class="collapse-icon" style="font-size:1.2rem;color:var(--text3);transition:transform .3s;user-select:none">-</span>
                 </div>
                 <div id="taxasResumoContainer" style="overflow-x:auto;margin-top:12px"></div>
@@ -2000,7 +2005,7 @@ function showTab(id,btn){
     document.getElementById('tab-'+id).classList.add('active');
     if(btn)btn.classList.add('active');
     else document.querySelector(`.tabs button[data-tab="${id}"]`)?.classList.add('active');
-    if(id==='dashboard'){renderCharts();renderTaxas();}
+    if(id==='dashboard'){refreshDashboard();renderTaxas();}
     if(id==='produtividade') {renderVidsAndamento();updProjTimerSelect();renderProdHist();}
     if(id==='ytdownload') ytCheckDeps();
 }
@@ -3658,9 +3663,21 @@ function renderFaturasCliente(nome){
 
 // ===== STATS =====
 function updStats(){
-    const h=hoje(),mesAtual=h.substring(0,7);
+    const h=hoje();
+    const mesAtual=(typeof _dashMonth!=='undefined'&&_dashMonth)?_dashMonth:h.substring(0,7);
     const mesRegs=regs.filter(r=>r.data.substring(0,7)===mesAtual);
-    const diaRegs=regs.filter(r=>r.data===h);
+    // "Hoje" only makes sense when viewing the current month
+    const diaRegs=(mesAtual===h.substring(0,7))?regs.filter(r=>r.data===h):[];
+    // Update labels to reflect selected month
+    const _mNames=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const [_my,_mm]=mesAtual.split('-');
+    const mLabel=(_mNames[parseInt(_mm)-1]||_mm)+'/'+_my;
+    const isCurMonth=mesAtual===h.substring(0,7);
+    document.querySelectorAll('.stats .stat .lbl').forEach(el=>{
+        const txt=el.textContent||'';
+        if(txt.startsWith('Servicos')||txt.startsWith('Serviços'))el.textContent='Serviços ('+(isCurMonth?'Mês':mLabel)+')';
+        else if(txt.startsWith('Bruto'))el.textContent='Bruto ('+(isCurMonth?'Mês':mLabel)+')';
+    });
     let tv=0,tb=0,ti=0,tl=0,ttx=0,pendB=0;
     mesRegs.forEach(r=>{
         const b=r.quantidade*r.valor;
@@ -3779,58 +3796,77 @@ function loadMeta(){
 }
 
 // ===== CHARTS =====
-let _chartCurrency='ALL';   // 'ALL' | 'BRL' | 'USD'
-let _chartMonth=null;        // YYYY-MM or null (current month)
+let _chartCurrency='BRL';   // 'BRL' | 'USD'
+let _dashMonth=null;        // YYYY-MM — global mês do dashboard
 function setChartCurrency(cur){
+    if(cur!=='BRL'&&cur!=='USD')cur='BRL';
     _chartCurrency=cur;
-    const all=document.getElementById('chartCurALL'),brl=document.getElementById('chartCurBRL'),usd=document.getElementById('chartCurUSD');
+    const brl=document.getElementById('chartCurBRL'),usd=document.getElementById('chartCurUSD');
     const active={background:'rgba(190,242,100,.18)',color:'#bef264'};
     const inactive={background:'transparent',color:'var(--text3)'};
-    if(all)Object.assign(all.style,cur==='ALL'?active:inactive);
     if(brl)Object.assign(brl.style,cur==='BRL'?active:inactive);
     if(usd)Object.assign(usd.style,cur==='USD'?active:inactive);
     renderCharts();
 }
-function onChartMonthChange(){
-    const sel=document.getElementById('chartMonthSel');
-    if(sel)_chartMonth=sel.value||null;
+function populateDashMonthSel(){
+    const sel=document.getElementById('dashMonthSel');if(!sel)return;
+    const allMeses=[...new Set(regs.map(r=>r.data.substring(0,7)))].sort().reverse();
+    const cur=hoje().substring(0,7);
+    if(!allMeses.includes(cur))allMeses.unshift(cur);
+    if(!_dashMonth)_dashMonth=cur;
+    if(!allMeses.includes(_dashMonth))allMeses.unshift(_dashMonth);
+    const mesesNomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    sel.innerHTML=allMeses.map(m=>{
+        const [y,mo]=m.split('-');
+        const lbl=(mesesNomes[parseInt(mo)-1]||mo)+'/'+y+(m===cur?' (atual)':'');
+        return `<option value="${m}"${m===_dashMonth?' selected':''}>${lbl}</option>`;
+    }).join('');
+}
+function onDashMonthChange(){
+    const sel=document.getElementById('dashMonthSel');
+    if(sel)_dashMonth=sel.value||hoje().substring(0,7);
+    refreshDashboard();
+}
+function refreshDashboard(){
+    populateDashMonthSel();
+    updStats();
     renderCharts();
+    renderTaxasResumo();
+    updMeta();
 }
 function renderCharts(){
-    // Determine which clients match the selected currency
+    populateDashMonthSel();
+    // Determine which clients match the selected currency (BRL or USD/others)
     const isCliBRL=(cliNome)=>{const cl=getCl(cliNome);return !cl||!cl.internacional||(cl.moeda||'BRL')==='BRL'};
     const isCliUSD=(cliNome)=>{const cl=getCl(cliNome);return cl&&cl.internacional&&(cl.moeda||'USD')!=='BRL'};
-    // ALL mode converts everything to BRL for a unified view; BRL/USD keep native values
     const usd=cotacao.usd||5.0;
-    const valBRL=(r)=>{const cl=getCl(r.cliente);const rate=cl&&cl.internacional?(getCotacaoMoeda(cl.moeda||'USD')||usd):1;return r.quantidade*r.valor*rate};
-    const matchCur=(r)=>_chartCurrency==='ALL'?true:(_chartCurrency==='BRL'?isCliBRL(r.cliente):isCliUSD(r.cliente));
+    const matchCur=(r)=>_chartCurrency==='BRL'?isCliBRL(r.cliente):isCliUSD(r.cliente);
     const regsFil=regs.filter(matchCur);
     const curSym=_chartCurrency==='USD'?'$':'R$';
-    // Value getter: ALL mode converts to BRL; otherwise uses native
-    const getVal=(r)=>_chartCurrency==='ALL'?valBRL(r):(r.quantidade*r.valor);
+    // Native value (BRL mode: values are BRL; USD mode: values in client's native currency)
+    const getVal=(r)=>r.quantidade*r.valor;
+    // For Chart 3 ranking in USD mode: convert any non-USD internacional currency to USD via cross rate
+    const getValUSDNorm=(r)=>{
+        const cl=getCl(r.cliente);if(!cl||!cl.internacional)return 0;
+        const moe=cl.moeda||'USD';if(moe==='USD')return r.quantidade*r.valor;
+        // moe->BRL via getCotacaoMoeda, then BRL->USD dividing by usd
+        const rate=getCotacaoMoeda(moe)||usd;
+        return (r.quantidade*r.valor*rate)/usd;
+    };
+    const getValRanked=(r)=>_chartCurrency==='USD'?getValUSDNorm(r):getVal(r);
 
     const meses={};
     regsFil.forEach(r=>{const m=r.data.substring(0,7);if(!meses[m])meses[m]={bruto:0,imp:0,liq:0,vids:0};
         const bNative=r.quantidade*r.valor;const rcl=getCl(r.cliente);const tx=calcTaxaMeio(bNative,r.pagamento||'outro',rcl?.moeda);const posTx=bNative-tx.taxaValor;const imp=calcImp(posTx,r.cliente);
-        // In ALL mode, convert native values (BRL/USD/EUR...) to BRL so they sum correctly
-        const rate=_chartCurrency==='ALL'&&rcl&&rcl.internacional?getCotacaoMoeda(rcl.moeda||'USD'):1;
+        // USD mode: if client uses EUR etc., normalize to USD via BRL cross rate
+        let rate=1;
+        if(_chartCurrency==='USD'&&rcl&&rcl.internacional&&(rcl.moeda||'USD')!=='USD'){
+            const r2=getCotacaoMoeda(rcl.moeda||'USD')||usd;
+            rate=r2/usd;
+        }
         meses[m].bruto+=bNative*rate;meses[m].imp+=imp.total*rate;meses[m].liq+=imp.liquido*rate;meses[m].vids+=r.quantidade});
     const ms=Object.keys(meses).sort();
     const labels=ms.map(m=>{const [y,mo]=m.split('-');return mo+'/'+y.substring(2)});
-
-    // Populate month selector (all months across all currencies)
-    const allMeses=[...new Set(regs.map(r=>r.data.substring(0,7)))].sort().reverse();
-    const monthSel=document.getElementById('chartMonthSel');
-    if(monthSel){
-        const currentVal=_chartMonth||hoje().substring(0,7);
-        const monthOpts=allMeses.length?allMeses:[hoje().substring(0,7)];
-        const mesesNomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-        monthSel.innerHTML=monthOpts.map(m=>{
-            const [y,mo]=m.split('-');
-            return `<option value="${m}"${m===currentVal?' selected':''}>${mesesNomes[parseInt(mo)-1]||mo}/${y}</option>`;
-        }).join('');
-        if(!_chartMonth)_chartMonth=currentVal;
-    }
     const ttOpts={backgroundColor:'rgba(10,10,10,0.95)',titleColor:'#d9f99d',bodyColor:'#f5f5f5',borderColor:'rgba(190,242,100,0.25)',borderWidth:1,cornerRadius:12,padding:14,bodyFont:{size:12,family:'Inter'},titleFont:{size:12,weight:'700',family:'Inter'},boxPadding:6,caretSize:6};
     const legLbl={color:'#a3a3a3',font:{size:11,weight:'500'},padding:14,usePointStyle:true,pointStyleWidth:10};
     const gridC='rgba(190,242,100,0.04)';
@@ -3856,19 +3892,32 @@ function renderCharts(){
         }).join('');
     }
 
-    // Chart 1: Faturamento mensal — beautiful gradient bars
+    // Chart 1: Faturamento mensal — gradient bars, destaca mes selecionado
+    const mesSel=_dashMonth||hoje().substring(0,7);
     const c1=document.getElementById('chartFat').getContext('2d');
     const g1a=c1.createLinearGradient(0,0,0,280);g1a.addColorStop(0,'rgba(190,242,100,0.75)');g1a.addColorStop(0.5,'rgba(190,242,100,0.4)');g1a.addColorStop(1,'rgba(190,242,100,0.05)');
     const g1b=c1.createLinearGradient(0,0,0,280);g1b.addColorStop(0,'rgba(34,211,238,0.75)');g1b.addColorStop(0.5,'rgba(34,211,238,0.4)');g1b.addColorStop(1,'rgba(34,211,238,0.05)');
+    // Destaque do mes selecionado: opacidade maior no selecionado, menor nos demais
+    const bgBruto=ms.map(m=>m===mesSel?'rgba(190,242,100,0.95)':g1a);
+    const bgLiq=ms.map(m=>m===mesSel?'rgba(34,211,238,0.95)':g1b);
+    const bdBruto=ms.map(m=>m===mesSel?'#bef264':'rgba(190,242,100,0.6)');
+    const bdLiq=ms.map(m=>m===mesSel?'#22d3ee':'rgba(34,211,238,0.6)');
+    const bwBruto=ms.map(m=>m===mesSel?2.5:1);
     if(charts.fat)charts.fat.destroy();
     charts.fat=new Chart(c1,{type:'bar',
         data:{labels,datasets:[
-            {label:'Bruto',data:ms.map(m=>meses[m].bruto),backgroundColor:g1a,borderColor:'rgba(190,242,100,0.6)',borderWidth:1,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(190,242,100,0.85)'},
-            {label:'Liquido',data:ms.map(m=>meses[m].liq),backgroundColor:g1b,borderColor:'rgba(34,211,238,0.6)',borderWidth:1,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(34,211,238,0.85)'}
+            {label:'Bruto',data:ms.map(m=>meses[m].bruto),backgroundColor:bgBruto,borderColor:bdBruto,borderWidth:bwBruto,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(190,242,100,0.85)'},
+            {label:'Liquido',data:ms.map(m=>meses[m].liq),backgroundColor:bgLiq,borderColor:bdLiq,borderWidth:bwBruto,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(34,211,238,0.85)'}
         ]},options:{responsive:true,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{...legLbl,usePointStyle:true,pointStyle:'rectRounded'}},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+curSym+' '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#525252',font:{size:11}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:11},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}}}}});
 
+    // Titulo do Chart 2 reflete o mes
+    const _mnC2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const [_c2y,_c2m]=mesSel.split('-');
+    const _c2Lbl=(_mnC2[parseInt(_c2m)-1]||_c2m)+'/'+_c2y;
+    const _cliTit=document.getElementById('chartCliTitle');
+    if(_cliTit)_cliTit.textContent='Serviços por Cliente ('+_c2Lbl+')';
+
     // Chart 2: Servicos por cliente (mes selecionado) — doughnut with avatar legend
-    const mesSel=_chartMonth||hoje().substring(0,7);
     const cliVids={};regsFil.filter(r=>r.data.substring(0,7)===mesSel).forEach(r=>{if(!cliVids[r.cliente])cliVids[r.cliente]=0;cliVids[r.cliente]+=r.quantidade});
     const cliNames=Object.keys(cliVids);
     if(charts.cli)charts.cli.destroy();
@@ -3892,9 +3941,9 @@ function renderCharts(){
     });
     _buildAvatarLegend('chartCliLegend',cliNames,colors,cliNames.map(n=>cliVids[n]),'');
 
-    // Chart 3: Receita por cliente (mes selecionado) — horizontal bars with avatar legend
-    // In ALL mode, convert to BRL so the bar chart is comparable across currencies
-    const cliRec={};regsFil.filter(r=>r.data.substring(0,7)===mesSel).forEach(r=>{if(!cliRec[r.cliente])cliRec[r.cliente]=0;cliRec[r.cliente]+=getVal(r)});
+    // Chart 3: Receita por cliente (mes selecionado) — ranking com conversão correta
+    // USD mode: normaliza EUR/GBP etc. -> USD via BRL cross rate para ordenação justa
+    const cliRec={};regsFil.filter(r=>r.data.substring(0,7)===mesSel).forEach(r=>{if(!cliRec[r.cliente])cliRec[r.cliente]=0;cliRec[r.cliente]+=getValRanked(r)});
     const crNames=Object.keys(cliRec).sort((a,b)=>cliRec[b]-cliRec[a]);
     // Update title to show the selected month
     const _mesesNomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -5407,9 +5456,18 @@ function onTaxaBaseChange(){
 }
 function renderTaxasResumo(){
     const el=document.getElementById('taxasResumoContainer');if(!el)return;
-    const mesAtual=hoje().substring(0,7);
+    const h=hoje();
+    const mesAtual=(typeof _dashMonth!=='undefined'&&_dashMonth)?_dashMonth:h.substring(0,7);
+    // Atualiza titulo do card com o mes selecionado
+    const _tit=document.getElementById('taxasResumoTitle');
+    if(_tit){
+        const _mn=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        const [_yy,_mm]=mesAtual.split('-');
+        const lbl=mesAtual===h.substring(0,7)?'Mês Atual':(_mn[parseInt(_mm)-1]||_mm)+'/'+_yy;
+        _tit.textContent='Taxas e Impostos por Serviço ('+lbl+')';
+    }
     const mesRegs=regs.filter(r=>r.data.substring(0,7)===mesAtual);
-    if(!mesRegs.length){el.innerHTML='<p style="color:#737373;padding:12px">Nenhum vídeo registrado este mês.</p>';return;}
+    if(!mesRegs.length){el.innerHTML='<p style="color:#737373;padding:12px">Nenhum vídeo registrado neste mês.</p>';return;}
     const usd=cotacao.usd||5.0;
     let totalBruto=0,totalTaxas=0,totalSpread=0,totalImp=0,totalLiq=0;
     let rows='';
@@ -5623,7 +5681,7 @@ function init(){
     let _migrated=false;
     clientes.forEach(c=>{if(!c.pipeline||!c.pipeline.length){c.pipeline=(cfg.etapas||_defEtapas).slice();_migrated=true}});
     if(_migrated)salvar();
-    renderCli();updSelects();renderRegs();updStats();renderCharts();loadMeta();
+    renderCli();updSelects();renderRegs();populateDashMonthSel();updStats();renderCharts();loadMeta();
     // Pomodoro defaults
     if(prodState.pomoWork)document.getElementById('pomoWork').value=prodState.pomoWork;
     if(prodState.pomoBreak)document.getElementById('pomoBreak').value=prodState.pomoBreak;
