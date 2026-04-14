@@ -421,11 +421,8 @@ function setClipAnchorPoint(position, compensate) {
         var clips = getSelectedClips();
         if (clips.length === 0) return 'NO_SELECTION';
 
-        var seqW = 1920, seqH = 1080;
-        try {
-            seqW = seq.frameSizeHorizontal || 1920;
-            seqH = seq.frameSizeVertical || 1080;
-        } catch (e) {}
+        var seqW = parseInt(seq.frameSizeHorizontal, 10) || 1920;
+        var seqH = parseInt(seq.frameSizeVertical, 10) || 1080;
 
         var totalApplied = 0;
 
@@ -446,97 +443,65 @@ function setClipAnchorPoint(position, compensate) {
                     'Scale', 'Escala', 'Skalierung', 'Échelle'
                 ]);
 
-                // Fallbacks: scan properties by value shape
-                if (!positionProp || !anchorProp) {
-                    for (var fp = 0; fp < motion.properties.numItems; fp++) {
-                        try {
-                            var fprop = motion.properties[fp];
-                            var fval = fprop.getValue();
-                            if (fval instanceof Array && fval.length === 2) {
-                                var fname = fprop.displayName.toLowerCase();
-                                if (!anchorProp && (fname.indexOf('anchor') >= 0 || fname.indexOf('ancor') >= 0)) {
-                                    anchorProp = fprop;
-                                } else if (!positionProp && fname.indexOf('posi') >= 0) {
-                                    positionProp = fprop;
-                                }
-                            }
-                            if (!scaleProp) {
-                                var sname = fprop.displayName.toLowerCase();
-                                if (sname.indexOf('scale') >= 0 || sname.indexOf('escala') >= 0) {
-                                    scaleProp = fprop;
-                                }
-                            }
-                        } catch (efp) {}
-                    }
-                }
-
                 if (!anchorProp || !positionProp) continue;
 
-                // Get source dimensions — try deriving from current anchor if at default center
-                var dims = getClipDimensions(clip);
-                var srcW = dims.width;
-                var srcH = dims.height;
-                try {
-                    var curAnchor = anchorProp.getValue();
-                    // If anchor is at default center, we can derive true source dims
-                    if (curAnchor && curAnchor.length >= 2 && curAnchor[0] > 1 && curAnchor[1] > 1) {
-                        srcW = Math.round(curAnchor[0] * 2);
-                        srcH = Math.round(curAnchor[1] * 2);
-                    }
-                } catch (ead) {}
+                // Read current anchor — this tells us the source clip dimensions
+                var oldAnchor = anchorProp.getValue();
+                var oldPosition = positionProp.getValue();
+                if (!oldAnchor || !oldPosition) continue;
 
-                // Calculate target anchor in clip-source pixels
+                // Determine source dimensions from sequence (safest default)
+                var srcW = seqW;
+                var srcH = seqH;
+
+                // Try to get real source dimensions from projectItem metadata
+                try {
+                    var pi = clip.projectItem;
+                    if (pi) {
+                        var vw = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoWidth'), 10);
+                        var vh = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoHeight'), 10);
+                        if (vw > 0 && vh > 0) { srcW = vw; srcH = vh; }
+                    }
+                } catch (emd) {}
+
+                // Calculate target anchor in source pixels
                 var newAx, newAy;
                 switch (position) {
-                    case 'tl': newAx = 0;      newAy = 0;      break;
-                    case 'tc': newAx = srcW/2; newAy = 0;      break;
-                    case 'tr': newAx = srcW;   newAy = 0;      break;
-                    case 'cl': newAx = 0;      newAy = srcH/2; break;
-                    case 'cc': newAx = srcW/2; newAy = srcH/2; break;
-                    case 'cr': newAx = srcW;   newAy = srcH/2; break;
-                    case 'bl': newAx = 0;      newAy = srcH;   break;
-                    case 'bc': newAx = srcW/2; newAy = srcH;   break;
-                    case 'br': newAx = srcW;   newAy = srcH;   break;
-                    default:   newAx = srcW/2; newAy = srcH/2;
+                    case 'tl': newAx = 0;       newAy = 0;       break;
+                    case 'tc': newAx = srcW / 2; newAy = 0;       break;
+                    case 'tr': newAx = srcW;     newAy = 0;       break;
+                    case 'cl': newAx = 0;        newAy = srcH / 2; break;
+                    case 'cc': newAx = srcW / 2; newAy = srcH / 2; break;
+                    case 'cr': newAx = srcW;     newAy = srcH / 2; break;
+                    case 'bl': newAx = 0;        newAy = srcH;     break;
+                    case 'bc': newAx = srcW / 2; newAy = srcH;     break;
+                    case 'br': newAx = srcW;     newAy = srcH;     break;
+                    default:   newAx = srcW / 2; newAy = srcH / 2;
                 }
 
-                // Read current values
-                var oldAnchor = null, oldPosition = null, scale = 1;
-                try { oldAnchor = anchorProp.getValue(); } catch (e) {}
-                try { oldPosition = positionProp.getValue(); } catch (e) {}
+                // Get scale (handle both number and array [scaleX, scaleY])
+                var scale = 1;
                 try {
                     var sv = scaleProp ? scaleProp.getValue() : 100;
-                    scale = (typeof sv === 'number') ? sv / 100 : 1;
-                } catch (e) {}
+                    if (typeof sv === 'number') scale = sv / 100;
+                    else if (sv instanceof Array) scale = sv[0] / 100;
+                } catch (es) {}
 
-                // Set new anchor point
-                try {
-                    anchorProp.setValue([newAx, newAy]);
-                } catch (ea) { continue; }
+                // Set new anchor
+                anchorProp.setValue([newAx, newAy]);
 
-                // Compensate position if requested
-                if (compensate && oldAnchor && oldPosition && oldAnchor.length >= 2 && oldPosition.length >= 2) {
-                    var deltaX = (newAx - oldAnchor[0]) * scale;
-                    var deltaY = (newAy - oldAnchor[1]) * scale;
+                // Compensate position so clip stays in place
+                if (compensate) {
+                    var dAx = newAx - oldAnchor[0];
+                    var dAy = newAy - oldAnchor[1];
 
-                    // Detect if Position is normalized (0-1 range) or pixel-based
-                    // In Premiere Pro ExtendScript, Position is normalized (default [0.5, 0.5])
-                    var px = oldPosition[0];
-                    var py = oldPosition[1];
-                    var isNormalized = (Math.abs(px) <= 5 && Math.abs(py) <= 5);
+                    // Position in Premiere is normalized (0-1), default center = [0.5, 0.5]
+                    // Anchor delta in source pixels → screen pixels = delta * scale
+                    // Screen pixels → normalized = / seqSize
+                    var newPx = oldPosition[0] + (dAx * scale) / seqW;
+                    var newPy = oldPosition[1] + (dAy * scale) / seqH;
 
-                    var newPx, newPy;
-                    if (isNormalized) {
-                        newPx = px + deltaX / seqW;
-                        newPy = py + deltaY / seqH;
-                    } else {
-                        newPx = px + deltaX;
-                        newPy = py + deltaY;
-                    }
-
-                    try {
-                        positionProp.setValue([newPx, newPy]);
-                    } catch (ep) {}
+                    positionProp.setValue([newPx, newPy]);
                 }
 
                 totalApplied++;
