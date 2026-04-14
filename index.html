@@ -762,8 +762,24 @@
         </div>
 
         <div id="dashChartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-            <div class="chart-card" style="grid-column:1/-1"><h3>Faturamento Mensal</h3><canvas id="chartFat"></canvas></div>
-            <div class="chart-card"><h3>Servicos por Cliente (Mes)</h3><canvas id="chartCli" style="max-height:220px"></canvas><div id="chartCliLegend" class="chart-legend"></div></div>
+            <div class="chart-card" style="grid-column:1/-1">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+                    <h3 style="margin:0">Faturamento Mensal</h3>
+                    <div style="display:inline-flex;background:rgba(190,242,100,.06);border:1px solid rgba(190,242,100,.15);border-radius:8px;overflow:hidden">
+                        <button type="button" id="chartCurBRL" onclick="setChartCurrency('BRL')" class="chart-cur-btn active" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(190,242,100,.18);color:#bef264;transition:all .2s">R$ Reais</button>
+                        <button type="button" id="chartCurUSD" onclick="setChartCurrency('USD')" class="chart-cur-btn" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);transition:all .2s">$ Dólares</button>
+                    </div>
+                </div>
+                <canvas id="chartFat"></canvas>
+            </div>
+            <div class="chart-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">
+                    <h3 style="margin:0">Servicos por Cliente</h3>
+                    <select id="chartMonthSel" onchange="onChartMonthChange()" style="background:rgba(15,15,15,.6);border:1px solid rgba(190,242,100,.15);color:var(--text);padding:4px 10px;border-radius:8px;font-size:.72rem;font-weight:600;cursor:pointer;font-family:inherit;outline:none;transition:all .2s"></select>
+                </div>
+                <canvas id="chartCli" style="max-height:220px"></canvas>
+                <div id="chartCliLegend" class="chart-legend"></div>
+            </div>
             <div class="chart-card"><h3>Receita por Cliente</h3><div id="chartRecAvatars" style="margin-bottom:4px"></div><canvas id="chartRec"></canvas><div id="chartRecLegend" class="chart-legend"></div></div>
         </div>
 
@@ -3759,13 +3775,52 @@ function loadMeta(){
 }
 
 // ===== CHARTS =====
+let _chartCurrency='BRL';  // 'BRL' or 'USD'
+let _chartMonth=null;       // YYYY-MM or null (current month)
+function setChartCurrency(cur){
+    _chartCurrency=cur;
+    const brl=document.getElementById('chartCurBRL'),usd=document.getElementById('chartCurUSD');
+    if(brl&&usd){
+        const active={background:'rgba(190,242,100,.18)',color:'#bef264'};
+        const inactive={background:'transparent',color:'var(--text3)'};
+        Object.assign(brl.style,cur==='BRL'?active:inactive);
+        Object.assign(usd.style,cur==='USD'?active:inactive);
+    }
+    renderCharts();
+}
+function onChartMonthChange(){
+    const sel=document.getElementById('chartMonthSel');
+    if(sel)_chartMonth=sel.value||null;
+    renderCharts();
+}
 function renderCharts(){
+    // Determine which clients match the selected currency
+    const isCliBRL=(cliNome)=>{const cl=getCl(cliNome);return !cl||!cl.internacional||(cl.moeda||'BRL')==='BRL'};
+    const isCliUSD=(cliNome)=>{const cl=getCl(cliNome);return cl&&cl.internacional&&(cl.moeda||'USD')!=='BRL'};
+    const matchCur=(r)=>_chartCurrency==='BRL'?isCliBRL(r.cliente):isCliUSD(r.cliente);
+    const regsFil=regs.filter(matchCur);
+    const curSym=_chartCurrency==='BRL'?'R$':'$';
+
     const meses={};
-    regs.forEach(r=>{const m=r.data.substring(0,7);if(!meses[m])meses[m]={bruto:0,imp:0,liq:0,vids:0};
+    regsFil.forEach(r=>{const m=r.data.substring(0,7);if(!meses[m])meses[m]={bruto:0,imp:0,liq:0,vids:0};
         const b=r.quantidade*r.valor;const rcl=getCl(r.cliente);const tx=calcTaxaMeio(b,r.pagamento||'outro',rcl?.moeda);const posTx=b-tx.taxaValor;const imp=calcImp(posTx,r.cliente);
         meses[m].bruto+=b;meses[m].imp+=imp.total;meses[m].liq+=imp.liquido;meses[m].vids+=r.quantidade});
     const ms=Object.keys(meses).sort();
     const labels=ms.map(m=>{const [y,mo]=m.split('-');return mo+'/'+y.substring(2)});
+
+    // Populate month selector (all months across all currencies)
+    const allMeses=[...new Set(regs.map(r=>r.data.substring(0,7)))].sort().reverse();
+    const monthSel=document.getElementById('chartMonthSel');
+    if(monthSel){
+        const currentVal=_chartMonth||hoje().substring(0,7);
+        const monthOpts=allMeses.length?allMeses:[hoje().substring(0,7)];
+        const mesesNomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        monthSel.innerHTML=monthOpts.map(m=>{
+            const [y,mo]=m.split('-');
+            return `<option value="${m}"${m===currentVal?' selected':''}>${mesesNomes[parseInt(mo)-1]||mo}/${y}</option>`;
+        }).join('');
+        if(!_chartMonth)_chartMonth=currentVal;
+    }
     const ttOpts={backgroundColor:'rgba(10,10,10,0.95)',titleColor:'#d9f99d',bodyColor:'#f5f5f5',borderColor:'rgba(190,242,100,0.25)',borderWidth:1,cornerRadius:12,padding:14,bodyFont:{size:12,family:'Inter'},titleFont:{size:12,weight:'700',family:'Inter'},boxPadding:6,caretSize:6};
     const legLbl={color:'#a3a3a3',font:{size:11,weight:'500'},padding:14,usePointStyle:true,pointStyleWidth:10};
     const gridC='rgba(190,242,100,0.04)';
@@ -3800,11 +3855,11 @@ function renderCharts(){
         data:{labels,datasets:[
             {label:'Bruto',data:ms.map(m=>meses[m].bruto),backgroundColor:g1a,borderColor:'rgba(190,242,100,0.6)',borderWidth:1,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(190,242,100,0.85)'},
             {label:'Liquido',data:ms.map(m=>meses[m].liq),backgroundColor:g1b,borderColor:'rgba(34,211,238,0.6)',borderWidth:1,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(34,211,238,0.85)'}
-        ]},options:{responsive:true,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{...legLbl,usePointStyle:true,pointStyle:'rectRounded'}},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': R$ '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#525252',font:{size:11}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:11},callback:v=>'R$ '+fb(v)},grid:{color:gridC,drawBorder:false}}}}});
+        ]},options:{responsive:true,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{...legLbl,usePointStyle:true,pointStyle:'rectRounded'}},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+curSym+' '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#525252',font:{size:11}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:11},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}}}}});
 
-    // Chart 2: Servicos por cliente (mes atual) — doughnut with avatar legend
-    const mesAtual=hoje().substring(0,7);
-    const cliVids={};regs.filter(r=>r.data.substring(0,7)===mesAtual).forEach(r=>{if(!cliVids[r.cliente])cliVids[r.cliente]=0;cliVids[r.cliente]+=r.quantidade});
+    // Chart 2: Servicos por cliente (mes selecionado) — doughnut with avatar legend
+    const mesSel=_chartMonth||hoje().substring(0,7);
+    const cliVids={};regsFil.filter(r=>r.data.substring(0,7)===mesSel).forEach(r=>{if(!cliVids[r.cliente])cliVids[r.cliente]=0;cliVids[r.cliente]+=r.quantidade});
     const cliNames=Object.keys(cliVids);
     if(charts.cli)charts.cli.destroy();
     charts.cli=new Chart(document.getElementById('chartCli'),{type:'doughnut',
@@ -3827,8 +3882,8 @@ function renderCharts(){
     });
     _buildAvatarLegend('chartCliLegend',cliNames,colors,cliNames.map(n=>cliVids[n]),'');
 
-    // Chart 3: Receita por cliente (total) — horizontal bars with avatar legend
-    const cliRec={};regs.forEach(r=>{if(!cliRec[r.cliente])cliRec[r.cliente]=0;cliRec[r.cliente]+=r.quantidade*r.valor});
+    // Chart 3: Receita por cliente (total, filtrado por moeda) — horizontal bars with avatar legend
+    const cliRec={};regsFil.forEach(r=>{if(!cliRec[r.cliente])cliRec[r.cliente]=0;cliRec[r.cliente]+=r.quantidade*r.valor});
     const crNames=Object.keys(cliRec).sort((a,b)=>cliRec[b]-cliRec[a]);
     const recColors=crNames.map((_,i)=>colors[i%colors.length]);
     // Gradient backgrounds for each bar
@@ -3838,8 +3893,8 @@ function renderCharts(){
     charts.rec=new Chart(recCtx,{type:'bar',
         data:{labels:crNames,datasets:[{label:'Receita Total',data:crNames.map(n=>cliRec[n]),backgroundColor:recGrads,borderColor:recColors.map(c=>c+'80'),borderWidth:1,borderRadius:10,borderSkipped:false,hoverBorderWidth:2,hoverBorderColor:'#fff',barThickness:crNames.length<=3?30:undefined}]},
         options:{responsive:true,indexAxis:'y',animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},
-            plugins:{legend:{display:false},tooltip:{...ttOpts,callbacks:{label:function(ctx){const cl=getCl(ctx.label);const sym=cl&&cl.internacional?(moedaSymbols[cl.moeda]||'$'):'R$';return ' '+ctx.label+': '+sym+' '+fb(ctx.raw)}}}},
-            scales:{x:{ticks:{color:'#525252',font:{size:11},callback:v=>'R$ '+fb(v)},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#a3a3a3',font:{size:11,weight:'500'},padding:8},grid:{display:false}}}},
+            plugins:{legend:{display:false},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+ctx.label+': '+curSym+' '+fb(ctx.raw)}}}},
+            scales:{x:{ticks:{color:'#525252',font:{size:11},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#a3a3a3',font:{size:11,weight:'500'},padding:8},grid:{display:false}}}},
         plugins:[{id:'avatarLabels',afterDraw(chart){
             const meta=chart.getDatasetMeta(0);
             if(!meta||!meta.data)return;
@@ -3868,7 +3923,7 @@ function renderCharts(){
             });
         }}]
     });
-    _buildAvatarLegend('chartRecLegend',crNames,recColors,crNames.map(n=>cliRec[n]),'R$ ');
+    _buildAvatarLegend('chartRecLegend',crNames,recColors,crNames.map(n=>cliRec[n]),curSym+' ');
 }
 
 // ===== HISTORICO =====
