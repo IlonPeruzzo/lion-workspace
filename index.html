@@ -784,7 +784,7 @@
                 <canvas id="chartCli" style="max-height:220px"></canvas>
                 <div id="chartCliLegend" class="chart-legend"></div>
             </div>
-            <div class="chart-card"><h3>Receita por Cliente</h3><div id="chartRecAvatars" style="margin-bottom:4px"></div><canvas id="chartRec"></canvas><div id="chartRecLegend" class="chart-legend"></div></div>
+            <div class="chart-card"><h3 id="chartRecTitle">Receita por Cliente</h3><div id="chartRecAvatars" style="margin-bottom:4px"></div><canvas id="chartRec"></canvas><div id="chartRecLegend" class="chart-legend"></div></div>
         </div>
 
         <div id="taxasWrapper">
@@ -3892,10 +3892,14 @@ function renderCharts(){
     });
     _buildAvatarLegend('chartCliLegend',cliNames,colors,cliNames.map(n=>cliVids[n]),'');
 
-    // Chart 3: Receita por cliente — horizontal bars with avatar legend
+    // Chart 3: Receita por cliente (mes selecionado) — horizontal bars with avatar legend
     // In ALL mode, convert to BRL so the bar chart is comparable across currencies
-    const cliRec={};regsFil.forEach(r=>{if(!cliRec[r.cliente])cliRec[r.cliente]=0;cliRec[r.cliente]+=getVal(r)});
+    const cliRec={};regsFil.filter(r=>r.data.substring(0,7)===mesSel).forEach(r=>{if(!cliRec[r.cliente])cliRec[r.cliente]=0;cliRec[r.cliente]+=getVal(r)});
     const crNames=Object.keys(cliRec).sort((a,b)=>cliRec[b]-cliRec[a]);
+    // Update title to show the selected month
+    const _mesesNomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const _recTitle=document.getElementById('chartRecTitle');
+    if(_recTitle){const [yy,mm]=mesSel.split('-');_recTitle.textContent='Receita por Cliente ('+(_mesesNomes[parseInt(mm)-1]||mm)+'/'+yy+')';}
     const recColors=crNames.map((_,i)=>colors[i%colors.length]);
     // Gradient backgrounds for each bar
     if(charts.rec)charts.rec.destroy();
