@@ -11,6 +11,15 @@ const { createClient } = require('@supabase/supabase-js');
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 
+// Global crash guards — prevent uncaught errors (antivirus locks, network, etc.)
+// from showing the ugly "A JavaScript error occurred" dialog and killing the app.
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err && (err.stack || err.message || err));
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled rejection:', reason);
+});
+
 /* ═══════════════════════════════════════════════════════════════════
    DATA MIGRATION — merge data from old "controle-videos" folder
    into current "lion-workspace" if it has no client data yet.
@@ -561,22 +570,38 @@ let ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', sta
 function ytDlpReady() { return fs.existsSync(ytDlpBin); }
 function ffmpegReady() { return fs.existsSync(ffmpegBin); }
 
+// Safe-remove: try to delete a file, swallow EPERM/ENOENT
+function safeRm(p) {
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); return true; }
+    catch (e) { return false; }
+}
+
 function downloadBinary(url, dest) {
     return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(dest);
+        // Pre-cleanup: remove any stale partial file (handles EPERM from locked files)
+        try { if (fs.existsSync(dest)) fs.unlinkSync(dest); }
+        catch (e) { return reject(new Error('Não foi possível limpar arquivo anterior: ' + e.message + '. Feche o antivírus ou outras instâncias do app.')); }
+
+        let file;
+        try { file = fs.createWriteStream(dest); }
+        catch (e) { return reject(new Error('Não foi possível criar arquivo: ' + e.message)); }
+
+        const cleanup = () => { try { file.close(); } catch {} safeRm(dest); };
+
+        file.on('error', (err) => { cleanup(); reject(err); });
+
         const request = require('https').get(url, { headers: { 'User-Agent': 'LionWorkspace/1.0' } }, (response) => {
             if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-                file.close();
-                fs.unlinkSync(dest);
-                downloadBinary(response.headers.location, dest).then(resolve).catch(reject);
+                cleanup();
+                downloadBinary(response.headers.location, dest).then(resolve, reject);
                 return;
             }
-            if (response.statusCode !== 200) { file.close(); reject(new Error('HTTP ' + response.statusCode)); return; }
+            if (response.statusCode !== 200) { cleanup(); reject(new Error('HTTP ' + response.statusCode)); return; }
             response.pipe(file);
-            file.on('finish', () => { file.close(); resolve(); });
+            file.on('finish', () => { try { file.close(); } catch {} resolve(); });
         });
-        request.on('error', reject);
-        request.setTimeout(120000, () => { request.destroy(); reject(new Error('Timeout')); });
+        request.on('error', (err) => { cleanup(); reject(err); });
+        request.setTimeout(120000, () => { request.destroy(); cleanup(); reject(new Error('Timeout no download')); });
     });
 }
 
@@ -673,14 +698,20 @@ async function ensureFfmpeg() {
     try {
         const ffUrl = 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
         const zipPath = path.join(ytDlpDir, 'ffmpeg.zip');
+        const extractDir = path.join(ytDlpDir, 'ffmpeg-extract');
+
+        // Pre-clean any leftovers from previous failed attempts
+        safeRm(zipPath);
+        try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
+
         await downloadBinary(ffUrl, zipPath);
         await new Promise((resolve, reject) => {
-            exec(`powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${ytDlpDir}\\ffmpeg-extract' -Force; $f=Get-ChildItem '${ytDlpDir}\\ffmpeg-extract' -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1; Copy-Item $f.FullName '${ffmpegBin}' -Force; $p=Get-ChildItem '${ytDlpDir}\\ffmpeg-extract' -Recurse -Filter 'ffprobe.exe' | Select-Object -First 1; if($p){Copy-Item $p.FullName '${ffprobeBin}' -Force}"`,
+            exec(`powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${extractDir}' -Force; $f=Get-ChildItem '${extractDir}' -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1; Copy-Item $f.FullName '${ffmpegBin}' -Force; $p=Get-ChildItem '${extractDir}' -Recurse -Filter 'ffprobe.exe' | Select-Object -First 1; if($p){Copy-Item $p.FullName '${ffprobeBin}' -Force}"`,
                 { windowsHide: true, timeout: 120000 },
                 (err) => { if (err) reject(err); else resolve(); });
         });
-        try { fs.unlinkSync(zipPath); } catch {}
-        try { fs.rmSync(path.join(ytDlpDir, 'ffmpeg-extract'), { recursive: true, force: true }); } catch {}
+        safeRm(zipPath);
+        try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
         return fs.existsSync(ffmpegBin);
     } catch (e) { console.error('ffmpeg download failed:', e.message); return false; }
 }
