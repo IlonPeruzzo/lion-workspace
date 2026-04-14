@@ -1270,11 +1270,19 @@ function startSyncServer() {
 }
 
 /* ═══════ Auto-Updater ═══════ */
-autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.logger = console;
-// Skip code signature verification on macOS (app is not signed with Apple Developer cert)
-if (isMac) autoUpdater.verifyUpdateCodeSignature = false;
+// macOS: Squirrel.Mac/ShipIt does native code signature validation that cannot be
+// bypassed without an Apple Developer certificate ($99/yr). So on Mac we only CHECK
+// for updates, then open the GitHub releases page for manual download.
+if (isMac) {
+    autoUpdater.autoDownload = false;
+    autoUpdater.verifyUpdateCodeSignature = false;
+} else {
+    autoUpdater.autoDownload = true;
+}
+
+const RELEASES_URL = 'https://github.com/IlonPeruzzo/lion-workspace/releases/latest';
 
 function setupAutoUpdater() {
     autoUpdater.on('checking-for-update', () => {
@@ -1282,7 +1290,12 @@ function setupAutoUpdater() {
     });
 
     autoUpdater.on('update-available', (info) => {
-        sendUpdateStatus('available', { version: info.version });
+        if (isMac) {
+            // Mac: tell frontend to show download link (no auto-install)
+            sendUpdateStatus('available-mac', { version: info.version });
+        } else {
+            sendUpdateStatus('available', { version: info.version });
+        }
     });
 
     autoUpdater.on('update-not-available', () => {
@@ -1318,6 +1331,11 @@ function setupAutoUpdater() {
         autoUpdater.checkForUpdates().catch(() => {});
     }, 30 * 60 * 1000);
 }
+
+// IPC: open releases page (used for Mac manual update)
+ipcMain.handle('open-releases-page', () => {
+    require('electron').shell.openExternal(RELEASES_URL);
+});
 
 function sendUpdateStatus(status, data = {}) {
     if (mainWin && !mainWin.isDestroyed()) {

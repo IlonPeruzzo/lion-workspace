@@ -5622,6 +5622,16 @@ if (window.appUpdater) {
                 progress.style.display = 'block';
                 actionBtn.style.display = 'none';
                 break;
+            case 'available-mac':
+                banner.classList.add('show');
+                text.textContent = 'Nova versão ' + data.version + ' disponível!';
+                progress.style.display = 'none';
+                actionBtn.style.display = 'inline-block';
+                actionBtn.textContent = 'Baixar atualização';
+                actionBtn.onclick = function() { window.appUpdater.openReleasesPage(); };
+                updateReady = false;
+                if (manualUpdateCheck) manualUpdateCheck = false;
+                break;
             case 'downloading':
                 banner.classList.add('show');
                 text.textContent = 'Baixando atualização... ' + data.percent + '%';
@@ -5635,6 +5645,7 @@ if (window.appUpdater) {
                 progress.style.display = 'none';
                 actionBtn.style.display = 'inline-block';
                 actionBtn.textContent = 'Reiniciar e atualizar';
+                actionBtn.onclick = function() { handleUpdateAction(); };
                 updateReady = true;
                 break;
             case 'error':
