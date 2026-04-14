@@ -1220,6 +1220,8 @@ function startSyncServer() {
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.logger = console;
+// Skip code signature verification on macOS (app is not signed with Apple Developer cert)
+if (isMac) autoUpdater.verifyUpdateCodeSignature = false;
 
 function setupAutoUpdater() {
     autoUpdater.on('checking-for-update', () => {
