@@ -227,9 +227,10 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
                                 var valA = prop.getValueAtKey(timeA);
                                 var valB = prop.getValueAtKey(timeB);
 
-                                var ticksA = timeA.ticks;
-                                var ticksB = timeB.ticks;
-                                var duration = ticksB - ticksA;
+                                // Use seconds instead of ticks to avoid large-integer precision loss on macOS
+                                var secsA = timeA.seconds;
+                                var secsB = timeB.seconds;
+                                var duration = secsB - secsA;
                                 if (duration <= 0) continue;
 
                                 // Create intermediate keyframes along the bezier curve
@@ -238,9 +239,9 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
                                     var easedFraction = evalBezierCurve(fraction, cp1x, cp1y, cp2x, cp2y);
 
                                     // Calculate time for this intermediate point
-                                    var midTicks = ticksA + Math.round(duration * fraction);
+                                    var midSecs = secsA + duration * fraction;
                                     var midTime = new Time();
-                                    midTime.ticks = String(midTicks);
+                                    midTime.seconds = midSecs;
 
                                     // Calculate interpolated value
                                     var midVal;
@@ -299,6 +300,7 @@ function importFileToProject(filePath) {
 function findMotionComponent(clip) {
     try {
         var components = clip.components;
+        // Search by localized name
         for (var i = 0; i < components.numItems; i++) {
             var comp = components[i];
             var name = comp.displayName;
@@ -307,20 +309,38 @@ function findMotionComponent(clip) {
                 return comp;
             }
         }
-        // Fallback: first component is typically Motion
-        if (components.numItems > 0) return components[0];
+        // Fallback: check if component has Position-like property (index 1 is typically Motion)
+        // Index 0 is the clip media itself, NOT Motion
+        for (var i = 1; i < components.numItems; i++) {
+            try {
+                var props = components[i].properties;
+                if (props && props.numItems >= 4) {
+                    // Motion has Position, Scale, Rotation, Anchor Point — at least 4 props
+                    return components[i];
+                }
+            } catch (e2) {}
+        }
     } catch (e) {}
     return null;
 }
 
-// Find a specific property in a component by matching name
+// Find a specific property in a component by matching name (case-insensitive partial match)
 function findMotionProperty(component, names) {
     try {
+        // Exact match first
         for (var p = 0; p < component.properties.numItems; p++) {
             var prop = component.properties[p];
             var pname = prop.displayName;
             for (var n = 0; n < names.length; n++) {
                 if (pname === names[n]) return prop;
+            }
+        }
+        // Case-insensitive partial match fallback
+        for (var p = 0; p < component.properties.numItems; p++) {
+            var prop = component.properties[p];
+            var pnameLow = prop.displayName.toLowerCase();
+            for (var n = 0; n < names.length; n++) {
+                if (pnameLow.indexOf(names[n].toLowerCase()) >= 0) return prop;
             }
         }
     } catch (e) {}
@@ -330,27 +350,35 @@ function findMotionProperty(component, names) {
 // Get clip source dimensions (best-effort)
 function getClipDimensions(clip) {
     var seq = app.project.activeSequence;
-    var w = 1920, h = 1080;
+    var fallbackW = 1920, fallbackH = 1080;
     try {
-        w = seq.frameSizeHorizontal || 1920;
-        h = seq.frameSizeVertical || 1080;
+        fallbackW = parseInt(seq.frameSizeHorizontal, 10) || 1920;
+        fallbackH = parseInt(seq.frameSizeVertical, 10) || 1080;
     } catch (e) {}
 
-    // Try to get actual source dimensions from the project item
+    // Try to get actual source dimensions from projectItem metadata
     try {
         var pi = clip.projectItem;
         if (pi) {
-            // Try QE DOM
+            // Premiere 2020+: column metadata
             try {
-                app.enableQE();
-                var qep = qe.project;
-                // Search for this clip in active sequence tracks
-                // This is unreliable but try it
-            } catch (eq) {}
+                var vw = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoWidth'), 10);
+                var vh = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoHeight'), 10);
+                if (vw > 0 && vh > 0) return { width: vw, height: vh };
+            } catch (e1) {}
+            // Try footage interpretation
+            try {
+                var interp = pi.getFootageInterpretation();
+                if (interp && interp.frameSize) {
+                    var fw = interp.frameSize.width || interp.frameSize[0];
+                    var fh = interp.frameSize.height || interp.frameSize[1];
+                    if (fw > 0 && fh > 0) return { width: fw, height: fh };
+                }
+            } catch (e2) {}
         }
     } catch (epi) {}
 
-    return { width: w, height: h };
+    return { width: fallbackW, height: fallbackH };
 }
 
 // Apply a named anchor position to selected clips
@@ -381,7 +409,7 @@ function setClipAnchorPoint(position, compensate) {
 
                 var anchorProp = findMotionProperty(motion, [
                     'Anchor Point', 'Ponto de ancoragem', 'Ponto de Ancoragem',
-                    'Ankerpunkt', 'Point d\'ancrage', 'Punto de anclaje'
+                    'Anchor', 'Ankerpunkt', 'Point d\'ancrage', 'Punto de anclaje'
                 ]);
                 var positionProp = findMotionProperty(motion, [
                     'Position', 'Posição', 'Posicao', 'Posición'
@@ -390,17 +418,44 @@ function setClipAnchorPoint(position, compensate) {
                     'Scale', 'Escala', 'Skalierung', 'Échelle'
                 ]);
 
-                // Fallbacks by typical index order (Position=0, Scale=1, ..., Anchor=4)
-                if (!positionProp) { try { positionProp = motion.properties[0]; } catch (e) {} }
-                if (!scaleProp)    { try { scaleProp = motion.properties[1]; } catch (e) {} }
-                if (!anchorProp)   { try { anchorProp = motion.properties[4]; } catch (e) {} }
+                // Fallbacks: scan properties by value shape
+                if (!positionProp || !anchorProp) {
+                    for (var fp = 0; fp < motion.properties.numItems; fp++) {
+                        try {
+                            var fprop = motion.properties[fp];
+                            var fval = fprop.getValue();
+                            if (fval instanceof Array && fval.length === 2) {
+                                var fname = fprop.displayName.toLowerCase();
+                                if (!anchorProp && (fname.indexOf('anchor') >= 0 || fname.indexOf('ancor') >= 0)) {
+                                    anchorProp = fprop;
+                                } else if (!positionProp && fname.indexOf('posi') >= 0) {
+                                    positionProp = fprop;
+                                }
+                            }
+                            if (!scaleProp) {
+                                var sname = fprop.displayName.toLowerCase();
+                                if (sname.indexOf('scale') >= 0 || sname.indexOf('escala') >= 0) {
+                                    scaleProp = fprop;
+                                }
+                            }
+                        } catch (efp) {}
+                    }
+                }
 
                 if (!anchorProp || !positionProp) continue;
 
-                // Get source dimensions
+                // Get source dimensions — try deriving from current anchor if at default center
                 var dims = getClipDimensions(clip);
                 var srcW = dims.width;
                 var srcH = dims.height;
+                try {
+                    var curAnchor = anchorProp.getValue();
+                    // If anchor is at default center, we can derive true source dims
+                    if (curAnchor && curAnchor.length >= 2 && curAnchor[0] > 1 && curAnchor[1] > 1) {
+                        srcW = Math.round(curAnchor[0] * 2);
+                        srcH = Math.round(curAnchor[1] * 2);
+                    }
+                } catch (ead) {}
 
                 // Calculate target anchor in clip-source pixels
                 var newAx, newAy;
@@ -428,11 +483,8 @@ function setClipAnchorPoint(position, compensate) {
 
                 // Set new anchor point
                 try {
-                    anchorProp.setValue([newAx, newAy], true);
-                } catch (ea) {
-                    // Try without second parameter
-                    try { anchorProp.setValue([newAx, newAy]); } catch (ea2) { continue; }
-                }
+                    anchorProp.setValue([newAx, newAy]);
+                } catch (ea) { continue; }
 
                 // Compensate position if requested
                 if (compensate && oldAnchor && oldPosition && oldAnchor.length >= 2 && oldPosition.length >= 2) {
@@ -455,10 +507,8 @@ function setClipAnchorPoint(position, compensate) {
                     }
 
                     try {
-                        positionProp.setValue([newPx, newPy], true);
-                    } catch (ep) {
-                        try { positionProp.setValue([newPx, newPy]); } catch (ep2) {}
-                    }
+                        positionProp.setValue([newPx, newPy]);
+                    } catch (ep) {}
                 }
 
                 totalApplied++;
@@ -492,23 +542,33 @@ function addAnchorKeyframe() {
                 if (!motion) continue;
 
                 var anchorProp = findMotionProperty(motion, [
-                    'Anchor Point', 'Ponto de ancoragem', 'Ponto de Ancoragem'
+                    'Anchor Point', 'Ponto de ancoragem', 'Ponto de Ancoragem',
+                    'Anchor', 'Ankerpunkt', 'Point d\'ancrage', 'Punto de anclaje'
                 ]);
                 var positionProp = findMotionProperty(motion, [
-                    'Position', 'Posição', 'Posicao'
+                    'Position', 'Posição', 'Posicao', 'Posición'
                 ]);
 
-                if (!positionProp) { try { positionProp = motion.properties[0]; } catch (e) {} }
-                if (!anchorProp)   { try { anchorProp = motion.properties[4]; } catch (e) {} }
+                // Fallback: scan by value shape if name match failed
+                if (!positionProp || !anchorProp) {
+                    for (var fp = 0; fp < motion.properties.numItems; fp++) {
+                        try {
+                            var fprop = motion.properties[fp];
+                            var fname = fprop.displayName.toLowerCase();
+                            if (!anchorProp && (fname.indexOf('anchor') >= 0 || fname.indexOf('ancor') >= 0)) {
+                                anchorProp = fprop;
+                            } else if (!positionProp && fname.indexOf('posi') >= 0) {
+                                positionProp = fprop;
+                            }
+                        } catch (efp) {}
+                    }
+                }
 
-                // Calculate clip-relative time
+                // Calculate clip-relative time using seconds (avoids ticks precision issues)
                 var clipTime = new Time();
                 try {
-                    var clipStart = clip.start.ticks;
-                    var ph = playhead.ticks;
-                    var inPoint = clip.inPoint.ticks;
-                    var relativeTicks = String(Number(ph) - Number(clipStart) + Number(inPoint));
-                    clipTime.ticks = relativeTicks;
+                    var relativeSecs = playhead.seconds - clip.start.seconds + clip.inPoint.seconds;
+                    clipTime.seconds = relativeSecs;
                 } catch (et) {
                     clipTime = playhead;
                 }

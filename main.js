@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, powerMonitor, Menu } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -1661,6 +1661,24 @@ app.on('before-quit', () => {
 });
 
 app.whenReady().then(() => {
+    // Set up Edit menu so Ctrl+V / Cmd+V works in all input fields
+    const menuTemplate = [
+        ...(isMac ? [{ role: 'appMenu' }] : []),
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                { role: 'selectAll' }
+            ]
+        }
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
+
     createWindow();
     startSyncServer();
     autoInstallPremierePlugin();
