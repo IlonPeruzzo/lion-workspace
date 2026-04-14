@@ -3836,35 +3836,37 @@ function refreshDashboard(){
 }
 function renderCharts(){
     populateDashMonthSel();
-    // Determine which clients match the selected currency (BRL or USD/others)
-    const isCliBRL=(cliNome)=>{const cl=getCl(cliNome);return !cl||!cl.internacional||(cl.moeda||'BRL')==='BRL'};
-    const isCliUSD=(cliNome)=>{const cl=getCl(cliNome);return cl&&cl.internacional&&(cl.moeda||'USD')!=='BRL'};
+    // Toggle de moeda = moeda de EXIBIÇÃO (nao filtra clientes, converte valores)
     const usd=cotacao.usd||5.0;
-    const matchCur=(r)=>_chartCurrency==='BRL'?isCliBRL(r.cliente):isCliUSD(r.cliente);
-    const regsFil=regs.filter(matchCur);
     const curSym=_chartCurrency==='USD'?'$':'R$';
-    // Native value (BRL mode: values are BRL; USD mode: values in client's native currency)
-    const getVal=(r)=>r.quantidade*r.valor;
-    // For Chart 3 ranking in USD mode: convert any non-USD internacional currency to USD via cross rate
-    const getValUSDNorm=(r)=>{
-        const cl=getCl(r.cliente);if(!cl||!cl.internacional)return 0;
-        const moe=cl.moeda||'USD';if(moe==='USD')return r.quantidade*r.valor;
-        // moe->BRL via getCotacaoMoeda, then BRL->USD dividing by usd
-        const rate=getCotacaoMoeda(moe)||usd;
-        return (r.quantidade*r.valor*rate)/usd;
+    // Taxa nativa -> BRL usando a moeda do cliente
+    const rateToBRL=(r)=>{
+        const cl=getCl(r.cliente);
+        if(!cl||!cl.internacional)return 1; // domestico ja é BRL
+        const moe=cl.moeda||'USD';
+        if(moe==='BRL')return 1;
+        return getCotacaoMoeda(moe)||usd;
     };
-    const getValRanked=(r)=>_chartCurrency==='USD'?getValUSDNorm(r):getVal(r);
+    // Valor em BRL (sempre) — Ranking e Faturamento usam isso quando BRL mode
+    const valBRL=(r)=>r.quantidade*r.valor*rateToBRL(r);
+    // Valor na moeda de exibição: BRL mode -> BRL; USD mode -> USD (BRL dividido por cotacao)
+    const getVal=(r)=>{
+        const v=valBRL(r);
+        return _chartCurrency==='USD'?v/usd:v;
+    };
+    // Para ranking do Chart 3 — mesma coisa
+    const getValRanked=getVal;
+    const regsFil=regs.slice(); // sem filtro de moeda, mostra tudo
 
     const meses={};
     regsFil.forEach(r=>{const m=r.data.substring(0,7);if(!meses[m])meses[m]={bruto:0,imp:0,liq:0,vids:0};
         const bNative=r.quantidade*r.valor;const rcl=getCl(r.cliente);const tx=calcTaxaMeio(bNative,r.pagamento||'outro',rcl?.moeda);const posTx=bNative-tx.taxaValor;const imp=calcImp(posTx,r.cliente);
-        // USD mode: if client uses EUR etc., normalize to USD via BRL cross rate
-        let rate=1;
-        if(_chartCurrency==='USD'&&rcl&&rcl.internacional&&(rcl.moeda||'USD')!=='USD'){
-            const r2=getCotacaoMoeda(rcl.moeda||'USD')||usd;
-            rate=r2/usd;
-        }
-        meses[m].bruto+=bNative*rate;meses[m].imp+=imp.total*rate;meses[m].liq+=imp.liquido*rate;meses[m].vids+=r.quantidade});
+        // Converte tudo pra BRL primeiro
+        const rate=rateToBRL(r);
+        let brutoBRL=bNative*rate, impBRL=imp.total*rate, liqBRL=imp.liquido*rate;
+        // Depois converte pra moeda de exibicao
+        const div=_chartCurrency==='USD'?usd:1;
+        meses[m].bruto+=brutoBRL/div;meses[m].imp+=impBRL/div;meses[m].liq+=liqBRL/div;meses[m].vids+=r.quantidade});
     const ms=Object.keys(meses).sort();
     const labels=ms.map(m=>{const [y,mo]=m.split('-');return mo+'/'+y.substring(2)});
     const ttOpts={backgroundColor:'rgba(10,10,10,0.95)',titleColor:'#d9f99d',bodyColor:'#f5f5f5',borderColor:'rgba(190,242,100,0.25)',borderWidth:1,cornerRadius:12,padding:14,bodyFont:{size:12,family:'Inter'},titleFont:{size:12,weight:'700',family:'Inter'},boxPadding:6,caretSize:6};
