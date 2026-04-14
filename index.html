@@ -3139,6 +3139,8 @@ function selectTimerVideo(regId){
     const differentVideo=wasRunning&&projT.regId!=null&&String(projT.regId)!==regId;
     // If timer is running for a DIFFERENT video, stop it first (saves time to that video)
     if(differentVideo)stopProjTimer();
+    // Ensure dropdown options are populated (user may not have visited "produtividade" yet)
+    updProjTimerSelect();
     document.getElementById('selProjTimer').value=regId;
     document.getElementById('customProj').value='';
     document.querySelectorAll('#timerVideoCards .tv-card').forEach(c=>{c.style.borderColor=c.dataset.regid===regId?'var(--accent)':'rgba(190,242,100,.1)'});
@@ -4851,6 +4853,8 @@ function handleSyncCommand(data){
                     const rid=Number(payload.project);
                     const reg=regs.find(r=>r.id===rid);
                     if(reg){
+                        // Ensure dropdown options exist before setting value
+                        updProjTimerSelect();
                         document.getElementById('selProjTimer').value=String(rid);
                         document.getElementById('customProj').value='';
                         document.querySelectorAll('#timerVideoCards .tv-card').forEach(c=>{c.style.borderColor=c.dataset.regid===String(rid)?'var(--accent)':'rgba(190,242,100,.1)'});
