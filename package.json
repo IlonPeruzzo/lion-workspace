@@ -1,6 +1,6 @@
 {
   "name": "lion-workspace",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "description": "Lion Workspace - Gestao para Editores de Video",
   "main": "main.js",
   "scripts": {
@@ -44,7 +44,8 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "createDesktopShortcut": "always",
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "Lion-Workspace-Setup-${version}.${ext}"
     },
     "mac": {
       "target": [
@@ -66,7 +67,8 @@
       "identity": null,
       "category": "public.app-category.productivity",
       "darkModeSupport": true,
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "artifactName": "Lion-Workspace-${version}-${arch}.${ext}"
     },
     "dmg": {
       "background": null,
