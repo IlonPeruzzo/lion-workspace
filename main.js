@@ -554,6 +554,7 @@ ipcMain.handle('open-folder', () => {
 const ytDlpDir = path.join(app.getPath('userData'), 'yt-dlp');
 const ytDlpBin = isWin ? path.join(ytDlpDir, 'yt-dlp.exe') : path.join(ytDlpDir, 'yt-dlp');
 const ffmpegBin = isWin ? path.join(ytDlpDir, 'ffmpeg.exe') : path.join(ytDlpDir, 'ffmpeg');
+const ffprobeBin = isWin ? path.join(ytDlpDir, 'ffprobe.exe') : path.join(ytDlpDir, 'ffprobe');
 let ytDownloadProc = null;
 let ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', status: 'idle', error: '' };
 
@@ -595,37 +596,89 @@ async function ensureYtDlp() {
 
 async function ensureFfmpeg() {
     if (ffmpegReady()) return true;
-    // Try to find system ffmpeg first
-    const systemFfmpeg = await new Promise(resolve => {
-        exec(isWin ? 'where ffmpeg' : 'which ffmpeg', { timeout: 5000 }, (err, stdout) => {
+
+    // Try to find system ffmpeg/ffprobe first
+    const findBin = (name) => new Promise(resolve => {
+        exec(isWin ? `where ${name}` : `which ${name}`, { timeout: 5000 }, (err, stdout) => {
             resolve(err ? '' : (stdout || '').trim().split('\n')[0].trim());
         });
     });
-    if (systemFfmpeg) {
-        // Symlink or copy to our dir
+
+    // Link a system binary to our dir
+    function linkBin(systemPath, localPath) {
+        if (!systemPath || !fs.existsSync(systemPath)) return false;
         try {
-            if (isWin) { fs.copyFileSync(systemFfmpeg, ffmpegBin); }
-            else { fs.symlinkSync(systemFfmpeg, ffmpegBin); }
+            if (fs.existsSync(localPath)) return true;
+            if (isWin) fs.copyFileSync(systemPath, localPath);
+            else fs.symlinkSync(systemPath, localPath);
             return true;
-        } catch (e) {}
+        } catch (e) { return false; }
     }
-    // Download ffmpeg-essentials (small build)
-    const ffUrl = isWin
-        ? 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
-        : 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz';
-    // For simplicity, on Mac try brew ffmpeg or skip (yt-dlp works without it for many formats)
-    if (isMac) return false;
-    // On Windows, download and extract
+
+    // 1) Check PATH
+    const sysFF = await findBin('ffmpeg');
+    const sysProbe = await findBin('ffprobe');
+    if (sysFF) {
+        linkBin(sysFF, ffmpegBin);
+        linkBin(sysProbe, ffprobeBin);
+        if (fs.existsSync(ffmpegBin)) return true;
+    }
+
+    // 2) macOS: check common Homebrew / MacPorts paths
+    if (isMac) {
+        const macPaths = [
+            '/opt/homebrew/bin',    // Homebrew Apple Silicon
+            '/usr/local/bin',       // Homebrew Intel
+            '/opt/local/bin',       // MacPorts
+        ];
+        for (const dir of macPaths) {
+            const ff = path.join(dir, 'ffmpeg');
+            const fp = path.join(dir, 'ffprobe');
+            if (fs.existsSync(ff)) {
+                linkBin(ff, ffmpegBin);
+                linkBin(fp, ffprobeBin);
+                if (fs.existsSync(ffmpegBin)) return true;
+            }
+        }
+
+        // 3) macOS: download ffmpeg + ffprobe from evermeet.cx (universal builds)
+        try {
+            const dlDir = path.join(ytDlpDir, 'ff-extract');
+            fs.mkdirSync(dlDir, { recursive: true });
+
+            for (const bin of ['ffmpeg', 'ffprobe']) {
+                const zipUrl = `https://evermeet.cx/ffmpeg/getrelease/${bin}/zip`;
+                const zipPath = path.join(dlDir, `${bin}.zip`);
+                const targetPath = bin === 'ffmpeg' ? ffmpegBin : ffprobeBin;
+
+                await downloadBinary(zipUrl, zipPath);
+                // Unzip on Mac
+                await new Promise((resolve, reject) => {
+                    exec(`unzip -o "${zipPath}" -d "${dlDir}"`, { timeout: 60000 },
+                        (err) => { if (err) reject(err); else resolve(); });
+                });
+                const extracted = path.join(dlDir, bin);
+                if (fs.existsSync(extracted)) {
+                    fs.copyFileSync(extracted, targetPath);
+                    fs.chmodSync(targetPath, 0o755);
+                }
+            }
+            // Cleanup
+            try { fs.rmSync(dlDir, { recursive: true, force: true }); } catch {}
+            return fs.existsSync(ffmpegBin);
+        } catch (e) { console.error('macOS ffmpeg download failed:', e.message); return false; }
+    }
+
+    // 4) Windows: download and extract
     try {
+        const ffUrl = 'https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip';
         const zipPath = path.join(ytDlpDir, 'ffmpeg.zip');
         await downloadBinary(ffUrl, zipPath);
-        // Extract using PowerShell
         await new Promise((resolve, reject) => {
-            exec(`powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${ytDlpDir}\\ffmpeg-extract' -Force; $f=Get-ChildItem '${ytDlpDir}\\ffmpeg-extract' -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1; Copy-Item $f.FullName '${ffmpegBin}' -Force"`,
+            exec(`powershell -NoProfile -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${ytDlpDir}\\ffmpeg-extract' -Force; $f=Get-ChildItem '${ytDlpDir}\\ffmpeg-extract' -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1; Copy-Item $f.FullName '${ffmpegBin}' -Force; $p=Get-ChildItem '${ytDlpDir}\\ffmpeg-extract' -Recurse -Filter 'ffprobe.exe' | Select-Object -First 1; if($p){Copy-Item $p.FullName '${ffprobeBin}' -Force}"`,
                 { windowsHide: true, timeout: 120000 },
                 (err) => { if (err) reject(err); else resolve(); });
         });
-        // Cleanup
         try { fs.unlinkSync(zipPath); } catch {}
         try { fs.rmSync(path.join(ytDlpDir, 'ffmpeg-extract'), { recursive: true, force: true }); } catch {}
         return fs.existsSync(ffmpegBin);
