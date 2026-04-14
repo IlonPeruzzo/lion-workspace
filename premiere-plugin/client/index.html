@@ -1508,13 +1508,15 @@
         csInterface.evalScript(script,function(result){
             if(result&&result.indexOf('OK')===0){
                 var parts=result.split(':');
-                showEasingMsg('Easing aplicado! ('+( parts[1]||'')+ ' keys)','#22c55e');
+                showEasingMsg('Easing aplicado! ('+( parts[1]||'')+' props, '+(parts[2]||'')+' keys)','#22c55e');
             }else if(result==='NO_SEQUENCE'){
                 showEasingMsg('Nenhuma sequence aberta','#f43f5e');
             }else if(result==='NO_SELECTION'){
                 showEasingMsg('Selecione um clip na timeline','#f43f5e');
             }else if(result==='NO_KEYS'){
                 showEasingMsg('Clip sem keyframes — adicione keyframes primeiro','#f43f5e');
+            }else if(result&&result.indexOf('ERRORS:')===0){
+                showEasingMsg('Erro ExtendScript: '+result.substring(7),'#f43f5e');
             }else{
                 showEasingMsg(result||'Erro ao aplicar','#f43f5e');
             }

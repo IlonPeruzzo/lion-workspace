@@ -5600,6 +5600,7 @@ init();
 
 /* ═══════ Auto-Updater UI ═══════ */
 let updateReady = false;
+let manualUpdateCheck = false;
 
 // Show app version in settings
 if (window.appUpdater) {
@@ -5638,9 +5639,16 @@ if (window.appUpdater) {
                 break;
             case 'error':
                 banner.classList.remove('show');
+                if (manualUpdateCheck) {
+                    showToast('Erro ao buscar atualizações: ' + (data.message || 'verifique sua conexão'));
+                    manualUpdateCheck = false;
+                }
                 break;
             case 'not-available':
-                // Don't show banner if no update
+                if (manualUpdateCheck) {
+                    showToast('Você já está na versão mais recente!');
+                    manualUpdateCheck = false;
+                }
                 break;
         }
     });
@@ -5661,12 +5669,19 @@ function manualCheckUpdate() {
     const btn = document.getElementById('btnCheckUpdate');
     btn.disabled = true;
     btn.textContent = 'Verificando...';
+    manualUpdateCheck = true;
     window.appUpdater.checkForUpdates().then(result => {
         btn.disabled = false;
         btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Buscar atualizações';
         if (result && !result.success) {
-            // Silently ignore errors on manual check
+            showToast('Erro ao buscar atualizações: ' + (result.error || 'verifique sua conexão'));
+            manualUpdateCheck = false;
         }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Buscar atualizações';
+        showToast('Falha ao verificar atualizações');
+        manualUpdateCheck = false;
     });
 }
 </script>

@@ -179,6 +179,13 @@ function getSelectedClips() {
 // Instead of setting bezier handles (not supported in Premiere ExtendScript),
 // we calculate intermediate values along the bezier curve and create
 // multiple linear keyframes that simulate the curve shape.
+// Helper: create a Time object at given ticks (cross-platform safe)
+function createTimeAt(ticksNum) {
+    var t = new Time();
+    t.ticks = String(Math.round(ticksNum));
+    return t;
+}
+
 function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
     try {
         if (!app.project) return 'NO_PROJECT';
@@ -189,7 +196,9 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
         if (clips.length === 0) return 'NO_SELECTION';
 
         var totalApplied = 0;
-        var STEPS = 10; // Number of intermediate keyframes to create
+        var totalKeys = 0;
+        var errors = [];
+        var STEPS = 10;
 
         for (var ci = 0; ci < clips.length; ci++) {
             var clip = clips[ci];
@@ -206,16 +215,8 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
 
                             // Collect key pairs to process
                             var pairs = [];
-                            if (mode === 'between') {
-                                // Process consecutive pairs
-                                for (var k = 0; k < keys.length - 1; k++) {
-                                    pairs.push([k, k + 1]);
-                                }
-                            } else {
-                                // Process all consecutive pairs
-                                for (var k = 0; k < keys.length - 1; k++) {
-                                    pairs.push([k, k + 1]);
-                                }
+                            for (var k = 0; k < keys.length - 1; k++) {
+                                pairs.push([k, k + 1]);
                             }
 
                             // Process each pair (in reverse to not mess up indices)
@@ -227,23 +228,20 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
                                 var valA = prop.getValueAtKey(timeA);
                                 var valB = prop.getValueAtKey(timeB);
 
-                                // Use seconds instead of ticks to avoid large-integer precision loss on macOS
-                                var secsA = timeA.seconds;
-                                var secsB = timeB.seconds;
-                                var duration = secsB - secsA;
-                                if (duration <= 0) continue;
+                                // Use explicit Number() to parse ticks (string in Premiere)
+                                var ticksA = Number(timeA.ticks);
+                                var ticksB = Number(timeB.ticks);
+                                if (isNaN(ticksA) || isNaN(ticksB)) continue;
+                                var durationTicks = ticksB - ticksA;
+                                if (durationTicks <= 0) continue;
 
-                                // Create intermediate keyframes along the bezier curve
+                                // First pass: collect all new keyframe data
+                                var newKeys = [];
                                 for (var s = 1; s < STEPS; s++) {
-                                    var fraction = s / STEPS; // 0.1, 0.2, ... 0.9
+                                    var fraction = s / STEPS;
                                     var easedFraction = evalBezierCurve(fraction, cp1x, cp1y, cp2x, cp2y);
+                                    var midTicks = ticksA + durationTicks * fraction;
 
-                                    // Calculate time for this intermediate point
-                                    var midSecs = secsA + duration * fraction;
-                                    var midTime = new Time();
-                                    midTime.seconds = midSecs;
-
-                                    // Calculate interpolated value
                                     var midVal;
                                     if (typeof valA === 'number') {
                                         midVal = valA + (valB - valA) * easedFraction;
@@ -253,25 +251,41 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
                                             midVal.push(valA[d] + (valB[d] - valA[d]) * easedFraction);
                                         }
                                     } else {
-                                        continue; // Skip unsupported value types
+                                        continue;
                                     }
+                                    newKeys.push({ ticks: midTicks, val: midVal });
+                                }
 
-                                    // Add keyframe at intermediate point
+                                // Second pass: add keys and set values
+                                for (var nk = 0; nk < newKeys.length; nk++) {
                                     try {
+                                        var midTime = createTimeAt(newKeys[nk].ticks);
                                         prop.addKey(midTime);
-                                        prop.setValueAtKey(midTime, midVal);
-                                    } catch (ek) {}
+                                        // Re-create time for setValueAtKey to ensure exact match
+                                        var setTime = createTimeAt(newKeys[nk].ticks);
+                                        prop.setValueAtKey(setTime, newKeys[nk].val);
+                                        totalKeys++;
+                                    } catch (ek) {
+                                        errors.push(prop.displayName + ':' + ek.toString());
+                                    }
                                 }
                                 totalApplied++;
                             }
-                        } catch (ep) {}
+                        } catch (ep) {
+                            errors.push('prop:' + ep.toString());
+                        }
                     }
                 }
-            } catch (ec) {}
+            } catch (ec) {
+                errors.push('clip:' + ec.toString());
+            }
         }
 
-        if (totalApplied === 0) return 'NO_KEYS';
-        return 'OK:' + totalApplied;
+        if (totalApplied === 0) {
+            if (errors.length > 0) return 'ERRORS:' + errors.join('|');
+            return 'NO_KEYS';
+        }
+        return 'OK:' + totalApplied + ':' + totalKeys;
     } catch (e) {
         return 'ERROR: ' + e.toString();
     }
