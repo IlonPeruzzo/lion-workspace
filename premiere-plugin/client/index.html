@@ -127,9 +127,51 @@
         .mini-check.active svg{display:block}
 
         .footer{text-align:center;margin-top:6px;font-size:.58rem;color:#3a3a3a;letter-spacing:.2px}
+
+        /* Login screen */
+        .login-overlay{position:fixed;inset:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:20px}
+        .login-overlay.hidden{display:none}
+        .login-overlay .logo{font-size:1.1rem;margin-bottom:4px}
+        .login-overlay .login-subtitle{font-size:.72rem;color:#636363;margin-bottom:20px;text-align:center}
+        .login-overlay .login-form{width:100%;max-width:240px;display:flex;flex-direction:column;gap:10px}
+        .login-overlay .login-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 12px;font-size:.78rem;color:#f5f5f5;outline:none;font-family:inherit;transition:border-color .2s}
+        .login-overlay .login-input:focus{border-color:rgba(190,242,100,.4)}
+        .login-overlay .login-input::placeholder{color:#525252}
+        .login-overlay .login-submit{background:#bef264;color:#0a0a0a;border:none;padding:11px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
+        .login-overlay .login-submit:hover{opacity:.9}
+        .login-overlay .login-submit:disabled{opacity:.4;cursor:not-allowed}
+        .login-overlay .login-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;padding:8px 10px;border-radius:6px;font-size:.7rem;display:none;text-align:center}
+        .login-overlay .login-error.show{display:block}
+        .login-user-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;margin-bottom:6px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.08);border-radius:6px}
+        .login-user-bar .user-info{font-size:.62rem;color:#a3a3a3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .login-user-bar .user-plan{font-size:.56rem;padding:1px 6px;border-radius:4px;background:rgba(190,242,100,.1);color:#bef264;font-weight:700;text-transform:uppercase}
+        .login-user-bar .logout-btn{font-size:.58rem;color:#636363;background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 4px;transition:color .2s}
+        .login-user-bar .logout-btn:hover{color:#f43f5e}
     </style>
 </head>
 <body>
+    <!-- Plugin Login Screen -->
+    <div class="login-overlay" id="pluginLogin">
+        <div class="logo">Lion <span>Workspace</span></div>
+        <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
+        <div class="login-form">
+            <div class="login-error" id="pluginLoginError"></div>
+            <input class="login-input" type="email" id="pluginEmail" placeholder="Email" autocomplete="off">
+            <input class="login-input" type="password" id="pluginPassword" placeholder="Senha">
+            <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
+            <div style="text-align:center;font-size:.62rem;color:#525252;margin-top:4px">
+                Não tem conta? Crie pelo app ou pelo site.
+            </div>
+        </div>
+    </div>
+
+    <!-- User bar (shown when logged in) -->
+    <div class="login-user-bar" id="pluginUserBar" style="display:none">
+        <span class="user-info" id="pluginUserInfo"></span>
+        <span class="user-plan" id="pluginUserPlan"></span>
+        <button class="logout-btn" onclick="pluginDoLogout()">Sair</button>
+    </div>
+
     <div class="logo">Lion <span>Workspace</span></div>
     <div class="status off" id="conn">Desconectado</div>
 
@@ -226,12 +268,26 @@
             </div>
 
             <!-- Time range (trim) -->
-            <div id="ytTrimSection" style="margin-top:8px;display:flex;align-items:center;gap:6px">
-                <div style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600;white-space:nowrap">Cortar</div>
-                <input type="text" class="time-input" id="ytStartTime" placeholder="00:00" title="Inicio (ex: 1:30)">
-                <span style="color:#555;font-size:.6rem">ate</span>
-                <input type="text" class="time-input" id="ytEndTime" placeholder="Fim" title="Fim (ex: 3:45)">
-                <span id="ytTrimInfo" style="font-size:.5rem;color:#555;white-space:nowrap"></span>
+            <div id="ytTrimSection" style="margin-top:8px;display:none">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <div style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Cortar</div>
+                    <span id="ytTrimDuration" style="font-size:.52rem;color:#bef264;font-weight:600"></span>
+                </div>
+                <!-- Visual range slider -->
+                <div id="ytRangeWrap" style="position:relative;height:28px;background:rgba(255,255,255,.03);border:1px solid rgba(190,242,100,.08);border-radius:6px;margin-bottom:6px;cursor:pointer;overflow:hidden" onmousedown="ytRangeDown(event)">
+                    <div id="ytRangeFill" style="position:absolute;top:0;bottom:0;background:rgba(190,242,100,.12);border-left:2px solid #bef264;border-right:2px solid #bef264;pointer-events:none"></div>
+                    <div id="ytRangeStart" style="position:absolute;top:0;bottom:0;width:10px;background:#bef264;border-radius:3px;cursor:ew-resize;z-index:2;opacity:.9" onmousedown="ytHandleDown(event,'start')"></div>
+                    <div id="ytRangeEnd" style="position:absolute;top:0;bottom:0;width:10px;background:#bef264;border-radius:3px;cursor:ew-resize;z-index:2;opacity:.9" onmousedown="ytHandleDown(event,'end')"></div>
+                    <!-- Time markers -->
+                    <div id="ytTimeMarkers" style="position:absolute;bottom:1px;left:0;right:0;display:flex;justify-content:space-between;padding:0 2px;pointer-events:none">
+                    </div>
+                </div>
+                <!-- Time inputs below -->
+                <div style="display:flex;align-items:center;gap:6px">
+                    <input type="text" class="time-input" id="ytStartTime" placeholder="00:00" title="Inicio" oninput="ytTimeInputChanged()">
+                    <div style="flex:1;height:1px;background:rgba(190,242,100,.1)"></div>
+                    <input type="text" class="time-input" id="ytEndTime" placeholder="Fim" title="Fim" oninput="ytTimeInputChanged()">
+                </div>
             </div>
 
             <!-- Save location -->
@@ -427,6 +483,152 @@
     var lastPipeJSON='';
     var timerState={running:false,paused:false,appPaused:false};
     var pomoState={running:false,paused:false};
+
+    /* ═══════ Plugin Auth ═══════ */
+    var pluginToken = localStorage.getItem('lw_plugin_token') || '';
+    var pluginUser = null;
+
+    function pluginAuthHeaders() {
+        return pluginToken ? { 'Authorization': 'Bearer ' + pluginToken } : {};
+    }
+
+    function pluginCheckSession() {
+        if (!pluginToken) { pluginShowLogin(); return; }
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', API + '/auth/check', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                var r = JSON.parse(xhr.responseText);
+                if (r.authenticated) {
+                    pluginUser = r.user;
+                    pluginShowApp(r.user, r.plan);
+                } else {
+                    pluginToken = '';
+                    localStorage.removeItem('lw_plugin_token');
+                    pluginShowLogin();
+                }
+            } else {
+                pluginToken = '';
+                localStorage.removeItem('lw_plugin_token');
+                pluginShowLogin();
+            }
+        };
+        xhr.onerror = function() { pluginShowLogin(); };
+        xhr.send();
+    }
+
+    function pluginDoLogin() {
+        var email = document.getElementById('pluginEmail').value.trim();
+        var password = document.getElementById('pluginPassword').value;
+        var errEl = document.getElementById('pluginLoginError');
+        var btn = document.getElementById('pluginLoginBtn');
+        if (!email || !password) { errEl.textContent = 'Preencha email e senha'; errEl.classList.add('show'); return; }
+        errEl.classList.remove('show');
+        btn.disabled = true;
+        btn.textContent = 'Entrando...';
+        var xhr = new XMLHttpRequest();
+        xhr.timeout = 15000;
+        xhr.open('POST', API + '/auth/login', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            btn.disabled = false;
+            btn.textContent = 'Entrar';
+            if (xhr.status === 200) {
+                try {
+                    var r = JSON.parse(xhr.responseText);
+                    pluginToken = r.token;
+                    localStorage.setItem('lw_plugin_token', r.token);
+                    pluginUser = r.user;
+                    pluginShowApp(r.user, r.plan);
+                } catch(e) {
+                    errEl.textContent = 'Erro ao processar resposta.';
+                    errEl.classList.add('show');
+                }
+            } else {
+                try {
+                    var err = JSON.parse(xhr.responseText);
+                    var msg = err.message || err.error || 'Erro ao fazer login';
+                    if (err.error === 'no_subscription') msg = 'Assinatura necessária para usar o plugin.';
+                    else if (msg.includes('Invalid login')) msg = 'Email ou senha incorretos';
+                    errEl.textContent = msg;
+                } catch(e) {
+                    errEl.textContent = 'Erro do servidor (' + xhr.status + ')';
+                }
+                errEl.classList.add('show');
+            }
+        };
+        xhr.onerror = function() {
+            btn.disabled = false;
+            btn.textContent = 'Entrar';
+            errEl.textContent = 'Abra o Lion Workspace primeiro.';
+            errEl.classList.add('show');
+        };
+        xhr.ontimeout = function() {
+            btn.disabled = false;
+            btn.textContent = 'Entrar';
+            errEl.textContent = 'Timeout — verifique sua conexão.';
+            errEl.classList.add('show');
+        };
+        xhr.send(JSON.stringify({ email: email, password: password }));
+    }
+
+    function pluginDoLogout() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', API + '/auth/logout', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
+        xhr.send();
+        pluginToken = '';
+        pluginUser = null;
+        localStorage.removeItem('lw_plugin_token');
+        pluginShowLogin();
+    }
+
+    function pluginShowLogin() {
+        document.getElementById('pluginLogin').classList.remove('hidden');
+        document.getElementById('pluginUserBar').style.display = 'none';
+    }
+
+    function pluginShowApp(user, plan) {
+        document.getElementById('pluginLogin').classList.add('hidden');
+        document.getElementById('pluginUserBar').style.display = '';
+        document.getElementById('pluginUserInfo').textContent = user.email || '';
+        document.getElementById('pluginUserPlan').textContent = plan || '';
+    }
+
+    // Enter key to submit login
+    document.getElementById('pluginEmail').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('pluginPassword').focus(); });
+    document.getElementById('pluginPassword').addEventListener('keydown', function(e) { if (e.key === 'Enter') pluginDoLogin(); });
+
+    // Auto-inject auth token into all XHR requests
+    var _origXHROpen = XMLHttpRequest.prototype.open;
+    var _origXHRSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function() {
+        this._lwUrl = arguments[1] || '';
+        return _origXHROpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function() {
+        // Inject auth header for API calls (except auth endpoints)
+        if (this._lwUrl && this._lwUrl.indexOf(API) === 0 && this._lwUrl.indexOf('/auth/') === -1 && pluginToken) {
+            this.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
+        }
+        // Handle 401 responses — force re-login
+        var self = this;
+        var _origOnload = this.onload;
+        this.onload = function() {
+            if (self.status === 401 && self._lwUrl && self._lwUrl.indexOf('/auth/') === -1) {
+                pluginToken = '';
+                localStorage.removeItem('lw_plugin_token');
+                pluginShowLogin();
+                return;
+            }
+            if (_origOnload) _origOnload.apply(self, arguments);
+        };
+        return _origXHRSend.apply(this, arguments);
+    };
+
+    // Check session on load
+    pluginCheckSession();
 
     function toggleSection(id){
         var el=document.getElementById(id);
@@ -672,6 +874,119 @@
     var ytProjFolder='';
     var ytLastFile='';
     var ytPlatform='youtube'; // 'youtube', 'instagram', 'twitter'
+    var ytTotalDuration=0; // total video duration in seconds
+    var ytRangeDragging=null; // 'start', 'end', or null
+    var ytRangeStartPct=0; // 0-1
+    var ytRangeEndPct=1; // 0-1
+
+    function ytSecsToTime(s){
+        s=Math.round(s);
+        var h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
+        if(h>0)return h+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+        return m+':'+String(ss).padStart(2,'0');
+    }
+    function ytTimeToSecs(t){
+        if(!t)return 0;
+        var parts=t.split(':').map(Number);
+        if(parts.length===3)return parts[0]*3600+parts[1]*60+parts[2];
+        if(parts.length===2)return parts[0]*60+parts[1];
+        return parts[0]||0;
+    }
+
+    function ytInitRange(duration){
+        ytTotalDuration=duration||0;
+        ytRangeStartPct=0;
+        ytRangeEndPct=1;
+        document.getElementById('ytStartTime').value='';
+        document.getElementById('ytEndTime').value='';
+        if(duration>0){
+            document.getElementById('ytTrimSection').style.display='';
+            document.getElementById('ytEndTime').placeholder=ytSecsToTime(duration);
+            // Time markers
+            var markers=document.getElementById('ytTimeMarkers');
+            var count=duration>300?5:duration>60?4:3;
+            var html='';
+            for(var i=0;i<count;i++){
+                var pct=i/(count-1);
+                var t=Math.round(pct*duration);
+                html+='<span style="font-size:.42rem;color:#555">'+ytSecsToTime(t)+'</span>';
+            }
+            markers.innerHTML=html;
+        }
+        ytUpdateRange();
+    }
+
+    function ytUpdateRange(){
+        var wrap=document.getElementById('ytRangeWrap');
+        if(!wrap)return;
+        var w=wrap.offsetWidth-10; // handle width
+        var fill=document.getElementById('ytRangeFill');
+        var startH=document.getElementById('ytRangeStart');
+        var endH=document.getElementById('ytRangeEnd');
+        var sl=Math.round(ytRangeStartPct*w);
+        var el=Math.round(ytRangeEndPct*w);
+        startH.style.left=sl+'px';
+        endH.style.left=el+'px';
+        fill.style.left=(sl+5)+'px';
+        fill.style.width=Math.max(0,el-sl)+'px';
+        // Update duration label
+        var startSecs=Math.round(ytRangeStartPct*ytTotalDuration);
+        var endSecs=Math.round(ytRangeEndPct*ytTotalDuration);
+        var selDur=endSecs-startSecs;
+        document.getElementById('ytTrimDuration').textContent=ytSecsToTime(startSecs)+' — '+ytSecsToTime(endSecs)+' ('+ytSecsToTime(selDur)+')';
+    }
+
+    function ytHandleDown(e,which){
+        e.preventDefault();e.stopPropagation();
+        ytRangeDragging=which;
+        document.addEventListener('mousemove',ytRangeMove);
+        document.addEventListener('mouseup',ytRangeUp);
+    }
+    function ytRangeDown(e){
+        // Click on track = move nearest handle
+        var wrap=document.getElementById('ytRangeWrap');
+        var rect=wrap.getBoundingClientRect();
+        var pct=Math.max(0,Math.min(1,(e.clientX-rect.left-5)/(rect.width-10)));
+        var distStart=Math.abs(pct-ytRangeStartPct);
+        var distEnd=Math.abs(pct-ytRangeEndPct);
+        if(distStart<distEnd){ytRangeStartPct=Math.min(pct,ytRangeEndPct-0.01);ytRangeDragging='start'}
+        else{ytRangeEndPct=Math.max(pct,ytRangeStartPct+0.01);ytRangeDragging='end'}
+        ytSyncInputsFromRange();
+        ytUpdateRange();
+        document.addEventListener('mousemove',ytRangeMove);
+        document.addEventListener('mouseup',ytRangeUp);
+    }
+    function ytRangeMove(e){
+        if(!ytRangeDragging)return;
+        var wrap=document.getElementById('ytRangeWrap');
+        var rect=wrap.getBoundingClientRect();
+        var pct=Math.max(0,Math.min(1,(e.clientX-rect.left-5)/(rect.width-10)));
+        if(ytRangeDragging==='start'){ytRangeStartPct=Math.min(pct,ytRangeEndPct-0.01)}
+        else{ytRangeEndPct=Math.max(pct,ytRangeStartPct+0.01)}
+        ytSyncInputsFromRange();
+        ytUpdateRange();
+    }
+    function ytRangeUp(){
+        ytRangeDragging=null;
+        document.removeEventListener('mousemove',ytRangeMove);
+        document.removeEventListener('mouseup',ytRangeUp);
+    }
+    function ytSyncInputsFromRange(){
+        var startSecs=Math.round(ytRangeStartPct*ytTotalDuration);
+        var endSecs=Math.round(ytRangeEndPct*ytTotalDuration);
+        document.getElementById('ytStartTime').value=startSecs>0?ytSecsToTime(startSecs):'';
+        document.getElementById('ytEndTime').value=endSecs<ytTotalDuration?ytSecsToTime(endSecs):'';
+    }
+    function ytTimeInputChanged(){
+        if(!ytTotalDuration)return;
+        var sv=document.getElementById('ytStartTime').value.trim();
+        var ev=document.getElementById('ytEndTime').value.trim();
+        if(sv){var ss=ytTimeToSecs(sv);ytRangeStartPct=Math.max(0,Math.min(1,ss/ytTotalDuration))}
+        else{ytRangeStartPct=0}
+        if(ev){var es=ytTimeToSecs(ev);ytRangeEndPct=Math.max(ytRangeStartPct+0.01,Math.min(1,es/ytTotalDuration))}
+        else{ytRangeEndPct=1}
+        ytUpdateRange();
+    }
 
     function ytSetPlatform(p){
         ytPlatform=p;
@@ -762,12 +1077,12 @@
                 var mm=Math.floor(dur/60);var ss=dur%60;
                 document.getElementById('ytDurPlugin').textContent=mm+':'+(ss<10?'0':'')+ss;
                 document.getElementById('ytPreview').style.display='';
-                // Set trim end placeholder to full duration
-                var endPh=mm+':'+(ss<10?'0':'')+ss;
-                document.getElementById('ytEndTime').placeholder=endPh;
-                document.getElementById('ytTrimInfo').textContent='Total: '+endPh;
-                // Show/hide trim for non-Instagram (IG is usually short)
-                document.getElementById('ytTrimSection').style.display=(ytPlatform==='instagram')?'none':'flex';
+                // Initialize interactive range slider
+                if(ytPlatform!=='instagram'&&dur>0){
+                    ytInitRange(dur);
+                } else {
+                    document.getElementById('ytTrimSection').style.display='none';
+                }
                 ytGetProjectFolder();
             }catch(e){showMsg('Erro ao processar resposta')}
             btn.disabled=false;btn.textContent='Buscar';

@@ -1,6 +1,6 @@
 {
   "name": "lion-workspace",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Lion Workspace - Gestao para Editores de Video",
   "main": "main.js",
   "scripts": {
@@ -33,14 +33,18 @@
           ]
         }
       ],
-      "sign": false
+      "sign": false,
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "Lion Workspace"
+      "shortcutName": "Lion Workspace",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true
     },
     "mac": {
       "target": [
@@ -61,10 +65,12 @@
       ],
       "identity": null,
       "category": "public.app-category.productivity",
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "icon": "build/icon.png"
     },
     "dmg": {
       "background": null,
+      "icon": "build/icon.png",
       "iconSize": 100,
       "contents": [
         {
@@ -82,7 +88,8 @@
     "files": [
       "main.js",
       "preload.js",
-      "index.html"
+      "index.html",
+      "build/icon.png"
     ],
     "extraResources": [
       {
@@ -101,6 +108,8 @@
   "devDependencies": {
     "@electron/packager": "^19.1.0",
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5"
   }
 }

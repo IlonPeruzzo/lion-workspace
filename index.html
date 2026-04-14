@@ -411,6 +411,46 @@
         @keyframes spin{to{transform:rotate(360deg)}}
         .login-success{background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.2);color:#bef264;padding:10px 14px;border-radius:8px;font-size:.82rem;display:none}
         .login-success.show{display:block}
+
+        /* First-launch setup screen */
+        .setup-screen{position:fixed;inset:0;background:#050505;display:flex;align-items:center;justify-content:center;z-index:9998;-webkit-app-region:drag}
+        .setup-screen.hidden{display:none}
+        .setup-card{width:420px;padding:40px;-webkit-app-region:no-drag}
+        .setup-card .logo{text-align:center;margin-bottom:28px}
+        .setup-card .logo h1{font-size:1.6rem;font-weight:800;color:#f5f5f5;letter-spacing:-.5px}
+        .setup-card .logo h1 span{color:#bef264}
+        .setup-card .logo p{font-size:.82rem;color:#636363;margin-top:6px}
+        .setup-step{display:none}
+        .setup-step.active{display:block}
+        .setup-option{display:flex;align-items:flex-start;gap:14px;padding:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;cursor:pointer;transition:all .2s;margin-bottom:10px}
+        .setup-option:hover{border-color:rgba(190,242,100,.2);background:rgba(190,242,100,.03)}
+        .setup-option.selected{border-color:rgba(190,242,100,.4);background:rgba(190,242,100,.06)}
+        .setup-option .opt-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .setup-option .opt-text h4{font-size:.88rem;font-weight:600;color:#f5f5f5;margin-bottom:3px}
+        .setup-option .opt-text p{font-size:.75rem;color:#737373;line-height:1.4}
+        .setup-option .opt-check{margin-left:auto;flex-shrink:0;width:20px;height:20px;border-radius:6px;border:2px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;transition:all .2s}
+        .setup-option.selected .opt-check{border-color:#bef264;background:#bef264}
+        .setup-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.68rem;font-weight:600}
+        .setup-badge.detected{background:rgba(190,242,100,.1);color:#bef264}
+        .setup-badge.not-found{background:rgba(255,255,255,.05);color:#525252}
+        .setup-card .setup-btn{background:#bef264;color:#0a0a0a;border:none;padding:14px;border-radius:12px;font-size:.9rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;width:100%;margin-top:16px;letter-spacing:-.2px}
+        .setup-card .setup-btn:hover{opacity:.9;transform:translateY(-1px)}
+        .setup-card .setup-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+        /* No subscription screen */
+        .nosub-screen{position:fixed;inset:0;background:#050505;display:flex;align-items:center;justify-content:center;z-index:9997;-webkit-app-region:drag}
+        .nosub-screen.hidden{display:none}
+        .nosub-card{width:420px;padding:40px;text-align:center;-webkit-app-region:no-drag}
+        .nosub-card .logo{margin-bottom:28px}
+        .nosub-card .logo h1{font-size:1.6rem;font-weight:800;color:#f5f5f5;letter-spacing:-.5px}
+        .nosub-card .logo h1 span{color:#bef264}
+        .nosub-icon{width:64px;height:64px;border-radius:16px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+        .nosub-card h2{font-size:1.1rem;font-weight:700;color:#f5f5f5;margin-bottom:8px}
+        .nosub-card .nosub-desc{font-size:.82rem;color:#737373;line-height:1.6;margin-bottom:24px}
+        .nosub-card .nosub-btn{background:#bef264;color:#0a0a0a;border:none;padding:14px 28px;border-radius:12px;font-size:.9rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;width:100%;letter-spacing:-.2px}
+        .nosub-card .nosub-btn:hover{opacity:.9;transform:translateY(-1px)}
+        .nosub-card .nosub-secondary{background:none;border:1px solid rgba(255,255,255,.08);color:#a3a3a3;padding:12px;border-radius:12px;font-size:.82rem;cursor:pointer;transition:all .2s;font-family:inherit;width:100%;margin-top:10px}
+        .nosub-card .nosub-secondary:hover{border-color:rgba(190,242,100,.2);color:#f5f5f5}
     </style>
 </head>
 <body>
@@ -467,6 +507,98 @@
                 </div>
             </div>
         </div>
+
+        <!-- Terms of Service (first access) -->
+        <div id="termsFormView" style="display:none">
+            <div class="login-form" style="gap:12px">
+                <div style="font-size:.92rem;font-weight:700;color:#f5f5f5">Termos de Uso</div>
+                <div style="max-height:240px;overflow-y:auto;padding:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;font-size:.75rem;color:#a3a3a3;line-height:1.7;scrollbar-width:thin;scrollbar-color:rgba(190,242,100,.2) transparent">
+                    <p style="margin-bottom:10px"><strong style="color:#d4d4d4">1. Licença de Uso</strong><br>O Lion Workspace é um software licenciado, não vendido. Você recebe uma licença pessoal e intransferível para utilizar o software de acordo com o plano contratado.</p>
+                    <p style="margin-bottom:10px"><strong style="color:#d4d4d4">2. Restrições</strong><br>Não é permitido copiar, modificar, descompilar ou fazer engenharia reversa do software. Não é permitido redistribuir ou compartilhar sua conta com terceiros.</p>
+                    <p style="margin-bottom:10px"><strong style="color:#d4d4d4">3. Conta e Autenticação</strong><br>É necessária uma conta válida para utilizar o software. O software coleta informações do dispositivo para controle de licença.</p>
+                    <p style="margin-bottom:10px"><strong style="color:#d4d4d4">4. Plugin Premiere Pro</strong><br>O plugin para Adobe Premiere Pro é incluso e requer CC 2019 ou superior. O plugin se comunica localmente com o aplicativo.</p>
+                    <p style="margin-bottom:10px"><strong style="color:#d4d4d4">5. Privacidade</strong><br>Seus dados são armazenados de forma segura. Não compartilhamos dados pessoais com terceiros.</p>
+                    <p style="margin-bottom:10px"><strong style="color:#d4d4d4">6. Atualizações</strong><br>O software verifica automaticamente por atualizações que podem incluir novos recursos e correções de segurança.</p>
+                    <p><strong style="color:#d4d4d4">7. Garantia</strong><br>O software é fornecido "como está", sem garantias expressas ou implícitas.</p>
+                </div>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.8rem;color:#a3a3a3">
+                    <input type="checkbox" id="termsCheckbox" onchange="document.getElementById('termsAcceptBtn').disabled=!this.checked" style="accent-color:#bef264;width:16px;height:16px">
+                    Li e aceito os <a onclick="window.electronAPI.openExternal('https://lionwork.com.br/terms')" style="color:#bef264;cursor:pointer;text-decoration:underline">Termos de Uso</a>
+                </label>
+                <button class="login-btn" id="termsAcceptBtn" disabled onclick="acceptTerms()">Continuar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- First-launch Setup Screen -->
+<div class="setup-screen hidden" id="setupScreen">
+    <div class="setup-card">
+        <div class="logo">
+            <h1>Lion <span>Workspace</span></h1>
+            <p>Vamos configurar seu app</p>
+        </div>
+
+        <!-- Step 1: Plugin -->
+        <div class="setup-step active" id="setupStep1">
+            <div style="font-size:.88rem;font-weight:600;color:#f5f5f5;margin-bottom:6px">Plugin Adobe Premiere Pro</div>
+            <div style="font-size:.78rem;color:#737373;margin-bottom:14px">
+                O plugin integra o Lion Workspace diretamente no Premiere Pro para controle de projetos e tempo.
+            </div>
+
+            <div id="premiereStatus" style="margin-bottom:14px">
+                <span class="setup-badge not-found">Detectando...</span>
+            </div>
+
+            <div class="setup-option selected" id="optInstallPlugin" onclick="togglePluginOption(true)">
+                <div class="opt-icon" style="background:rgba(190,242,100,.1)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <div class="opt-text">
+                    <h4>Instalar plugin</h4>
+                    <p>Adiciona integração com Adobe Premiere Pro CC 2019+</p>
+                </div>
+                <div class="opt-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+            </div>
+
+            <div class="setup-option" id="optSkipPlugin" onclick="togglePluginOption(false)">
+                <div class="opt-icon" style="background:rgba(255,255,255,.05)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#525252" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
+                <div class="opt-text">
+                    <h4>Pular</h4>
+                    <p>Não uso Premiere Pro ou quero instalar depois</p>
+                </div>
+                <div class="opt-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+            </div>
+
+            <button class="setup-btn" onclick="finishSetup()">Continuar</button>
+        </div>
+    </div>
+</div>
+
+<!-- No subscription screen -->
+<div class="nosub-screen hidden" id="nosubScreen">
+    <div class="nosub-card">
+        <div class="logo">
+            <h1>Lion <span>Workspace</span></h1>
+        </div>
+        <div class="nosub-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.5"><path d="M12 9v4m0 4h.01M3.27 20.45l7.86-15.72a.96.96 0 011.74 0l7.86 15.72a.96.96 0 01-.87 1.38H4.14a.96.96 0 01-.87-1.38z"/></svg>
+        </div>
+        <h2>Assinatura necessária</h2>
+        <p class="nosub-desc">
+            Para usar o Lion Workspace, você precisa de uma assinatura ativa.<br>
+            Acesse o site para escolher um plano.
+        </p>
+        <p id="nosubPlan" style="font-size:.75rem;color:#525252;margin-bottom:16px"></p>
+        <button class="nosub-btn" onclick="openSubscriptionPage()">Ver planos</button>
+        <button class="nosub-secondary" onclick="retryLicenseCheck()">Já assinei — verificar novamente</button>
+        <button class="nosub-secondary" onclick="doLogout()" style="margin-top:6px;border-color:rgba(239,68,68,.2);color:#fca5a5">Sair da conta</button>
     </div>
 </div>
 
@@ -1284,7 +1416,8 @@ async function checkAuth() {
                 document.getElementById('accountName').textContent = session.user.full_name || 'Usuário';
                 document.getElementById('accountEmail').textContent = session.user.email || '';
             }
-            showApp();
+            // Check license/subscription before allowing access
+            await verifyLicense();
         } else {
             showLoginScreen();
         }
@@ -1293,8 +1426,65 @@ async function checkAuth() {
     }
 }
 
+async function verifyLicense() {
+    try {
+        const license = await window.auth.checkLicense();
+        if (license.valid) {
+            hideNoSubScreen();
+            showApp();
+        } else {
+            showNoSubScreen(license.reason);
+        }
+    } catch {
+        // Offline or error — allow access if cached
+        showApp();
+    }
+}
+
+function showNoSubScreen(reason) {
+    const screen = document.getElementById('nosubScreen');
+    const planEl = document.getElementById('nosubPlan');
+    loginScreen.classList.add('hidden');
+    document.getElementById('setupScreen').classList.add('hidden');
+    if (appContainer) appContainer.style.display = 'none';
+    if (reason === 'device_blocked') {
+        planEl.textContent = 'Este dispositivo foi bloqueado. Entre em contato com o suporte.';
+    } else {
+        planEl.textContent = '';
+    }
+    screen.classList.remove('hidden');
+}
+
+function hideNoSubScreen() {
+    document.getElementById('nosubScreen').classList.add('hidden');
+}
+
+function openSubscriptionPage() {
+    if (window.electronAPI) {
+        window.electronAPI.openExternal('https://app.lionwork.com.br/pricing');
+    }
+}
+
+async function retryLicenseCheck() {
+    const btn = document.querySelector('.nosub-card .nosub-secondary');
+    btn.textContent = 'Verificando...';
+    btn.disabled = true;
+    try {
+        await verifyLicense();
+    } finally {
+        btn.textContent = 'Já assinei — verificar novamente';
+        btn.disabled = false;
+    }
+}
+
 function showApp() {
     loginScreen.classList.add('hidden');
+    // Check if first-launch setup is needed
+    if (!localStorage.getItem('lw_setup_done') && window.setup) {
+        showSetupScreen();
+        return;
+    }
+    document.getElementById('setupScreen').classList.add('hidden');
     if (appContainer) appContainer.style.display = '';
 }
 
@@ -1304,23 +1494,49 @@ function showLoginScreen() {
 }
 
 // Login form navigation
+const allLoginViews = ['loginFormView','signupFormView','forgotFormView','termsFormView'];
+function hideAllViews() { allLoginViews.forEach(id => document.getElementById(id).style.display = 'none'); }
+
 function showLogin() {
+    hideAllViews();
     document.getElementById('loginFormView').style.display = '';
-    document.getElementById('signupFormView').style.display = 'none';
-    document.getElementById('forgotFormView').style.display = 'none';
     document.querySelector('.login-card .logo p').textContent = 'Faça login para continuar';
 }
 function showSignup() {
-    document.getElementById('loginFormView').style.display = 'none';
+    // Show terms first if not accepted
+    if (!localStorage.getItem('lw_terms_accepted')) {
+        showTerms('signup');
+        return;
+    }
+    hideAllViews();
     document.getElementById('signupFormView').style.display = '';
-    document.getElementById('forgotFormView').style.display = 'none';
     document.querySelector('.login-card .logo p').textContent = 'Crie sua conta';
 }
 function showForgotPassword() {
-    document.getElementById('loginFormView').style.display = 'none';
-    document.getElementById('signupFormView').style.display = 'none';
+    hideAllViews();
+    document.getElementById('forgotFormView').style.display = 'none';
     document.getElementById('forgotFormView').style.display = '';
     document.querySelector('.login-card .logo p').textContent = 'Recuperar senha';
+}
+
+let termsNextAction = null;
+function showTerms(nextAction) {
+    termsNextAction = nextAction || 'login';
+    hideAllViews();
+    document.getElementById('termsFormView').style.display = '';
+    document.getElementById('termsCheckbox').checked = false;
+    document.getElementById('termsAcceptBtn').disabled = true;
+    document.querySelector('.login-card .logo p').textContent = 'Termos de Uso';
+}
+function acceptTerms() {
+    localStorage.setItem('lw_terms_accepted', new Date().toISOString());
+    if (termsNextAction === 'signup') {
+        hideAllViews();
+        document.getElementById('signupFormView').style.display = '';
+        document.querySelector('.login-card .logo p').textContent = 'Crie sua conta';
+    } else {
+        showLogin();
+    }
 }
 
 async function doLogin() {
@@ -1339,20 +1555,26 @@ async function doLogin() {
     btn.disabled = true;
     btn.innerHTML = '<span class="login-loading"><span class="login-spinner"></span> Entrando...</span>';
 
-    const result = await window.auth.login(email, password);
+    try {
+        const result = await window.auth.login(email, password);
 
-    if (result.success) {
-        // Update account info
-        const session = await window.auth.getSession();
-        if (session.user) {
-            document.getElementById('accountName').textContent = session.user.full_name || 'Usuário';
-            document.getElementById('accountEmail').textContent = session.user.email || '';
+        if (result.success) {
+            const session = await window.auth.getSession();
+            if (session.user) {
+                document.getElementById('accountName').textContent = session.user.full_name || 'Usuário';
+                document.getElementById('accountEmail').textContent = session.user.email || '';
+            }
+            await verifyLicense();
+        } else {
+            let msg = result.error || 'Erro ao fazer login';
+            if (msg.includes('Invalid login')) msg = 'Email ou senha incorretos';
+            errorEl.textContent = msg;
+            errorEl.classList.add('show');
+            btn.disabled = false;
+            btn.textContent = 'Entrar';
         }
-        showApp();
-    } else {
-        let msg = result.error || 'Erro ao fazer login';
-        if (msg.includes('Invalid login')) msg = 'Email ou senha incorretos';
-        errorEl.textContent = msg;
+    } catch (err) {
+        errorEl.textContent = 'Erro de conexão. Tente novamente.';
         errorEl.classList.add('show');
         btn.disabled = false;
         btn.textContent = 'Entrar';
@@ -1385,24 +1607,71 @@ async function doSignup() {
     btn.disabled = true;
     btn.innerHTML = '<span class="login-loading"><span class="login-spinner"></span> Criando...</span>';
 
-    const result = await window.auth.signup(email, password, name);
+    try {
+        const result = await window.auth.signup(email, password, name);
 
-    btn.disabled = false;
-    btn.textContent = 'Criar conta';
+        btn.disabled = false;
+        btn.textContent = 'Criar conta';
 
-    if (result.success) {
-        if (result.needsConfirmation) {
-            successEl.textContent = 'Conta criada! Verifique seu email para confirmar.';
-            successEl.classList.add('show');
-            errorEl.classList.remove('show');
+        if (result.success) {
+            if (result.needsConfirmation) {
+                successEl.innerHTML = 'Conta criada! Verifique seu email para confirmar.';
+                successEl.classList.add('show');
+                errorEl.classList.remove('show');
+                let countdown = 10;
+                btn.disabled = true;
+                btn.textContent = `Já confirmei meu email (${countdown}s)`;
+                const timer = setInterval(() => {
+                    countdown--;
+                    if (countdown <= 0) {
+                        clearInterval(timer);
+                        btn.disabled = false;
+                        btn.textContent = 'Já confirmei meu email';
+                    } else {
+                        btn.textContent = `Já confirmei meu email (${countdown}s)`;
+                    }
+                }, 1000);
+                btn.onclick = async function() {
+                    const email = document.getElementById('signupEmail').value.trim();
+                    const password = document.getElementById('signupPassword').value;
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="login-loading"><span class="login-spinner"></span> Entrando...</span>';
+                    try {
+                        const loginResult = await window.auth.login(email, password);
+                        if (loginResult.success) {
+                            const session = await window.auth.getSession();
+                            if (session.user) {
+                                document.getElementById('accountName').textContent = session.user.full_name || 'Usuário';
+                                document.getElementById('accountEmail').textContent = session.user.email || '';
+                            }
+                            await verifyLicense();
+                        } else {
+                            errorEl.textContent = 'Confirme seu email primeiro e tente novamente.';
+                            errorEl.classList.add('show');
+                            btn.disabled = false;
+                            btn.textContent = 'Já confirmei meu email';
+                        }
+                    } catch {
+                        errorEl.textContent = 'Erro de conexão. Tente novamente.';
+                        errorEl.classList.add('show');
+                        btn.disabled = false;
+                        btn.textContent = 'Já confirmei meu email';
+                    }
+                };
+            } else {
+                await verifyLicense();
+            }
         } else {
-            showApp();
+            let msg = result.error || 'Erro ao criar conta';
+            if (msg.includes('already registered')) msg = 'Este email já está cadastrado';
+            errorEl.textContent = msg;
+            errorEl.classList.add('show');
         }
-    } else {
-        let msg = result.error || 'Erro ao criar conta';
-        if (msg.includes('already registered')) msg = 'Este email já está cadastrado';
-        errorEl.textContent = msg;
+    } catch (err) {
+        errorEl.textContent = 'Erro de conexão. Tente novamente.';
         errorEl.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Criar conta';
     }
 }
 
@@ -1452,6 +1721,57 @@ document.getElementById('loginPassword').addEventListener('keydown', e => { if (
 document.getElementById('loginEmail').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
 document.getElementById('signupPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doSignup(); });
 document.getElementById('forgotEmail').addEventListener('keydown', e => { if (e.key === 'Enter') doForgotPassword(); });
+
+/* ═══════ First-launch Setup ═══════ */
+let installPluginChoice = true;
+
+async function showSetupScreen() {
+    const setupScreen = document.getElementById('setupScreen');
+    setupScreen.classList.remove('hidden');
+    loginScreen.classList.add('hidden');
+    if (appContainer) appContainer.style.display = 'none';
+
+    // Detect Premiere
+    if (window.setup) {
+        const result = await window.setup.detectPremiere();
+        const statusEl = document.getElementById('premiereStatus');
+        if (result.pluginInstalled) {
+            statusEl.innerHTML = '<span class="setup-badge detected">Plugin ja instalado</span>';
+            // Auto-select skip since already installed
+            togglePluginOption(false);
+        } else if (result.adobeInstalled) {
+            statusEl.innerHTML = '<span class="setup-badge detected">Adobe detectado no computador</span>';
+        } else {
+            statusEl.innerHTML = '<span class="setup-badge not-found">Adobe nao detectado</span>';
+        }
+    }
+}
+
+function togglePluginOption(install) {
+    installPluginChoice = install;
+    const optInstall = document.getElementById('optInstallPlugin');
+    const optSkip = document.getElementById('optSkipPlugin');
+    if (install) {
+        optInstall.classList.add('selected');
+        optSkip.classList.remove('selected');
+    } else {
+        optInstall.classList.remove('selected');
+        optSkip.classList.add('selected');
+    }
+}
+
+async function finishSetup() {
+    if (window.setup) {
+        if (installPluginChoice) {
+            await window.setup.installPlugin();
+        } else {
+            await window.setup.skipPlugin();
+        }
+    }
+    localStorage.setItem('lw_setup_done', new Date().toISOString());
+    document.getElementById('setupScreen').classList.add('hidden');
+    if (appContainer) appContainer.style.display = '';
+}
 
 // Run auth check on load
 checkAuth();
@@ -4527,8 +4847,16 @@ function handleSyncCommand(data){
                 if(!projT.project&&!projT.regId)break; // no video = no resume
                 resumeProjTimer();
             } else if(!projT.running){
-                if(payload.project){selectTimerVideo(payload.project)}
-                startProjTimer();
+                if(payload.project){
+                    const rid=Number(payload.project);
+                    const reg=regs.find(r=>r.id===rid);
+                    if(reg){
+                        document.getElementById('selProjTimer').value=String(rid);
+                        document.getElementById('customProj').value='';
+                        document.querySelectorAll('#timerVideoCards .tv-card').forEach(c=>{c.style.borderColor=c.dataset.regid===String(rid)?'var(--accent)':'rgba(190,242,100,.1)'});
+                    }
+                }
+                startProjTimer(true);
             }break;
         case'timer/stop':stopProjTimer();break;
         case'timer/pause':pauseProjTimer();break;

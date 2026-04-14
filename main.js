@@ -875,6 +875,26 @@ ipcMain.handle('yt-open-folder', (event, folderPath) => {
 const SYNC_PORT = 9847;
 let cachedState = { timer: { running: false }, pomodoro: { running: false }, projects: [] };
 
+// Plugin auth tokens (session-based, stored in memory)
+const pluginSessions = new Map(); // token -> { userId, email, plan, expiresAt }
+
+function generatePluginToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+function authenticatePluginRequest(req) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    const token = authHeader.slice(7);
+    const session = pluginSessions.get(token);
+    if (!session) return null;
+    if (Date.now() > session.expiresAt) {
+        pluginSessions.delete(token);
+        return null;
+    }
+    return session;
+}
+
 ipcMain.handle('sync-push-state', (event, state) => {
     cachedState = state;
     return true;
@@ -884,11 +904,103 @@ function startSyncServer() {
     const server = http.createServer((req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
         if (req.method === 'OPTIONS') {
             res.writeHead(200);
             res.end();
+            return;
+        }
+
+        // === Auth endpoints (no token required) ===
+        if (req.method === 'POST' && req.url === '/auth/login') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', async () => {
+                try {
+                    const { email, password } = JSON.parse(body);
+                    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                    if (error) {
+                        res.writeHead(401, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: error.message }));
+                        return;
+                    }
+                    // Check subscription
+                    const { data: sub } = await supabase
+                        .from('subscriptions')
+                        .select('plan, status')
+                        .eq('user_id', data.user.id)
+                        .in('status', ['active', 'trialing'])
+                        .limit(1)
+                        .single();
+                    if (!sub) {
+                        res.writeHead(403, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'no_subscription', message: 'Assinatura necessária para usar o plugin.' }));
+                        return;
+                    }
+                    // Check device
+                    const fp = getDeviceFingerprint();
+                    const { data: device } = await supabase
+                        .from('devices')
+                        .select('blocked')
+                        .eq('user_id', data.user.id)
+                        .eq('fingerprint', fp)
+                        .single();
+                    if (device?.blocked) {
+                        res.writeHead(403, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'device_blocked' }));
+                        return;
+                    }
+                    // Create plugin session token (valid 24h)
+                    const token = generatePluginToken();
+                    pluginSessions.set(token, {
+                        userId: data.user.id,
+                        email: data.user.email,
+                        name: data.user.user_metadata?.full_name || '',
+                        plan: sub.plan,
+                        expiresAt: Date.now() + (24 * 60 * 60 * 1000)
+                    });
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        token,
+                        user: { email: data.user.email, name: data.user.user_metadata?.full_name || '' },
+                        plan: sub.plan
+                    }));
+                } catch (e) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: e.message }));
+                }
+            });
+            return;
+        }
+
+        if (req.method === 'GET' && req.url === '/auth/check') {
+            const session = authenticatePluginRequest(req);
+            if (!session) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ authenticated: false }));
+            } else {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ authenticated: true, user: { email: session.email, name: session.name }, plan: session.plan }));
+            }
+            return;
+        }
+
+        if (req.method === 'POST' && req.url === '/auth/logout') {
+            const authHeader = req.headers['authorization'];
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                pluginSessions.delete(authHeader.slice(7));
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+            return;
+        }
+
+        // === All other routes require authentication ===
+        const pluginSession = authenticatePluginRequest(req);
+        if (!pluginSession) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'unauthorized', message: 'Faça login no plugin.' }));
             return;
         }
 
@@ -1146,10 +1258,10 @@ function setupAutoUpdater() {
         });
     }, 5000);
 
-    // Re-check every 4 hours
+    // Re-check every 30 minutes (frequent during early releases)
     setInterval(() => {
         autoUpdater.checkForUpdates().catch(() => {});
-    }, 4 * 60 * 60 * 1000);
+    }, 30 * 60 * 1000);
 }
 
 function sendUpdateStatus(status, data = {}) {
@@ -1258,15 +1370,23 @@ function clearLicenseCache() {
     } catch {}
 }
 
+// Timeout wrapper for async operations
+function withTimeout(promise, ms = 15000) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout — verifique sua conexão')), ms))
+    ]);
+}
+
 // IPC: Login
 ipcMain.handle('auth-login', async (_, email, password) => {
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }));
         if (error) return { success: false, error: error.message };
 
-        // Register/update device
+        // Register/update device (don't block login for this)
         const fingerprint = getDeviceFingerprint();
-        await supabase.from('devices').upsert({
+        supabase.from('devices').upsert({
             user_id: data.user.id,
             fingerprint,
             name: os.hostname(),
@@ -1277,7 +1397,7 @@ ipcMain.handle('auth-login', async (_, email, password) => {
             app_version: app.getVersion(),
             last_seen_at: new Date().toISOString(),
             last_heartbeat_at: new Date().toISOString()
-        }, { onConflict: 'user_id,fingerprint' });
+        }, { onConflict: 'user_id,fingerprint' }).catch(() => {});
 
         return {
             success: true,
@@ -1357,10 +1477,7 @@ ipcMain.handle('auth-check-license', async () => {
             .single();
 
         if (!sub) {
-            // No active subscription — still allow access (trial/free tier)
-            const result = { valid: true, plan: 'free', status: 'free' };
-            setLicenseCache(result);
-            return result;
+            return { valid: false, reason: 'no_subscription' };
         }
 
         // Check device
@@ -1412,12 +1529,22 @@ ipcMain.handle('auth-check-license', async () => {
 // IPC: Signup
 ipcMain.handle('auth-signup', async (_, email, password, fullName) => {
     try {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await withTimeout(supabase.auth.signUp({
             email,
             password,
             options: { data: { full_name: fullName } }
-        });
+        }));
         if (error) return { success: false, error: error.message };
+
+        // Ensure profile exists (don't block signup for this)
+        if (data.user) {
+            supabase.from('profiles').upsert({
+                id: data.user.id,
+                email: email,
+                full_name: fullName
+            }, { onConflict: 'id' }).catch(() => {});
+        }
+
         return {
             success: true,
             needsConfirmation: !data.session,
@@ -1438,6 +1565,65 @@ ipcMain.handle('auth-forgot-password', async (_, email) => {
         return { success: true };
     } catch (err) {
         return { success: false, error: err.message };
+    }
+});
+
+// IPC: Detect if Adobe Premiere Pro is installed
+ipcMain.handle('detect-premiere', async () => {
+    try {
+        let cepDir;
+        if (isMac) {
+            cepDir = path.join(os.homedir(), 'Library', 'Application Support', 'Adobe', 'CEP', 'extensions');
+        } else {
+            cepDir = path.join(process.env.APPDATA || '', 'Adobe', 'CEP', 'extensions');
+        }
+        // Check if Adobe folder exists (indicates Adobe products installed)
+        const adobeDir = isMac
+            ? path.join(os.homedir(), 'Library', 'Application Support', 'Adobe')
+            : path.join(process.env.APPDATA || '', 'Adobe');
+        const adobeInstalled = fs.existsSync(adobeDir);
+
+        // Check if our plugin is already installed
+        const pluginInstalled = fs.existsSync(path.join(cepDir, 'com.lionworkspace.premiere', 'host', 'index.jsx'));
+
+        return { adobeInstalled, pluginInstalled };
+    } catch {
+        return { adobeInstalled: false, pluginInstalled: false };
+    }
+});
+
+// IPC: Install the Premiere plugin now
+ipcMain.handle('install-premiere-plugin', async () => {
+    try {
+        // Server-side license check before installing plugin
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { success: false, error: 'not_authenticated' };
+
+        const { data: sub } = await supabase
+            .from('subscriptions')
+            .select('plan, status')
+            .eq('user_id', user.id)
+            .in('status', ['active', 'trialing'])
+            .limit(1)
+            .single();
+
+        if (!sub) return { success: false, error: 'no_subscription' };
+
+        autoInstallPremierePlugin();
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+
+// IPC: Skip plugin installation (write flag)
+ipcMain.handle('skip-premiere-plugin', () => {
+    try {
+        const flagPath = path.join(path.dirname(process.execPath), 'skip-plugin.flag');
+        fs.writeFileSync(flagPath, 'true');
+        return { success: true };
+    } catch {
+        return { success: true }; // non-critical
     }
 });
 
@@ -1485,6 +1671,13 @@ app.whenReady().then(() => {
 // Auto-install Premiere plugin on startup (works on both Mac and Windows)
 function autoInstallPremierePlugin() {
     try {
+        // Check if user opted out of plugin during installation
+        const skipFlag = path.join(path.dirname(process.execPath), 'skip-plugin.flag');
+        if (fs.existsSync(skipFlag)) {
+            console.log('Plugin installation skipped by user choice');
+            return;
+        }
+
         // Find the plugin source (bundled with app in extraResources)
         let pluginSrc = path.join(process.resourcesPath, 'premiere-plugin');
         if (!fs.existsSync(pluginSrc)) {

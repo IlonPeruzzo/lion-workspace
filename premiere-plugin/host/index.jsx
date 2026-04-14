@@ -541,39 +541,56 @@ function insertClipToTimeline(filePath) {
     try {
         if (!app.project) return 'NO_PROJECT';
 
-        // Get active sequence
         var seq = app.project.activeSequence;
         if (!seq) return 'NO_SEQUENCE';
 
-        // Find the clip in the project (search all bins recursively)
         var f = new File(filePath);
         var clipItem = null;
         var fileName = f.displayName.replace(/\.[^.]+$/, '');
 
-        function searchBin(bin) {
-            for (var i = 0; i < bin.children.numItems; i++) {
+        // Match by file path (most accurate)
+        function matchByPath(item) {
+            try {
+                var treePath = item.getMediaPath ? item.getMediaPath() : '';
+                if (treePath) {
+                    var itemFile = new File(treePath);
+                    if (itemFile.fsName === f.fsName) return true;
+                }
+            } catch (e) {}
+            return false;
+        }
+
+        // Search a specific bin for the clip
+        function searchBin(bin, usePathMatch) {
+            for (var i = bin.children.numItems - 1; i >= 0; i--) {
                 var child = bin.children[i];
                 if (child.type === 2) {
-                    // It's a bin, recurse
-                    var found = searchBin(child);
+                    var found = searchBin(child, usePathMatch);
                     if (found) return found;
                 } else {
-                    // Match by name
-                    if (child.name === f.displayName || child.name === fileName) {
-                        return child;
-                    }
+                    if (usePathMatch && matchByPath(child)) return child;
+                    if (!usePathMatch && (child.name === f.displayName || child.name === fileName)) return child;
                 }
             }
             return null;
         }
 
-        clipItem = searchBin(app.project.rootItem);
+        // Strategy 1: Find "YouTube Downloads" bin and search by path (most accurate)
+        var ytBin = findOrCreateBin('YouTube Downloads');
+        if (ytBin) {
+            clipItem = searchBin(ytBin, true);
+            if (!clipItem) clipItem = searchBin(ytBin, false);
+        }
+
+        // Strategy 2: Search entire project by path
+        if (!clipItem) clipItem = searchBin(app.project.rootItem, true);
+
+        // Strategy 3: Search entire project by name (last resort, search from end = newest first)
+        if (!clipItem) clipItem = searchBin(app.project.rootItem, false);
+
         if (!clipItem) return 'CLIP_NOT_FOUND';
 
-        // Get playhead position (current time indicator)
         var insertTime = seq.getPlayerPosition();
-
-        // Insert into first video track (V1)
         var videoTrack = seq.videoTracks[0];
         if (!videoTrack) return 'NO_VIDEO_TRACK';
 

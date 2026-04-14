@@ -52,3 +52,9 @@ contextBridge.exposeInMainWorld('auth', {
     checkLicense: () => ipcRenderer.invoke('auth-check-license'),
     forgotPassword: (email) => ipcRenderer.invoke('auth-forgot-password', email)
 });
+
+contextBridge.exposeInMainWorld('setup', {
+    detectPremiere: () => ipcRenderer.invoke('detect-premiere'),
+    installPlugin: () => ipcRenderer.invoke('install-premiere-plugin'),
+    skipPlugin: () => ipcRenderer.invoke('skip-premiere-plugin')
+});
