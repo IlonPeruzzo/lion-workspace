@@ -1737,17 +1737,19 @@
         var script='setClipAnchorPoint("'+pos+'",'+(anchorCompensate?'true':'false')+')';
         csInterface.evalScript(script,function(result){
             var r=String(result||'');
-            if(r.indexOf('OK')===0){
-                var parts=r.split(':');
+            var debugInfo=r.indexOf('|')>=0?r.substring(r.indexOf('|')+1):'';
+            var mainResult=r.indexOf('|')>=0?r.substring(0,r.indexOf('|')):r;
+            if(mainResult.indexOf('OK')===0){
+                var parts=mainResult.split(':');
                 var n=parts[1]||'1';
-                showAnchorMsg('Anchor aplicado em '+n+' clip(s)','#22c55e');
-            } else if(r==='NO_SEQUENCE'){
+                showAnchorMsg('Anchor aplicado ('+debugInfo+')','#22c55e');
+            } else if(mainResult.indexOf('NO_SEQUENCE')===0){
                 showAnchorMsg('Nenhuma sequence aberta','#f43f5e');
-            } else if(r==='NO_SELECTION'){
+            } else if(mainResult.indexOf('NO_SELECTION')===0){
                 showAnchorMsg('Selecione um clip na timeline','#f43f5e');
-            } else if(r==='NO_APPLIED'){
-                showAnchorMsg('Não foi possível aplicar (sem Motion?)','#f43f5e');
-            } else if(r==='NO_PROJECT'){
+            } else if(mainResult.indexOf('NO_APPLIED')===0){
+                showAnchorMsg('Sem Motion. '+debugInfo,'#f43f5e');
+            } else if(mainResult.indexOf('NO_PROJECT')===0){
                 showAnchorMsg('Nenhum projeto aberto','#f43f5e');
             } else {
                 showAnchorMsg(r||'Erro ao aplicar','#f43f5e');

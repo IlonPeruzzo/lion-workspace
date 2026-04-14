@@ -375,38 +375,56 @@ function findMotionProperty(component, names) {
     return null;
 }
 
-// Get clip source dimensions (best-effort)
-function getClipDimensions(clip) {
-    var seq = app.project.activeSequence;
-    var fallbackW = 1920, fallbackH = 1080;
+// Get source clip dimensions using multiple methods
+function getSourceDimensions(clip) {
+    var pi = clip.projectItem;
+    if (!pi) return null;
+
+    // Method 1: getMetadataValue (Premiere 2020+)
     try {
-        fallbackW = parseInt(seq.frameSizeHorizontal, 10) || 1920;
-        fallbackH = parseInt(seq.frameSizeVertical, 10) || 1080;
+        var vw = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoWidth'), 10);
+        var vh = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoHeight'), 10);
+        if (vw > 0 && vh > 0) return { width: vw, height: vh };
     } catch (e) {}
 
-    // Try to get actual source dimensions from projectItem metadata
+    // Method 2: Parse project metadata XML
     try {
-        var pi = clip.projectItem;
-        if (pi) {
-            // Premiere 2020+: column metadata
-            try {
-                var vw = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoWidth'), 10);
-                var vh = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoHeight'), 10);
-                if (vw > 0 && vh > 0) return { width: vw, height: vh };
-            } catch (e1) {}
-            // Try footage interpretation
-            try {
-                var interp = pi.getFootageInterpretation();
-                if (interp && interp.frameSize) {
-                    var fw = interp.frameSize.width || interp.frameSize[0];
-                    var fh = interp.frameSize.height || interp.frameSize[1];
-                    if (fw > 0 && fh > 0) return { width: fw, height: fh };
-                }
-            } catch (e2) {}
+        var md = pi.getProjectMetadata();
+        if (md) {
+            var w = 0, h = 0;
+            var wi = md.indexOf('Column.Intrinsic.VideoWidth');
+            if (wi < 0) wi = md.indexOf('VideoWidth');
+            if (wi >= 0) {
+                var ws = md.indexOf('>', wi) + 1;
+                var we = md.indexOf('<', ws);
+                w = parseInt(md.substring(ws, we), 10);
+            }
+            var hi = md.indexOf('Column.Intrinsic.VideoHeight');
+            if (hi < 0) hi = md.indexOf('VideoHeight');
+            if (hi >= 0) {
+                var hs = md.indexOf('>', hi) + 1;
+                var he = md.indexOf('<', hs);
+                h = parseInt(md.substring(hs, he), 10);
+            }
+            if (w > 0 && h > 0) return { width: w, height: h };
         }
-    } catch (epi) {}
+    } catch (e) {}
 
-    return { width: fallbackW, height: fallbackH };
+    // Method 3: XMP metadata
+    try {
+        var xmp = pi.getXMPMetadata();
+        if (xmp) {
+            var wi2 = xmp.indexOf('stDim:w="');
+            var hi2 = xmp.indexOf('stDim:h="');
+            if (wi2 >= 0 && hi2 >= 0) {
+                var w2 = parseInt(xmp.substring(wi2 + 9, xmp.indexOf('"', wi2 + 9)), 10);
+                var h2 = parseInt(xmp.substring(hi2 + 9, xmp.indexOf('"', hi2 + 9)), 10);
+                if (w2 > 0 && h2 > 0) return { width: w2, height: h2 };
+            }
+        }
+    } catch (e) {}
+
+    return null;
 }
 
 // Apply a named anchor position to selected clips
@@ -423,8 +441,8 @@ function setClipAnchorPoint(position, compensate) {
 
         var seqW = parseInt(seq.frameSizeHorizontal, 10) || 1920;
         var seqH = parseInt(seq.frameSizeVertical, 10) || 1080;
-
         var totalApplied = 0;
+        var debug = '';
 
         for (var ci = 0; ci < clips.length; ci++) {
             var clip = clips[ci];
@@ -445,24 +463,27 @@ function setClipAnchorPoint(position, compensate) {
 
                 if (!anchorProp || !positionProp) continue;
 
-                // Read current anchor — this tells us the source clip dimensions
                 var oldAnchor = anchorProp.getValue();
                 var oldPosition = positionProp.getValue();
                 if (!oldAnchor || !oldPosition) continue;
 
-                // Determine source dimensions from sequence (safest default)
-                var srcW = seqW;
-                var srcH = seqH;
-
-                // Try to get real source dimensions from projectItem metadata
-                try {
-                    var pi = clip.projectItem;
-                    if (pi) {
-                        var vw = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoWidth'), 10);
-                        var vh = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoHeight'), 10);
-                        if (vw > 0 && vh > 0) { srcW = vw; srcH = vh; }
+                // Get REAL source dimensions (not sequence dimensions)
+                var srcDims = getSourceDimensions(clip);
+                var srcW, srcH;
+                if (srcDims) {
+                    srcW = srcDims.width;
+                    srcH = srcDims.height;
+                } else {
+                    // Last resort: if anchor looks like it's at center, derive from it
+                    // Otherwise use sequence dimensions
+                    if (oldAnchor[0] > 10 && oldAnchor[1] > 10) {
+                        srcW = Math.round(oldAnchor[0] * 2);
+                        srcH = Math.round(oldAnchor[1] * 2);
+                    } else {
+                        srcW = seqW;
+                        srcH = seqH;
                     }
-                } catch (emd) {}
+                }
 
                 // Calculate target anchor in source pixels
                 var newAx, newAy;
@@ -479,7 +500,7 @@ function setClipAnchorPoint(position, compensate) {
                     default:   newAx = srcW / 2; newAy = srcH / 2;
                 }
 
-                // Get scale (handle both number and array [scaleX, scaleY])
+                // Get scale
                 var scale = 1;
                 try {
                     var sv = scaleProp ? scaleProp.getValue() : 100;
@@ -490,27 +511,31 @@ function setClipAnchorPoint(position, compensate) {
                 // Set new anchor
                 anchorProp.setValue([newAx, newAy]);
 
-                // Compensate position so clip stays in place
+                // Compensate position so clip stays visually in place
                 if (compensate) {
                     var dAx = newAx - oldAnchor[0];
                     var dAy = newAy - oldAnchor[1];
 
-                    // Position in Premiere is normalized (0-1), default center = [0.5, 0.5]
-                    // Anchor delta in source pixels → screen pixels = delta * scale
-                    // Screen pixels → normalized = / seqSize
+                    // Position is normalized (0-1). Default center = [0.5, 0.5]
                     var newPx = oldPosition[0] + (dAx * scale) / seqW;
                     var newPy = oldPosition[1] + (dAy * scale) / seqH;
 
-                    positionProp.setValue([newPx, newPy]);
+                    // Sanity check: position should stay in reasonable range (-2 to 3)
+                    if (newPx > -2 && newPx < 3 && newPy > -2 && newPy < 3) {
+                        positionProp.setValue([newPx, newPy]);
+                    }
                 }
 
+                debug = 'src=' + srcW + 'x' + srcH + ' anchor=[' + Math.round(newAx) + ',' + Math.round(newAy) + '] pos=[' + (oldPosition[0]).toFixed(3) + ',' + (oldPosition[1]).toFixed(3) + '] scale=' + scale.toFixed(2);
                 totalApplied++;
-            } catch (ec) {}
+            } catch (ec) {
+                debug = 'err:' + ec.toString();
+            }
         }
 
-        if (totalApplied === 0) return 'NO_APPLIED';
+        if (totalApplied === 0) return 'NO_APPLIED|' + debug;
         forceUIRefresh();
-        return 'OK:' + totalApplied;
+        return 'OK:' + totalApplied + '|' + debug;
     } catch (e) {
         return 'ERROR: ' + e.toString();
     }
