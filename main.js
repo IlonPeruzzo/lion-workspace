@@ -1397,7 +1397,7 @@ ipcMain.handle('auth-login', async (_, email, password) => {
             app_version: app.getVersion(),
             last_seen_at: new Date().toISOString(),
             last_heartbeat_at: new Date().toISOString()
-        }, { onConflict: 'user_id,fingerprint' }).catch(() => {});
+        }, { onConflict: 'user_id,fingerprint' }).then(() => {}, () => {});
 
         return {
             success: true,
@@ -1542,7 +1542,7 @@ ipcMain.handle('auth-signup', async (_, email, password, fullName) => {
                 id: data.user.id,
                 email: email,
                 full_name: fullName
-            }, { onConflict: 'id' }).catch(() => {});
+            }, { onConflict: 'id' }).then(() => {}, () => {});
         }
 
         return {
