@@ -186,6 +186,19 @@ function createTimeAt(ticksNum) {
     return t;
 }
 
+// Force Premiere UI to refresh (nudge playhead 1 tick forward and back)
+function forceUIRefresh() {
+    try {
+        var seq = app.project.activeSequence;
+        if (!seq) return;
+        var pos = seq.getPlayerPosition();
+        var ticks = Number(pos.ticks);
+        var nudge = createTimeAt(ticks + 1);
+        seq.setPlayerPosition(nudge.ticks);
+        seq.setPlayerPosition(pos.ticks);
+    } catch (e) {}
+}
+
 function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
     try {
         if (!app.project) return 'NO_PROJECT';
@@ -285,6 +298,7 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
             if (errors.length > 0) return 'ERRORS:' + errors.join('|');
             return 'NO_KEYS';
         }
+        forceUIRefresh();
         return 'OK:' + totalApplied + ':' + totalKeys;
     } catch (e) {
         return 'ERROR: ' + e.toString();
@@ -530,6 +544,7 @@ function setClipAnchorPoint(position, compensate) {
         }
 
         if (totalApplied === 0) return 'NO_APPLIED';
+        forceUIRefresh();
         return 'OK:' + totalApplied;
     } catch (e) {
         return 'ERROR: ' + e.toString();
@@ -604,6 +619,7 @@ function addAnchorKeyframe() {
         }
 
         if (totalApplied === 0) return 'NO_APPLIED';
+        forceUIRefresh();
         return 'OK:' + totalApplied;
     } catch (e) {
         return 'ERROR: ' + e.toString();
