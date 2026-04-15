@@ -784,7 +784,13 @@
 
         <div id="dashChartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
             <div class="chart-card" style="grid-column:1/-1">
-                <h3 style="margin:0 0 12px 0">Faturamento Mensal</h3>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+                    <h3 style="margin:0">Faturamento Mensal</h3>
+                    <div id="fatMetricToggle" style="display:inline-flex;background:rgba(15,15,15,.6);border:1px solid rgba(190,242,100,.15);border-radius:8px;padding:2px;overflow:hidden">
+                        <button type="button" id="fatMetricBruto" onclick="setFatMetric('bruto')" style="padding:6px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(190,242,100,.18);color:#bef264;border-radius:6px;transition:all .2s">Bruto</button>
+                        <button type="button" id="fatMetricLiq" onclick="setFatMetric('liq')" style="padding:6px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);border-radius:6px;transition:all .2s">Líquido</button>
+                    </div>
+                </div>
                 <canvas id="chartFat"></canvas>
             </div>
             <div class="chart-card">
@@ -3804,6 +3810,16 @@ function loadMeta(){
 // ===== CHARTS =====
 let _chartCurrency='BRL';   // 'BRL' | 'USD'
 let _dashMonth=null;        // YYYY-MM — global mês do dashboard
+let _fatMetric='bruto';     // 'bruto' | 'liq' — metrica do Faturamento Mensal
+function setFatMetric(m){
+    if(m!=='bruto'&&m!=='liq')m='bruto';
+    _fatMetric=m;
+    const bBtn=document.getElementById('fatMetricBruto');
+    const lBtn=document.getElementById('fatMetricLiq');
+    if(bBtn){bBtn.style.background=m==='bruto'?'rgba(190,242,100,.18)':'transparent';bBtn.style.color=m==='bruto'?'#bef264':'var(--text3)'}
+    if(lBtn){lBtn.style.background=m==='liq'?'rgba(34,211,238,.18)':'transparent';lBtn.style.color=m==='liq'?'#22d3ee':'var(--text3)'}
+    renderCharts();
+}
 function setChartCurrency(cur){
     if(cur!=='BRL'&&cur!=='USD')cur='BRL';
     _chartCurrency=cur;
@@ -3898,23 +3914,28 @@ function renderCharts(){
         }).join('');
     }
 
-    // Chart 1: Faturamento mensal — gradient bars, destaca mes selecionado
+    // Chart 1: Faturamento mensal — torre bars mes a mes, metrica unica (Bruto ou Liquido)
     const mesSel=_dashMonth||hoje().substring(0,7);
     const c1=document.getElementById('chartFat').getContext('2d');
-    const g1a=c1.createLinearGradient(0,0,0,280);g1a.addColorStop(0,'rgba(190,242,100,0.75)');g1a.addColorStop(0.5,'rgba(190,242,100,0.4)');g1a.addColorStop(1,'rgba(190,242,100,0.05)');
-    const g1b=c1.createLinearGradient(0,0,0,280);g1b.addColorStop(0,'rgba(34,211,238,0.75)');g1b.addColorStop(0.5,'rgba(34,211,238,0.4)');g1b.addColorStop(1,'rgba(34,211,238,0.05)');
-    // Destaque do mes selecionado: opacidade maior no selecionado, menor nos demais
-    const bgBruto=ms.map(m=>m===mesSel?'rgba(190,242,100,0.95)':g1a);
-    const bgLiq=ms.map(m=>m===mesSel?'rgba(34,211,238,0.95)':g1b);
-    const bdBruto=ms.map(m=>m===mesSel?'#bef264':'rgba(190,242,100,0.6)');
-    const bdLiq=ms.map(m=>m===mesSel?'#22d3ee':'rgba(34,211,238,0.6)');
-    const bwBruto=ms.map(m=>m===mesSel?2.5:1);
+    const isLiq=_fatMetric==='liq';
+    const metricLabel=isLiq?'Líquido':'Bruto';
+    const colMain=isLiq?'#22d3ee':'#bef264';
+    const colRgb=isLiq?'34,211,238':'190,242,100';
+    // Gradiente "torre": topo vibrante, base esmaecida
+    const gT=c1.createLinearGradient(0,0,0,320);
+    gT.addColorStop(0,`rgba(${colRgb},0.95)`);
+    gT.addColorStop(0.6,`rgba(${colRgb},0.55)`);
+    gT.addColorStop(1,`rgba(${colRgb},0.08)`);
+    // Destaque do mes selecionado: cor solida; demais recebem gradiente
+    const bgArr=ms.map(m=>m===mesSel?colMain:gT);
+    const bdArr=ms.map(m=>m===mesSel?colMain:`rgba(${colRgb},0.5)`);
+    const bwArr=ms.map(m=>m===mesSel?2.5:1);
+    const dataArr=ms.map(m=>isLiq?meses[m].liq:meses[m].bruto);
     if(charts.fat)charts.fat.destroy();
     charts.fat=new Chart(c1,{type:'bar',
         data:{labels,datasets:[
-            {label:'Bruto',data:ms.map(m=>meses[m].bruto),backgroundColor:bgBruto,borderColor:bdBruto,borderWidth:bwBruto,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(190,242,100,0.85)'},
-            {label:'Liquido',data:ms.map(m=>meses[m].liq),backgroundColor:bgLiq,borderColor:bdLiq,borderWidth:bwBruto,borderRadius:10,borderSkipped:false,hoverBackgroundColor:'rgba(34,211,238,0.85)'}
-        ]},options:{responsive:true,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{...legLbl,usePointStyle:true,pointStyle:'rectRounded'}},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+curSym+' '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#525252',font:{size:11}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:11},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}}}}});
+            {label:metricLabel,data:dataArr,backgroundColor:bgArr,borderColor:bdArr,borderWidth:bwArr,borderRadius:8,borderSkipped:false,hoverBackgroundColor:`rgba(${colRgb},0.95)`,barPercentage:0.65,categoryPercentage:0.85}
+        ]},options:{responsive:true,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+metricLabel+': '+curSym+' '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#a3a3a3',font:{size:11,weight:'600'}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:11},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}}}}});
 
     // Titulo do Chart 2 reflete o mes
     const _mnC2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
