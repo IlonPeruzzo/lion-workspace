@@ -703,21 +703,25 @@
             </div>
             <div id="meiAlertaPrevio" style="display:none;margin-top:10px;padding:10px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:8px;font-size:.8rem;color:#f59e0b"></div>
         </div>
-        <!-- Seletor global de mes do Dashboard -->
+        <!-- Seletor global de mes + moeda do Dashboard -->
         <div id="dashMonthBar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap;padding:10px 14px;background:linear-gradient(135deg,rgba(190,242,100,.06),rgba(15,15,15,.6));border:1px solid rgba(190,242,100,.12);border-radius:10px">
-            <div style="display:flex;align-items:center;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 <span style="font-weight:700;font-size:.82rem;color:var(--text2)">Período:</span>
                 <select id="dashMonthSel" onchange="onDashMonthChange()" style="background:rgba(15,15,15,.7);border:1px solid rgba(190,242,100,.2);color:var(--text);padding:6px 14px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;outline:none;transition:all .2s"></select>
+                <button type="button" id="btnDashCurrency" onclick="toggleDashCurrency()" title="Alternar moeda do dashboard" style="display:inline-flex;align-items:center;gap:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.2);color:#bef264;padding:6px 14px;border-radius:8px;font-size:.82rem;font-weight:800;cursor:pointer;font-family:inherit;outline:none;transition:all .2s">
+                    <span id="btnDashCurrencyLabel">R$</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                </button>
             </div>
-            <div style="font-size:.7rem;color:var(--text3)">Afeta todos os indicadores abaixo</div>
+            <div style="font-size:.7rem;color:var(--text3)">Afeta todos os indicadores e gráficos (exceto Meta)</div>
         </div>
         <div class="stats">
             <div class="stat"><div class="val" id="sVid">0</div><div class="lbl">Serviços (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sVidDia">0</div><div class="lbl" style="font-size:.62rem">Hoje</div></div></div>
-            <div class="stat" style="position:relative"><div class="val" id="sBruto">R$ 0</div><div id="sBrutoPend" style="display:none;font-size:.65rem;color:var(--orange);margin-top:2px"></div><div class="lbl">Bruto (Mês)</div><button onclick="toggleStatCurr('bruto');event.stopPropagation()" id="btnCurrBruto" style="position:absolute;top:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s" title="Alternar moeda">BRL</button><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sBrutoDia">R$ 0</div><div class="lbl" style="font-size:.62rem">Hoje</div></div></div>
-            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showTaxasInfo();event.stopPropagation()">?</span><div class="val" id="sTaxas">R$ 0</div><div class="lbl">Taxas</div><div class="info-panel" id="taxasInfoPanel"></div><span id="eyeTaxas" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><button onclick="toggleStatCurr('taxas');event.stopPropagation()" id="btnCurrTaxas" style="position:absolute;bottom:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s;z-index:2" title="Alternar moeda">BRL</button></div>
-            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showImpInfo();event.stopPropagation()">?</span><div class="val" id="sImp">R$ 0</div><div class="lbl">Impostos</div><div class="info-panel" id="impInfoPanel"></div><span id="eyeImp" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><button onclick="toggleStatCurr('imp');event.stopPropagation()" id="btnCurrImp" style="position:absolute;bottom:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s;z-index:2" title="Alternar moeda">BRL</button></div>
-            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><div class="val" id="sLiq">R$ 0</div><div class="lbl">Líquido</div><span id="eyeLiq" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span><button onclick="toggleStatCurr('liq');event.stopPropagation()" id="btnCurrLiq" style="position:absolute;bottom:6px;right:6px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.15);color:var(--accent);font-size:.58rem;padding:2px 6px;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .15s;z-index:2" title="Alternar moeda">BRL</button></div>
+            <div class="stat" style="position:relative"><div class="val" id="sBruto">R$ 0</div><div id="sBrutoPend" style="display:none;font-size:.65rem;color:var(--orange);margin-top:2px"></div><div class="lbl">Bruto (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sBrutoDia">R$ 0</div><div class="lbl" style="font-size:.62rem">Hoje</div></div></div>
+            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showTaxasInfo();event.stopPropagation()">?</span><div class="val" id="sTaxas">R$ 0</div><div class="lbl">Taxas</div><div class="info-panel" id="taxasInfoPanel"></div><span id="eyeTaxas" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span></div>
+            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showImpInfo();event.stopPropagation()">?</span><div class="val" id="sImp">R$ 0</div><div class="lbl">Impostos</div><div class="info-panel" id="impInfoPanel"></div><span id="eyeImp" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span></div>
+            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" title="Clique para ocultar/mostrar"><div class="val" id="sLiq">R$ 0</div><div class="lbl">Líquido</div><span id="eyeLiq" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span></div>
             <div class="stat"><div class="val" id="sCli">0</div><div class="lbl">Clientes</div></div>
         </div>
         <!-- Meta Financeira -->
@@ -775,13 +779,7 @@
 
         <div id="dashChartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
             <div class="chart-card" style="grid-column:1/-1">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-                    <h3 style="margin:0">Faturamento Mensal</h3>
-                    <div style="display:inline-flex;background:rgba(190,242,100,.06);border:1px solid rgba(190,242,100,.15);border-radius:8px;overflow:hidden">
-                        <button type="button" id="chartCurBRL" onclick="setChartCurrency('BRL')" class="chart-cur-btn active" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(190,242,100,.18);color:#bef264;transition:all .2s">R$ Reais</button>
-                        <button type="button" id="chartCurUSD" onclick="setChartCurrency('USD')" class="chart-cur-btn" style="padding:5px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);transition:all .2s">$ Dólares</button>
-                    </div>
-                </div>
+                <h3 style="margin:0 0 12px 0">Faturamento Mensal</h3>
                 <canvas id="chartFat"></canvas>
             </div>
             <div class="chart-card">
@@ -1192,12 +1190,6 @@
             </div>
         </div>
 
-        <div style="border-top:1px solid rgba(190,242,100,.08);padding-top:20px;margin-top:8px">
-            <div class="card-title">YouTube</div>
-            <div style="font-size:.82rem;color:var(--text3);line-height:1.6;padding:10px;background:rgba(190,242,100,.03);border:1px solid rgba(190,242,100,.08);border-radius:8px">
-                Os dados do YouTube sao carregados automaticamente a partir do link/@ do canal cadastrado no cliente. <strong style="color:var(--text2)">Nenhuma API Key necessaria.</strong>
-            </div>
-        </div>
         <input type="hidden" id="ytApiKey" value="">
 
         <div style="border-top:1px solid rgba(190,242,100,.08);padding-top:20px;margin-top:12px">
@@ -2702,26 +2694,23 @@ let taxasBlurred=false;
 const eyeOpenSvg=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const eyeClosedSvg=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 let _statVals={bruto:0,brutoDia:0,taxas:0,imp:0,liq:0,pendB:0};
-let _statCurr={bruto:'BRL',taxas:'BRL',imp:'BRL',liq:'BRL'};
-function toggleStatCurr(key){
-    _statCurr[key]=_statCurr[key]==='BRL'?'USD':'BRL';
-    const btn=document.getElementById('btnCurr'+key.charAt(0).toUpperCase()+key.slice(1));
-    if(btn)btn.textContent=_statCurr[key];
+function toggleDashCurrency(){
+    _chartCurrency = _chartCurrency==='BRL'?'USD':'BRL';
+    const lbl=document.getElementById('btnDashCurrencyLabel');
+    if(lbl)lbl.textContent=_chartCurrency==='USD'?'$':'R$';
     renderStatValues();
+    if(typeof renderCharts==='function')renderCharts();
 }
 function renderStatValues(){
     const usd=cotacao.usd||5.0;
-    function conv(val,key){
-        if(_statCurr[key]==='USD')return '$ '+fb(val/usd);
-        return 'R$ '+fb(val);
-    }
-    document.getElementById('sBruto').textContent=conv(_statVals.bruto,'bruto');
-    document.getElementById('sBrutoDia').textContent=conv(_statVals.brutoDia,'bruto');
+    const conv=(val)=>_chartCurrency==='USD'?'$ '+fb(val/usd):'R$ '+fb(val);
+    document.getElementById('sBruto').textContent=conv(_statVals.bruto);
+    document.getElementById('sBrutoDia').textContent=conv(_statVals.brutoDia);
     const pendEl=document.getElementById('sBrutoPend');
-    if(pendEl){if(_statVals.pendB>0){pendEl.textContent=conv(_statVals.pendB,'bruto')+' pendente';pendEl.style.display='block'}else{pendEl.style.display='none'}}
-    document.getElementById('sTaxas').textContent=conv(_statVals.taxas,'taxas');
-    document.getElementById('sImp').textContent=conv(_statVals.imp,'imp');
-    document.getElementById('sLiq').textContent=conv(_statVals.liq,'liq');
+    if(pendEl){if(_statVals.pendB>0){pendEl.textContent=conv(_statVals.pendB)+' pendente';pendEl.style.display='block'}else{pendEl.style.display='none'}}
+    document.getElementById('sTaxas').textContent=conv(_statVals.taxas);
+    document.getElementById('sImp').textContent=conv(_statVals.imp);
+    document.getElementById('sLiq').textContent=conv(_statVals.liq);
 }
 function toggleBlurTaxas(){
     taxasBlurred=!taxasBlurred;
@@ -3801,11 +3790,9 @@ let _dashMonth=null;        // YYYY-MM — global mês do dashboard
 function setChartCurrency(cur){
     if(cur!=='BRL'&&cur!=='USD')cur='BRL';
     _chartCurrency=cur;
-    const brl=document.getElementById('chartCurBRL'),usd=document.getElementById('chartCurUSD');
-    const active={background:'rgba(190,242,100,.18)',color:'#bef264'};
-    const inactive={background:'transparent',color:'var(--text3)'};
-    if(brl)Object.assign(brl.style,cur==='BRL'?active:inactive);
-    if(usd)Object.assign(usd.style,cur==='USD'?active:inactive);
+    const lbl=document.getElementById('btnDashCurrencyLabel');
+    if(lbl)lbl.textContent=cur==='USD'?'$':'R$';
+    renderStatValues();
     renderCharts();
 }
 function populateDashMonthSel(){
@@ -5799,6 +5786,13 @@ if (window.appUpdater) {
                 if (manualUpdateCheck) {
                     showToast('Você já está na versão mais recente!');
                     manualUpdateCheck = false;
+                    // Feedback visual no botao
+                    const _b=document.getElementById('btnCheckUpdate');
+                    if(_b){
+                        _b.disabled=false;
+                        _b.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span style="color:#22c55e">Já está atualizado</span>';
+                        setTimeout(()=>{_b.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Buscar atualizações';},3000);
+                    }
                 }
                 break;
         }
@@ -5818,19 +5812,42 @@ function dismissUpdate() {
 function manualCheckUpdate() {
     if (!window.appUpdater) return;
     const btn = document.getElementById('btnCheckUpdate');
+    const defaultBtnHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Buscar atualizações';
     btn.disabled = true;
     btn.textContent = 'Verificando...';
     manualUpdateCheck = true;
-    window.appUpdater.checkForUpdates().then(result => {
+    Promise.all([
+        window.appUpdater.checkForUpdates(),
+        window.appUpdater.getVersion()
+    ]).then(([result, currentVer]) => {
         btn.disabled = false;
-        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Buscar atualizações';
+        btn.innerHTML = defaultBtnHTML;
         if (result && !result.success) {
             showToast('Erro ao buscar atualizações: ' + (result.error || 'verifique sua conexão'));
             manualUpdateCheck = false;
+            return;
         }
+        // Fallback: compara versao retornada com versao atual
+        // Caso evento update-not-available nao dispare, mostra mensagem pelo .then()
+        const latestVer = result && result.version;
+        if (manualUpdateCheck && latestVer && currentVer && latestVer === currentVer) {
+            showToast('Você já está na versão mais recente!');
+            manualUpdateCheck = false;
+            btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span style="color:#22c55e">Já está atualizado</span>';
+            setTimeout(()=>{btn.innerHTML=defaultBtnHTML;},3000);
+        }
+        // Timeout final: se nenhum evento disparou em 8s, avisa que verificacao terminou
+        setTimeout(()=>{
+            if(manualUpdateCheck){
+                showToast('Verificação concluída. Você está na versão mais recente.');
+                manualUpdateCheck=false;
+                btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span style="color:#22c55e">Já está atualizado</span>';
+                setTimeout(()=>{btn.innerHTML=defaultBtnHTML;},3000);
+            }
+        },8000);
     }).catch(function() {
         btn.disabled = false;
-        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Buscar atualizações';
+        btn.innerHTML = defaultBtnHTML;
         showToast('Falha ao verificar atualizações');
         manualUpdateCheck = false;
     });
