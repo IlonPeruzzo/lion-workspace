@@ -472,6 +472,67 @@
         </div>
     </div>
 
+    <!-- Copy / Paste -->
+    <div class="section">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('cpBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="8" y="8" width="12" height="12" rx="2"/>
+                    <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+                </svg>
+                Copy / Paste
+            </span>
+            <svg id="cpChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="cpBody">
+            <div style="font-size:.58rem;color:#666;margin-bottom:10px;text-align:center;line-height:1.4">
+                Copia atributos e keyframes de um clip e cola em outro(s)
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+                <button class="btn btn-go" style="flex:1;padding:9px 4px" onclick="cpDoCopy()" id="cpCopyBtn">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Copy
+                </button>
+                <button class="btn btn-pause" style="flex:1;padding:9px 4px" onclick="cpDoPaste()" id="cpPasteBtn">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+                    Paste
+                </button>
+            </div>
+
+            <!-- What to paste checkboxes -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;font-size:.6rem;color:#aaa">
+                <div style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:5px 6px;background:rgba(255,255,255,.02);border-radius:4px;border:1px solid rgba(190,242,100,.04)" onclick="cpToggleFlag('motion')">
+                    <div id="cpFlagMotion" class="mini-check active">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <span>Motion</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:5px 6px;background:rgba(255,255,255,.02);border-radius:4px;border:1px solid rgba(190,242,100,.04)" onclick="cpToggleFlag('opacity')">
+                    <div id="cpFlagOpacity" class="mini-check active">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <span>Opacity</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:5px 6px;background:rgba(255,255,255,.02);border-radius:4px;border:1px solid rgba(190,242,100,.04)" onclick="cpToggleFlag('effects')">
+                    <div id="cpFlagEffects" class="mini-check active">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <span>Efeitos</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:5px 6px;background:rgba(255,255,255,.02);border-radius:4px;border:1px solid rgba(190,242,100,.04)" onclick="cpToggleFlag('timeRemap')">
+                    <div id="cpFlagTimeRemap" class="mini-check active">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <span>Velocidade</span>
+                </div>
+            </div>
+
+            <div id="cpStatus" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px;padding:4px 6px;background:rgba(255,255,255,.015);border-radius:4px;line-height:1.3">
+                Nada copiado ainda
+            </div>
+        </div>
+    </div>
+
     <div class="footer">Lion Workspace Sync</div>
 
     <script src="CSInterface.js"></script>
@@ -1779,6 +1840,151 @@
             }
         });
     }
+
+    // ============================================
+    // COPY / PASTE (Lion Copy-Pasta)
+    // ============================================
+    var cpFlags = {
+        motion: true,
+        opacity: true,
+        effects: true,
+        timeRemap: true
+    };
+    var cpLastCopy = null; // { name, t, comps, props }
+
+    function cpToggleFlag(key){
+        cpFlags[key] = !cpFlags[key];
+        var id = 'cpFlag' + key.charAt(0).toUpperCase() + key.slice(1);
+        var el = document.getElementById(id);
+        if (el) el.classList.toggle('active', cpFlags[key]);
+    }
+
+    function cpShowStatus(text, color){
+        var el = document.getElementById('cpStatus');
+        if (!el) return;
+        el.textContent = text;
+        el.style.color = color || '#777';
+    }
+
+    function cpFormatAgo(t){
+        if (!t) return '';
+        var sec = Math.floor((Date.now() - Number(t)) / 1000);
+        if (sec < 1) return 'agora';
+        if (sec < 60) return 'há ' + sec + 's';
+        var min = Math.floor(sec / 60);
+        if (min < 60) return 'há ' + min + 'min';
+        var h = Math.floor(min / 60);
+        if (h < 24) return 'há ' + h + 'h';
+        var d = Math.floor(h / 24);
+        return 'há ' + d + 'd';
+    }
+
+    function cpUpdateStatusFromLast(){
+        if (!cpLastCopy) {
+            cpShowStatus('Nada copiado ainda', '#555');
+            return;
+        }
+        var name = cpLastCopy.name || 'Clip';
+        if (name.length > 22) name = name.substring(0, 22) + '…';
+        var s = 'Copiado: ' + name + ' (' + cpLastCopy.props + ' props) ' + cpFormatAgo(cpLastCopy.t);
+        cpShowStatus(s, '#bef264');
+    }
+
+    function cpCheckClipboard(){
+        if (!csInterface) return;
+        csInterface.evalScript('getCopiedClipInfo()', function(r){
+            var s = String(r || '');
+            if (s.indexOf('OK:') !== 0) {
+                cpLastCopy = null;
+                cpUpdateStatusFromLast();
+                return;
+            }
+            // OK:<name>:<t>:<comps>:<props>
+            var rest = s.substring(3);
+            var parts = rest.split(':');
+            // name can contain ':' theoretically; rebuild from the end
+            if (parts.length < 4) return;
+            var props = Number(parts[parts.length - 1]) || 0;
+            var comps = Number(parts[parts.length - 2]) || 0;
+            var t = Number(parts[parts.length - 3]) || 0;
+            var name = parts.slice(0, parts.length - 3).join(':');
+            cpLastCopy = { name: name, t: t, comps: comps, props: props };
+            cpUpdateStatusFromLast();
+        });
+    }
+
+    function cpDoCopy(){
+        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
+        var btn = document.getElementById('cpCopyBtn');
+        if (btn) btn.disabled = true;
+        cpShowStatus('Copiando…', '#f59e0b');
+        csInterface.evalScript('copyClipAttributes()', function(result){
+            if (btn) btn.disabled = false;
+            var r = String(result || '');
+            if (r.indexOf('OK:') === 0) {
+                // OK:<comps>:<props>:<clipName>
+                var rest = r.substring(3);
+                var parts = rest.split(':');
+                var comps = parts[0] || '0';
+                var props = parts[1] || '0';
+                var name = parts.slice(2).join(':') || 'clip';
+                cpLastCopy = { name: name, t: Date.now(), comps: Number(comps), props: Number(props) };
+                cpUpdateStatusFromLast();
+            } else if (r === 'NO_SELECTION') {
+                cpShowStatus('Selecione um clip na timeline', '#f43f5e');
+            } else if (r === 'NO_SEQUENCE') {
+                cpShowStatus('Nenhuma sequence aberta', '#f43f5e');
+            } else if (r === 'NO_PROJECT') {
+                cpShowStatus('Nenhum projeto aberto', '#f43f5e');
+            } else if (r === 'FILE_OPEN_FAIL') {
+                cpShowStatus('Erro gravando clipboard', '#f43f5e');
+            } else {
+                cpShowStatus(r || 'Erro ao copiar', '#f43f5e');
+            }
+        });
+    }
+
+    function cpDoPaste(){
+        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
+        var btn = document.getElementById('cpPasteBtn');
+        if (btn) btn.disabled = true;
+        cpShowStatus('Colando…', '#f59e0b');
+        // Build options string
+        var opts = '{motion:' + (cpFlags.motion?'true':'false') +
+                   ',opacity:' + (cpFlags.opacity?'true':'false') +
+                   ',effects:' + (cpFlags.effects?'true':'false') +
+                   ',timeRemap:' + (cpFlags.timeRemap?'true':'false') + '}';
+        csInterface.evalScript('pasteClipAttributes(' + opts + ')', function(result){
+            if (btn) btn.disabled = false;
+            var r = String(result || '');
+            if (r.indexOf('OK:') === 0) {
+                // OK:<props>:<comps>:<clips>:<skipped>
+                var parts = r.substring(3).split(':');
+                var props = parts[0] || '0';
+                var clips = parts[2] || '0';
+                var skipped = Number(parts[3] || 0);
+                var msg = 'Colado: ' + props + ' props em ' + clips + ' clip(s)';
+                if (skipped > 0) msg += ' (' + skipped + ' efeito(s) não existem no target)';
+                cpShowStatus(msg, '#22c55e');
+            } else if (r === 'NO_CLIPBOARD') {
+                cpShowStatus('Copie primeiro um clip', '#f43f5e');
+            } else if (r === 'NO_SELECTION') {
+                cpShowStatus('Selecione um clip na timeline', '#f43f5e');
+            } else if (r === 'NO_SEQUENCE') {
+                cpShowStatus('Nenhuma sequence aberta', '#f43f5e');
+            } else if (r === 'NO_PROJECT') {
+                cpShowStatus('Nenhum projeto aberto', '#f43f5e');
+            } else if (r === 'INVALID_DATA' || r === 'PARSE_ERROR') {
+                cpShowStatus('Clipboard corrompido, copie de novo', '#f43f5e');
+            } else {
+                cpShowStatus(r || 'Erro ao colar', '#f43f5e');
+            }
+        });
+    }
+
+    // Atualiza "há Xs" a cada 15s e checa clipboard no load
+    try { cpCheckClipboard(); } catch(e) {}
+    setInterval(function(){ if (cpLastCopy) cpUpdateStatusFromLast(); }, 15000);
 
     </script>
 </body>

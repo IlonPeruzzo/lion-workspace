@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.lionworkspace.premiere" ExtensionBundleVersion="1.0.0" ExtensionBundleName="Lion Workspace">
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.lionworkspace.premiere" ExtensionBundleVersion="1.1.0" ExtensionBundleName="Lion Workspace">
     <ExtensionList>
-        <Extension Id="com.lionworkspace.premiere.panel" Version="1.0.0"/>
+        <Extension Id="com.lionworkspace.premiere.panel" Version="1.1.0"/>
     </ExtensionList>
     <ExecutionEnvironment>
         <HostList>
