@@ -3096,14 +3096,13 @@ function renderVidsAndamento(){
         // Full pipeline for concluding button
         const fullPipe=getCliPipeline(filtro);
         const lastStage=fullPipe.length?fullPipe[fullPipe.length-1]:'Concluído';
-        // Sum stage time across all vids for this stage (not just colVids — all vids that PASSED through this stage)
+        // Sum stage time only for videos CURRENTLY in this stage (so old videos that moved past don't inflate the timer)
         let stageTimeSec=0;
-        vids.forEach(r=>{if(r.tempoEtapas&&r.tempoEtapas[etapa])stageTimeSec+=r.tempoEtapas[etapa]});
-        // Also add live timer if currently timing this stage
-        if(projT.running&&projT.currentStage===etapa&&!projT.paused){
-            stageTimeSec+=projT.stageElapsed+Math.floor((Date.now()-projT.stageStart)/1000);
-        }else if(projT.running&&projT.currentStage===etapa&&projT.paused){
-            stageTimeSec+=projT.stageElapsed;
+        colVids.forEach(r=>{if(r.tempoEtapas&&r.tempoEtapas[etapa])stageTimeSec+=r.tempoEtapas[etapa]});
+        // Also add live timer if currently timing this stage (and the video is in this column)
+        if(projT.running&&projT.currentStage===etapa&&colVids.some(r=>r.id===projT.currentRegId)){
+            if(!projT.paused)stageTimeSec+=projT.stageElapsed+Math.floor((Date.now()-projT.stageStart)/1000);
+            else stageTimeSec+=projT.stageElapsed;
         }
         const stageTimeStr=stageTimeSec>0?fmtDurCompact(stageTimeSec):'';
         const cards=colVids.map(r=>{
@@ -5075,12 +5074,21 @@ async function ytStartDownload(){
     const btn=document.getElementById('ytDownloadBtn');
     btn.disabled=true;
     document.getElementById('ytProgressPanel').style.display='';
-    document.getElementById('ytProgressTitle').textContent=_ytInfo?_ytInfo.title:'Baixando...';
+    document.getElementById('ytProgressTitle').textContent=_ytInfo&&_ytInfo._url===url?_ytInfo.title:'Buscando info...';
     document.getElementById('ytProgressBar').style.width='0%';
     document.getElementById('ytProgressPercent').textContent='0%';
     document.getElementById('ytProgressSpeed').textContent='';
     document.getElementById('ytProgressEta').textContent='';
     document.getElementById('ytProgressStatus').style.display='none';
+    // Auto-fetch video info (thumb + titulo) se ainda nao temos pra essa URL — usado no historico
+    if(!_ytInfo||_ytInfo._url!==url){
+        try{
+            if(!_ytDepsReady) await window.ytDownloader.ensureDeps();
+            const info=await window.ytDownloader.getInfo(url);
+            if(info&&!info.error){_ytInfo=info;_ytInfo._url=url;document.getElementById('ytProgressTitle').textContent=info.title||'Baixando...'}
+            else document.getElementById('ytProgressTitle').textContent='Baixando...';
+        }catch(e){document.getElementById('ytProgressTitle').textContent='Baixando...'}
+    }
     const startT=(document.getElementById('ytAppStartTime').value||'').trim();
     const endT=(document.getElementById('ytAppEndTime').value||'').trim();
     const opts={url:url,format:_ytFmt};
@@ -5117,12 +5125,18 @@ function ytOnProgress(p){
         st.style.color='#22c55e';
         bar.style.width='100%';pct.textContent='100%';
         document.getElementById('ytDownloadBtn').disabled=false;
+        const _curUrl=(document.getElementById('ytUrl')?.value||'').trim();
+        const _effUrl=(_ytInfo&&_ytInfo._url)?_ytInfo._url:_curUrl;
+        // Extrai ID do YouTube/Shorts pra fallback de thumbnail
+        const _ytIdMatch=_effUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
+        const _ytId=_ytIdMatch?_ytIdMatch[1]:'';
+        const _fallbackThumb=_ytId?`https://i.ytimg.com/vi/${_ytId}/hqdefault.jpg`:'';
         _ytHistory.unshift({
-            title:_ytInfo?_ytInfo.title:'Video',
-            thumb:_ytInfo?_ytInfo.thumbnail:'',
+            title:_ytInfo&&_ytInfo.title?_ytInfo.title:'Video',
+            thumb:_ytInfo&&_ytInfo.thumbnail?_ytInfo.thumbnail:_fallbackThumb,
             uploader:_ytInfo?_ytInfo.uploader:'',
             duration:_ytInfo?_ytInfo.duration:0,
-            url:_ytInfo?_ytInfo._url:'',
+            url:_effUrl,
             date:new Date().toISOString(),
             format:_ytFmt
         });
