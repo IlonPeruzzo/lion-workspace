@@ -395,6 +395,11 @@
         .login-card .login-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;font-size:.88rem;color:#f5f5f5;outline:none;transition:border-color .2s;font-family:inherit}
         .login-card .login-input:focus{border-color:rgba(190,242,100,.4)}
         .login-card .login-input::placeholder{color:#525252}
+        .pw-wrap{position:relative;display:flex;align-items:center}
+        .pw-wrap .pw-inp{width:100%;padding-right:44px}
+        .pw-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#737373;cursor:pointer;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:color .15s,background .15s}
+        .pw-eye:hover{color:#bef264;background:rgba(190,242,100,.08)}
+        .pw-eye:focus{outline:none}
         .login-card .login-btn{background:#bef264;color:#0a0a0a;border:none;padding:12px;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s;font-family:inherit}
         .login-card .login-btn:hover{opacity:.9}
         .login-card .login-btn:disabled{opacity:.5;cursor:not-allowed}
@@ -471,7 +476,7 @@
             <div class="login-form">
                 <div class="login-error" id="loginError"></div>
                 <input class="login-input" type="email" id="loginEmail" placeholder="Email" autocomplete="email">
-                <input class="login-input" type="password" id="loginPassword" placeholder="Senha" autocomplete="current-password">
+                <div class="pw-wrap"><input class="login-input pw-inp" type="password" id="loginPassword" placeholder="Senha" autocomplete="current-password"><button type="button" class="pw-eye" onclick="togglePw('loginPassword',this)" tabindex="-1" aria-label="Mostrar senha"><svg class="pw-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="pw-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div>
                 <button class="login-btn" id="loginBtn" onclick="doLogin()">Entrar</button>
                 <div class="login-links">
                     <a onclick="showForgotPassword()">Esqueci minha senha</a>
@@ -489,7 +494,7 @@
                 <div class="login-success" id="signupSuccess"></div>
                 <input class="login-input" type="text" id="signupName" placeholder="Nome completo">
                 <input class="login-input" type="email" id="signupEmail" placeholder="Email">
-                <input class="login-input" type="password" id="signupPassword" placeholder="Senha (mínimo 8 caracteres)">
+                <div class="pw-wrap"><input class="login-input pw-inp" type="password" id="signupPassword" placeholder="Senha (mínimo 8 caracteres)"><button type="button" class="pw-eye" onclick="togglePw('signupPassword',this)" tabindex="-1" aria-label="Mostrar senha"><svg class="pw-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><svg class="pw-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div>
                 <button class="login-btn" id="signupBtn" onclick="doSignup()">Criar conta</button>
                 <div class="login-links">
                     <a onclick="showLogin()">Já tenho conta</a>
@@ -1513,6 +1518,19 @@ function showLoginScreen() {
 // Login form navigation
 const allLoginViews = ['loginFormView','signupFormView','forgotFormView','termsFormView'];
 function hideAllViews() { allLoginViews.forEach(id => document.getElementById(id).style.display = 'none'); }
+
+// Toggle de visibilidade da senha
+function togglePw(id, btn){
+    const inp = document.getElementById(id);
+    if (!inp || !btn) return;
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    const eOpen = btn.querySelector('.pw-eye-open');
+    const eClosed = btn.querySelector('.pw-eye-closed');
+    if (eOpen) eOpen.style.display = show ? 'none' : '';
+    if (eClosed) eClosed.style.display = show ? '' : 'none';
+    btn.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+}
 
 function showLogin() {
     hideAllViews();
