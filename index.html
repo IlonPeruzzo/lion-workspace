@@ -544,11 +544,60 @@
     <div class="setup-card">
         <div class="logo">
             <h1>Lion <span>Workspace</span></h1>
-            <p>Vamos configurar seu app</p>
+            <p id="setupLogoSub">Vamos configurar seu app</p>
         </div>
 
-        <!-- Step 1: Plugin -->
-        <div class="setup-step active" id="setupStep1">
+        <!-- Step 1: Regime Tributario -->
+        <div class="setup-step active" id="setupStepRegime">
+            <div style="font-size:.88rem;font-weight:600;color:#f5f5f5;margin-bottom:6px">Regime Tributário</div>
+            <div style="font-size:.78rem;color:#737373;margin-bottom:14px">
+                Escolha seu regime para calcular corretamente impostos e taxas. Você pode alterar depois nas Configurações.
+            </div>
+
+            <div class="setup-option selected" id="optRegimeMEI" onclick="pickRegime('MEI')">
+                <div class="opt-icon" style="background:rgba(190,242,100,.1)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2"><path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM9 5h6v2H9V5z"/></svg>
+                </div>
+                <div class="opt-text">
+                    <h4>MEI</h4>
+                    <p>Microempreendedor Individual — DAS fixo mensal</p>
+                </div>
+                <div class="opt-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+            </div>
+
+            <div class="setup-option" id="optRegimeME" onclick="pickRegime('ME')">
+                <div class="opt-icon" style="background:rgba(34,211,238,.1)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></svg>
+                </div>
+                <div class="opt-text">
+                    <h4>ME (Simples Nacional)</h4>
+                    <p>Microempresa — alíquota variável sobre faturamento</p>
+                </div>
+                <div class="opt-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+            </div>
+
+            <div class="setup-option" id="optRegimePF" onclick="pickRegime('PF')">
+                <div class="opt-icon" style="background:rgba(245,158,11,.1)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div class="opt-text">
+                    <h4>PF</h4>
+                    <p>Pessoa Física — IRPF por tabela progressiva</p>
+                </div>
+                <div class="opt-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+            </div>
+
+            <button class="setup-btn" onclick="goToStep('plugin')">Continuar</button>
+        </div>
+
+        <!-- Step 2: Plugin -->
+        <div class="setup-step" id="setupStep1">
             <div style="font-size:.88rem;font-weight:600;color:#f5f5f5;margin-bottom:6px">Plugin Adobe Premiere Pro</div>
             <div style="font-size:.78rem;color:#737373;margin-bottom:14px">
                 O plugin integra o Lion Workspace diretamente no Premiere Pro para controle de projetos e tempo.
@@ -584,7 +633,10 @@
                 </div>
             </div>
 
-            <button class="setup-btn" onclick="finishSetup()">Continuar</button>
+            <div style="display:flex;gap:10px">
+                <button class="setup-btn" onclick="goToStep('regime')" style="flex:0 0 auto;background:rgba(255,255,255,.05);color:var(--text2)">Voltar</button>
+                <button class="setup-btn" onclick="finishSetup()" style="flex:1">Continuar</button>
+            </div>
         </div>
     </div>
 </div>
@@ -1765,20 +1817,23 @@ document.getElementById('forgotEmail').addEventListener('keydown', e => { if (e.
 
 /* ═══════ First-launch Setup ═══════ */
 let installPluginChoice = true;
+let selectedRegime = 'MEI';
 
 async function showSetupScreen() {
     const setupScreen = document.getElementById('setupScreen');
     setupScreen.classList.remove('hidden');
     loginScreen.classList.add('hidden');
     if (appContainer) appContainer.style.display = 'none';
+    // Começa sempre na etapa do regime
+    goToStep('regime');
 
-    // Detect Premiere
+    // Detect Premiere (em paralelo, pra ja estar pronto quando chegar no Step 2)
     if (window.setup) {
         const result = await window.setup.detectPremiere();
         const statusEl = document.getElementById('premiereStatus');
+        if (!statusEl) return;
         if (result.pluginInstalled) {
             statusEl.innerHTML = '<span class="setup-badge detected">Plugin ja instalado</span>';
-            // Auto-select skip since already installed
             togglePluginOption(false);
         } else if (result.adobeInstalled) {
             statusEl.innerHTML = '<span class="setup-badge detected">Adobe detectado no computador</span>';
@@ -1786,6 +1841,31 @@ async function showSetupScreen() {
             statusEl.innerHTML = '<span class="setup-badge not-found">Adobe nao detectado</span>';
         }
     }
+}
+
+function goToStep(step){
+    const regime = document.getElementById('setupStepRegime');
+    const plugin = document.getElementById('setupStep1');
+    const sub = document.getElementById('setupLogoSub');
+    if (!regime || !plugin) return;
+    if (step === 'plugin') {
+        regime.classList.remove('active');
+        plugin.classList.add('active');
+        if (sub) sub.textContent = 'Passo 2 de 2 — Integração';
+    } else {
+        plugin.classList.remove('active');
+        regime.classList.add('active');
+        if (sub) sub.textContent = 'Passo 1 de 2 — Seu regime';
+    }
+}
+
+function pickRegime(r){
+    if (r !== 'MEI' && r !== 'ME' && r !== 'PF') return;
+    selectedRegime = r;
+    ['MEI','ME','PF'].forEach(k => {
+        const el = document.getElementById('optRegime' + k);
+        if (el) el.classList.toggle('selected', k === r);
+    });
 }
 
 function togglePluginOption(install) {
@@ -1802,6 +1882,17 @@ function togglePluginOption(install) {
 }
 
 async function finishSetup() {
+    // Salva o regime escolhido no cfg
+    try {
+        if (typeof cfg === 'object' && cfg) {
+            cfg.tipoPessoa = selectedRegime;
+            if (typeof salvar === 'function') salvar();
+            // Reflete no radio da tela de Configuracoes (se ja existe no DOM)
+            const radio = document.getElementById('tp' + selectedRegime);
+            if (radio) radio.checked = true;
+        }
+    } catch(e) { /* nao bloqueia o setup por isso */ }
+
     if (window.setup) {
         if (installPluginChoice) {
             await window.setup.installPlugin();
@@ -5056,6 +5147,57 @@ function ytAutoDetectAppPlatform(){
     else if(url.includes('twitter.com')||url.includes('x.com')) ytSetAppPlatform('twitter');
 }
 
+// Valida URL de midia: retorna {ok,msg} indicando se parece um link de video valido
+function ytValidateMediaUrl(raw){
+    const url=(raw||'').trim();
+    if(!url) return {ok:false,msg:'Cole uma URL'};
+    let parsed;
+    try{parsed=new URL(url)}catch(e){return {ok:false,msg:'URL invalida'}}
+    const host=parsed.hostname.replace(/^www\./,'').toLowerCase();
+    const path=parsed.pathname||'';
+
+    // YouTube
+    if(host==='youtube.com'||host==='m.youtube.com'||host==='music.youtube.com'){
+        // rejeita paginas que nao sao video
+        if(path.startsWith('/results')) return {ok:false,msg:'Isso é uma página de busca do YouTube, não um vídeo'};
+        if(path==='/'||path===''||path.startsWith('/feed')||path.startsWith('/playlist')&&!parsed.searchParams.get('v')) return {ok:false,msg:'Cole o link de um vídeo do YouTube (não da home/feed)'};
+        if(path.startsWith('/@')||path.startsWith('/channel/')||path.startsWith('/c/')||path.startsWith('/user/')) return {ok:false,msg:'Isso é um canal, não um vídeo'};
+        // aceita: /watch?v=..., /shorts/..., /embed/..., /live/...
+        const hasV=!!parsed.searchParams.get('v');
+        const hasShort=/^\/(shorts|embed|live|v)\//.test(path);
+        if(hasV||hasShort) return {ok:true};
+        return {ok:false,msg:'Link do YouTube não é um vídeo válido'};
+    }
+    if(host==='youtu.be'){
+        if(path==='/'||path==='') return {ok:false,msg:'Link do youtu.be sem ID de vídeo'};
+        return {ok:true};
+    }
+    // Instagram (aceita reel/p/tv)
+    if(host==='instagram.com'){
+        if(/^\/(reel|reels|p|tv)\/[^\/]+/i.test(path)) return {ok:true};
+        if(path==='/'||/^\/explore/.test(path)) return {ok:false,msg:'Cole o link de um post/reel específico do Instagram'};
+        // perfil (ex: /usuario/)
+        if(/^\/[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do Instagram, não um post/reel'};
+        return {ok:false,msg:'Link do Instagram não é um post/reel válido'};
+    }
+    // X / Twitter — precisa ter /status/ID
+    if(host==='twitter.com'||host==='x.com'||host==='mobile.twitter.com'){
+        if(/\/status\/\d+/i.test(path)) return {ok:true};
+        if(/^\/(search|explore|home|i\/|hashtag)/i.test(path)) return {ok:false,msg:'Cole o link de um tweet específico (com /status/)'};
+        if(/^\/[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do X/Twitter, não um tweet'};
+        return {ok:false,msg:'Link do X/Twitter não é um tweet válido'};
+    }
+    return {ok:false,msg:'Só aceito links do YouTube, Instagram e X/Twitter'};
+}
+
+// Helper: promise com timeout (rejeita apos ms)
+function _withTimeout(promise, ms, label){
+    return Promise.race([
+        promise,
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error(label||'Tempo esgotado')), ms))
+    ]);
+}
+
 async function ytCheckDeps(){
     const el=document.getElementById('ytDepsStatus');
     if(!window.ytDownloader){el.textContent='Indisponivel';el.style.background='rgba(244,63,94,.12)';el.style.color='var(--red)';return}
@@ -5076,14 +5218,19 @@ async function ytCheckDeps(){
 async function ytFetchInfo(){
     const url=document.getElementById('ytUrl').value.trim();
     if(!url){showToast('Cole uma URL do YouTube','warn');return}
+    // Valida ANTES de chamar o downloader — evita loading infinito em URLs invalidas
+    const v=ytValidateMediaUrl(url);
+    if(!v.ok){showToast(v.msg,'warn');return}
     if(!window.ytDownloader){showToast('Downloader indisponivel','warn');return}
     const btn=document.getElementById('ytFetchBtn');
+    const _resetBtn=()=>{btn.disabled=false;btn.innerHTML=_ytSearchIcon+' Buscar'};
     btn.disabled=true;btn.innerHTML='Buscando...';
     document.getElementById('ytInfoPanel').style.display='none';
     try{
         if(!_ytDepsReady) await window.ytDownloader.ensureDeps();
-        const info=await window.ytDownloader.getInfo(url);
-        if(info.error){showToast(info.error,'warn');btn.disabled=false;btn.innerHTML=_ytSearchIcon+' Buscar';return}
+        // Timeout de 30s — se yt-dlp travar, libera o botao e avisa
+        const info=await _withTimeout(window.ytDownloader.getInfo(url), 30000, 'Tempo esgotado: verifique se a URL é de um vídeo válido');
+        if(!info||info.error){showToast(info&&info.error?info.error:'Não foi possível obter informações do vídeo','warn');_resetBtn();return}
         _ytInfo=info;_ytInfo._url=url;
         document.getElementById('ytThumb').src=info.thumbnail||'';
         document.getElementById('ytTitle').textContent=info.title||'Sem titulo';
@@ -5096,8 +5243,8 @@ async function ytFetchInfo(){
         document.getElementById('ytAppTrimInfo').textContent='Total: '+durStr;
         document.getElementById('ytAppTrimSection').style.display=(_ytAppPlatform==='instagram')?'none':'flex';
         document.getElementById('ytInfoPanel').style.display='';
-    }catch(e){showToast('Erro ao buscar','warn')}
-    btn.disabled=false;btn.innerHTML=_ytSearchIcon+' Buscar';
+    }catch(e){showToast(e&&e.message?e.message:'Erro ao buscar','warn')}
+    _resetBtn();
 }
 
 function ytPickFmt(btn){
@@ -5109,6 +5256,9 @@ function ytPickFmt(btn){
 async function ytStartDownload(){
     const url=document.getElementById('ytUrl').value.trim();
     if(!url){showToast('Cole uma URL','warn');return}
+    // Valida antes de baixar — evita travar em URL invalida
+    const v=ytValidateMediaUrl(url);
+    if(!v.ok){showToast(v.msg,'warn');return}
     if(!window.ytDownloader){showToast('Downloader indisponivel','warn');return}
     const btn=document.getElementById('ytDownloadBtn');
     btn.disabled=true;
@@ -5123,7 +5273,7 @@ async function ytStartDownload(){
     if(!_ytInfo||_ytInfo._url!==url){
         try{
             if(!_ytDepsReady) await window.ytDownloader.ensureDeps();
-            const info=await window.ytDownloader.getInfo(url);
+            const info=await _withTimeout(window.ytDownloader.getInfo(url), 30000, 'Tempo esgotado ao buscar info');
             if(info&&!info.error){_ytInfo=info;_ytInfo._url=url;document.getElementById('ytProgressTitle').textContent=info.title||'Baixando...'}
             else document.getElementById('ytProgressTitle').textContent='Baixando...';
         }catch(e){document.getElementById('ytProgressTitle').textContent='Baixando...'}
