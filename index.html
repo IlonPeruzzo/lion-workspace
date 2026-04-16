@@ -3533,9 +3533,9 @@ function filterFaturaVideos(){
         vList.innerHTML=`<div style="font-size:.75rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${videosNaoPagos.length} servicos pendentes</div>
         <div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">${videosNaoPagos.map(r=>{
             const b=r.quantidade*r.valor;const d=r.data.split('-').reverse().join('/');
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(255,255,255,.02);border-radius:6px;border:1px solid rgba(190,242,100,.06)">
-                <div style="display:flex;align-items:center;gap:8px"><span style="font-size:.82rem;color:var(--text)">${r.nome||'Edicao de Video'}</span><span style="font-size:.7rem;color:var(--text3)">${d}</span></div>
-                <span style="font-weight:600;font-size:.85rem;color:var(--accent)">${s} ${fb(b)}</span>
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(255,255,255,.02);border-radius:6px;border:1px solid rgba(190,242,100,.06);gap:8px">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1"><span style="font-size:.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.nome||'Edicao de Video'}</span><span style="font-size:.7rem;color:var(--text3);white-space:nowrap">${d}</span></div>
+                <span style="font-weight:600;font-size:.85rem;color:var(--accent);white-space:nowrap;flex-shrink:0">${s} ${fb(b)}</span>
             </div>`;
         }).join('')}</div>`;
         const total=videosNaoPagos.reduce((s,r)=>s+r.quantidade*r.valor,0);
