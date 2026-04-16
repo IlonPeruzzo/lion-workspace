@@ -552,11 +552,8 @@
                 <span>Compensar posicao</span>
             </div>
 
-            <!-- Action Buttons -->
-            <div style="display:flex;gap:4px;margin-top:6px">
-                <button class="yt-q" onclick="anchorKeyframe()" title="Adicionar keyframe no anchor point atual" style="flex:1;padding:5px">+ Keyframe</button>
-                <button class="yt-q" onclick="anchorReset()" title="Resetar para centro" style="flex:1;padding:5px">Reset</button>
-            </div>
+            <!-- Apply Button -->
+            <button class="yt-q" onclick="applyAnchor()" style="width:100%;padding:6px;margin-top:6px;font-weight:600">Aplicar</button>
 
             <div id="anchorMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
         </div>
@@ -2027,29 +2024,27 @@
         if(sp) sp.style.display=show?'block':'none';
     }
 
+    // Grid click: only SELECT the position (no apply)
     function setAnchor(pos){
-        if(_ancBusy) return;
         anchorCurrent=pos;
-
-        // Highlight active point
         var pts=document.querySelectorAll('.anc-pt');
         for(var i=0;i<pts.length;i++){
             if(pts[i].getAttribute('data-pos')===pos) pts[i].classList.add('active');
             else pts[i].classList.remove('active');
         }
-
-        // Update label
         var lblEl=document.getElementById('anchorLabel');
         if(lblEl) lblEl.textContent=anchorLabels[pos]||pos;
+    }
 
+    // Apply button: send to Premiere
+    function applyAnchor(){
+        if(_ancBusy) return;
         if(!csInterface){
             showAnchorMsg('CEP indisponivel','#f43f5e');
             return;
         }
-
-        // Get normalized coords from map
-        var coords=anchorPosMap[pos];
-        if(!coords){showAnchorMsg('Posicao invalida','#f43f5e');return;}
+        var coords=anchorPosMap[anchorCurrent];
+        if(!coords){showAnchorMsg('Selecione uma posicao','#f43f5e');return;}
 
         _ancBusy=true;
         ancSetSpinner(true);
@@ -2065,7 +2060,7 @@
             var mainResult=pipe>=0?r.substring(0,pipe):r;
             if(mainResult.indexOf('OK')===0){
                 var n=mainResult.split(':')[1]||'1';
-                showAnchorMsg(n+' clip'+(n>1?'s':'')+' aplicado'+(n>1?'s':''),'#22c55e');
+                showAnchorMsg(n+' clip'+(n>1?'s':'')+' - '+debugInfo,'#22c55e');
             } else if(mainResult==='NO_SEQUENCE'){
                 showAnchorMsg('Abra uma sequence','#f43f5e');
             } else if(mainResult==='NO_SELECTION'){
@@ -2076,33 +2071,6 @@
                 showAnchorMsg('Nenhum projeto aberto','#f43f5e');
             } else {
                 showAnchorMsg(r||'Erro ao aplicar','#f43f5e');
-            }
-        });
-    }
-
-    function anchorReset(){
-        setAnchor('cc');
-    }
-
-    function anchorKeyframe(){
-        if(!csInterface){
-            showAnchorMsg('CEP indisponivel','#f43f5e');
-            return;
-        }
-        _ancBusy=true;
-        ancSetSpinner(true);
-        showAnchorMsg('Adicionando keyframe...','#f59e0b');
-        csInterface.evalScript('addAnchorKeyframe('+(anchorVector?'true':'false')+')',function(result){
-            _ancBusy=false;
-            ancSetSpinner(false);
-            var r=String(result||'');
-            if(r.indexOf('OK')===0){
-                var n=r.split(':')[1]||'1';
-                showAnchorMsg('Keyframe em '+n+' clip'+(n>1?'s':''),'#22c55e');
-            } else if(r==='NO_SELECTION'){
-                showAnchorMsg('Selecione um clip','#f43f5e');
-            } else {
-                showAnchorMsg(r||'Erro','#f43f5e');
             }
         });
     }

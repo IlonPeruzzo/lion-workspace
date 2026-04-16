@@ -324,12 +324,17 @@ function importFileToProject(filePath) {
 // Uses normalized coordinates (0-1) for sub-anchor precision
 // ============================================
 
-// Localized property name variants
+// Localized property name variants (short prefixes for accent-safe matching)
 var _anchorNames = ['Anchor Point', 'Ponto de ancoragem', 'Ponto de Ancoragem', 'Anchor', 'Ankerpunkt', "Point d'ancrage", 'Punto de anclaje'];
 var _positionNames = ['Position', 'Posicao', 'Posicion'];
 var _scaleNames = ['Scale', 'Escala', 'Skalierung', 'Echelle'];
 var _motionNames = ['Motion', 'Movimento', 'Movement', 'Bewegung', 'Mouvement', 'Movimiento'];
 var _vectorMotionNames = ['Vector Motion', 'Movimento Vetorial', 'Vectorielle Bewegung'];
+
+// Short prefixes for accent-safe fallback matching (handles Posicao vs Posição etc.)
+var _anchorPrefixes = ['anchor', 'ancor', 'anker', 'ancla'];
+var _positionPrefixes = ['posi'];
+var _scalePrefixes = ['scal', 'esca', 'skal'];
 
 // Find a named component on a clip
 function findComponentByName(clip, names) {
@@ -372,23 +377,32 @@ function findVectorMotionComponent(clip) {
     return findComponentByName(clip, _vectorMotionNames);
 }
 
-// Find a property in a component by name (exact first, then partial)
-function findProp(component, names) {
+// Find a property in a component by name (exact, then partial, then prefix)
+function findProp(component, names, prefixes) {
     if (!component) return null;
     try {
         var props = component.properties;
-        // Exact match
+        // Pass 1: exact match
         for (var p = 0; p < props.numItems; p++) {
             var pn = props[p].displayName;
             for (var n = 0; n < names.length; n++) {
                 if (pn === names[n]) return props[p];
             }
         }
-        // Partial match
+        // Pass 2: partial match (handles localized names)
         for (var p = 0; p < props.numItems; p++) {
             var pnL = props[p].displayName.toLowerCase();
             for (var n = 0; n < names.length; n++) {
                 if (pnL.indexOf(names[n].toLowerCase()) >= 0) return props[p];
+            }
+        }
+        // Pass 3: short prefix match (handles accented chars like Posição, Posición)
+        if (prefixes) {
+            for (var p = 0; p < props.numItems; p++) {
+                var pnL2 = props[p].displayName.toLowerCase();
+                for (var n = 0; n < prefixes.length; n++) {
+                    if (pnL2.indexOf(prefixes[n]) >= 0) return props[p];
+                }
             }
         }
     } catch (e) {}
@@ -438,16 +452,19 @@ function getSourceDimensions(clip) {
 // Apply anchor to a single component (Motion or Vector Motion)
 // anchorNorm: [0-1, 0-1], compensate: bool
 // Returns true if applied, false otherwise
+// Returns: { ok: bool, debug: string }
 function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH) {
-    if (!comp) return false;
-    var anchorProp = findProp(comp, _anchorNames);
-    var posProp = findProp(comp, _positionNames);
-    var scaleProp = findProp(comp, _scaleNames);
-    if (!anchorProp || !posProp) return false;
+    if (!comp) return { ok: false, debug: 'no-comp' };
+    var anchorProp = findProp(comp, _anchorNames, _anchorPrefixes);
+    var posProp = findProp(comp, _positionNames, _positionPrefixes);
+    var scaleProp = findProp(comp, _scaleNames, _scalePrefixes);
+
+    if (!anchorProp) return { ok: false, debug: 'no-anchor-prop' };
+    if (!posProp) return { ok: false, debug: 'no-pos-prop(comp=' + comp.displayName + ')' };
 
     var oldAnchor = anchorProp.getValue();
     var oldPos = posProp.getValue();
-    if (!oldAnchor || !oldPos) return false;
+    if (!oldAnchor || !oldPos) return { ok: false, debug: 'no-values' };
 
     // Source dimensions
     var srcDims = getSourceDimensions(clip);
@@ -458,7 +475,7 @@ function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH)
         srcH = Math.round(oldAnchor[1] * 2);
     } else { srcW = seqW; srcH = seqH; }
 
-    // Target anchor in pixels
+    // Target anchor in source pixels
     var newAx = anchorNorm[0] * srcW;
     var newAy = anchorNorm[1] * srcH;
 
@@ -470,20 +487,22 @@ function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH)
         else if (sv instanceof Array) scale = sv[0] / 100;
     } catch (e) {}
 
-    // Set anchor
-    anchorProp.setValue([newAx, newAy]);
-
-    // Compensate position
     if (compensate) {
+        // Calculate compensation BEFORE setting anchor
         var dAx = newAx - oldAnchor[0];
         var dAy = newAy - oldAnchor[1];
         var newPx = oldPos[0] + (dAx * scale) / seqW;
         var newPy = oldPos[1] + (dAy * scale) / seqH;
-        if (newPx > -5 && newPx < 6 && newPy > -5 && newPy < 6) {
-            posProp.setValue([newPx, newPy]);
-        }
+
+        // Set BOTH atomically
+        anchorProp.setValue([newAx, newAy], true);
+        posProp.setValue([newPx, newPy], true);
+    } else {
+        anchorProp.setValue([newAx, newAy], true);
     }
-    return true;
+
+    var dbg = srcW + 'x' + srcH + ' a[' + Math.round(newAx) + ',' + Math.round(newAy) + ']';
+    return { ok: true, debug: dbg };
 }
 
 // Main entry: set anchor with normalized coords
@@ -513,7 +532,7 @@ function setClipAnchorPointPro(nx, ny, compensate, target, useVector) {
             try {
                 // Apply to standard Motion
                 var motion = findMotionComponent(clip);
-                var applied = _applyAnchorToComponent(motion, clip, anchorNorm, compensate, seqW, seqH);
+                var result = _applyAnchorToComponent(motion, clip, anchorNorm, compensate, seqW, seqH);
 
                 // Apply to Vector Motion if requested
                 if (useVector) {
@@ -523,12 +542,11 @@ function setClipAnchorPointPro(nx, ny, compensate, target, useVector) {
                     }
                 }
 
-                if (applied) {
-                    var srcDims = getSourceDimensions(clip);
-                    var sw = srcDims ? srcDims.width : seqW;
-                    var sh = srcDims ? srcDims.height : seqH;
-                    debug = sw + 'x' + sh + ' [' + Math.round(nx * sw) + ',' + Math.round(ny * sh) + ']';
+                if (result.ok) {
+                    debug = result.debug;
                     totalApplied++;
+                } else {
+                    debug = result.debug;
                 }
             } catch (ec) {
                 debug = 'err:' + ec.toString();
@@ -588,8 +606,8 @@ function addAnchorKeyframe(useVector) {
                 var didSomething = false;
                 for (var cpi = 0; cpi < compsToProcess.length; cpi++) {
                     var comp = compsToProcess[cpi];
-                    var ancProp = findProp(comp, _anchorNames);
-                    var posProp = findProp(comp, _positionNames);
+                    var ancProp = findProp(comp, _anchorNames, _anchorPrefixes);
+                    var posProp = findProp(comp, _positionNames, _positionPrefixes);
 
                     // Fallback scan
                     if (!ancProp || !posProp) {
