@@ -147,6 +147,25 @@
         .login-user-bar .user-plan{font-size:.56rem;padding:1px 6px;border-radius:4px;background:rgba(190,242,100,.1);color:#bef264;font-weight:700;text-transform:uppercase}
         .login-user-bar .logout-btn{font-size:.58rem;color:#636363;background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 4px;transition:color .2s}
         .login-user-bar .logout-btn:hover{color:#f43f5e}
+        .gear-btn{background:none;border:none;cursor:pointer;color:#888;padding:2px 4px;transition:all .15s;display:flex;align-items:center}
+        .gear-btn:hover{color:#bef264;transform:rotate(45deg)}
+
+        /* Settings overlay */
+        .settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-start;justify-content:center;z-index:9998;padding:14px;overflow-y:auto}
+        .settings-overlay.hidden{display:none}
+        .settings-card{background:#1c1c1c;border:1px solid rgba(190,242,100,.12);border-radius:10px;padding:14px;width:100%;max-width:260px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+        .settings-card h3{font-size:.78rem;color:#f5f5f5;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
+        .settings-card .close-x{background:none;border:none;color:#666;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 4px}
+        .settings-card .close-x:hover{color:#f43f5e}
+        .settings-card .info-row{font-size:.66rem;color:#aaa;margin-bottom:4px;word-break:break-all;line-height:1.4}
+        .settings-card .info-row strong{color:#f5f5f5;font-weight:600}
+        .settings-card .info-plan{display:inline-block;font-size:.56rem;padding:1px 6px;border-radius:4px;background:rgba(190,242,100,.1);color:#bef264;font-weight:700;text-transform:uppercase;margin-left:4px}
+        .settings-card .sec-title{font-size:.6rem;text-transform:uppercase;letter-spacing:.4px;color:#666;font-weight:600;margin-top:12px;margin-bottom:6px}
+        .settings-card .panel-row{display:flex;align-items:center;gap:7px;cursor:pointer;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.04);margin-bottom:3px;font-size:.66rem;color:#ddd}
+        .settings-card .panel-row:hover{background:rgba(190,242,100,.04)}
+        .settings-card .logout-row{margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)}
+        .settings-card .logout-btn-full{width:100%;padding:8px;border-radius:6px;background:rgba(244,63,94,.08);color:#f43f5e;border:1px solid rgba(244,63,94,.15);font-family:inherit;font-size:.7rem;font-weight:700;cursor:pointer;transition:all .2s}
+        .settings-card .logout-btn-full:hover{background:rgba(244,63,94,.18)}
     </style>
 </head>
 <body>
@@ -169,14 +188,38 @@
     <div class="login-user-bar" id="pluginUserBar" style="display:none">
         <span class="user-info" id="pluginUserInfo"></span>
         <span class="user-plan" id="pluginUserPlan"></span>
-        <button class="logout-btn" onclick="pluginDoLogout()">Sair</button>
+        <button class="gear-btn" onclick="openSettings()" title="Configurações">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Settings overlay -->
+    <div class="settings-overlay hidden" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+        <div class="settings-card">
+            <h3>
+                <span>Configurações</span>
+                <button class="close-x" onclick="closeSettings()">×</button>
+            </h3>
+            <div class="info-row"><strong>Email:</strong> <span id="settingsEmail">—</span></div>
+            <div class="info-row"><strong>Plano:</strong> <span class="info-plan" id="settingsPlan">—</span></div>
+
+            <div class="sec-title">Painéis visíveis</div>
+            <div id="panelsList"></div>
+
+            <div class="logout-row">
+                <button class="logout-btn-full" onclick="pluginDoLogout()">Sair da conta</button>
+            </div>
+        </div>
     </div>
 
     <div class="logo">Lion <span>Workspace</span></div>
     <div class="status off" id="conn">Desconectado</div>
 
     <!-- Timer -->
-    <div class="section">
+    <div class="section" id="sectionTimer">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('timerBody')">
             Timer do Projeto
             <svg id="timerChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
@@ -199,7 +242,7 @@
     </div>
 
     <!-- Pomodoro -->
-    <div class="section">
+    <div class="section" id="sectionPomo">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('pomoBody')">
             Pomodoro
             <svg id="pomoChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
@@ -218,10 +261,21 @@
     </div>
 
     <!-- Multi-platform Downloader -->
-    <div class="section">
-        <div class="section-title">Download</div>
+    <div class="section" id="sectionDownload">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('downloadBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+            </span>
+            <svg id="downloadChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="downloadBody">
         <!-- Platform selector -->
-        <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center">
+        <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center;margin-top:6px">
             <button class="plat-btn active" id="platYT" onclick="ytSetPlatform('youtube')" title="YouTube">
                 <svg viewBox="0 0 24 24" fill="#f43f5e"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
             </button>
@@ -334,10 +388,11 @@
                 <span id="ytPluginStat"></span>
             </div>
         </div>
+        </div><!-- /downloadBody -->
     </div>
 
     <!-- Keyframe Curve Editor -->
-    <div class="section">
+    <div class="section" id="sectionEasing">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('easingBody')">
             <span style="display:flex;align-items:center;gap:5px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><path d="M3 20C3 20 7 20 10 12C13 4 21 4 21 4"/></svg>
@@ -415,7 +470,7 @@
     </div>
 
     <!-- Anchor Point Pro -->
-    <div class="section">
+    <div class="section" id="sectionAnchor">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('anchorBody')">
             <span style="display:flex;align-items:center;gap:5px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round">
@@ -473,7 +528,7 @@
     </div>
 
     <!-- Copy / Paste -->
-    <div class="section">
+    <div class="section" id="sectionCopyPaste">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('cpBody')">
             <span style="display:flex;align-items:center;gap:5px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -515,23 +570,119 @@
                 </div>
             </div>
 
+            <!-- Save location -->
+            <div style="margin-bottom:8px">
+                <div style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600;margin-bottom:4px">Salvar prints em</div>
+                <div style="display:flex;gap:3px">
+                    <button class="yt-q active" id="cpSaveModeProj" onclick="cpSetSaveMode('project')" style="flex:1">Pasta do Projeto</button>
+                    <button class="yt-q" id="cpSaveModeCustom" onclick="cpSetSaveMode('custom')" style="flex:1">Personalizada</button>
+                </div>
+                <div id="cpCustomPathRow" style="display:none;margin-top:4px;display:flex;gap:3px;align-items:center">
+                    <input type="text" id="cpCustomPathInput" placeholder="C:\\caminho\\..." style="flex:1;padding:4px 6px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.58rem;font-family:inherit;outline:none" oninput="cpSavePathChanged()">
+                    <button class="yt-q" onclick="cpPickFolder()" style="padding:4px 6px;flex-shrink:0" title="Escolher pasta">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </button>
+                </div>
+                <div id="cpPathHint" style="font-size:.5rem;color:#555;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+            </div>
+
             <div id="cpStatus" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px;padding:4px 6px;background:rgba(255,255,255,.015);border-radius:4px;line-height:1.3">
                 Pronto. Copie um arquivo/print e clique Paste
             </div>
         </div>
     </div>
 
-    <div class="footer">Lion Workspace Sync</div>
+    <div class="footer" id="pluginFooter">Lion Workspace Sync</div>
 
     <script src="CSInterface.js"></script>
     <script>
     var API='http://127.0.0.1:9847';
+    var PLUGIN_VERSION='1.3.0';
     var csInterface=new CSInterface();
     var selProj='';
     var lastCardsJSON='';
     var lastPipeJSON='';
     var timerState={running:false,paused:false,appPaused:false};
     var pomoState={running:false,paused:false};
+    var pluginAppVersion='';
+
+    /* ═══════ Panel visibility ═══════ */
+    var PANELS = [
+        { key: 'timer',    id: 'sectionTimer',     label: 'Timer do Projeto' },
+        { key: 'pomo',     id: 'sectionPomo',      label: 'Pomodoro' },
+        { key: 'download', id: 'sectionDownload',  label: 'Download' },
+        { key: 'easing',   id: 'sectionEasing',    label: 'Easing / Curvas' },
+        { key: 'anchor',   id: 'sectionAnchor',    label: 'Anchor Point Pro' },
+        { key: 'cp',       id: 'sectionCopyPaste', label: 'Copy / Paste' }
+    ];
+    var panelsVisible = (function(){
+        try {
+            var saved = JSON.parse(localStorage.getItem('lw_panels_visible') || '{}');
+            var def = {};
+            for (var i=0; i<PANELS.length; i++) def[PANELS[i].key] = (saved[PANELS[i].key] !== false);
+            return def;
+        } catch(e) {
+            var def2 = {};
+            for (var j=0; j<PANELS.length; j++) def2[PANELS[j].key] = true;
+            return def2;
+        }
+    })();
+
+    function applyPanelsVisibility(){
+        for (var i=0; i<PANELS.length; i++){
+            var p = PANELS[i];
+            var el = document.getElementById(p.id);
+            if (el) el.style.display = panelsVisible[p.key] ? '' : 'none';
+        }
+    }
+
+    function togglePanelVisible(key){
+        panelsVisible[key] = !panelsVisible[key];
+        try { localStorage.setItem('lw_panels_visible', JSON.stringify(panelsVisible)); } catch(e){}
+        applyPanelsVisibility();
+        renderPanelsList();
+    }
+
+    function renderPanelsList(){
+        var el = document.getElementById('panelsList');
+        if (!el) return;
+        var html = '';
+        for (var i=0; i<PANELS.length; i++){
+            var p = PANELS[i];
+            var on = !!panelsVisible[p.key];
+            html += '<div class="panel-row" onclick="togglePanelVisible(\'' + p.key + '\')">'
+                  + '<div class="mini-check' + (on?' active':'') + '">'
+                  + '<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+                  + '</div>'
+                  + '<span>' + p.label + '</span>'
+                  + '</div>';
+        }
+        el.innerHTML = html;
+    }
+
+    function openSettings(){
+        var ov = document.getElementById('settingsOverlay');
+        if (!ov) return;
+        document.getElementById('settingsEmail').textContent = (pluginUser && pluginUser.email) || '—';
+        document.getElementById('settingsPlan').textContent = (window._lwPlan || '—');
+        renderPanelsList();
+        ov.classList.remove('hidden');
+    }
+
+    function closeSettings(){
+        var ov = document.getElementById('settingsOverlay');
+        if (ov) ov.classList.add('hidden');
+    }
+
+    function updateFooter(){
+        var f = document.getElementById('pluginFooter');
+        if (!f) return;
+        var txt = 'Plugin v' + PLUGIN_VERSION;
+        if (pluginAppVersion) txt += ' · App v' + pluginAppVersion;
+        f.textContent = txt;
+    }
+    updateFooter();
+    applyPanelsVisibility();
 
     /* ═══════ Plugin Auth ═══════ */
     var pluginToken = localStorage.getItem('lw_plugin_token') || '';
@@ -542,13 +693,28 @@
     }
 
     function pluginCheckSession() {
-        if (!pluginToken) { pluginShowLogin(); return; }
+        if (!pluginToken) {
+            // Mesmo sem token, tenta pegar a versão do app pra mostrar no rodapé
+            var xhr0 = new XMLHttpRequest();
+            xhr0.open('GET', API + '/auth/check', true);
+            xhr0.onload = function(){
+                try {
+                    var r0 = JSON.parse(xhr0.responseText || '{}');
+                    if (r0.app_version) { pluginAppVersion = r0.app_version; updateFooter(); }
+                } catch(e){}
+                pluginShowLogin();
+            };
+            xhr0.onerror = function(){ pluginShowLogin(); };
+            xhr0.send();
+            return;
+        }
         var xhr = new XMLHttpRequest();
         xhr.open('GET', API + '/auth/check', true);
         xhr.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
         xhr.onload = function() {
             if (xhr.status === 200) {
                 var r = JSON.parse(xhr.responseText);
+                if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
                 if (r.authenticated) {
                     pluginUser = r.user;
                     pluginShowApp(r.user, r.plan);
@@ -589,6 +755,7 @@
                     pluginToken = r.token;
                     localStorage.setItem('lw_plugin_token', r.token);
                     pluginUser = r.user;
+                    if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
                     pluginShowApp(r.user, r.plan);
                 } catch(e) {
                     errEl.textContent = 'Erro ao processar resposta.';
@@ -643,6 +810,8 @@
         document.getElementById('pluginUserBar').style.display = '';
         document.getElementById('pluginUserInfo').textContent = user.email || '';
         document.getElementById('pluginUserPlan').textContent = plan || '';
+        window._lwPlan = plan || '';
+        applyPanelsVisibility();
     }
 
     // Enter key to submit login
@@ -1837,6 +2006,10 @@
         useBin: true
     };
 
+    // Save mode for clipboard images: 'project' (next to .prproj) or 'custom' (user-chosen folder)
+    var cpSaveMode = localStorage.getItem('lw_cp_save_mode') || 'project';
+    var cpCustomPath = localStorage.getItem('lw_cp_save_path') || '';
+
     function cpToggleFlag(key){
         cpFlags[key] = !cpFlags[key];
         var id = 'cpFlag' + key.charAt(0).toUpperCase() + key.slice(1);
@@ -1850,6 +2023,70 @@
         el.textContent = text;
         el.style.color = color || '#777';
     }
+
+    function cpSetSaveMode(mode){
+        cpSaveMode = mode;
+        localStorage.setItem('lw_cp_save_mode', mode);
+        var bProj = document.getElementById('cpSaveModeProj');
+        var bCust = document.getElementById('cpSaveModeCustom');
+        if (bProj) bProj.classList.toggle('active', mode === 'project');
+        if (bCust) bCust.classList.toggle('active', mode === 'custom');
+        var row = document.getElementById('cpCustomPathRow');
+        if (row) row.style.display = (mode === 'custom') ? 'flex' : 'none';
+        cpUpdatePathHint();
+    }
+
+    function cpSavePathChanged(){
+        var inp = document.getElementById('cpCustomPathInput');
+        if (inp) {
+            cpCustomPath = inp.value.trim();
+            localStorage.setItem('lw_cp_save_path', cpCustomPath);
+            cpUpdatePathHint();
+        }
+    }
+
+    function cpUpdatePathHint(){
+        var el = document.getElementById('cpPathHint');
+        if (!el) return;
+        if (cpSaveMode === 'custom') {
+            el.textContent = cpCustomPath ? ('→ ' + cpCustomPath) : 'Defina uma pasta personalizada';
+        } else {
+            el.textContent = 'Salva na pasta do .prproj atual';
+        }
+    }
+
+    function cpPickFolder(){
+        if (!csInterface) return;
+        csInterface.evalScript('cpSelectFolder()', function(result){
+            var r = String(result || '').trim();
+            if (!r || r === 'CANCEL' || r === 'NO_FOLDER') return;
+            cpCustomPath = r;
+            localStorage.setItem('lw_cp_save_path', r);
+            var inp = document.getElementById('cpCustomPathInput');
+            if (inp) inp.value = r;
+            cpUpdatePathHint();
+        });
+    }
+
+    // Resolve final save dir before paste: returns via callback(dirOrEmpty)
+    function cpResolveSaveDir(callback){
+        if (cpSaveMode === 'custom') {
+            callback(cpCustomPath || '');
+            return;
+        }
+        // project mode: ask ExtendScript for project folder
+        if (!csInterface) { callback(''); return; }
+        csInterface.evalScript('getProjectFolder()', function(result){
+            callback(String(result || '').trim());
+        });
+    }
+
+    // Init UI on load
+    setTimeout(function(){
+        var inp = document.getElementById('cpCustomPathInput');
+        if (inp) inp.value = cpCustomPath;
+        cpSetSaveMode(cpSaveMode);
+    }, 0);
 
     // Acesso ao Node.js via CEP
     function cpGetNode(){
@@ -1889,7 +2126,14 @@
     }
 
     // Ler clipboard do Windows: procura arquivos ou imagem
-    function cpReadClipboard(callback){
+    // saveDir: diretorio onde salvar imagem (vazio = TEMP)
+    function cpReadClipboard(saveDir, callback){
+        // Compat: se chamado com (callback) apenas
+        if (typeof saveDir === 'function') { callback = saveDir; saveDir = ''; }
+        var saveDirEsc = String(saveDir || '').replace(/'/g, "''");
+        var saveDirLine = saveDirEsc
+            ? ("    $dir = '" + saveDirEsc + "'")
+            : "    $dir = $env:TEMP";
         var ps = [
             'Add-Type -AssemblyName System.Windows.Forms',
             'Add-Type -AssemblyName System.Drawing',
@@ -1905,8 +2149,10 @@
             'try {',
             '  $img = [System.Windows.Forms.Clipboard]::GetImage()',
             '  if ($img -ne $null) {',
+            saveDirLine,
+            '    if (-not (Test-Path $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $dir = $env:TEMP } }',
             '    $ts = [int][double]::Parse((Get-Date -UFormat %s))',
-            '    $outPath = Join-Path $env:TEMP ("lw-clip-" + $ts + ".png")',
+            '    $outPath = Join-Path $dir ("lw-clip-" + $ts + ".png")',
             '    $img.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)',
             '    Write-Output ("IMAGE:" + $outPath)',
             '    exit 0',
@@ -1987,7 +2233,8 @@
         var btn = document.getElementById('cpPasteBtn');
         if (btn) btn.disabled = true;
         cpShowStatus('Lendo clipboard…', '#f59e0b');
-        cpReadClipboard(function(res){
+        cpResolveSaveDir(function(saveDir){
+        cpReadClipboard(saveDir, function(res){
             if (res.type === 'error') {
                 if (btn) btn.disabled = false;
                 cpShowStatus('Erro clipboard: ' + (res.msg || ''), '#f43f5e');
@@ -2036,6 +2283,7 @@
                     cpShowStatus(r || 'Erro ao importar', '#f43f5e');
                 }
             });
+        });
         });
     }
 

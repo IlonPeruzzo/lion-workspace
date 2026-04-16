@@ -622,6 +622,22 @@ function addAnchorKeyframe() {
 // Copy:  pega arquivo do clip selecionado e poe no clipboard do SO
 // ============================================
 
+// Abre dialog nativo pra escolher pasta de salvamento de prints
+function cpSelectFolder() {
+    try {
+        var initial = null;
+        try {
+            if (app.project && app.project.path) {
+                var pf = new File(app.project.path);
+                if (pf.parent && pf.parent.exists) initial = pf.parent;
+            }
+        } catch (e) {}
+        var folder = (initial || Folder.desktop).selectDlg('Escolher pasta para salvar prints');
+        if (!folder) return 'CANCEL';
+        return folder.fsName;
+    } catch (e) { return 'NO_FOLDER'; }
+}
+
 // Retorna o caminho do media do primeiro clip selecionado na timeline
 function cpGetSelectedClipMediaPath() {
     try {

@@ -1048,7 +1048,8 @@ function startSyncServer() {
                     res.end(JSON.stringify({
                         token,
                         user: { email: data.user.email, name: data.user.user_metadata?.full_name || '' },
-                        plan: sub.plan
+                        plan: sub.plan,
+                        app_version: app.getVersion()
                     }));
                 } catch (e) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -1062,10 +1063,10 @@ function startSyncServer() {
             const session = authenticatePluginRequest(req);
             if (!session) {
                 res.writeHead(401, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ authenticated: false }));
+                res.end(JSON.stringify({ authenticated: false, app_version: app.getVersion() }));
             } else {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ authenticated: true, user: { email: session.email, name: session.name }, plan: session.plan }));
+                res.end(JSON.stringify({ authenticated: true, user: { email: session.email, name: session.name }, plan: session.plan, app_version: app.getVersion() }));
             }
             return;
         }
