@@ -634,8 +634,8 @@
             </div>
 
             <div style="display:flex;gap:10px">
-                <button class="setup-btn" onclick="goToStep('regime')" style="flex:0 0 auto;background:rgba(255,255,255,.05);color:var(--text2)">Voltar</button>
-                <button class="setup-btn" onclick="finishSetup()" style="flex:1">Continuar</button>
+                <button class="setup-btn" onclick="goToStep('regime')" style="flex:0 0 auto;width:auto;background:rgba(255,255,255,.05);color:var(--text2)">Voltar</button>
+                <button class="setup-btn" onclick="finishSetup()" style="flex:1;width:auto">Continuar</button>
             </div>
         </div>
     </div>
@@ -2100,7 +2100,7 @@ let projInt=null,pomoInt=null,lastActivity=Date.now(),inactiveMs=30*1000;
 
 function getCl(n){return clientes.find(c=>c.nome===n)}
 function hoje(){return new Date().toISOString().split('T')[0]}
-function fb(v){return v.toFixed(2).replace('.',',')}
+function fb(v){var p=v.toFixed(2).split('.');return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+p[1]}
 function salvar(){localStorage.setItem('vc_clientes',JSON.stringify(clientes));localStorage.setItem('vc_registros',JSON.stringify(regs))}
 function salvarFaturas(){localStorage.setItem('vc_faturas',JSON.stringify(faturas))}
 

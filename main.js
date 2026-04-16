@@ -1152,6 +1152,7 @@ function startSyncServer() {
                     // Reuse the IPC handler logic
                     try {
                         if (!ytDlpReady()) await ensureYtDlp();
+                        if (!ffmpegReady()) await ensureFfmpeg();
                         const outputPath = (data.outputDir && fs.existsSync(data.outputDir)) ? data.outputDir : (isWin ? path.join(os.homedir(), 'Downloads') : path.join(os.homedir(), 'Downloads'));
                         const dlArgs = ['-o', path.join(outputPath, '%(title)s.%(ext)s'), '--newline', '--no-warnings', '--no-mtime', '--no-playlist', '--windows-filenames'];
                         if (ffmpegReady()) dlArgs.push('--ffmpeg-location', path.dirname(ffmpegBin));
