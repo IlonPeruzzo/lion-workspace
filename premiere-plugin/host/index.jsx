@@ -617,377 +617,125 @@ function addAnchorKeyframe() {
 }
 
 // ============================================
-// COPY / PASTE ATTRIBUTES (Lion Copy-Pasta)
-// Copia TODOS os atributos do clip selecionado (Motion, Opacity, Time Remap,
-// e efeitos aplicados) incluindo keyframes. Paste aplica os mesmos valores/
-// keyframes nos clips selecionados.
+// COPY / PASTE (Lion Copy-Pasta)
+// Paste: importa arquivo(s)/imagem do clipboard do SO pra timeline
+// Copy:  pega arquivo do clip selecionado e poe no clipboard do SO
 // ============================================
 
-// Caminho do arquivo "clipboard" persistente no temp
-function getLwClipFilePath() {
-    try {
-        var temp = Folder.temp.fsName;
-        // Normaliza separadores
-        var sep = ($.os && $.os.indexOf('Windows') >= 0) ? '\\' : '/';
-        return temp + sep + 'lion-workspace-clip-attrs.json';
-    } catch (e) {
-        return 'lion-workspace-clip-attrs.json';
-    }
-}
-
-// Converte value para algo JSON-safe (number, array de number, string)
-function _cpSanitizeValue(v) {
-    if (v === null || typeof v === 'undefined') return null;
-    if (typeof v === 'number') return v;
-    if (typeof v === 'string') return v;
-    if (typeof v === 'boolean') return v;
-    if (v instanceof Array) {
-        var out = [];
-        for (var i = 0; i < v.length; i++) {
-            var sv = _cpSanitizeValue(v[i]);
-            if (sv !== null) out.push(sv);
-        }
-        return out;
-    }
-    // Color object ou similar — tenta extrair campos conhecidos
-    try {
-        if (typeof v.red !== 'undefined') {
-            return { r: Number(v.red) || 0, g: Number(v.green) || 0, b: Number(v.blue) || 0, a: Number(v.alpha || 1) };
-        }
-    } catch (e) {}
-    return null;
-}
-
-// Serializa uma Property (valor estático + keyframes)
-function _cpSerializeProp(prop) {
-    try {
-        var entry = { n: String(prop.displayName || '') };
-        var isTv = false;
-        try { isTv = prop.isTimeVarying(); } catch (e) {}
-        if (isTv) {
-            var keys = null;
-            try { keys = prop.getKeys(); } catch (e) {}
-            if (keys && keys.length > 0) {
-                entry.kf = [];
-                for (var k = 0; k < keys.length; k++) {
-                    try {
-                        var t = keys[k];
-                        var v = prop.getValueAtKey(t);
-                        var san = _cpSanitizeValue(v);
-                        if (san !== null) {
-                            entry.kf.push({ s: Number(t.seconds), v: san });
-                        }
-                    } catch (ek) {}
-                }
-                if (entry.kf.length === 0) delete entry.kf;
-            }
-        }
-        if (!entry.kf) {
-            try {
-                var val = prop.getValue();
-                var sv = _cpSanitizeValue(val);
-                if (sv !== null) entry.v = sv;
-            } catch (e) {}
-        }
-        if (typeof entry.v === 'undefined' && !entry.kf) return null;
-        return entry;
-    } catch (e) { return null; }
-}
-
-// Serializa todos os componentes do clip
-function _cpSerializeClip(clip) {
-    var data = { components: [] };
-    try { data.clipName = clip.name || ''; } catch (e) {}
-    try {
-        for (var i = 0; i < clip.components.numItems; i++) {
-            var comp = clip.components[i];
-            var cEntry = { n: '', m: '', props: [] };
-            try { cEntry.n = String(comp.displayName || ''); } catch (e) {}
-            try { cEntry.m = String(comp.matchName || ''); } catch (e) {}
-            try {
-                for (var p = 0; p < comp.properties.numItems; p++) {
-                    var ser = _cpSerializeProp(comp.properties[p]);
-                    if (ser) cEntry.props.push(ser);
-                }
-            } catch (e) {}
-            if (cEntry.props.length > 0) data.components.push(cEntry);
-        }
-    } catch (e) {}
-    return data;
-}
-
-// Copia atributos do clip selecionado (primeiro, se múltiplos)
-function copyClipAttributes() {
+// Retorna o caminho do media do primeiro clip selecionado na timeline
+function cpGetSelectedClipMediaPath() {
     try {
         if (!app.project) return 'NO_PROJECT';
         var seq = app.project.activeSequence;
         if (!seq) return 'NO_SEQUENCE';
         var clips = getSelectedClips();
         if (clips.length === 0) return 'NO_SELECTION';
-
-        var data = _cpSerializeClip(clips[0]);
-        data.t = (new Date()).getTime();
-
-        var f = new File(getLwClipFilePath());
-        f.encoding = 'UTF-8';
-        if (!f.open('w')) return 'FILE_OPEN_FAIL';
-        f.write('{"t":' + data.t + ',"clipName":' + _cpJsonEscape(data.clipName || '') + ',"components":' + _cpStringifyComponents(data.components) + '}');
-        f.close();
-
-        var totalProps = 0;
-        for (var j = 0; j < data.components.length; j++) totalProps += data.components[j].props.length;
-        return 'OK:' + data.components.length + ':' + totalProps + ':' + (data.clipName || '');
-    } catch (e) { return 'ERROR: ' + e.toString(); }
-}
-
-// JSON manual (ExtendScript não tem JSON.stringify nativo confiável)
-function _cpJsonEscape(s) {
-    if (s === null || typeof s === 'undefined') return '""';
-    var str = String(s);
-    var out = '"';
-    for (var i = 0; i < str.length; i++) {
-        var c = str.charAt(i);
-        var code = str.charCodeAt(i);
-        if (c === '"') out += '\\"';
-        else if (c === '\\') out += '\\\\';
-        else if (c === '\n') out += '\\n';
-        else if (c === '\r') out += '\\r';
-        else if (c === '\t') out += '\\t';
-        else if (code < 32) out += '\\u' + ('0000' + code.toString(16)).slice(-4);
-        else out += c;
-    }
-    return out + '"';
-}
-
-function _cpStringifyValue(v) {
-    if (v === null || typeof v === 'undefined') return 'null';
-    if (typeof v === 'number') {
-        if (isNaN(v) || !isFinite(v)) return '0';
-        return String(v);
-    }
-    if (typeof v === 'boolean') return v ? 'true' : 'false';
-    if (typeof v === 'string') return _cpJsonEscape(v);
-    if (v instanceof Array) {
-        var parts = [];
-        for (var i = 0; i < v.length; i++) parts.push(_cpStringifyValue(v[i]));
-        return '[' + parts.join(',') + ']';
-    }
-    // Object (color)
-    var keys = [];
-    for (var k in v) {
-        if (v.hasOwnProperty(k)) keys.push(_cpJsonEscape(k) + ':' + _cpStringifyValue(v[k]));
-    }
-    return '{' + keys.join(',') + '}';
-}
-
-function _cpStringifyProp(p) {
-    var parts = ['"n":' + _cpJsonEscape(p.n)];
-    if (typeof p.v !== 'undefined') parts.push('"v":' + _cpStringifyValue(p.v));
-    if (p.kf && p.kf.length > 0) {
-        var kfParts = [];
-        for (var i = 0; i < p.kf.length; i++) {
-            kfParts.push('{"s":' + Number(p.kf[i].s) + ',"v":' + _cpStringifyValue(p.kf[i].v) + '}');
-        }
-        parts.push('"kf":[' + kfParts.join(',') + ']');
-    }
-    return '{' + parts.join(',') + '}';
-}
-
-function _cpStringifyComponents(comps) {
-    var arr = [];
-    for (var i = 0; i < comps.length; i++) {
-        var c = comps[i];
-        var propParts = [];
-        for (var p = 0; p < c.props.length; p++) propParts.push(_cpStringifyProp(c.props[p]));
-        arr.push('{"n":' + _cpJsonEscape(c.n) + ',"m":' + _cpJsonEscape(c.m) + ',"props":[' + propParts.join(',') + ']}');
-    }
-    return '[' + arr.join(',') + ']';
-}
-
-// Mini JSON parser simples (só o que a gente salva)
-function _cpParseJson(text) {
-    // ExtendScript tem eval — mas cuidado: só usar com conteúdo que a gente mesmo gravou
-    try {
-        // Remove BOM se houver
-        if (text.charCodeAt(0) === 0xFEFF) text = text.substring(1);
-        return eval('(' + text + ')');
-    } catch (e) { return null; }
-}
-
-function _cpApplyValue(prop, val) {
-    try {
-        // Desativa time-varying se houver
-        try { if (prop.isTimeVarying()) prop.setTimeVarying(false); } catch (e) {}
-        prop.setValue(val);
-        return true;
-    } catch (e) { return false; }
-}
-
-function _cpApplyKeyframes(prop, kfList) {
-    try {
-        // Limpa keyframes existentes
+        var clip = clips[0];
         try {
-            if (prop.isTimeVarying()) {
-                var existing = prop.getKeys();
-                for (var e2 = existing.length - 1; e2 >= 0; e2--) {
-                    try { prop.removeKey(existing[e2]); } catch (err) {}
-                }
-                try { prop.setTimeVarying(false); } catch (e3) {}
-            }
-        } catch (e) {}
-        try { prop.setTimeVarying(true); } catch (e) {}
-
-        var added = 0;
-        for (var k = 0; k < kfList.length; k++) {
-            try {
-                var t = new Time();
-                t.seconds = Number(kfList[k].s);
-                prop.addKey(t);
-                var t2 = new Time();
-                t2.seconds = Number(kfList[k].s);
-                prop.setValueAtKey(t2, kfList[k].v);
-                added++;
-            } catch (ek) {}
-        }
-        return added > 0;
-    } catch (e) { return false; }
+            var pi = clip.projectItem;
+            if (!pi) return 'NO_MEDIA';
+            var p = null;
+            try { p = pi.getMediaPath(); } catch(e) {}
+            if (!p) return 'NO_MEDIA';
+            var f = new File(p);
+            if (!f.exists) return 'FILE_NOT_FOUND';
+            return 'OK:' + f.fsName;
+        } catch (e) { return 'ERR:' + e.toString(); }
+    } catch (e) { return 'ERR:' + e.toString(); }
 }
 
-// Pasta: aplica atributos salvos nos clips selecionados
-// options = { motion: bool, opacity: bool, effects: bool, timeRemap: bool }
-function pasteClipAttributes(options) {
+// Procura item importado no projeto por caminho
+function _cpFindItemByPath(filePath) {
     try {
-        if (!app.project) return 'NO_PROJECT';
-        var seq = app.project.activeSequence;
-        if (!seq) return 'NO_SEQUENCE';
-        var clips = getSelectedClips();
-        if (clips.length === 0) return 'NO_SELECTION';
-
-        var f = new File(getLwClipFilePath());
-        if (!f.exists) return 'NO_CLIPBOARD';
-        f.encoding = 'UTF-8';
-        if (!f.open('r')) return 'FILE_READ_FAIL';
-        var text = f.read();
-        f.close();
-
-        var data = _cpParseJson(text);
-        if (!data || !data.components) return 'INVALID_DATA';
-
-        // Flags (default = todos true)
-        var oM = !(options && options.motion === false);
-        var oO = !(options && options.opacity === false);
-        var oE = !(options && options.effects === false);
-        var oT = !(options && options.timeRemap === false);
-
-        function _isMotion(comp) {
-            var n = (comp.n || '').toLowerCase();
-            var m = (comp.m || '').toLowerCase();
-            return n === 'motion' || n === 'movimento' || n === 'movement' ||
-                   m.indexOf('motion') >= 0;
-        }
-        function _isOpacity(comp) {
-            var n = (comp.n || '').toLowerCase();
-            var m = (comp.m || '').toLowerCase();
-            return n === 'opacity' || n === 'opacidade' ||
-                   m.indexOf('opacity') >= 0;
-        }
-        function _isTimeRemap(comp) {
-            var n = (comp.n || '').toLowerCase();
-            var m = (comp.m || '').toLowerCase();
-            return n.indexOf('time remap') >= 0 || n.indexOf('remapeamento') >= 0 ||
-                   m.indexOf('timeremap') >= 0 || m.indexOf('timewarp') >= 0;
-        }
-
-        var totalProps = 0;
-        var totalComps = 0;
-        var skippedComps = 0;
-
-        for (var ci = 0; ci < clips.length; ci++) {
-            var target = clips[ci];
+        var target = new File(filePath);
+        function search(bin) {
             try {
-                for (var sc = 0; sc < data.components.length; sc++) {
-                    var savedComp = data.components[sc];
-
-                    // Filtros por tipo de componente
-                    var isMotion = _isMotion(savedComp);
-                    var isOpacity = _isOpacity(savedComp);
-                    var isTimeRemap = _isTimeRemap(savedComp);
-                    var isEffect = !isMotion && !isOpacity && !isTimeRemap;
-
-                    if (isMotion && !oM) continue;
-                    if (isOpacity && !oO) continue;
-                    if (isTimeRemap && !oT) continue;
-                    if (isEffect && !oE) continue;
-
-                    // Procura componente correspondente no target
-                    var targetComp = null;
-                    for (var tc = 0; tc < target.components.numItems; tc++) {
+                for (var i = bin.children.numItems - 1; i >= 0; i--) {
+                    var child = bin.children[i];
+                    if (child.type === 2) {
+                        var found = search(child);
+                        if (found) return found;
+                    } else {
                         try {
-                            var tComp = target.components[tc];
-                            if (savedComp.m && String(tComp.matchName) === savedComp.m) { targetComp = tComp; break; }
+                            var p = child.getMediaPath ? child.getMediaPath() : '';
+                            if (p) {
+                                var cf = new File(p);
+                                if (cf.fsName === target.fsName) return child;
+                            }
                         } catch (e) {}
                     }
-                    if (!targetComp) {
-                        // fallback por displayName
-                        for (var tc2 = 0; tc2 < target.components.numItems; tc2++) {
-                            try {
-                                if (String(target.components[tc2].displayName) === savedComp.n) {
-                                    targetComp = target.components[tc2];
-                                    break;
-                                }
-                            } catch (e) {}
-                        }
-                    }
-                    if (!targetComp) { skippedComps++; continue; }
-
-                    totalComps++;
-                    // Aplica cada propriedade
-                    for (var sp = 0; sp < savedComp.props.length; sp++) {
-                        var saved = savedComp.props[sp];
-                        var tgtProp = null;
-                        for (var tp = 0; tp < targetComp.properties.numItems; tp++) {
-                            try {
-                                if (String(targetComp.properties[tp].displayName) === saved.n) {
-                                    tgtProp = targetComp.properties[tp];
-                                    break;
-                                }
-                            } catch (e) {}
-                        }
-                        if (!tgtProp) continue;
-
-                        if (saved.kf && saved.kf.length > 0) {
-                            if (_cpApplyKeyframes(tgtProp, saved.kf)) totalProps++;
-                        } else if (typeof saved.v !== 'undefined') {
-                            if (_cpApplyValue(tgtProp, saved.v)) totalProps++;
-                        }
-                    }
                 }
-            } catch (ec) {}
+            } catch (e) {}
+            return null;
+        }
+        return search(app.project.rootItem);
+    } catch (e) { return null; }
+}
+
+// Importa lista de arquivos pra Premiere, opcionalmente em um bin, opcionalmente insere no playhead
+// filePathsJson: string JSON de array de caminhos
+function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
+    try {
+        if (!app.project) return 'NO_PROJECT';
+        var filePaths = null;
+        try { filePaths = eval('(' + filePathsJson + ')'); } catch (e) { return 'PARSE_ERROR'; }
+        if (!filePaths || filePaths.length === 0) return 'NO_FILES';
+
+        var seq = app.project.activeSequence;
+        var targetBin = null;
+        if (useBin) {
+            try { targetBin = findOrCreateBin(binName || 'Copy-Pasta'); } catch (e) {}
         }
 
-        forceUIRefresh();
-        return 'OK:' + totalProps + ':' + totalComps + ':' + clips.length + ':' + skippedComps;
-    } catch (e) { return 'ERROR: ' + e.toString(); }
+        var imported = 0;
+        var inserted = 0;
+        var failed = 0;
+
+        for (var i = 0; i < filePaths.length; i++) {
+            var fp = filePaths[i];
+            try {
+                var f = new File(fp);
+                if (!f.exists) { failed++; continue; }
+
+                var okImport = false;
+                try {
+                    if (targetBin) {
+                        okImport = app.project.importFiles([fp], false, targetBin, false);
+                    } else {
+                        okImport = app.project.importFiles([fp]);
+                    }
+                } catch (e1) {}
+                // Fallback: import to root
+                if (!okImport) {
+                    try { app.project.importFiles([fp]); okImport = true; } catch (e2) {}
+                }
+
+                if (!okImport) { failed++; continue; }
+                imported++;
+                $.sleep(500);
+
+                // Insere no playhead
+                if (insertAtPlayhead && seq) {
+                    var clipItem = _cpFindItemByPath(fp);
+                    if (clipItem) {
+                        try {
+                            var insertTime = seq.getPlayerPosition();
+                            var videoTrack = seq.videoTracks[0];
+                            if (videoTrack) {
+                                videoTrack.insertClip(clipItem, insertTime);
+                                inserted++;
+                            }
+                        } catch (e) {}
+                    }
+                }
+            } catch (e) { failed++; }
+        }
+
+        return 'OK:' + imported + ':' + inserted + ':' + failed;
+    } catch (e) { return 'ERR:' + e.toString(); }
 }
 
-// Verifica se existe clipboard salvo (para mostrar status na UI)
-function getCopiedClipInfo() {
-    try {
-        var f = new File(getLwClipFilePath());
-        if (!f.exists) return 'EMPTY';
-        f.encoding = 'UTF-8';
-        if (!f.open('r')) return 'EMPTY';
-        var text = f.read();
-        f.close();
-        var data = _cpParseJson(text);
-        if (!data || !data.components) return 'EMPTY';
-        var totalProps = 0;
-        for (var i = 0; i < data.components.length; i++) totalProps += (data.components[i].props ? data.components[i].props.length : 0);
-        return 'OK:' + (data.clipName || '') + ':' + (data.t || 0) + ':' + data.components.length + ':' + totalProps;
-    } catch (e) { return 'EMPTY'; }
-}
-
-// ============================================
+// ============================================// ============================================
 
 // Insert a clip into the active sequence at the playhead position
 function insertClipToTimeline(filePath) {
