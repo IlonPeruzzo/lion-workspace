@@ -1676,7 +1676,7 @@
         document.getElementById('presetCustomBtn').classList.add('active');
     }
 
-    // Mouse interaction on canvas
+    // Mouse interaction on canvas — drag via document pra nao travar na borda
     (function(){
         var canvas=document.getElementById('curveCanvas');
         if(!canvas) return;
@@ -1690,12 +1690,30 @@
         }
         function toNorm(px){
             var gw=canvas.width-2*pad,gh=canvas.height-2*pad;
-            return{x:Math.max(-0.3,Math.min(1.3,(px.x-pad)/gw)),y:Math.max(-0.5,Math.min(1.5,1-(px.y-pad)/gh))};
+            // X: 0-1 (obrigatorio pra cubic-bezier valido), Y: -4 a 5 (permite overshoot extremo)
+            return{x:Math.max(0,Math.min(1,(px.x-pad)/gw)),y:Math.max(-4,Math.min(5,1-(px.y-pad)/gh))};
         }
         function dist(a,b){return Math.sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y))}
         function toCanvas(p){
             var gw=canvas.width-2*pad,gh=canvas.height-2*pad;
             return{x:pad+p.x*gw,y:pad+gh-p.y*gh};
+        }
+
+        function onDragMove(e){
+            if(!curveDragging) return;
+            e.preventDefault();
+            var mp=getMousePos(e);
+            var np=toNorm(mp);
+            if(curveDragging==='cp1'){curveCP1.x=np.x;curveCP1.y=np.y;}
+            else{curveCP2.x=np.x;curveCP2.y=np.y;}
+            curvePresetName='custom';
+            activateCustomBtn();
+            drawCurve();updateCoords();
+        }
+        function onDragEnd(){
+            curveDragging=null;
+            document.removeEventListener('mousemove',onDragMove);
+            document.removeEventListener('mouseup',onDragEnd);
         }
 
         canvas.addEventListener('mousedown',function(e){
@@ -1704,19 +1722,12 @@
             var c2=toCanvas(curveCP2);
             if(dist(mp,c1)<14) curveDragging='cp1';
             else if(dist(mp,c2)<14) curveDragging='cp2';
+            if(curveDragging){
+                e.preventDefault();
+                document.addEventListener('mousemove',onDragMove);
+                document.addEventListener('mouseup',onDragEnd);
+            }
         });
-        canvas.addEventListener('mousemove',function(e){
-            if(!curveDragging) return;
-            var mp=getMousePos(e);
-            var np=toNorm(mp);
-            if(curveDragging==='cp1'){curveCP1.x=np.x;curveCP1.y=np.y;}
-            else{curveCP2.x=np.x;curveCP2.y=np.y;}
-            curvePresetName='custom';
-            activateCustomBtn();
-            drawCurve();updateCoords();
-        });
-        canvas.addEventListener('mouseup',function(){curveDragging=null});
-        canvas.addEventListener('mouseleave',function(){curveDragging=null});
     })();
 
     // Initial draw
