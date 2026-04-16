@@ -577,7 +577,7 @@
                     <button class="yt-q active" id="cpSaveModeProj" onclick="cpSetSaveMode('project')" style="flex:1">Pasta do Projeto</button>
                     <button class="yt-q" id="cpSaveModeCustom" onclick="cpSetSaveMode('custom')" style="flex:1">Personalizada</button>
                 </div>
-                <div id="cpCustomPathRow" style="display:none;margin-top:4px;display:flex;gap:3px;align-items:center">
+                <div id="cpCustomPathRow" style="display:none;margin-top:4px;gap:3px;align-items:center">
                     <input type="text" id="cpCustomPathInput" placeholder="C:\\caminho\\..." style="flex:1;padding:4px 6px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.58rem;font-family:inherit;outline:none" oninput="cpSavePathChanged()">
                     <button class="yt-q" onclick="cpPickFolder()" style="padding:4px 6px;flex-shrink:0" title="Escolher pasta">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -2108,7 +2108,7 @@
         } catch(e) { return true; }
     }
 
-    // Exec PowerShell com script multi-linha encodado em base64 (evita hell de escaping)
+    // ─── Exec helpers (OS-specific) ───
     function cpExecPS(psScript, callback){
         var node = cpGetNode();
         if (!node) { callback('NODE_UNAVAILABLE', null); return; }
@@ -2125,11 +2125,56 @@
         } catch(e) { callback(e.message || e.toString(), null); }
     }
 
-    // Ler clipboard do Windows: procura arquivos ou imagem
-    // saveDir: diretorio onde salvar imagem (vazio = TEMP)
+    function cpExecShell(cmd, callback){
+        var node = cpGetNode();
+        if (!node) { callback('NODE_UNAVAILABLE', null); return; }
+        try {
+            var child_process = node.require('child_process');
+            child_process.exec(cmd,
+                { maxBuffer: 8 * 1024 * 1024 },
+                function(err, stdout, stderr) {
+                    callback(err, String(stdout || ''), String(stderr || ''));
+                }
+            );
+        } catch(e) { callback(e.message || e.toString(), null); }
+    }
+
+    // Escreve AppleScript pra temp file e executa (evita escaping hell)
+    function cpRunAppleScript(scriptLines, callback){
+        var node = cpGetNode();
+        if (!node) { callback('NODE_UNAVAILABLE', null); return; }
+        var fs = node.require('fs');
+        var tmpFile = '/tmp/lw-cb-' + Date.now() + '.applescript';
+        fs.writeFileSync(tmpFile, scriptLines.join('\n'), 'utf8');
+        cpExecShell('osascript "' + tmpFile + '"', function(err, stdout, stderr){
+            try { fs.unlinkSync(tmpFile); } catch(e){}
+            callback(err, stdout, stderr);
+        });
+    }
+
+    // ─── Clipboard Read (cross-platform) ───
     function cpReadClipboard(saveDir, callback){
-        // Compat: se chamado com (callback) apenas
         if (typeof saveDir === 'function') { callback = saveDir; saveDir = ''; }
+        if (cpIsWindows()) {
+            cpReadClipboardWin(saveDir, callback);
+        } else {
+            cpReadClipboardMac(saveDir, callback);
+        }
+    }
+
+    function cpParseClipboardOutput(stdout, callback){
+        var out = (stdout || '').trim();
+        if (out.indexOf('FILES:') === 0) {
+            var paths = out.substring(6).split('|').map(function(s){return s.trim();}).filter(Boolean);
+            callback({ type: 'files', paths: paths });
+        } else if (out.indexOf('IMAGE:') === 0) {
+            callback({ type: 'image', paths: [out.substring(6).trim()] });
+        } else {
+            callback({ type: 'empty' });
+        }
+    }
+
+    function cpReadClipboardWin(saveDir, callback){
         var saveDirEsc = String(saveDir || '').replace(/'/g, "''");
         var saveDirLine = saveDirEsc
             ? ("    $dir = '" + saveDirEsc + "'")
@@ -2162,20 +2207,69 @@
         ].join("\r\n");
         cpExecPS(ps, function(err, stdout){
             if (err) { callback({type:'error', msg: String(err.message || err)}); return; }
-            var out = (stdout || '').trim();
-            if (out.indexOf('FILES:') === 0) {
-                var paths = out.substring(6).split('|').map(function(s){return s.trim();}).filter(Boolean);
-                callback({ type: 'files', paths: paths });
-            } else if (out.indexOf('IMAGE:') === 0) {
-                callback({ type: 'image', paths: [out.substring(6).trim()] });
-            } else {
-                callback({ type: 'empty' });
-            }
+            cpParseClipboardOutput(stdout, callback);
         });
     }
 
-    // Colocar arquivo no clipboard do Windows
+    function cpReadClipboardMac(saveDir, callback){
+        var node = cpGetNode();
+        if (!node) { callback({type:'error', msg:'NODE_UNAVAILABLE'}); return; }
+        var fs = node.require('fs');
+        var dir = saveDir || '/tmp';
+        try { fs.mkdirSync(dir, {recursive: true}); } catch(e){}
+        var dirEsc = dir.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var scpt = [
+            'use framework "AppKit"',
+            'use framework "Foundation"',
+            'use scripting additions',
+            '',
+            "set pb to current application's NSPasteboard's generalPasteboard()",
+            '',
+            '-- Check for file URLs first',
+            "set urls to pb's readObjectsForClasses:{current application's NSURL} options:(missing value)",
+            'if urls is not missing value and (count of urls) > 0 then',
+            '    set filePaths to {}',
+            '    repeat with u in urls',
+            "        set end of filePaths to (u's |path|() as text)",
+            '    end repeat',
+            "    set AppleScript's text item delimiters to \"|\"",
+            '    return "FILES:" & (filePaths as text)',
+            'end if',
+            '',
+            '-- Check for image data (PNG or TIFF)',
+            "set imgTypes to {current application's NSPasteboardTypePNG, current application's NSPasteboardTypeTIFF}",
+            'repeat with t in imgTypes',
+            "    set imgData to pb's dataForType:t",
+            '    if imgData is not missing value then',
+            "        set img to current application's NSImage's alloc()'s initWithData:imgData",
+            "        set tiffData to img's TIFFRepresentation()",
+            "        set bitmap to current application's NSBitmapImageRep's imageRepWithData:tiffData",
+            "        set pngData to bitmap's representationUsingType:(current application's NSBitmapImageFileTypePNG) properties:(missing value)",
+            '        set ts to do shell script "date +%s"',
+            '        set outPath to "' + dirEsc + '/lw-clip-" & ts & ".png"',
+            "        pngData's writeToFile:outPath atomically:true",
+            '        return "IMAGE:" & outPath',
+            '    end if',
+            'end repeat',
+            '',
+            'return "EMPTY"'
+        ];
+        cpRunAppleScript(scpt, function(err, stdout){
+            if (err) { callback({type:'error', msg: String(err.message || err)}); return; }
+            cpParseClipboardOutput(stdout, callback);
+        });
+    }
+
+    // ─── Clipboard Write (cross-platform) ───
     function cpWriteFileToClipboard(filePath, callback){
+        if (cpIsWindows()) {
+            cpWriteFileToClipboardWin(filePath, callback);
+        } else {
+            cpWriteFileToClipboardMac(filePath, callback);
+        }
+    }
+
+    function cpWriteFileToClipboardWin(filePath, callback){
         var escaped = String(filePath).replace(/'/g, "''");
         var ps = [
             'Add-Type -AssemblyName System.Windows.Forms',
@@ -2189,6 +2283,23 @@
             '}'
         ].join("\r\n");
         cpExecPS(ps, function(err, stdout){
+            if (err) { callback('ERR:' + String(err.message || err)); return; }
+            callback((stdout || '').trim());
+        });
+    }
+
+    function cpWriteFileToClipboardMac(filePath, callback){
+        var pathEsc = String(filePath).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var scpt = [
+            'use framework "AppKit"',
+            'use scripting additions',
+            "set pb to current application's NSPasteboard's generalPasteboard()",
+            "pb's clearContents()",
+            "set fileURL to current application's NSURL's fileURLWithPath:\"" + pathEsc + "\"",
+            "pb's writeObjects:{fileURL}",
+            'return "OK"'
+        ];
+        cpRunAppleScript(scpt, function(err, stdout){
             if (err) { callback('ERR:' + String(err.message || err)); return; }
             callback((stdout || '').trim());
         });
