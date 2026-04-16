@@ -319,74 +319,92 @@ function importFileToProject(filePath) {
 }
 
 // ============================================
-// ANCHOR POINT PRO
-// Moves clip anchor point to a named position (tl, tc, tr, cl, cc, cr, bl, bc, br)
-// optionally compensating position so the clip stays visually in place.
+// ANCHOR POINT PRO v2
+// 25-point grid (5x5), target modes (clip/sequence), Vector Motion support
+// Uses normalized coordinates (0-1) for sub-anchor precision
 // ============================================
 
-// Find the Motion component of a clip
-function findMotionComponent(clip) {
+// Localized property name variants
+var _anchorNames = ['Anchor Point', 'Ponto de ancoragem', 'Ponto de Ancoragem', 'Anchor', 'Ankerpunkt', "Point d'ancrage", 'Punto de anclaje'];
+var _positionNames = ['Position', 'Posicao', 'Posicion'];
+var _scaleNames = ['Scale', 'Escala', 'Skalierung', 'Echelle'];
+var _motionNames = ['Motion', 'Movimento', 'Movement', 'Bewegung', 'Mouvement', 'Movimiento'];
+var _vectorMotionNames = ['Vector Motion', 'Movimento Vetorial', 'Vectorielle Bewegung'];
+
+// Find a named component on a clip
+function findComponentByName(clip, names) {
     try {
-        var components = clip.components;
-        // Search by localized name
-        for (var i = 0; i < components.numItems; i++) {
-            var comp = components[i];
-            var name = comp.displayName;
-            if (name === 'Motion' || name === 'Movimento' || name === 'Movement' ||
-                name === 'Bewegung' || name === 'Mouvement' || name === 'Movimiento') {
-                return comp;
+        var comps = clip.components;
+        for (var i = 0; i < comps.numItems; i++) {
+            var dn = comps[i].displayName;
+            for (var n = 0; n < names.length; n++) {
+                if (dn === names[n]) return comps[i];
             }
         }
-        // Fallback: check if component has Position-like property (index 1 is typically Motion)
-        // Index 0 is the clip media itself, NOT Motion
-        for (var i = 1; i < components.numItems; i++) {
+        // Partial match fallback (case-insensitive)
+        for (var i = 0; i < comps.numItems; i++) {
+            var dnLow = comps[i].displayName.toLowerCase();
+            for (var n = 0; n < names.length; n++) {
+                if (dnLow.indexOf(names[n].toLowerCase()) >= 0) return comps[i];
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
+// Find Motion component — first by name, then by property count heuristic
+function findMotionComponent(clip) {
+    var c = findComponentByName(clip, _motionNames);
+    if (c) return c;
+    try {
+        for (var i = 1; i < clip.components.numItems; i++) {
             try {
-                var props = components[i].properties;
-                if (props && props.numItems >= 4) {
-                    // Motion has Position, Scale, Rotation, Anchor Point — at least 4 props
-                    return components[i];
-                }
+                if (clip.components[i].properties && clip.components[i].properties.numItems >= 4)
+                    return clip.components[i];
             } catch (e2) {}
         }
     } catch (e) {}
     return null;
 }
 
-// Find a specific property in a component by matching name (case-insensitive partial match)
-function findMotionProperty(component, names) {
+// Find Vector Motion component
+function findVectorMotionComponent(clip) {
+    return findComponentByName(clip, _vectorMotionNames);
+}
+
+// Find a property in a component by name (exact first, then partial)
+function findProp(component, names) {
+    if (!component) return null;
     try {
-        // Exact match first
-        for (var p = 0; p < component.properties.numItems; p++) {
-            var prop = component.properties[p];
-            var pname = prop.displayName;
+        var props = component.properties;
+        // Exact match
+        for (var p = 0; p < props.numItems; p++) {
+            var pn = props[p].displayName;
             for (var n = 0; n < names.length; n++) {
-                if (pname === names[n]) return prop;
+                if (pn === names[n]) return props[p];
             }
         }
-        // Case-insensitive partial match fallback
-        for (var p = 0; p < component.properties.numItems; p++) {
-            var prop = component.properties[p];
-            var pnameLow = prop.displayName.toLowerCase();
+        // Partial match
+        for (var p = 0; p < props.numItems; p++) {
+            var pnL = props[p].displayName.toLowerCase();
             for (var n = 0; n < names.length; n++) {
-                if (pnameLow.indexOf(names[n].toLowerCase()) >= 0) return prop;
+                if (pnL.indexOf(names[n].toLowerCase()) >= 0) return props[p];
             }
         }
     } catch (e) {}
     return null;
 }
 
-// Get source clip dimensions using multiple methods
+// Get source clip pixel dimensions (multiple fallback methods)
 function getSourceDimensions(clip) {
     var pi = clip.projectItem;
     if (!pi) return null;
-
     // Method 1: getMetadataValue (Premiere 2020+)
     try {
         var vw = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoWidth'), 10);
         var vh = parseInt(pi.getMetadataValue('Column.Intrinsic.VideoHeight'), 10);
         if (vw > 0 && vh > 0) return { width: vw, height: vh };
     } catch (e) {}
-
     // Method 2: Parse project metadata XML
     try {
         var md = pi.getProjectMetadata();
@@ -394,23 +412,14 @@ function getSourceDimensions(clip) {
             var w = 0, h = 0;
             var wi = md.indexOf('Column.Intrinsic.VideoWidth');
             if (wi < 0) wi = md.indexOf('VideoWidth');
-            if (wi >= 0) {
-                var ws = md.indexOf('>', wi) + 1;
-                var we = md.indexOf('<', ws);
-                w = parseInt(md.substring(ws, we), 10);
-            }
+            if (wi >= 0) { var ws = md.indexOf('>', wi) + 1; w = parseInt(md.substring(ws, md.indexOf('<', ws)), 10); }
             var hi = md.indexOf('Column.Intrinsic.VideoHeight');
             if (hi < 0) hi = md.indexOf('VideoHeight');
-            if (hi >= 0) {
-                var hs = md.indexOf('>', hi) + 1;
-                var he = md.indexOf('<', hs);
-                h = parseInt(md.substring(hs, he), 10);
-            }
+            if (hi >= 0) { var hs = md.indexOf('>', hi) + 1; h = parseInt(md.substring(hs, md.indexOf('<', hs)), 10); }
             if (w > 0 && h > 0) return { width: w, height: h };
         }
     } catch (e) {}
-
-    // Method 3: XMP metadata
+    // Method 3: XMP
     try {
         var xmp = pi.getXMPMetadata();
         if (xmp) {
@@ -423,14 +432,66 @@ function getSourceDimensions(clip) {
             }
         }
     } catch (e) {}
-
     return null;
 }
 
-// Apply a named anchor position to selected clips
-// position: 'tl','tc','tr','cl','cc','cr','bl','bc','br'
-// compensate: boolean — if true, adjust Position to keep clip visually in place
-function setClipAnchorPoint(position, compensate) {
+// Apply anchor to a single component (Motion or Vector Motion)
+// anchorNorm: [0-1, 0-1], compensate: bool
+// Returns true if applied, false otherwise
+function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH) {
+    if (!comp) return false;
+    var anchorProp = findProp(comp, _anchorNames);
+    var posProp = findProp(comp, _positionNames);
+    var scaleProp = findProp(comp, _scaleNames);
+    if (!anchorProp || !posProp) return false;
+
+    var oldAnchor = anchorProp.getValue();
+    var oldPos = posProp.getValue();
+    if (!oldAnchor || !oldPos) return false;
+
+    // Source dimensions
+    var srcDims = getSourceDimensions(clip);
+    var srcW, srcH;
+    if (srcDims) { srcW = srcDims.width; srcH = srcDims.height; }
+    else if (oldAnchor[0] > 10 && oldAnchor[1] > 10) {
+        srcW = Math.round(oldAnchor[0] * 2);
+        srcH = Math.round(oldAnchor[1] * 2);
+    } else { srcW = seqW; srcH = seqH; }
+
+    // Target anchor in pixels
+    var newAx = anchorNorm[0] * srcW;
+    var newAy = anchorNorm[1] * srcH;
+
+    // Get current scale
+    var scale = 1;
+    try {
+        var sv = scaleProp ? scaleProp.getValue() : 100;
+        if (typeof sv === 'number') scale = sv / 100;
+        else if (sv instanceof Array) scale = sv[0] / 100;
+    } catch (e) {}
+
+    // Set anchor
+    anchorProp.setValue([newAx, newAy]);
+
+    // Compensate position
+    if (compensate) {
+        var dAx = newAx - oldAnchor[0];
+        var dAy = newAy - oldAnchor[1];
+        var newPx = oldPos[0] + (dAx * scale) / seqW;
+        var newPy = oldPos[1] + (dAy * scale) / seqH;
+        if (newPx > -5 && newPx < 6 && newPy > -5 && newPy < 6) {
+            posProp.setValue([newPx, newPy]);
+        }
+    }
+    return true;
+}
+
+// Main entry: set anchor with normalized coords
+// nx, ny: 0-1 normalized position
+// compensate: boolean
+// target: 'clip' or 'sequence'
+// useVector: boolean — also apply to Vector Motion
+function setClipAnchorPointPro(nx, ny, compensate, target, useVector) {
     try {
         if (!app.project) return 'NO_PROJECT';
         var seq = app.project.activeSequence;
@@ -444,90 +505,31 @@ function setClipAnchorPoint(position, compensate) {
         var totalApplied = 0;
         var debug = '';
 
+        // If target is 'sequence', anchor is relative to sequence dimensions
+        var anchorNorm = [nx, ny];
+
         for (var ci = 0; ci < clips.length; ci++) {
             var clip = clips[ci];
             try {
+                // Apply to standard Motion
                 var motion = findMotionComponent(clip);
-                if (!motion) continue;
+                var applied = _applyAnchorToComponent(motion, clip, anchorNorm, compensate, seqW, seqH);
 
-                var anchorProp = findMotionProperty(motion, [
-                    'Anchor Point', 'Ponto de ancoragem', 'Ponto de Ancoragem',
-                    'Anchor', 'Ankerpunkt', 'Point d\'ancrage', 'Punto de anclaje'
-                ]);
-                var positionProp = findMotionProperty(motion, [
-                    'Position', 'Posição', 'Posicao', 'Posición'
-                ]);
-                var scaleProp = findMotionProperty(motion, [
-                    'Scale', 'Escala', 'Skalierung', 'Échelle'
-                ]);
-
-                if (!anchorProp || !positionProp) continue;
-
-                var oldAnchor = anchorProp.getValue();
-                var oldPosition = positionProp.getValue();
-                if (!oldAnchor || !oldPosition) continue;
-
-                // Get REAL source dimensions (not sequence dimensions)
-                var srcDims = getSourceDimensions(clip);
-                var srcW, srcH;
-                if (srcDims) {
-                    srcW = srcDims.width;
-                    srcH = srcDims.height;
-                } else {
-                    // Last resort: if anchor looks like it's at center, derive from it
-                    // Otherwise use sequence dimensions
-                    if (oldAnchor[0] > 10 && oldAnchor[1] > 10) {
-                        srcW = Math.round(oldAnchor[0] * 2);
-                        srcH = Math.round(oldAnchor[1] * 2);
-                    } else {
-                        srcW = seqW;
-                        srcH = seqH;
+                // Apply to Vector Motion if requested
+                if (useVector) {
+                    var vMotion = findVectorMotionComponent(clip);
+                    if (vMotion) {
+                        _applyAnchorToComponent(vMotion, clip, anchorNorm, compensate, seqW, seqH);
                     }
                 }
 
-                // Calculate target anchor in source pixels
-                var newAx, newAy;
-                switch (position) {
-                    case 'tl': newAx = 0;       newAy = 0;       break;
-                    case 'tc': newAx = srcW / 2; newAy = 0;       break;
-                    case 'tr': newAx = srcW;     newAy = 0;       break;
-                    case 'cl': newAx = 0;        newAy = srcH / 2; break;
-                    case 'cc': newAx = srcW / 2; newAy = srcH / 2; break;
-                    case 'cr': newAx = srcW;     newAy = srcH / 2; break;
-                    case 'bl': newAx = 0;        newAy = srcH;     break;
-                    case 'bc': newAx = srcW / 2; newAy = srcH;     break;
-                    case 'br': newAx = srcW;     newAy = srcH;     break;
-                    default:   newAx = srcW / 2; newAy = srcH / 2;
+                if (applied) {
+                    var srcDims = getSourceDimensions(clip);
+                    var sw = srcDims ? srcDims.width : seqW;
+                    var sh = srcDims ? srcDims.height : seqH;
+                    debug = sw + 'x' + sh + ' [' + Math.round(nx * sw) + ',' + Math.round(ny * sh) + ']';
+                    totalApplied++;
                 }
-
-                // Get scale
-                var scale = 1;
-                try {
-                    var sv = scaleProp ? scaleProp.getValue() : 100;
-                    if (typeof sv === 'number') scale = sv / 100;
-                    else if (sv instanceof Array) scale = sv[0] / 100;
-                } catch (es) {}
-
-                // Set new anchor
-                anchorProp.setValue([newAx, newAy]);
-
-                // Compensate position so clip stays visually in place
-                if (compensate) {
-                    var dAx = newAx - oldAnchor[0];
-                    var dAy = newAy - oldAnchor[1];
-
-                    // Position is normalized (0-1). Default center = [0.5, 0.5]
-                    var newPx = oldPosition[0] + (dAx * scale) / seqW;
-                    var newPy = oldPosition[1] + (dAy * scale) / seqH;
-
-                    // Sanity check: position should stay in reasonable range (-2 to 3)
-                    if (newPx > -2 && newPx < 3 && newPy > -2 && newPy < 3) {
-                        positionProp.setValue([newPx, newPy]);
-                    }
-                }
-
-                debug = 'src=' + srcW + 'x' + srcH + ' anchor=[' + Math.round(newAx) + ',' + Math.round(newAy) + '] pos=[' + (oldPosition[0]).toFixed(3) + ',' + (oldPosition[1]).toFixed(3) + '] scale=' + scale.toFixed(2);
-                totalApplied++;
             } catch (ec) {
                 debug = 'err:' + ec.toString();
             }
@@ -537,12 +539,24 @@ function setClipAnchorPoint(position, compensate) {
         forceUIRefresh();
         return 'OK:' + totalApplied + '|' + debug;
     } catch (e) {
-        return 'ERROR: ' + e.toString();
+        return 'ERROR:' + e.toString();
     }
 }
 
-// Add a keyframe at the playhead for Position and Anchor Point (for animation work)
-function addAnchorKeyframe() {
+// Legacy compat — keep old function name working
+function setClipAnchorPoint(position, compensate) {
+    var map = {
+        'tl': [0, 0], 'tc': [0.5, 0], 'tr': [1, 0],
+        'cl': [0, 0.5], 'cc': [0.5, 0.5], 'cr': [1, 0.5],
+        'bl': [0, 1], 'bc': [0.5, 1], 'br': [1, 1]
+    };
+    var c = map[position] || [0.5, 0.5];
+    return setClipAnchorPointPro(c[0], c[1], compensate, 'clip', false);
+}
+
+// Add keyframe at playhead for Position + Anchor Point
+// useVector: boolean — also add keyframes on Vector Motion
+function addAnchorKeyframe(useVector) {
     try {
         if (!app.project) return 'NO_PROJECT';
         var seq = app.project.activeSequence;
@@ -557,54 +571,47 @@ function addAnchorKeyframe() {
         for (var ci = 0; ci < clips.length; ci++) {
             var clip = clips[ci];
             try {
-                var motion = findMotionComponent(clip);
-                if (!motion) continue;
-
-                var anchorProp = findMotionProperty(motion, [
-                    'Anchor Point', 'Ponto de ancoragem', 'Ponto de Ancoragem',
-                    'Anchor', 'Ankerpunkt', 'Point d\'ancrage', 'Punto de anclaje'
-                ]);
-                var positionProp = findMotionProperty(motion, [
-                    'Position', 'Posição', 'Posicao', 'Posición'
-                ]);
-
-                // Fallback: scan by value shape if name match failed
-                if (!positionProp || !anchorProp) {
-                    for (var fp = 0; fp < motion.properties.numItems; fp++) {
-                        try {
-                            var fprop = motion.properties[fp];
-                            var fname = fprop.displayName.toLowerCase();
-                            if (!anchorProp && (fname.indexOf('anchor') >= 0 || fname.indexOf('ancor') >= 0)) {
-                                anchorProp = fprop;
-                            } else if (!positionProp && fname.indexOf('posi') >= 0) {
-                                positionProp = fprop;
-                            }
-                        } catch (efp) {}
-                    }
-                }
-
-                // Calculate clip-relative time using seconds (avoids ticks precision issues)
+                // Calculate clip-relative time
                 var clipTime = new Time();
                 try {
-                    var relativeSecs = playhead.seconds - clip.start.seconds + clip.inPoint.seconds;
-                    clipTime.seconds = relativeSecs;
-                } catch (et) {
-                    clipTime = playhead;
+                    clipTime.seconds = playhead.seconds - clip.start.seconds + clip.inPoint.seconds;
+                } catch (et) { clipTime = playhead; }
+
+                var compsToProcess = [];
+                var motion = findMotionComponent(clip);
+                if (motion) compsToProcess.push(motion);
+                if (useVector) {
+                    var vm = findVectorMotionComponent(clip);
+                    if (vm) compsToProcess.push(vm);
                 }
 
-                // Enable time-varying if not already
-                try {
-                    if (anchorProp && !anchorProp.isTimeVarying()) anchorProp.setTimeVarying(true);
-                } catch (e) {}
-                try {
-                    if (positionProp && !positionProp.isTimeVarying()) positionProp.setTimeVarying(true);
-                } catch (e) {}
+                var didSomething = false;
+                for (var cpi = 0; cpi < compsToProcess.length; cpi++) {
+                    var comp = compsToProcess[cpi];
+                    var ancProp = findProp(comp, _anchorNames);
+                    var posProp = findProp(comp, _positionNames);
 
-                // Add keyframes at current time
-                try { if (anchorProp) anchorProp.addKey(clipTime); } catch (e) {}
-                try { if (positionProp) positionProp.addKey(clipTime); } catch (e) {}
+                    // Fallback scan
+                    if (!ancProp || !posProp) {
+                        for (var fp = 0; fp < comp.properties.numItems; fp++) {
+                            try {
+                                var fn = comp.properties[fp].displayName.toLowerCase();
+                                if (!ancProp && (fn.indexOf('anchor') >= 0 || fn.indexOf('ancor') >= 0))
+                                    ancProp = comp.properties[fp];
+                                else if (!posProp && fn.indexOf('posi') >= 0 && fn.indexOf('compo') < 0)
+                                    posProp = comp.properties[fp];
+                            } catch (e) {}
+                        }
+                    }
 
-                totalApplied++;
+                    // Enable time-varying + add keyframes
+                    try { if (ancProp && !ancProp.isTimeVarying()) ancProp.setTimeVarying(true); } catch (e) {}
+                    try { if (posProp && !posProp.isTimeVarying()) posProp.setTimeVarying(true); } catch (e) {}
+                    try { if (ancProp) { ancProp.addKey(clipTime); didSomething = true; } } catch (e) {}
+                    try { if (posProp) { posProp.addKey(clipTime); didSomething = true; } } catch (e) {}
+                }
+
+                if (didSomething) totalApplied++;
             } catch (ec) {}
         }
 
@@ -612,7 +619,7 @@ function addAnchorKeyframe() {
         forceUIRefresh();
         return 'OK:' + totalApplied;
     } catch (e) {
-        return 'ERROR: ' + e.toString();
+        return 'ERROR:' + e.toString();
     }
 }
 

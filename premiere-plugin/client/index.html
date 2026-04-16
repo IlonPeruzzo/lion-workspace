@@ -73,47 +73,32 @@
         .time-input{width:58px;padding:3px 5px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.6rem;font-family:inherit;outline:none;text-align:center}
         .time-input::placeholder{color:#555}
 
-        /* Anchor Point Grid */
-        .anchor-wrap{
-            position:relative;width:150px;height:90px;
-            background:rgba(255,255,255,.02);
-            border:2px dashed rgba(190,242,100,.2);
-            border-radius:6px;
-            margin:0 auto;
-            box-shadow:inset 0 0 20px rgba(190,242,100,.03);
-        }
-        .anchor-wrap::before{
-            content:'';position:absolute;left:50%;top:0;bottom:0;
-            width:1px;background:rgba(190,242,100,.08);
-        }
-        .anchor-wrap::after{
-            content:'';position:absolute;top:50%;left:0;right:0;
-            height:1px;background:rgba(190,242,100,.08);
-        }
-        .anchor-grid{
-            position:absolute;inset:0;
-            display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
-            padding:8px;gap:0;
-        }
-        .anchor-dot{
-            width:14px;height:14px;border-radius:50%;
-            border:2px solid rgba(190,242,100,.35);
-            background:rgba(20,20,20,.8);
-            cursor:pointer;padding:0;
-            transition:all .15s;
-            justify-self:center;align-self:center;
-            position:relative;z-index:2;
-        }
-        .anchor-dot:hover{background:rgba(190,242,100,.25);border-color:#bef264;transform:scale(1.25)}
-        .anchor-dot.active{background:#bef264;border-color:#bef264;box-shadow:0 0 0 3px rgba(190,242,100,.2),0 0 12px rgba(190,242,100,.4);transform:scale(1.15)}
-        .anchor-dot[data-pos="tl"]{justify-self:start;align-self:start}
-        .anchor-dot[data-pos="tc"]{justify-self:center;align-self:start}
-        .anchor-dot[data-pos="tr"]{justify-self:end;align-self:start}
-        .anchor-dot[data-pos="cl"]{justify-self:start;align-self:center}
-        .anchor-dot[data-pos="cr"]{justify-self:end;align-self:center}
-        .anchor-dot[data-pos="bl"]{justify-self:start;align-self:end}
-        .anchor-dot[data-pos="bc"]{justify-self:center;align-self:end}
-        .anchor-dot[data-pos="br"]{justify-self:end;align-self:end}
+        /* Anchor Point Pro — inspired by AnchorPro layout */
+        .anc-container{position:relative;margin:0 auto;aspect-ratio:1/1;width:85%}
+        .anc-bg{position:absolute;inset:0;z-index:0}
+        .anc-bg line{stroke:rgba(190,242,100,.12);stroke-width:1.5}
+        .anc-bg rect{fill:none;stroke:rgba(190,242,100,.15);stroke-width:1.5;rx:4}
+        .anc-grid{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;z-index:1;padding:2%}
+        .anc-row{display:flex;justify-content:space-between;align-items:center}
+        .anc-row.sub{width:87.5%;margin:0 auto}
+        .anc-pt{cursor:pointer;transition:transform .12s,filter .12s;padding:2%}
+        .anc-pt:hover{transform:scale(1.12);filter:brightness(1.3)}
+        .anc-pt:active{transform:scale(.95)}
+        .anc-pt.active svg path{d:path('M440-42v-80q-125-14-214.5-103.5T122-440H42v-80h80q14-125 103.5-214.5T440-838v-80h80v80q125 14 214.5 103.5T838-520h80v80h-80q-14 125-103.5 214.5T520-122v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Zm0-120q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47Zm0-80q33 0 56.5-23.5T560-480q0-33-23.5-56.5T480-560q-33 0-56.5 23.5T400-480q0 33 23.5 56.5T480-400Zm0-80Z')}
+        .anc-main{width:15%}
+        .anc-main svg{fill:#b5b2b2;width:100%}
+        .anc-main.active svg{fill:#bef264;filter:drop-shadow(0 0 6px rgba(190,242,100,.5))}
+        .anc-sub{width:8%}
+        .anc-sub svg{fill:#666;width:100%}
+        .anc-sub.active svg{fill:#bef264;filter:drop-shadow(0 0 4px rgba(190,242,100,.4))}
+        .anc-targets{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px}
+        .anc-tgt{width:26px;height:26px;border-radius:6px;border:1.5px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:4px}
+        .anc-tgt:hover{border-color:rgba(190,242,100,.25);background:rgba(190,242,100,.05)}
+        .anc-tgt.active{border-color:rgba(190,242,100,.5);background:rgba(190,242,100,.1)}
+        .anc-tgt svg{width:14px;height:14px}
+        .anc-opts{display:flex;align-items:center;gap:6px;margin-top:6px}
+        .anc-spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:80%;border:3px solid rgba(190,242,100,.15);border-top-color:#bef264;border-radius:50%;animation:anc-spin .8s linear infinite;z-index:10;display:none}
+        @keyframes anc-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
 
         .mini-check{
             width:12px;height:12px;border-radius:3px;
@@ -489,45 +474,91 @@
             <svg id="anchorChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="anchorBody">
-            <div style="font-size:.58rem;color:#666;margin-bottom:10px;text-align:center;line-height:1.4">
-                Move o ponto de ancoragem sem deslocar o clip visualmente
-            </div>
-
-            <!-- 3x3 Anchor Grid -->
-            <div class="anchor-wrap" id="anchorWrap">
-                <div class="anchor-grid">
-                    <button class="anchor-dot" data-pos="tl" onclick="setAnchor('tl')" title="Canto Superior Esquerdo"></button>
-                    <button class="anchor-dot" data-pos="tc" onclick="setAnchor('tc')" title="Centro Superior"></button>
-                    <button class="anchor-dot" data-pos="tr" onclick="setAnchor('tr')" title="Canto Superior Direito"></button>
-                    <button class="anchor-dot" data-pos="cl" onclick="setAnchor('cl')" title="Meio Esquerda"></button>
-                    <button class="anchor-dot active" data-pos="cc" onclick="setAnchor('cc')" title="Centro"></button>
-                    <button class="anchor-dot" data-pos="cr" onclick="setAnchor('cr')" title="Meio Direita"></button>
-                    <button class="anchor-dot" data-pos="bl" onclick="setAnchor('bl')" title="Canto Inferior Esquerdo"></button>
-                    <button class="anchor-dot" data-pos="bc" onclick="setAnchor('bc')" title="Centro Inferior"></button>
-                    <button class="anchor-dot" data-pos="br" onclick="setAnchor('br')" title="Canto Inferior Direito"></button>
+            <!-- 5x5 Anchor Grid (9 main + 16 sub) -->
+            <div class="anc-container" id="anchorWrap">
+                <div class="anc-spinner" id="ancSpinner"></div>
+                <!-- Background grid lines -->
+                <svg class="anc-bg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <rect x="1" y="1" width="98" height="98"/>
+                    <line x1="50" y1="0" x2="50" y2="100"/>
+                    <line x1="0" y1="50" x2="100" y2="50"/>
+                </svg>
+                <div class="anc-grid">
+                    <!-- Row 1: TL - sub - TC - sub - TR -->
+                    <div class="anc-row">
+                        <div class="anc-pt anc-main" data-pos="tl" onclick="setAnchor('tl')" title="Sup. Esquerdo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="tlc" onclick="setAnchor('tlc')" title="Entre TL e TC"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-main" data-pos="tc" onclick="setAnchor('tc')" title="Sup. Centro"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="tcr" onclick="setAnchor('tcr')" title="Entre TC e TR"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-main" data-pos="tr" onclick="setAnchor('tr')" title="Sup. Direito"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                    </div>
+                    <!-- Row 1.5: sub row (tl-cl, sub, tc-cc, sub, tr-cr) -->
+                    <div class="anc-row sub">
+                        <div class="anc-pt anc-sub" data-pos="tlcl" onclick="setAnchor('tlcl')" title="Entre TL e CL"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="q1" onclick="setAnchor('q1')" title="Quadrante 1"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="tccc" onclick="setAnchor('tccc')" title="Entre TC e CC"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="q2" onclick="setAnchor('q2')" title="Quadrante 2"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="trcr" onclick="setAnchor('trcr')" title="Entre TR e CR"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                    </div>
+                    <!-- Row 2: CL - sub - CC - sub - CR -->
+                    <div class="anc-row">
+                        <div class="anc-pt anc-main" data-pos="cl" onclick="setAnchor('cl')" title="Meio Esquerdo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="clcc" onclick="setAnchor('clcc')" title="Entre CL e CC"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-main active" data-pos="cc" onclick="setAnchor('cc')" title="Centro"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="cccr" onclick="setAnchor('cccr')" title="Entre CC e CR"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-main" data-pos="cr" onclick="setAnchor('cr')" title="Meio Direito"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                    </div>
+                    <!-- Row 2.5: sub row (cl-bl, sub, cc-bc, sub, cr-br) -->
+                    <div class="anc-row sub">
+                        <div class="anc-pt anc-sub" data-pos="clbl" onclick="setAnchor('clbl')" title="Entre CL e BL"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="q3" onclick="setAnchor('q3')" title="Quadrante 3"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="ccbc" onclick="setAnchor('ccbc')" title="Entre CC e BC"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="q4" onclick="setAnchor('q4')" title="Quadrante 4"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="crbr" onclick="setAnchor('crbr')" title="Entre CR e BR"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                    </div>
+                    <!-- Row 3: BL - sub - BC - sub - BR -->
+                    <div class="anc-row">
+                        <div class="anc-pt anc-main" data-pos="bl" onclick="setAnchor('bl')" title="Inf. Esquerdo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="blc" onclick="setAnchor('blc')" title="Entre BL e BC"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-main" data-pos="bc" onclick="setAnchor('bc')" title="Inf. Centro"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-sub" data-pos="bcr" onclick="setAnchor('bcr')" title="Entre BC e BR"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                        <div class="anc-pt anc-main" data-pos="br" onclick="setAnchor('br')" title="Inf. Direito"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M440-40v-80q-125-14-214.5-103.5T122-438H42v-80h80q14-125 103.5-214.5T440-836v-80h80v80q125 14 214.5 103.5T838-518h80v80h-80q-14 125-103.5 214.5T520-120v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Z"/></svg></div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Position labels -->
-            <div style="display:flex;justify-content:space-between;font-size:.5rem;color:#444;margin:4px 8px 10px;letter-spacing:.3px">
-                <span>←</span><span id="anchorLabel">Centro</span><span>→</span>
+            <!-- Position label & target mode -->
+            <div style="text-align:center;font-size:.58rem;color:#888;margin-top:4px" id="anchorLabel">Centro</div>
+
+            <!-- Target mode buttons -->
+            <div class="anc-targets">
+                <div class="anc-tgt active" id="ancTgtClip" onclick="setAnchorTarget('clip')" title="Relativo ao Clip">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                </div>
+                <div class="anc-tgt" id="ancTgtSeq" onclick="setAnchorTarget('sequence')" title="Relativo a Sequence">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                </div>
+                <div style="width:1px;height:16px;background:rgba(255,255,255,.08)"></div>
+                <div class="anc-tgt" id="ancTgtVector" onclick="toggleAnchorVector()" title="Usar Vector Motion (ambos Motion + Vector)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
             </div>
 
-            <!-- Compensate checkbox -->
-            <div style="display:flex;align-items:center;gap:6px;font-size:.62rem;color:#aaa;cursor:pointer;margin-bottom:8px;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.05)" onclick="toggleCompensate()">
+            <!-- Options row -->
+            <div style="display:flex;align-items:center;gap:6px;font-size:.58rem;color:#aaa;cursor:pointer;margin-top:8px;padding:5px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.05)" onclick="toggleCompensate()">
                 <div id="anchorCompCheck" class="mini-check active">
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <span>Manter clip no lugar (compensar posição)</span>
+                <span>Compensar posicao</span>
             </div>
 
-            <!-- Quick Keyframe Buttons -->
-            <div style="display:flex;gap:4px;margin-bottom:6px">
+            <!-- Action Buttons -->
+            <div style="display:flex;gap:4px;margin-top:6px">
                 <button class="yt-q" onclick="anchorKeyframe()" title="Adicionar keyframe no anchor point atual" style="flex:1;padding:5px">+ Keyframe</button>
-                <button class="yt-q" onclick="anchorReset()" title="Resetar para centro" style="flex:1;padding:5px">⟲ Reset</button>
+                <button class="yt-q" onclick="anchorReset()" title="Resetar para centro" style="flex:1;padding:5px">Reset</button>
             </div>
 
-            <div id="anchorMsg" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px"></div>
+            <div id="anchorMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
         </div>
     </div>
 
@@ -601,7 +632,7 @@
     <script src="CSInterface.js"></script>
     <script>
     var API='http://127.0.0.1:9847';
-    var PLUGIN_VERSION='1.3.29';
+    var PLUGIN_VERSION='1.3.30';
     var csInterface=new CSInterface();
     var selProj='';
     var lastCardsJSON='';
@@ -1935,15 +1966,30 @@
     loadSavedPresets();
 
     // ============================================
-    // ANCHOR POINT PRO
+    // ANCHOR POINT PRO (5x5 grid, target modes, vector motion)
     // ============================================
     var anchorCompensate=true;
     var anchorCurrent='cc';
+    var anchorTarget='clip'; // 'clip' or 'sequence'
+    var anchorVector=false;  // use Vector Motion too
+    var _ancBusy=false;
 
+    // Position labels — main 9 + 16 sub-anchors
     var anchorLabels={
-        'tl':'Sup. Esquerdo','tc':'Sup. Centro','tr':'Sup. Direito',
-        'cl':'Meio Esquerdo','cc':'Centro','cr':'Meio Direito',
-        'bl':'Inf. Esquerdo','bc':'Inf. Centro','br':'Inf. Direito'
+        'tl':'Sup. Esquerdo','tlc':'Sup. Esq-Centro','tc':'Sup. Centro','tcr':'Sup. Centro-Dir','tr':'Sup. Direito',
+        'tlcl':'Esq. Sup-Meio','q1':'Quadrante 1','tccc':'Sup-Centro','q2':'Quadrante 2','trcr':'Dir. Sup-Meio',
+        'cl':'Meio Esquerdo','clcc':'Esq-Centro','cc':'Centro','cccr':'Centro-Dir','cr':'Meio Direito',
+        'clbl':'Esq. Meio-Inf','q3':'Quadrante 3','ccbc':'Centro-Inf','q4':'Quadrante 4','crbr':'Dir. Meio-Inf',
+        'bl':'Inf. Esquerdo','blc':'Inf. Esq-Centro','bc':'Inf. Centro','bcr':'Inf. Centro-Dir','br':'Inf. Direito'
+    };
+
+    // Map each position name to normalized [x, y] where (0,0)=top-left, (1,1)=bottom-right
+    var anchorPosMap={
+        'tl':[0,0],'tlc':[.25,0],'tc':[.5,0],'tcr':[.75,0],'tr':[1,0],
+        'tlcl':[0,.25],'q1':[.25,.25],'tccc':[.5,.25],'q2':[.75,.25],'trcr':[1,.25],
+        'cl':[0,.5],'clcc':[.25,.5],'cc':[.5,.5],'cccr':[.75,.5],'cr':[1,.5],
+        'clbl':[0,.75],'q3':[.25,.75],'ccbc':[.5,.75],'q4':[.75,.75],'crbr':[1,.75],
+        'bl':[0,1],'blc':[.25,1],'bc':[.5,1],'bcr':[.75,1],'br':[1,1]
     };
 
     function toggleCompensate(){
@@ -1955,6 +2001,17 @@
         }
     }
 
+    function setAnchorTarget(t){
+        anchorTarget=t;
+        document.getElementById('ancTgtClip').className='anc-tgt'+(t==='clip'?' active':'');
+        document.getElementById('ancTgtSeq').className='anc-tgt'+(t==='sequence'?' active':'');
+    }
+
+    function toggleAnchorVector(){
+        anchorVector=!anchorVector;
+        document.getElementById('ancTgtVector').className='anc-tgt'+(anchorVector?' active':'');
+    }
+
     function showAnchorMsg(msg,color){
         var el=document.getElementById('anchorMsg');
         if(!el) return;
@@ -1962,43 +2019,60 @@
         el.style.color=color||'#555';
         setTimeout(function(){
             if(el.textContent===msg) el.textContent='';
-        },3500);
+        },4000);
+    }
+
+    function ancSetSpinner(show){
+        var sp=document.getElementById('ancSpinner');
+        if(sp) sp.style.display=show?'block':'none';
     }
 
     function setAnchor(pos){
+        if(_ancBusy) return;
         anchorCurrent=pos;
-        // Highlight active dot
-        var dots=document.querySelectorAll('.anchor-dot');
-        for(var i=0;i<dots.length;i++){
-            if(dots[i].getAttribute('data-pos')===pos) dots[i].classList.add('active');
-            else dots[i].classList.remove('active');
+
+        // Highlight active point
+        var pts=document.querySelectorAll('.anc-pt');
+        for(var i=0;i<pts.length;i++){
+            if(pts[i].getAttribute('data-pos')===pos) pts[i].classList.add('active');
+            else pts[i].classList.remove('active');
         }
+
         // Update label
         var lblEl=document.getElementById('anchorLabel');
-        if(lblEl) lblEl.textContent=anchorLabels[pos]||'-';
+        if(lblEl) lblEl.textContent=anchorLabels[pos]||pos;
 
         if(!csInterface){
             showAnchorMsg('CEP indisponivel','#f43f5e');
             return;
         }
 
+        // Get normalized coords from map
+        var coords=anchorPosMap[pos];
+        if(!coords){showAnchorMsg('Posicao invalida','#f43f5e');return;}
+
+        _ancBusy=true;
+        ancSetSpinner(true);
         showAnchorMsg('Aplicando...','#f59e0b');
-        var script='setClipAnchorPoint("'+pos+'",'+(anchorCompensate?'true':'false')+')';
+
+        var script='setClipAnchorPointPro('+coords[0]+','+coords[1]+','+(anchorCompensate?'true':'false')+',"'+anchorTarget+'",'+(anchorVector?'true':'false')+')';
         csInterface.evalScript(script,function(result){
+            _ancBusy=false;
+            ancSetSpinner(false);
             var r=String(result||'');
-            var debugInfo=r.indexOf('|')>=0?r.substring(r.indexOf('|')+1):'';
-            var mainResult=r.indexOf('|')>=0?r.substring(0,r.indexOf('|')):r;
+            var pipe=r.indexOf('|');
+            var debugInfo=pipe>=0?r.substring(pipe+1):'';
+            var mainResult=pipe>=0?r.substring(0,pipe):r;
             if(mainResult.indexOf('OK')===0){
-                var parts=mainResult.split(':');
-                var n=parts[1]||'1';
-                showAnchorMsg('Anchor aplicado ('+debugInfo+')','#22c55e');
-            } else if(mainResult.indexOf('NO_SEQUENCE')===0){
-                showAnchorMsg('Nenhuma sequence aberta','#f43f5e');
-            } else if(mainResult.indexOf('NO_SELECTION')===0){
-                showAnchorMsg('Selecione um clip na timeline','#f43f5e');
+                var n=mainResult.split(':')[1]||'1';
+                showAnchorMsg(n+' clip'+(n>1?'s':'')+' aplicado'+(n>1?'s':''),'#22c55e');
+            } else if(mainResult==='NO_SEQUENCE'){
+                showAnchorMsg('Abra uma sequence','#f43f5e');
+            } else if(mainResult==='NO_SELECTION'){
+                showAnchorMsg('Selecione clips na timeline','#f43f5e');
             } else if(mainResult.indexOf('NO_APPLIED')===0){
-                showAnchorMsg('Sem Motion. '+debugInfo,'#f43f5e');
-            } else if(mainResult.indexOf('NO_PROJECT')===0){
+                showAnchorMsg('Erro: '+debugInfo,'#f43f5e');
+            } else if(mainResult==='NO_PROJECT'){
                 showAnchorMsg('Nenhum projeto aberto','#f43f5e');
             } else {
                 showAnchorMsg(r||'Erro ao aplicar','#f43f5e');
@@ -2015,12 +2089,16 @@
             showAnchorMsg('CEP indisponivel','#f43f5e');
             return;
         }
+        _ancBusy=true;
+        ancSetSpinner(true);
         showAnchorMsg('Adicionando keyframe...','#f59e0b');
-        csInterface.evalScript('addAnchorKeyframe()',function(result){
+        csInterface.evalScript('addAnchorKeyframe('+(anchorVector?'true':'false')+')',function(result){
+            _ancBusy=false;
+            ancSetSpinner(false);
             var r=String(result||'');
             if(r.indexOf('OK')===0){
-                var parts=r.split(':');
-                showAnchorMsg('Keyframe adicionado ('+(parts[1]||'1')+' clips)','#22c55e');
+                var n=r.split(':')[1]||'1';
+                showAnchorMsg('Keyframe em '+n+' clip'+(n>1?'s':''),'#22c55e');
             } else if(r==='NO_SELECTION'){
                 showAnchorMsg('Selecione um clip','#f43f5e');
             } else {
