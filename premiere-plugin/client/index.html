@@ -2135,14 +2135,14 @@
         } catch(e) { callback(e.message || e.toString(), null); }
     }
 
-    // Escreve AppleScript pra temp file e executa (evita escaping hell)
-    function cpRunAppleScript(scriptLines, callback){
+    // Executa JXA (JavaScript for Automation) via osascript — muito mais robusto que AppleScript pra ObjC bridge
+    function cpRunJXA(scriptLines, callback){
         var node = cpGetNode();
         if (!node) { callback('NODE_UNAVAILABLE', null); return; }
         var fs = node.require('fs');
-        var tmpFile = '/tmp/lw-cb-' + Date.now() + '.applescript';
+        var tmpFile = '/tmp/lw-cb-' + Date.now() + '.js';
         fs.writeFileSync(tmpFile, scriptLines.join('\n'), 'utf8');
-        cpExecShell('osascript "' + tmpFile + '"', function(err, stdout, stderr){
+        cpExecShell('osascript -l JavaScript "' + tmpFile + '"', function(err, stdout, stderr){
             try { fs.unlinkSync(tmpFile); } catch(e){}
             callback(err, stdout, stderr);
         });
@@ -2214,43 +2214,40 @@
         var dir = saveDir || '/tmp';
         try { fs.mkdirSync(dir, {recursive: true}); } catch(e){}
         var dirEsc = dir.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        var scpt = [
-            'use framework "AppKit"',
-            'use framework "Foundation"',
-            'use scripting additions',
-            '',
-            "set pb to current application's NSPasteboard's generalPasteboard()",
-            '',
-            '-- Check for file URLs first',
-            "set urls to pb's readObjectsForClasses:{current application's NSURL} options:(missing value)",
-            'if urls is not missing value and (count of urls) > 0 then',
-            '    set filePaths to {}',
-            '    repeat with u in urls',
-            "        set end of filePaths to (u's |path|() as text)",
-            '    end repeat',
-            "    set AppleScript's text item delimiters to \"|\"",
-            '    return "FILES:" & (filePaths as text)',
-            'end if',
-            '',
-            '-- Check for image data (PNG or TIFF)',
-            "set imgTypes to {current application's NSPasteboardTypePNG, current application's NSPasteboardTypeTIFF}",
-            'repeat with t in imgTypes',
-            "    set imgData to pb's dataForType:t",
-            '    if imgData is not missing value then',
-            "        set img to current application's NSImage's alloc()'s initWithData:imgData",
-            "        set tiffData to img's TIFFRepresentation()",
-            "        set bitmap to current application's NSBitmapImageRep's imageRepWithData:tiffData",
-            "        set pngData to bitmap's representationUsingType:(current application's NSBitmapImageFileTypePNG) properties:(missing value)",
-            '        set ts to do shell script "date +%s"',
-            '        set outPath to "' + dirEsc + '/lw-clip-" & ts & ".png"',
-            "        pngData's writeToFile:outPath atomically:true",
-            '        return "IMAGE:" & outPath',
-            '    end if',
-            'end repeat',
-            '',
-            'return "EMPTY"'
+        var jxa = [
+            'ObjC.import("AppKit");',
+            'ObjC.import("Foundation");',
+            '(function(){',
+            '    var pb = $.NSPasteboard.generalPasteboard;',
+            '    try {',
+            '        var urls = pb.readObjectsForClassesOptions([$.NSURL], null);',
+            '        if (urls && urls.count > 0) {',
+            '            var paths = [];',
+            '            for (var i = 0; i < urls.count; i++) {',
+            '                var p = ObjC.unwrap(urls.objectAtIndex(i).path);',
+            '                if (p) paths.push(p);',
+            '            }',
+            '            if (paths.length > 0) return "FILES:" + paths.join("|");',
+            '        }',
+            '    } catch(e) {}',
+            '    try {',
+            '        var imgData = pb.dataForType($.NSPasteboardTypePNG);',
+            '        if (!imgData || imgData.length == 0) {',
+            '            imgData = pb.dataForType($.NSPasteboardTypeTIFF);',
+            '        }',
+            '        if (imgData && imgData.length > 0) {',
+            '            var bmp = $.NSBitmapImageRep.imageRepWithData(imgData);',
+            '            var png = bmp.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, null);',
+            '            var ts = Math.floor(Date.now()/1000);',
+            '            var outPath = "' + dirEsc + '/lw-clip-" + ts + ".png";',
+            '            png.writeToFileAtomically(outPath, true);',
+            '            return "IMAGE:" + outPath;',
+            '        }',
+            '    } catch(e) {}',
+            '    return "EMPTY";',
+            '})()'
         ];
-        cpRunAppleScript(scpt, function(err, stdout){
+        cpRunJXA(jxa, function(err, stdout){
             if (err) { callback({type:'error', msg: String(err.message || err)}); return; }
             cpParseClipboardOutput(stdout, callback);
         });
@@ -2286,16 +2283,17 @@
 
     function cpWriteFileToClipboardMac(filePath, callback){
         var pathEsc = String(filePath).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        var scpt = [
-            'use framework "AppKit"',
-            'use scripting additions',
-            "set pb to current application's NSPasteboard's generalPasteboard()",
-            "pb's clearContents()",
-            "set fileURL to current application's NSURL's fileURLWithPath:\"" + pathEsc + "\"",
-            "pb's writeObjects:{fileURL}",
-            'return "OK"'
+        var jxa = [
+            'ObjC.import("AppKit");',
+            '(function(){',
+            '    var pb = $.NSPasteboard.generalPasteboard;',
+            '    pb.clearContents;',
+            '    var url = $.NSURL.fileURLWithPath("' + pathEsc + '");',
+            '    pb.writeObjects($.NSArray.arrayWithObject(url));',
+            '    return "OK";',
+            '})()'
         ];
-        cpRunAppleScript(scpt, function(err, stdout){
+        cpRunJXA(jxa, function(err, stdout){
             if (err) { callback('ERR:' + String(err.message || err)); return; }
             callback((stdout || '').trim());
         });
