@@ -1092,6 +1092,78 @@ function autoCutGetClipInfo() {
     }
 }
 
+// ─── Backup sequence before destructive operations ───
+// Tries seq.clone() (Premiere 2024+); falls back to project save
+function autoCutBackupSequence() {
+    try {
+        if (!app.project) return 'NO_PROJECT';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        var origName = seq.name;
+        var stamp = new Date();
+        var tag = stamp.getFullYear() + '-' + (stamp.getMonth()+1) + '-' + stamp.getDate() +
+                  '_' + stamp.getHours() + 'h' + stamp.getMinutes();
+        var backupName = origName + ' [BACKUP ' + tag + ']';
+
+        // Try Sequence.clone() (newer Premiere versions)
+        try {
+            if (typeof seq.clone === 'function') {
+                var cloned = seq.clone();
+                if (cloned) {
+                    try { cloned.name = backupName; } catch(e) {}
+                    // Return focus to original sequence
+                    try { app.project.activeSequence = seq; } catch(e) {}
+                    return 'CLONED:' + backupName;
+                }
+            }
+        } catch(eClone) {}
+
+        // Fallback 1: save project to disk (if it has been saved before)
+        try {
+            if (app.project.path && app.project.path.length > 0) {
+                app.project.save();
+                return 'SAVED';
+            }
+        } catch(eSave) {}
+
+        // Fallback 2: at least add a sequence marker as a visual anchor
+        try {
+            var markers = seq.markers;
+            if (markers && markers.createMarker) {
+                var m = markers.createMarker(0);
+                try { m.name = 'Pre-AutoCut: ' + tag; } catch(e) {}
+                try { m.comments = 'AutoCut iniciou aqui. Use Ctrl+Z pra desfazer.'; } catch(e) {}
+                return 'MARKER';
+            }
+        } catch(eMark) {}
+
+        return 'NONE';
+    } catch (e) {
+        return 'ERR:' + e.toString();
+    }
+}
+
+// ─── Extract helper: use QE sequence.extract() to remove range + ripple ───
+// Returns true if clip count changed (silence removed)
+function _doExtractRange(startTick, endTick, qeSeq, stdTrack) {
+    if (!qeSeq) return false;
+    var before = stdTrack.clips.numItems;
+    var startStr = String(Math.round(startTick));
+    var endStr = String(Math.round(endTick));
+    try {
+        qeSeq.setInPoint(startStr);
+        $.sleep(50);
+        qeSeq.setOutPoint(endStr);
+        $.sleep(50);
+        if (typeof qeSeq.extract === 'function') {
+            qeSeq.extract();
+            $.sleep(300);
+            return stdTrack.clips.numItems !== before;
+        }
+    } catch(e) {}
+    return false;
+}
+
 // ─── Razor helper: tries multiple methods, returns true if clip count increased ───
 function _doRazorAt(tickVal, targetTrack, qeTrack, qeSeq, seq) {
     var nb = targetTrack.clips.numItems;
@@ -1251,22 +1323,45 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
         var tol = Math.round(tps * 0.05);
         var origPlayhead = seq.getPlayerPosition().ticks;
 
-        // ── Diagnostic on first cut: detect which razor method works ──
-        var razorMethod = '';
+        // Unlock target track so razor/extract can operate on it
+        try { if (typeof targetTrack.setLocked === 'function') targetTrack.setLocked(false); } catch(e) {}
+
+        // ── Save current in/out points so we can restore them after extract ──
+        var origInTicks = null, origOutTicks = null;
+        try { origInTicks = seq.getInPoint ? seq.getInPoint().ticks : null; } catch(e) {}
+        try { origOutTicks = seq.getOutPoint ? seq.getOutPoint().ticks : null; } catch(e) {}
+
+        // Detect if extract works on first cut; if yes, use it for all
+        var useExtract = null; // null = undetermined, true/false after first test
 
         for (var ci = 0; ci < cutPoints.length; ci++) {
             var cp = cutPoints[ci];
             try {
                 var numBefore = targetTrack.clips.numItems;
+                var method = '';
 
-                // Razor at END then START
+                // ── TRY 1: qeSeq.extract() — cleanest, removes range + ripples in one shot ──
+                if (mode === 'remove' && useExtract !== false && qeSeq) {
+                    if (_doExtractRange(cp.start, cp.end, qeSeq, targetTrack)) {
+                        method = 'extract';
+                        useExtract = true;
+                        removedDuration += (cp.end - cp.start) / tps;
+                        cutsApplied++;
+                        if (ci === 0) dbg.push('m=extract');
+                        continue;
+                    } else if (ci === 0) {
+                        useExtract = false; // first try failed, don't attempt again
+                        dbg.push('extract:fail');
+                    }
+                }
+
+                // ── TRY 2: Razor at both points + remove middle clip (fallback) ──
                 var rEnd = _doRazorAt(cp.end, targetTrack, qeTrack, qeSeq, seq);
                 var rStart = _doRazorAt(cp.start, targetTrack, qeTrack, qeSeq, seq);
                 var numAfter = targetTrack.clips.numItems;
 
                 if (ci === 0) {
-                    razorMethod = rEnd + '/' + rStart;
-                    dbg.push('m=' + razorMethod);
+                    dbg.push('razor=' + rEnd + '/' + rStart);
                     dbg.push('n=' + numBefore + '>' + numAfter);
                 }
 
@@ -1276,14 +1371,9 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
                         dbg.push('tps=' + tps);
                         dbg.push('cp=' + (Math.round(cp.start / tps * 100) / 100) + '-' + (Math.round(cp.end / tps * 100) / 100) + 's');
                         dbg.push('clip=' + (Math.round(clipStartTicks / tps * 100) / 100) + '-' + (Math.round(clipEndTicks / tps * 100) / 100) + 's');
-                        dbg.push('inPt=' + (Math.round(clipInTicks / tps * 100) / 100) + 's');
                         dbg.push('qeT=' + (qeTrack ? typeof qeTrack.razor : 'null'));
                         dbg.push('qeS=' + (qeSeq ? typeof qeSeq.razor : 'null'));
-                        // Dump first 3 clips on track
-                        for (var dd = 0; dd < Math.min(targetTrack.clips.numItems, 3); dd++) {
-                            var dc = targetTrack.clips[dd];
-                            dbg.push('t' + dd + '=' + dc.start.ticks + '-' + dc.end.ticks);
-                        }
+                        dbg.push('qeX=' + (qeSeq ? typeof qeSeq.extract : 'null'));
                     }
                     continue;
                 }
@@ -1305,9 +1395,6 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
                     }
                     if (!found && ci < 3) {
                         dbg.push('miss' + ci + ':w=' + Math.round(cp.start) + '-' + Math.round(cp.end));
-                        for (var xx = 0; xx < Math.min(targetTrack.clips.numItems, 5); xx++) {
-                            dbg.push('p' + xx + '=' + targetTrack.clips[xx].start.ticks + '-' + targetTrack.clips[xx].end.ticks);
-                        }
                     }
                 } else {
                     cutsApplied++;
@@ -1317,6 +1404,10 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
                 dbg.push('e' + ci + ':' + eCut.toString().substring(0, 30));
             }
         }
+
+        // Restore original in/out points (extract sets them)
+        try { if (origInTicks && seq.setInPoint) seq.setInPoint(origInTicks); } catch(e) {}
+        try { if (origOutTicks && seq.setOutPoint) seq.setOutPoint(origOutTicks); } catch(e) {}
 
         // Restore playhead
         try { seq.setPlayerPosition(origPlayhead); } catch (e) {}

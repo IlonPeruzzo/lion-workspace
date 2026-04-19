@@ -699,21 +699,22 @@
 
             <div id="acStatus" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px"></div>
 
-            <!-- API Key Config (hidden toggle) -->
-            <div style="margin-top:4px;display:flex;justify-content:space-between;align-items:center">
-                <span id="acAiKeyStatus" style="font-size:.42rem;color:#444"></span>
-                <span style="font-size:.45rem;color:#555;cursor:pointer" onclick="acToggleAiConfig()">
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" style="vertical-align:middle;margin-right:2px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    API Key
-                </span>
+            <!-- API Key Config -->
+            <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:6px">
+                <span id="acAiKeyStatus" style="font-size:.52rem;color:#a78bfa;font-weight:600"></span>
+                <button class="yt-q" onclick="acToggleAiConfig()" style="font-size:.56rem;padding:3px 8px;border-color:rgba(167,139,250,.3);color:#a78bfa;cursor:pointer;display:flex;align-items:center;gap:4px">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span id="acAiKeyBtnTxt">Configurar chave OpenAI</span>
+                </button>
             </div>
-            <div id="acAiConfig" style="display:none;margin-top:4px;padding:6px;background:rgba(167,139,250,.03);border:1px solid rgba(167,139,250,.08);border-radius:6px">
-                <div style="font-size:.5rem;color:#888;margin-bottom:4px">Chave da API OpenAI (necessária para AI Words)</div>
-                <div style="display:flex;gap:3px">
-                    <input type="password" id="acAiKeyInput" placeholder="sk-proj-..." style="flex:1;padding:4px 6px;border-radius:4px;border:1px solid rgba(167,139,250,.15);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.52rem;font-family:monospace;outline:none">
-                    <button class="yt-q" onclick="acSaveAiKey()" style="padding:4px 8px;font-size:.5rem;border-color:rgba(167,139,250,.2)">Salvar</button>
+            <div id="acAiConfig" style="display:none;margin-top:6px;padding:8px;background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:6px">
+                <div style="font-size:.58rem;color:#d4d4d4;margin-bottom:6px;font-weight:600">🔑 Chave da API OpenAI</div>
+                <div style="font-size:.5rem;color:#888;margin-bottom:5px;line-height:1.4">Pegue a sua em <span style="color:#a78bfa">platform.openai.com/api-keys</span> · usada só pra transcrever áudio via Whisper</div>
+                <div style="display:flex;gap:4px">
+                    <input type="password" id="acAiKeyInput" placeholder="Cole aqui: sk-proj-..." onkeydown="if(event.key==='Enter')acSaveAiKey()" style="flex:1;padding:6px 8px;border-radius:5px;border:1px solid rgba(167,139,250,.3);background:rgba(255,255,255,.05);color:#f5f5f5;font-size:.62rem;font-family:monospace;outline:none">
+                    <button class="yt-q" onclick="acSaveAiKey()" style="padding:6px 12px;font-size:.6rem;border-color:rgba(167,139,250,.4);color:#a78bfa;font-weight:600">Salvar</button>
                 </div>
-                <div style="font-size:.42rem;color:#555;margin-top:3px">A chave fica salva localmente no app. Usada para transcrever via Whisper.</div>
+                <div style="font-size:.48rem;color:#555;margin-top:5px">A chave fica salva localmente. Não é enviada pra lugar nenhum além da OpenAI.</div>
             </div>
         </div>
     </div>
@@ -3223,6 +3224,32 @@
     function acAiAnalyze() {
         if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
 
+        // Check if API key is configured first — if not, expand config inline and focus input
+        var savedKey = localStorage.getItem('lw_openai_key') || '';
+        if (!savedKey) {
+            // Also check server-side config (in case key is stored in app)
+            LWHttp.post(API + '/autocut/ai-key', {}, { retries: 0, timeout: 3000 }, function(err, st, body) {
+                var hasKey = false;
+                try { var r = JSON.parse(body || '{}'); hasKey = !!r.configured; } catch(e) {}
+                if (!hasKey) {
+                    var cfg = document.getElementById('acAiConfig');
+                    cfg.style.display = '';
+                    var input = document.getElementById('acAiKeyInput');
+                    if (input) { input.focus(); input.placeholder = 'Cole sua chave OpenAI aqui (sk-proj-...)'; }
+                    acShowStatus('Configure a chave da OpenAI abaixo pra usar IA', '#a78bfa');
+                    // Scroll into view
+                    try { cfg.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                    return;
+                }
+                // Key is on server — continue normally
+                _acAiAnalyzeProceed();
+            });
+            return;
+        }
+        _acAiAnalyzeProceed();
+    }
+
+    function _acAiAnalyzeProceed() {
         var btn = document.getElementById('acAiBtn');
         btn.disabled = true;
         document.getElementById('acAnalyzeBtn').disabled = true;
@@ -3409,20 +3436,33 @@
         el.style.display = el.style.display === 'none' ? '' : 'none';
     }
 
+    function _acUpdateKeyUI(hasKey, masked) {
+        var statusEl = document.getElementById('acAiKeyStatus');
+        var btnTxt = document.getElementById('acAiKeyBtnTxt');
+        if (hasKey) {
+            if (statusEl) statusEl.textContent = '✓ ' + (masked || 'API configurada');
+            if (btnTxt) btnTxt.textContent = 'Trocar chave';
+        } else {
+            if (statusEl) statusEl.textContent = '';
+            if (btnTxt) btnTxt.textContent = 'Configurar chave OpenAI';
+        }
+    }
+
     function acSaveAiKey() {
         var key = document.getElementById('acAiKeyInput').value.trim();
-        if (!key) { acShowStatus('Digite a chave da API', '#f59e0b'); return; }
+        if (!key) { acShowStatus('Cole a chave da API primeiro', '#f59e0b'); return; }
+        if (key.indexOf('sk-') !== 0) { acShowStatus('Chave OpenAI inválida (começa com sk-)', '#f43f5e'); return; }
         localStorage.setItem('lw_openai_key', key);
         // Also save on the server side
         LWHttp.post(API + '/autocut/ai-key', { key: key }, { retries: 1 }, function(err, status, body) {
             if (err) { acShowStatus('Erro ao salvar chave', '#f43f5e'); return; }
             try {
                 var r = JSON.parse(body);
-                acShowStatus('Chave salva! (' + (r.masked || 'ok') + ')', '#22c55e');
-                document.getElementById('acAiKeyStatus').textContent = r.masked || '';
+                acShowStatus('✓ Chave salva! Pode usar IA agora', '#22c55e');
+                _acUpdateKeyUI(true, r.masked);
                 document.getElementById('acAiConfig').style.display = 'none';
                 document.getElementById('acAiKeyInput').value = '';
-            } catch (e) { acShowStatus('Chave salva!', '#22c55e'); }
+            } catch (e) { acShowStatus('Chave salva!', '#22c55e'); _acUpdateKeyUI(true); }
         });
     }
 
@@ -3432,13 +3472,7 @@
             if (err) return;
             try {
                 var r = JSON.parse(body);
-                if (r.hasKey) {
-                    document.getElementById('acAiKeyStatus').textContent = r.masked || 'API configurada';
-                    // Also load into localStorage if not there
-                    if (!localStorage.getItem('lw_openai_key') && r.masked) {
-                        document.getElementById('acAiKeyStatus').textContent = r.masked;
-                    }
-                }
+                _acUpdateKeyUI(!!r.hasKey, r.masked);
             } catch (e) {}
         });
     }
@@ -3453,18 +3487,36 @@
         btn.disabled = true;
         var padding = parseFloat(document.getElementById('acPadding').value) || 0;
 
-        acShowStatus('Cortando ' + acSilences.length + ' silêncios...', '#f59e0b');
-        LWLog.info('autocut', 'Applying ' + acSilences.length + ' cuts, mode=' + acMode + ', padding=' + padding);
+        acShowStatus('Criando backup da sequência...', '#a78bfa');
+        // Step 1: create backup sequence before any destructive action
+        csInterface.evalScript('autoCutBackupSequence()', function(bkResult) {
+            var bk = String(bkResult || '');
+            LWLog.info('autocut', 'Backup: ' + bk);
+            var bkMsg = '';
+            if (bk.indexOf('CLONED:') === 0) bkMsg = 'Backup: sequência "' + bk.substring(7) + '"';
+            else if (bk === 'SAVED') bkMsg = 'Backup: projeto salvo';
+            else if (bk === 'MARKER') bkMsg = 'Marker adicionado (Ctrl+Z pra desfazer)';
 
-        var silJson = JSON.stringify(acSilences).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        var tIdx = (acClipInfo && acClipInfo.trackIndex >= 0) ? acClipInfo.trackIndex : -1;
-        var tTyp = (acClipInfo && acClipInfo.trackType) ? acClipInfo.trackType : 'video';
-        var script = 'autoCutExecute("' + silJson + '",' + padding + ',"' + acMode + '",' + tIdx + ',"' + tTyp + '")';
+            acShowStatus('Cortando ' + acSilences.length + ' silêncios...', '#f59e0b');
+            LWLog.info('autocut', 'Applying ' + acSilences.length + ' cuts, mode=' + acMode + ', padding=' + padding);
+
+            var silJson = JSON.stringify(acSilences).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            var tIdx = (acClipInfo && acClipInfo.trackIndex >= 0) ? acClipInfo.trackIndex : -1;
+            var tTyp = (acClipInfo && acClipInfo.trackType) ? acClipInfo.trackType : 'video';
+            var script = 'autoCutExecute("' + silJson + '",' + padding + ',"' + acMode + '",' + tIdx + ',"' + tTyp + '")';
+            window._acBackupMsg = bkMsg;
+            _acRunExecute(script, btn);
+        });
+    }
+
+    function _acRunExecute(script, btn) {
+        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
 
         csInterface.evalScript(script, function(result) {
             btn.disabled = false;
             var r = String(result || '');
             LWLog.info('autocut', 'Result: ' + r);
+            var bkInfo = window._acBackupMsg || '';
             if (r.indexOf('OK:') === 0) {
                 // Parse result — format: OK:cuts:removedSec  or  OK:cuts:removedSec|DBG:...
                 var mainPart = r.substring(3).split('|')[0]; // before any |DBG:
@@ -3472,10 +3524,10 @@
                 var cuts = parseInt(parts[0]) || 0;
                 var removed = parts[1] || '0';
                 if (cuts > 0) {
-                    var msg = cuts + ' cortes aplicados';
-                    if (acMode === 'remove' && removed !== '0') msg += ' — ' + removed + 's removidos';
+                    var msg = cuts + ' cortes' + (acMode === 'remove' && removed !== '0' ? ' — ' + removed + 's removidos' : '');
+                    if (bkInfo) msg += ' · ' + bkInfo;
                     acShowStatus(msg, '#22c55e');
-                    showMsg('AutoCut: ' + msg);
+                    showMsg('AutoCut: ' + cuts + ' cortes' + (bkInfo ? ' (' + bkInfo + ')' : ''));
                     LWLog.info('autocut', 'Done: ' + msg);
                     // Reset state
                     acSilences = [];
