@@ -797,8 +797,105 @@
        - Structured logging
        ═══════════════════════════════════════════════════════════ */
     var API='http://127.0.0.1:9847';
-    var PLUGIN_VERSION='1.3.31';
+    var PLUGIN_VERSION='1.3.35';
     var csInterface=new CSInterface();
+
+    /* ═══════ LW utilities (inline) — lightweight replacements for XHR/logging ═══════ */
+    var LWLog = {
+        _fmt: function(level, cat, msg) {
+            try { console.log('[LW:' + level + '][' + cat + '] ' + msg); } catch(e) {}
+        },
+        info:  function(cat, msg) { this._fmt('INFO',  cat, msg); },
+        warn:  function(cat, msg) { this._fmt('WARN',  cat, msg); },
+        error: function(cat, msg) { this._fmt('ERROR', cat, msg); }
+    };
+
+    var LWInit = {
+        _steps: {},
+        start:    function(name) { this._steps[name] = { startedAt: Date.now(), done: false }; },
+        complete: function(name) { if (this._steps[name]) this._steps[name].done = true; },
+        fail:     function(name, err) { if (this._steps[name]) { this._steps[name].done = true; this._steps[name].err = err; } }
+    };
+
+    var LWHttp = (function() {
+        var _lastSuccess = 0;
+        var _lastError = 0;
+        function request(method, url, data, options, callback) {
+            if (typeof options === 'function') { callback = options; options = {}; }
+            options = options || {};
+            var timeout = options.timeout || 5000;
+            var retries = (options.retries != null) ? options.retries : 0;
+            var headers = options.headers || {};
+            var attempt = 0;
+            function tryOnce() {
+                var xhr = new XMLHttpRequest();
+                var done = false;
+                var to = setTimeout(function() {
+                    if (done) return;
+                    done = true;
+                    try { xhr.abort(); } catch(e) {}
+                    _lastError = Date.now();
+                    if (attempt < retries) { attempt++; setTimeout(tryOnce, 300 * attempt); }
+                    else if (callback) callback('TIMEOUT', 0, '');
+                }, timeout);
+                xhr.open(method, url, true);
+                if (data != null) xhr.setRequestHeader('Content-Type', 'application/json');
+                for (var k in headers) { if (headers.hasOwnProperty(k)) xhr.setRequestHeader(k, headers[k]); }
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4 || done) return;
+                    done = true;
+                    clearTimeout(to);
+                    if (xhr.status > 0) {
+                        _lastSuccess = Date.now();
+                        if (callback) callback(null, xhr.status, xhr.responseText);
+                    } else {
+                        _lastError = Date.now();
+                        if (attempt < retries) { attempt++; setTimeout(tryOnce, 300 * attempt); }
+                        else if (callback) callback('NETWORK', 0, '');
+                    }
+                };
+                try { xhr.send(data != null ? JSON.stringify(data) : null); }
+                catch(e) {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(to);
+                    _lastError = Date.now();
+                    if (callback) callback(e.message || 'SEND_ERR', 0, '');
+                }
+            }
+            tryOnce();
+        }
+        return {
+            request: request,
+            get:  function(url, options, callback) { request('GET',  url, null, options, callback); },
+            post: function(url, data, options, callback) { request('POST', url, data, options, callback); },
+            isHealthy: function() { return (Date.now() - _lastSuccess) < 10000; }
+        };
+    })();
+
+    var LWConnection = (function() {
+        var _state = 'unknown';
+        var _listeners = [];
+        var _interval = 2000;
+        var _apiBase = '';
+        function notify() { for (var i = 0; i < _listeners.length; i++) { try { _listeners[i](_state); } catch(e) {} } }
+        return {
+            init: function(api) { _apiBase = api; },
+            onStateChange: function(fn) { _listeners.push(fn); },
+            markConnected: function() {
+                _interval = 2000;
+                if (_state !== 'connected') { _state = 'connected'; notify(); }
+            },
+            markDisconnected: function() {
+                if (_interval < 8000) _interval = Math.min(8000, _interval * 1.5);
+                if (_state !== 'disconnected') { _state = 'disconnected'; notify(); }
+            },
+            resetPollRate: function() { _interval = 1000; },
+            getPollInterval: function() { return _interval; },
+            getState: function() { return _state; }
+        };
+    })();
+    /* ═══════ end LW utilities ═══════ */
     var selProj='';
     var lastCardsJSON='';
     var lastPipeJSON='';
