@@ -2610,13 +2610,21 @@
         if (!node) { callback({type:'error', msg:'NODE_UNAVAILABLE'}); return; }
         var fs = node.require('fs');
         var dir = saveDir || '/tmp';
-        try { fs.mkdirSync(dir, {recursive: true}); } catch(e){}
+        // Try to create the requested dir; if it fails (permission/drive unmounted), fall back to /tmp
+        try { fs.mkdirSync(dir, {recursive: true}); } catch(e){ dir = '/tmp'; }
+        // Verify writability — if the dir isn't writable (SMB drive, sandbox, etc.) fall back to /tmp
+        try {
+            var testFile = dir + '/.lw-write-test-' + Date.now();
+            fs.writeFileSync(testFile, '');
+            fs.unlinkSync(testFile);
+        } catch(e){ dir = '/tmp'; }
         var dirEsc = dir.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         var jxa = [
             'ObjC.import("AppKit");',
             'ObjC.import("Foundation");',
             '(function(){',
             '    var pb = $.NSPasteboard.generalPasteboard;',
+            '    var debug = [];',
             '',
             '    // Method 1: file URLs via readObjectsForClasses',
             '    try {',
@@ -2633,7 +2641,7 @@
             '            }',
             '            if (paths.length > 0) return "FILES:" + paths.join("|");',
             '        }',
-            '    } catch(e) {}',
+            '    } catch(e) { debug.push("m1:" + e.message); }',
             '',
             '    // Method 2: NSFilenamesPboardType (older Finder format)',
             '    try {',
@@ -2645,28 +2653,50 @@
             '            }',
             '            if (paths.length > 0) return "FILES:" + paths.join("|");',
             '        }',
-            '    } catch(e) {}',
+            '    } catch(e) { debug.push("m2:" + e.message); }',
             '',
             '    // Method 3: image data (PNG then TIFF)',
             '    try {',
             '        var imgData = pb.dataForType("public.png");',
-            '        if (!imgData || imgData.length < 1) imgData = pb.dataForType("public.tiff");',
+            '        var wasPng = imgData && imgData.length > 0;',
+            '        if (!wasPng) imgData = pb.dataForType("public.tiff");',
             '        if (imgData && imgData.length > 0) {',
-            '            var bmp = $.NSBitmapImageRep.imageRepWithData(imgData);',
-            '            var png = bmp.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $());',
             '            var ts = Math.floor(Date.now()/1000);',
             '            var outPath = "' + dirEsc + '/lw-clip-" + ts + ".png";',
-            '            png.writeToFileAtomically(outPath, true);',
-            '            return "IMAGE:" + outPath;',
+            '            var ok = false;',
+            '            if (wasPng) {',
+            '                // Already PNG — write raw data directly (avoids NSBitmapImageFileTypePNG deprecation on macOS 11+)',
+            '                ok = imgData.writeToFileAtomically(outPath, true);',
+            '            } else {',
+            '                // Convert TIFF → PNG. NSBitmapImageFileTypePNG raw value = 4',
+            '                var bmp = $.NSBitmapImageRep.imageRepWithData(imgData);',
+            '                if (bmp) {',
+            '                    var png;',
+            '                    try { png = bmp.representationUsingTypeProperties(4, $()); }',
+            '                    catch(e) { debug.push("repr:" + e.message); }',
+            '                    if (png) ok = png.writeToFileAtomically(outPath, true);',
+            '                }',
+            '            }',
+            '            if (ok) return "IMAGE:" + outPath;',
+            '            // Write failed — try /tmp as last resort',
+            '            var tmpPath = "/tmp/lw-clip-" + ts + ".png";',
+            '            if (wasPng) {',
+            '                if (imgData.writeToFileAtomically(tmpPath, true)) return "IMAGE:" + tmpPath;',
+            '            }',
+            '            return "ERROR:write_failed|" + debug.join(";");',
             '        }',
-            '    } catch(e) {}',
+            '    } catch(e) { debug.push("m3:" + e.message); }',
             '',
+            '    if (debug.length > 0) return "EMPTY_DBG:" + debug.join(";");',
             '    return "EMPTY";',
             '})()'
         ];
-        cpRunJXA(jxa, function(err, stdout){
-            if (err) { callback({type:'error', msg: String(err.message || err)}); return; }
-            cpParseClipboardOutput(stdout, callback);
+        cpRunJXA(jxa, function(err, stdout, stderr){
+            if (err) { callback({type:'error', msg: String(err.message || err) + (stderr ? ' | ' + String(stderr).substring(0,200) : '')}); return; }
+            var out = String(stdout || '').trim();
+            if (out.indexOf('ERROR:') === 0) { callback({type:'error', msg: out.substring(6)}); return; }
+            if (out.indexOf('EMPTY_DBG:') === 0) { callback({type:'empty', debug: out.substring(10)}); return; }
+            cpParseClipboardOutput(out, callback);
         });
     }
 
