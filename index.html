@@ -5714,11 +5714,29 @@ async function fetchDollarNews(){
                     .filter(it=>_isThisWeek(it.pubDate))
                     .slice(0,6)
                     .map(it=>{
-                        const src=(it.author||'').replace(/<[^>]*>/g,'');
-                        let source=src;
-                        if(!source)try{source=new URL(it.link).hostname.replace('www.','')}catch(e){source=''}
+                        // Google News titles come as "Título - Fonte" — extract both
+                        const rawTitle=(it.title||'').replace(/<[^>]*>/g,'').trim();
+                        const tm=rawTitle.match(/^(.+?)\s+-\s+([^-]{2,40})$/);
+                        const title=tm?tm[1].trim():rawTitle;
+                        const sourceFromTitle=tm?tm[2].trim():'';
+                        // Fallback chain: author → title suffix → hostname (ignoring news.google.com)
+                        const authorSrc=(it.author||'').replace(/<[^>]*>/g,'').trim();
+                        let hostSrc='';
+                        try{
+                            const h=new URL(it.link).hostname.replace(/^www\./,'');
+                            if(h&&!/news\.google\.com/i.test(h)) hostSrc=h;
+                        }catch(e){}
+                        // Also try extracting real source URL from description HTML
+                        if(!hostSrc&&it.description){
+                            const hrefMatch=it.description.match(/href="https?:\/\/([^\/"]+)/i);
+                            if(hrefMatch){
+                                const h2=hrefMatch[1].replace(/^www\./,'');
+                                if(!/news\.google\.com/i.test(h2)) hostSrc=h2;
+                            }
+                        }
+                        const source=authorSrc||sourceFromTitle||hostSrc||'Notícia';
                         return{
-                            title:it.title.replace(/<[^>]*>/g,'').replace(/ - [^-]+$/,''),
+                            title,
                             link:it.link,
                             source,
                             pubDate:it.pubDate,
@@ -5747,8 +5765,8 @@ async function fetchDollarNews(){
                 <div style="width:3px;min-height:100%;background:${ac};flex-shrink:0;border-radius:3px 0 0 3px"></div>
                 <div style="flex:1;padding:8px 10px;min-width:0">
                     <div style="color:var(--text);font-size:.76rem;font-weight:500;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${a.title}</div>
-                    <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-                        <span style="font-size:.6rem;color:${ac};font-weight:600;background:${ac}15;padding:2px 7px;border-radius:4px;white-space:nowrap">${a.source}</span>
+                    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
+                        ${a.source?`<span style="font-size:.6rem;color:${ac};font-weight:600;background:${ac}15;padding:2px 7px;border-radius:4px;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis">${a.source}</span>`:''}
                         <span style="font-size:.6rem;color:var(--text3);white-space:nowrap">${a.ago} atras</span>
                     </div>
                 </div>
