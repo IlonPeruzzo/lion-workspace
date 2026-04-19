@@ -4037,7 +4037,7 @@ function renderCharts(){
 
     charts.fat=new Chart(c1,{type:'bar',
         data:{labels,datasets:[
-            {label:metricLabel,data:dataArr,backgroundColor:bgArr,borderColor:bdArr,borderWidth:bwArr,borderRadius:8,borderSkipped:false,hoverBackgroundColor:`rgba(${colRgb},0.95)`,barPercentage:0.65,categoryPercentage:0.85}
+            {label:metricLabel,data:dataArr,backgroundColor:bgArr,borderColor:bdArr,borderWidth:bwArr,borderRadius:6,borderSkipped:false,hoverBackgroundColor:`rgba(${colRgb},0.95)`,barPercentage:0.42,categoryPercentage:0.9}
         ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+metricLabel+': '+curSym+' '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#a3a3a3',font:{size:11,weight:'600'}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:10},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}}}},
         plugins:[{id:'barValueLabels',afterDatasetsDraw(chart){
             const{ctx:cx}=chart;
@@ -4109,24 +4109,22 @@ function renderCharts(){
 
                 cx.restore();
 
-                // ─── Value text — soft white with glow, no harsh black ───
+                // ─── Knockout text — "atravessa" a barra mostrando o fundo ───
                 const fontSize=isSelected
-                    ? (barH>=100?18:barH>=70?16:barH>=45?13:11)
+                    ? (barH>=100?19:barH>=70?16:barH>=45?13:11)
                     : (barH>=70?12:barH>=45?11:barH>=25?10:9);
-                const weight=isSelected?'700':'600';
                 cx.save();
-                cx.font=`${weight} ${fontSize}px Inter`;
+                // Fonte com weight leve (500 = medium) pra dar suavidade
+                cx.font=`500 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
                 cx.textAlign='center';
                 cx.textBaseline='middle';
-                cx.letterSpacing='0.3px';
 
-                const textY=barH>=fontSize*2.8?bar.y+barH/2:(bar.y+fontSize*0.9+waveAmp);
+                const textY=barH>=fontSize*2.8?bar.y+barH/2:(bar.y+fontSize*0.95+waveAmp);
 
-                // Dark backing blur for readability on light liquid
-                cx.shadowColor='rgba(0,0,0,0.55)';
-                cx.shadowBlur=isSelected?10:5;
-                cx.shadowOffsetY=1;
-                cx.fillStyle='rgba(255,255,255,0.97)';
+                // destination-out = onde o texto é desenhado, pixels da barra são removidos
+                // → o fundo do card (cinza escuro) aparece por trás, criando o efeito de vidro/atravessado
+                cx.globalCompositeOperation='destination-out';
+                cx.fillStyle='rgba(0,0,0,1)';
                 cx.fillText(txt,bar.x,textY);
                 cx.restore();
             });
