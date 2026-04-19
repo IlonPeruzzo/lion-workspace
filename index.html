@@ -3377,7 +3377,9 @@ function editReg(id){
         <input type="text" id="_editRegNome_${id}" value="${(r.nome||'').replace(/"/g,'&quot;')}" placeholder="Nome do serviço" style="padding:5px 8px;font-size:.8rem;width:100%">
         <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
             <span style="font-size:.72rem;color:var(--text3)">${sym}</span>
-            <input type="number" id="_editRegValor_${id}" value="${r.valor}" min="0" step="0.01" style="padding:5px 8px;font-size:.8rem;width:80px">
+            <input type="number" id="_editRegValor_${id}" value="${r.valor}" min="0" step="0.01" style="padding:5px 8px;font-size:.8rem;width:80px" title="Valor unitário">
+            <span style="font-size:.72rem;color:var(--text3)">×</span>
+            <input type="number" id="_editRegQtd_${id}" value="${r.quantidade||1}" min="1" step="1" style="padding:5px 8px;font-size:.8rem;width:55px" title="Quantidade de serviços">
             <input type="date" id="_editRegData_${id}" value="${r.data||''}" style="padding:4px 6px;font-size:.76rem;background:rgba(255,255,255,.05);border:1px solid rgba(190,242,100,.15);border-radius:6px;color:var(--text)">
             <button class="btn btn-a" onclick="saveEditReg(${id})" style="padding:4px 10px;font-size:.72rem">OK</button>
             <button class="btn btn-o" onclick="renderRegs()" style="padding:4px 8px;font-size:.72rem">X</button>
@@ -3390,8 +3392,10 @@ function saveEditReg(id){
     const r=regs.find(x=>x.id===id);if(!r)return;
     const nome=document.getElementById('_editRegNome_'+id);
     const valor=document.getElementById('_editRegValor_'+id);
+    const qtd=document.getElementById('_editRegQtd_'+id);
     if(nome)r.nome=nome.value.trim()||r.nome;
     if(valor){const v=parseFloat(valor.value);if(v>0)r.valor=v}
+    if(qtd){const q=parseInt(qtd.value,10);if(q>0)r.quantidade=q}
     const dataEl=document.getElementById('_editRegData_'+id);
     if(dataEl&&dataEl.value)r.data=dataEl.value;
     salvar();renderRegs();updStats();renderCli();renderCharts();renderVidsAndamento();
