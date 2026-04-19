@@ -997,11 +997,13 @@
         if (!f) return;
         var txt = 'Plugin v' + PLUGIN_VERSION;
         if (pluginAppVersion) txt += ' · App v' + pluginAppVersion;
-        // Health indicator (like AutoCut's system report)
-        var cepHealth = csInterface.isHealthy();
-        var httpHealth = LWHttp.isHealthy();
-        if (!cepHealth) txt += ' · CEP ⚠';
-        if (!httpHealth) txt += ' · HTTP ⚠';
+        // Health indicators (CEP/HTTP)
+        try {
+            var cepHealth = !!(window.__adobe_cep__ && csInterface);
+            var httpHealth = LWHttp.isHealthy();
+            if (!cepHealth) txt += ' · CEP ⚠';
+            if (!httpHealth) txt += ' · HTTP ⚠';
+        } catch(e) {}
         f.textContent = txt;
     }
     updateFooter();
