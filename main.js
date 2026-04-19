@@ -82,8 +82,15 @@ if (isWin) {
     ].join("\n"));
 }
 
+let _fgRestartDelay = 3000; // exponential backoff on repeated crashes
+let _fgLastStart = 0;
 function startFgDaemon() {
     if (!isWin || fgDaemon) return;
+    const now = Date.now();
+    // If daemon lasted >60s, consider it stable and reset delay
+    if (now - _fgLastStart > 60000) _fgRestartDelay = 3000;
+    _fgLastStart = now;
+
     fgDaemon = spawn('powershell', [
         '-NoProfile', '-WindowStyle', 'Hidden',
         '-ExecutionPolicy', 'Bypass', '-File', daemonScriptPath
@@ -91,7 +98,11 @@ function startFgDaemon() {
 
     fgDaemon.on('exit', () => {
         fgDaemon = null;
-        if (!app.isQuitting) setTimeout(startFgDaemon, 3000);
+        if (!app.isQuitting) {
+            setTimeout(startFgDaemon, _fgRestartDelay);
+            // Exponential backoff: 3s → 6s → 12s → 24s → 48s → cap 60s
+            _fgRestartDelay = Math.min(_fgRestartDelay * 2, 60000);
+        }
     });
     fgDaemon.on('error', () => {});
 }
@@ -1001,6 +1012,18 @@ function savePluginSessions() {
 }
 loadPluginSessions(); // Restore sessions on startup
 
+// Periodic cleanup: prune expired plugin sessions every hour (prevents unbounded Map growth)
+setInterval(() => {
+    try {
+        const now = Date.now();
+        let pruned = 0;
+        for (const [token, session] of pluginSessions) {
+            if (session.expiresAt <= now) { pluginSessions.delete(token); pruned++; }
+        }
+        if (pruned > 0) { savePluginSessions(); console.log('[cleanup] Pruned ' + pruned + ' expired plugin session(s)'); }
+    } catch(e) {}
+}, 60 * 60 * 1000);
+
 function generatePluginToken() {
     return crypto.randomBytes(32).toString('hex');
 }
@@ -1539,32 +1562,42 @@ function startSyncServer() {
                             if (apiPct < 78) { apiPct += 2; autoCutProgress.percent = apiPct; }
                         }, 1500);
 
-                        const whisperResult = await new Promise((resolve, reject) => {
-                            const options = {
-                                hostname: 'api.openai.com',
-                                path: '/v1/audio/transcriptions',
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': 'Bearer ' + apiKey,
-                                    'Content-Type': 'multipart/form-data; boundary=' + boundary,
-                                    'Content-Length': fullBody.length
-                                }
-                            };
-                            const httpsReq = require('https').request(options, (httpsRes) => {
-                                let resData = '';
-                                httpsRes.on('data', chunk => resData += chunk);
-                                httpsRes.on('end', () => {
-                                    try { resolve(JSON.parse(resData)); }
-                                    catch (e) { reject(new Error('Whisper API parse error: ' + resData.substring(0, 300))); }
+                        let whisperResult;
+                        try {
+                            whisperResult = await new Promise((resolve, reject) => {
+                                const options = {
+                                    hostname: 'api.openai.com',
+                                    path: '/v1/audio/transcriptions',
+                                    method: 'POST',
+                                    headers: {
+                                        'Authorization': 'Bearer ' + apiKey,
+                                        'Content-Type': 'multipart/form-data; boundary=' + boundary,
+                                        'Content-Length': fullBody.length
+                                    }
+                                };
+                                let settled = false;
+                                let timeoutId = null;
+                                const done = (fn, val) => { if (settled) return; settled = true; if (timeoutId) clearTimeout(timeoutId); fn(val); };
+                                const httpsReq = require('https').request(options, (httpsRes) => {
+                                    let resData = '';
+                                    httpsRes.on('data', chunk => resData += chunk);
+                                    httpsRes.on('end', () => {
+                                        try { done(resolve, JSON.parse(resData)); }
+                                        catch (e) { done(reject, new Error('Whisper API parse error: ' + resData.substring(0, 300))); }
+                                    });
                                 });
+                                httpsReq.on('error', e => done(reject, e));
+                                httpsReq.write(fullBody);
+                                httpsReq.end();
+                                timeoutId = setTimeout(() => {
+                                    try { httpsReq.destroy(); } catch(e) {}
+                                    done(reject, new Error('Whisper API timeout (5min)'));
+                                }, 300000);
                             });
-                            httpsReq.on('error', reject);
-                            httpsReq.write(fullBody);
-                            httpsReq.end();
-                            setTimeout(() => { httpsReq.destroy(); reject(new Error('Whisper API timeout (5min)')); }, 300000);
-                        });
-
-                        clearInterval(apiProgressTimer);
+                        } finally {
+                            // ALWAYS clear the progress ticker, even on error/timeout
+                            clearInterval(apiProgressTimer);
+                        }
 
                         // Check API errors
                         if (whisperResult.error) {
@@ -1700,12 +1733,38 @@ function startSyncServer() {
         res.end('Not found');
     });
 
+    // Leak prevention: close idle sockets so the plugin reconnecting doesn't accumulate them
+    server.keepAliveTimeout = 30000;   // 30s
+    server.headersTimeout = 35000;     // must be > keepAliveTimeout
+    server.requestTimeout = 60000;     // reject requests that hang >60s
+
     server.listen(SYNC_PORT, '127.0.0.1', () => {
         console.log('Lion Workspace sync: http://127.0.0.1:' + SYNC_PORT);
     });
     server.on('error', (err) => {
         console.error('Sync server error:', err.message);
     });
+}
+
+// Helper: collect request body with hard size limit (prevents unbounded string growth)
+const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB
+function readBodyLimited(req, cb) {
+    let body = '';
+    let size = 0;
+    let aborted = false;
+    req.on('data', chunk => {
+        if (aborted) return;
+        size += chunk.length;
+        if (size > MAX_BODY_BYTES) {
+            aborted = true;
+            try { req.destroy(); } catch(e) {}
+            cb(new Error('body_too_large'));
+            return;
+        }
+        body += chunk;
+    });
+    req.on('end', () => { if (!aborted) cb(null, body); });
+    req.on('error', e => { if (!aborted) { aborted = true; cb(e); } });
 }
 
 /* ═══════ Auto-Updater ═══════ */
