@@ -9,6 +9,7 @@
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
             background:#232323;color:#f5f5f5;padding:10px;min-height:100vh;
             user-select:none;-webkit-user-select:none;
+            border:1px solid rgba(190,242,100,.25);border-radius:4px;
         }
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-track{background:transparent}
@@ -20,7 +21,10 @@
         .status.ok{background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.15)}
         .status.off{background:rgba(244,63,94,.1);color:#f43f5e;border:1px solid rgba(244,63,94,.15)}
 
-        .section{background:rgba(255,255,255,.03);border:1px solid rgba(190,242,100,.08);border-radius:10px;padding:12px;margin-bottom:8px}
+        .section{background:rgba(255,255,255,.03);border:1px solid rgba(190,242,100,.08);border-radius:10px;padding:12px;margin-bottom:8px;transition:opacity .4s ease,filter .4s ease}
+        .section.lw-disabled{opacity:.35;pointer-events:none;filter:grayscale(.5);user-select:none}
+        .section.lw-disabled .btn,.section.lw-disabled button,.section.lw-disabled input{pointer-events:none!important;cursor:not-allowed!important}
+        .lw-disc-overlay{display:none;text-align:center;padding:6px 0;font-size:.56rem;color:#f43f5e;font-weight:600;letter-spacing:.3px;opacity:.8}
         .section-title{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:8px;font-weight:600}
 
         .proj-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:8px;padding-right:2px}
@@ -258,7 +262,7 @@
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Downloader
             </span>
             <svg id="downloadChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
@@ -274,10 +278,13 @@
             <button class="plat-btn" id="platTW" onclick="ytSetPlatform('twitter')" title="Twitter / X">
                 <svg viewBox="0 0 24 24" fill="#fff"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             </button>
+            <button class="plat-btn" id="platTT" onclick="ytSetPlatform('tiktok')" title="TikTok">
+                <svg viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.1z"/></svg>
+            </button>
         </div>
         <!-- URL + Buscar -->
         <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input type="text" id="ytUrlPlugin" placeholder="Cole a URL..." style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.7rem;font-family:inherit;outline:none" onkeydown="if(event.key==='Enter')ytPluginFetch()" oninput="ytAutoDetectPlatform()">
+            <input type="text" id="ytUrlPlugin" placeholder="Cole a URL..." style="flex:1;min-width:0;padding:6px 8px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.7rem;font-family:inherit;outline:none;overflow:hidden;text-overflow:ellipsis" onkeydown="if(event.key==='Enter')ytPluginFetch()" oninput="ytAutoDetectPlatform()">
             <button class="btn btn-go" onclick="ytPluginFetch()" id="ytFetchBtn" style="padding:6px 10px;font-size:.66rem;white-space:nowrap">Buscar</button>
         </div>
 
@@ -349,7 +356,7 @@
                 Importar no projeto automaticamente
             </label>
             <label style="display:flex;align-items:center;gap:5px;margin-top:4px;cursor:pointer;font-size:.62rem;color:#aaa">
-                <input type="checkbox" id="ytAutoTimeline" style="accent-color:#bef264;width:12px;height:12px">
+                <input type="checkbox" id="ytAutoTimeline" checked style="accent-color:#bef264;width:12px;height:12px">
                 Colocar na timeline automaticamente
             </label>
 
@@ -539,6 +546,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 </div>
                 <div style="width:1px;height:16px;background:rgba(255,255,255,.08)"></div>
+                <div class="anc-tgt" id="ancTgtTransform" onclick="toggleAnchorTransform()" title="Aplicar no efeito Transform">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <span style="font-size:.38rem;position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);white-space:nowrap;color:inherit;opacity:.7">FX</span>
+                </div>
                 <div class="anc-tgt" id="ancTgtVector" onclick="toggleAnchorVector()" title="Usar Vector Motion (ambos Motion + Vector)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                 </div>
@@ -556,6 +567,154 @@
             <button class="yt-q" onclick="applyAnchor()" style="width:100%;padding:6px;margin-top:6px;font-weight:600">Aplicar</button>
 
             <div id="anchorMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
+            <button class="yt-q" onclick="debugAnchorClick()" style="width:100%;padding:4px;margin-top:4px;font-size:.55rem;opacity:.6">🔍 Debug Values</button>
+            <pre id="anchorDebug" style="font-size:.45rem;color:#888;margin-top:3px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;display:none"></pre>
+        </div>
+    </div>
+
+    <!-- AutoCut — Silence Remover -->
+    <div class="section" id="sectionAutoCut">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('autoCutBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
+                    <line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>
+                </svg>
+                AutoCut
+            </span>
+            <svg id="autoCutChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="autoCutBody">
+            <div style="font-size:.58rem;color:#666;margin-bottom:8px;text-align:center;line-height:1.4">
+                Detecta silêncios e corta automaticamente o clip selecionado
+            </div>
+
+            <!-- Threshold -->
+            <div style="margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Sensibilidade</span>
+                    <span id="acThreshVal" style="font-size:.56rem;color:#bef264;font-weight:600">-30 dB</span>
+                </div>
+                <input type="range" id="acThreshold" min="-60" max="-10" value="-30" step="1" style="width:100%;accent-color:#bef264;height:4px" oninput="acUpdateThreshold()">
+                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#444">
+                    <span>Mais silêncio</span><span>Menos silêncio</span>
+                </div>
+            </div>
+
+            <!-- Min duration -->
+            <div style="margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Duração mínima</span>
+                    <span id="acMinDurVal" style="font-size:.56rem;color:#bef264;font-weight:600">0.5s</span>
+                </div>
+                <input type="range" id="acMinDuration" min="0.1" max="3" value="0.5" step="0.1" style="width:100%;accent-color:#bef264;height:4px" oninput="acUpdateMinDur()">
+                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#444">
+                    <span>0.1s</span><span>3.0s</span>
+                </div>
+            </div>
+
+            <!-- Padding -->
+            <div style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Padding</span>
+                    <span id="acPaddingVal" style="font-size:.56rem;color:#bef264;font-weight:600">0.1s</span>
+                </div>
+                <input type="range" id="acPadding" min="0" max="1" value="0.1" step="0.05" style="width:100%;accent-color:#bef264;height:4px" oninput="acUpdatePadding()">
+                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#444">
+                    <span>Sem padding</span><span>1.0s</span>
+                </div>
+            </div>
+
+            <!-- Mode -->
+            <div style="display:flex;gap:3px;margin-bottom:8px">
+                <button class="yt-q active" id="acModeRemove" onclick="acSetMode('remove')">Remover silêncios</button>
+                <button class="yt-q" id="acModeCut" onclick="acSetMode('cut')">Só marcar cortes</button>
+            </div>
+
+            <!-- Preview results (hidden until analyzed) -->
+            <div id="acResults" style="display:none;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px;padding:8px;margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;font-size:.58rem;color:#aaa;margin-bottom:4px">
+                    <span>Silêncios: <strong id="acSilCount" style="color:#bef264">0</strong></span>
+                    <span>Remover: <strong id="acRemoveTime" style="color:#f43f5e">0s</strong></span>
+                </div>
+                <!-- Visual timeline bar -->
+                <div id="acTimeline" style="height:20px;background:#1a1a1a;border-radius:4px;overflow:hidden;position:relative;margin-bottom:4px;border:1px solid rgba(255,255,255,.06)"></div>
+                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#555">
+                    <span id="acTimeStart">0:00</span>
+                    <span id="acTimeEnd">0:00</span>
+                </div>
+            </div>
+
+            <!-- Analysis Buttons -->
+            <div style="display:flex;gap:4px">
+                <button class="btn btn-pause" onclick="acAnalyze()" id="acAnalyzeBtn" style="flex:1;padding:8px;font-size:.65rem;display:flex;align-items:center;justify-content:center;gap:4px">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Silêncios
+                </button>
+                <button class="btn btn-pause" onclick="acAiAnalyze()" id="acAiBtn" style="flex:1;padding:8px;font-size:.65rem;display:flex;align-items:center;justify-content:center;gap:4px;border-color:rgba(167,139,250,.15)">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v3a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                    AI Words
+                </button>
+            </div>
+
+            <!-- Progress Bar (shared — hidden until analysis starts) -->
+            <div id="acProgressWrap" style="display:none;margin-top:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+                    <span id="acProgressLabel" style="font-size:.5rem;color:#888">Analisando...</span>
+                    <span id="acProgressPct" style="font-size:.56rem;color:#bef264;font-weight:600">0%</span>
+                </div>
+                <div style="height:6px;background:#1a1a1a;border-radius:3px;overflow:hidden;border:1px solid rgba(255,255,255,.06)">
+                    <div id="acProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#bef264,#22c55e);border-radius:3px;transition:width .3s ease"></div>
+                </div>
+                <div style="text-align:right;margin-top:2px">
+                    <span style="font-size:.42rem;color:#555;cursor:pointer;text-decoration:underline" onclick="acCancelAnalysis()">Cancelar</span>
+                </div>
+            </div>
+
+            <!-- AI Results Panel (hidden until AI analysis) -->
+            <div id="acAiResults" style="display:none;background:rgba(167,139,250,.03);border:1px solid rgba(167,139,250,.1);border-radius:8px;padding:8px;margin-top:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#a78bfa;font-weight:600">AI Detectou</span>
+                    <span style="font-size:.56rem;color:#a78bfa"><strong id="acAiCount">0</strong> problemas</span>
+                </div>
+                <!-- Filter chips -->
+                <div style="display:flex;gap:3px;margin-bottom:4px;flex-wrap:wrap">
+                    <span class="yt-q active" id="acAiFilterAll" onclick="acAiFilter('all')" style="font-size:.45rem;padding:2px 6px;cursor:pointer">Todos</span>
+                    <span class="yt-q" id="acAiFilterFiller" onclick="acAiFilter('filler')" style="font-size:.45rem;padding:2px 6px;cursor:pointer;border-color:rgba(245,158,11,.2)">Fillers <strong id="acAiFillerN">0</strong></span>
+                    <span class="yt-q" id="acAiFilterRepeat" onclick="acAiFilter('repeat')" style="font-size:.45rem;padding:2px 6px;cursor:pointer;border-color:rgba(244,63,94,.2)">Repetidos <strong id="acAiRepeatN">0</strong></span>
+                    <span class="yt-q" id="acAiFilterStutter" onclick="acAiFilter('stutter')" style="font-size:.45rem;padding:2px 6px;cursor:pointer;border-color:rgba(167,139,250,.2)">Gaguejos <strong id="acAiStutterN">0</strong></span>
+                </div>
+                <div id="acAiIssuesList" style="max-height:120px;overflow-y:auto;font-size:.52rem"></div>
+                <div style="font-size:.42rem;color:#555;margin-top:3px;text-align:center" id="acAiTranscript" title="Clique pra ver transcrição completa" onclick="acToggleTranscript()"></div>
+            </div>
+            <div id="acFullTranscript" style="display:none;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:6px;margin-top:4px;max-height:100px;overflow-y:auto;font-size:.5rem;color:#888;line-height:1.5;word-wrap:break-word"></div>
+
+            <!-- Apply button -->
+            <div style="display:flex;gap:4px;margin-top:6px">
+                <button class="btn btn-go" onclick="acApply()" id="acApplyBtn" style="flex:1;padding:8px;font-size:.7rem;display:flex;align-items:center;justify-content:center;gap:4px" disabled>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/></svg>
+                    Cortar
+                </button>
+            </div>
+
+            <div id="acStatus" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px"></div>
+
+            <!-- API Key Config (hidden toggle) -->
+            <div style="margin-top:4px;display:flex;justify-content:space-between;align-items:center">
+                <span id="acAiKeyStatus" style="font-size:.42rem;color:#444"></span>
+                <span style="font-size:.45rem;color:#555;cursor:pointer" onclick="acToggleAiConfig()">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" style="vertical-align:middle;margin-right:2px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    API Key
+                </span>
+            </div>
+            <div id="acAiConfig" style="display:none;margin-top:4px;padding:6px;background:rgba(167,139,250,.03);border:1px solid rgba(167,139,250,.08);border-radius:6px">
+                <div style="font-size:.5rem;color:#888;margin-bottom:4px">Chave da API OpenAI (necessária para AI Words)</div>
+                <div style="display:flex;gap:3px">
+                    <input type="password" id="acAiKeyInput" placeholder="sk-proj-..." style="flex:1;padding:4px 6px;border-radius:4px;border:1px solid rgba(167,139,250,.15);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.52rem;font-family:monospace;outline:none">
+                    <button class="yt-q" onclick="acSaveAiKey()" style="padding:4px 8px;font-size:.5rem;border-color:rgba(167,139,250,.2)">Salvar</button>
+                </div>
+                <div style="font-size:.42rem;color:#555;margin-top:3px">A chave fica salva localmente no app. Usada para transcrever via Whisper.</div>
+            </div>
         </div>
     </div>
 
@@ -628,6 +787,15 @@
 
     <script src="CSInterface.js"></script>
     <script>
+    /* ═══════════════════════════════════════════════════════════
+       Lion Workspace Plugin — Professional Architecture
+       Inspired by AutoCut V4 patterns:
+       - Step-based initialization with tracking
+       - Resilient HTTP with retry + exponential backoff
+       - Adaptive polling (fast when connected, slow when not)
+       - Connection health monitoring
+       - Structured logging
+       ═══════════════════════════════════════════════════════════ */
     var API='http://127.0.0.1:9847';
     var PLUGIN_VERSION='1.3.31';
     var csInterface=new CSInterface();
@@ -638,13 +806,34 @@
     var pomoState={running:false,paused:false};
     var pluginAppVersion='';
 
+    /* ═══════ Initialization (step-based like AutoCut) ═══════ */
+    LWConnection.init(API);
+    LWConnection.onStateChange(function(newState) {
+        updateFooter();
+        if (newState === 'connected') {
+            document.getElementById('conn').className='status ok';
+            document.getElementById('conn').textContent='Conectado';
+            lwConnected = true;
+            lwSetSectionsDisabled(false);
+        } else {
+            lwConnected = false;
+            lwSetSectionsDisabled(true);
+        }
+    });
+    LWInit.start('plugin-bootstrap');
+    LWLog.info('plugin', 'Lion Workspace Plugin v' + PLUGIN_VERSION + ' starting...');
+
+    // Start with sections disabled until connected
+    setTimeout(function() { lwSetSectionsDisabled(true); }, 100);
+
     /* ═══════ Panel visibility ═══════ */
     var PANELS = [
         { key: 'timer',    id: 'sectionTimer',     label: 'Timer do Projeto' },
         { key: 'pomo',     id: 'sectionPomo',      label: 'Pomodoro' },
-        { key: 'download', id: 'sectionDownload',  label: 'Download' },
+        { key: 'download', id: 'sectionDownload',  label: 'Downloader' },
         { key: 'easing',   id: 'sectionEasing',    label: 'Easing / Curvas' },
         { key: 'anchor',   id: 'sectionAnchor',    label: 'Anchor Point Pro' },
+        { key: 'autocut',  id: 'sectionAutoCut',   label: 'AutoCut' },
         { key: 'cp',       id: 'sectionCopyPaste', label: 'Copy / Paste' }
     ];
     var panelsVisible = (function(){
@@ -711,9 +900,16 @@
         if (!f) return;
         var txt = 'Plugin v' + PLUGIN_VERSION;
         if (pluginAppVersion) txt += ' · App v' + pluginAppVersion;
+        // Health indicator (like AutoCut's system report)
+        var cepHealth = csInterface.isHealthy();
+        var httpHealth = LWHttp.isHealthy();
+        if (!cepHealth) txt += ' · CEP ⚠';
+        if (!httpHealth) txt += ' · HTTP ⚠';
         f.textContent = txt;
     }
     updateFooter();
+    // Update footer health every 10s
+    setInterval(updateFooter, 10000);
     applyPanelsVisibility();
 
     /* ═══════ Plugin Auth ═══════ */
@@ -725,44 +921,34 @@
     }
 
     function pluginCheckSession() {
-        if (!pluginToken) {
-            // Mesmo sem token, tenta pegar a versão do app pra mostrar no rodapé
-            var xhr0 = new XMLHttpRequest();
-            xhr0.open('GET', API + '/auth/check', true);
-            xhr0.onload = function(){
-                try {
-                    var r0 = JSON.parse(xhr0.responseText || '{}');
-                    if (r0.app_version) { pluginAppVersion = r0.app_version; updateFooter(); }
-                } catch(e){}
+        LWInit.start('auth-check');
+        var headers = pluginToken ? { 'Authorization': 'Bearer ' + pluginToken } : {};
+        LWHttp.get(API + '/auth/check', { timeout: 5000, retries: 2, headers: headers }, function(err, status, body) {
+            if (err || !body) {
+                LWInit.fail('auth-check', err || 'no-response');
                 pluginShowLogin();
-            };
-            xhr0.onerror = function(){ pluginShowLogin(); };
-            xhr0.send();
-            return;
-        }
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', API + '/auth/check', true);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                var r = JSON.parse(xhr.responseText);
+                return;
+            }
+            try {
+                var r = JSON.parse(body);
                 if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
-                if (r.authenticated) {
+                if (pluginToken && r.authenticated) {
                     pluginUser = r.user;
+                    LWInit.complete('auth-check');
                     pluginShowApp(r.user, r.plan);
                 } else {
-                    pluginToken = '';
-                    localStorage.removeItem('lw_plugin_token');
+                    if (pluginToken) {
+                        pluginToken = '';
+                        localStorage.removeItem('lw_plugin_token');
+                    }
+                    LWInit.complete('auth-check');
                     pluginShowLogin();
                 }
-            } else {
-                pluginToken = '';
-                localStorage.removeItem('lw_plugin_token');
+            } catch(e) {
+                LWInit.fail('auth-check', e.message);
                 pluginShowLogin();
             }
-        };
-        xhr.onerror = function() { pluginShowLogin(); };
-        xhr.send();
+        });
     }
 
     function togglePluginPwEye(){
@@ -792,20 +978,24 @@
         errEl.classList.remove('show');
         btn.disabled = true;
         btn.textContent = 'Entrando...';
-        var xhr = new XMLHttpRequest();
-        xhr.timeout = 15000;
-        xhr.open('POST', API + '/auth/login', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onload = function() {
+        LWLog.info('auth', 'Login attempt: ' + email);
+        LWHttp.post(API + '/auth/login', { email: email, password: password }, { timeout: 15000, retries: 2 }, function(err, status, body) {
             btn.disabled = false;
             btn.textContent = 'Entrar';
-            if (xhr.status === 200) {
+            if (err) {
+                LWLog.error('auth', 'Login failed: ' + err);
+                errEl.textContent = (err === 'TIMEOUT') ? 'Timeout — verifique sua conexão.' : 'Abra o Lion Workspace primeiro.';
+                errEl.classList.add('show');
+                return;
+            }
+            if (status === 200) {
                 try {
-                    var r = JSON.parse(xhr.responseText);
+                    var r = JSON.parse(body);
                     pluginToken = r.token;
                     localStorage.setItem('lw_plugin_token', r.token);
                     pluginUser = r.user;
                     if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
+                    LWLog.info('auth', 'Login successful: ' + email);
                     pluginShowApp(r.user, r.plan);
                 } catch(e) {
                     errEl.textContent = 'Erro ao processar resposta.';
@@ -813,40 +1003,25 @@
                 }
             } else {
                 try {
-                    var err = JSON.parse(xhr.responseText);
-                    var msg = err.message || err.error || 'Erro ao fazer login';
-                    if (err.error === 'no_subscription') msg = 'Assinatura necessária para usar o plugin.';
-                    else if (msg.includes('Invalid login')) msg = 'Email ou senha incorretos';
+                    var errData = JSON.parse(body);
+                    var msg = errData.message || errData.error || 'Erro ao fazer login';
+                    if (errData.error === 'no_subscription') msg = 'Assinatura necessária para usar o plugin.';
+                    else if (msg.indexOf('Invalid login') >= 0) msg = 'Email ou senha incorretos';
                     errEl.textContent = msg;
                 } catch(e) {
-                    errEl.textContent = 'Erro do servidor (' + xhr.status + ')';
+                    errEl.textContent = 'Erro do servidor (' + status + ')';
                 }
                 errEl.classList.add('show');
             }
-        };
-        xhr.onerror = function() {
-            btn.disabled = false;
-            btn.textContent = 'Entrar';
-            errEl.textContent = 'Abra o Lion Workspace primeiro.';
-            errEl.classList.add('show');
-        };
-        xhr.ontimeout = function() {
-            btn.disabled = false;
-            btn.textContent = 'Entrar';
-            errEl.textContent = 'Timeout — verifique sua conexão.';
-            errEl.classList.add('show');
-        };
-        xhr.send(JSON.stringify({ email: email, password: password }));
+        });
     }
 
     function pluginDoLogout() {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', API + '/auth/logout', true);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
-        xhr.send();
+        LWHttp.post(API + '/auth/logout', {}, { headers: { 'Authorization': 'Bearer ' + pluginToken }, retries: 0 }, function(){});
         pluginToken = '';
         pluginUser = null;
         localStorage.removeItem('lw_plugin_token');
+        LWLog.info('auth', 'User logged out');
         pluginShowLogin();
     }
 
@@ -859,41 +1034,52 @@
         document.getElementById('pluginLogin').classList.add('hidden');
         document.getElementById('pluginUserBar').style.display = '';
         window._lwPlan = plan || '';
+        _authExpiredShown = false;
+        lwConnected = true;
+        lwSetSectionsDisabled(false); // ensure sections are enabled after login
         applyPanelsVisibility();
+        setTimeout(function() { poll(); }, 300);
     }
 
     // Enter key to submit login
     document.getElementById('pluginEmail').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('pluginPassword').focus(); });
     document.getElementById('pluginPassword').addEventListener('keydown', function(e) { if (e.key === 'Enter') pluginDoLogin(); });
 
-    // Auto-inject auth token into all XHR requests
-    var _origXHROpen = XMLHttpRequest.prototype.open;
-    var _origXHRSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.open = function() {
-        this._lwUrl = arguments[1] || '';
-        return _origXHROpen.apply(this, arguments);
-    };
-    XMLHttpRequest.prototype.send = function() {
-        // Inject auth header for API calls (except auth endpoints)
-        if (this._lwUrl && this._lwUrl.indexOf(API) === 0 && this._lwUrl.indexOf('/auth/') === -1 && pluginToken) {
-            this.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
+    // Auto-inject auth token into all LWHttp requests via interceptor
+    var _origLWHttpRequest = LWHttp.request.bind(LWHttp);
+    var _authExpiredShown = false; // avoid spamming login overlay
+    LWHttp.request = function(method, url, data, options, callback) {
+        if (typeof options === 'function') { callback = options; options = {}; }
+        options = options || {};
+        // Inject auth header for API calls (except auth & ping endpoints)
+        if (url.indexOf(API) === 0 && url.indexOf('/auth/') === -1 && url.indexOf('/ping') === -1 && pluginToken) {
+            options.headers = options.headers || {};
+            if (!options.headers['Authorization']) {
+                options.headers['Authorization'] = 'Bearer ' + pluginToken;
+            }
         }
-        // Handle 401 responses — force re-login
-        var self = this;
-        var _origOnload = this.onload;
-        this.onload = function() {
-            if (self.status === 401 && self._lwUrl && self._lwUrl.indexOf('/auth/') === -1) {
-                pluginToken = '';
-                localStorage.removeItem('lw_plugin_token');
-                pluginShowLogin();
+        // Wrap callback to handle 401
+        var origCallback = callback;
+        callback = function(err, status, body) {
+            if (status === 401 && url.indexOf('/auth/') === -1) {
+                if (!_authExpiredShown) {
+                    _authExpiredShown = true;
+                    LWLog.warn('auth', '401 received — session expired, showing login');
+                    pluginToken = '';
+                    localStorage.removeItem('lw_plugin_token');
+                    pluginShowLogin();
+                }
+                // IMPORTANT: still call original callback so polling continues
+                if (origCallback) origCallback('AUTH_EXPIRED', status, body);
                 return;
             }
-            if (_origOnload) _origOnload.apply(self, arguments);
+            if (origCallback) origCallback(err, status, body);
         };
-        return _origXHRSend.apply(this, arguments);
+        _origLWHttpRequest(method, url, data, options, callback);
     };
 
     // Check session on load
+    LWInit.start('session-check');
     pluginCheckSession();
 
     function toggleSection(id){
@@ -906,7 +1092,8 @@
             'timerBody':'timerChev',
             'pomoBody':'pomoChev',
             'easingBody':'easingChev',
-            'anchorBody':'anchorChev'
+            'anchorBody':'anchorChev',
+            'autoCutBody':'autoCutChev'
         };
         var chevId=chevMap[id]||id.replace('Body','Chev');
         var chev=document.getElementById(chevId);
@@ -960,20 +1147,16 @@
     }
 
     function setStage(regId,etapa){
-        var x=new XMLHttpRequest();
-        x.open('POST',API+'/timer/set-stage');
-        x.setRequestHeader('Content-Type','application/json');
-        x.send(JSON.stringify({regId:regId,etapa:etapa}));
+        LWConnection.resetPollRate();
+        LWHttp.post(API+'/timer/set-stage',{regId:regId,etapa:etapa},{retries:1},function(){});
         setTimeout(poll,300);
     }
 
     function pick(val){
         selProj=val;
         lastCardsJSON='';
-        var x=new XMLHttpRequest();
-        x.open('POST',API+'/timer/select');
-        x.setRequestHeader('Content-Type','application/json');
-        x.send(JSON.stringify({project:val}));
+        LWConnection.resetPollRate();
+        LWHttp.post(API+'/timer/select',{project:val},{retries:1},function(){});
     }
 
     function timerStart(){
@@ -982,10 +1165,8 @@
             cmd('timer/resume');
         } else if(!timerState.running){
             if(!selProj){showMsg('Selecione um video primeiro!');return}
-            var x=new XMLHttpRequest();
-            x.open('POST',API+'/timer/start');
-            x.setRequestHeader('Content-Type','application/json');
-            x.send(JSON.stringify({project:selProj}));
+            LWConnection.resetPollRate();
+            LWHttp.post(API+'/timer/start',{project:selProj},{retries:1},function(){});
             setTimeout(poll,300);
         }
     }
@@ -1002,10 +1183,8 @@
         if(pomoState.paused){
             cmd('pomodoro/start');
         } else if(!pomoState.running){
-            var x=new XMLHttpRequest();
-            x.open('POST',API+'/pomodoro/start');
-            x.setRequestHeader('Content-Type','application/json');
-            x.send(JSON.stringify({fromPlugin:true}));
+            LWConnection.resetPollRate();
+            LWHttp.post(API+'/pomodoro/start',{fromPlugin:true},{retries:1},function(){});
             setTimeout(poll,300);
         }
     }
@@ -1014,12 +1193,6 @@
         if(!state)return;
         document.getElementById('conn').className='status ok';
         document.getElementById('conn').textContent='Conectado';
-
-        // Sync selection from app — only when timer is actively running (not paused)
-        if(state.selectedProject&&state.selectedProject!==selProj&&t.running&&!t.paused&&!t.appPaused){
-            selProj=state.selectedProject;
-            lastCardsJSON='';
-        }
 
         // Project cards
         renderCards(state.projectCards||[]);
@@ -1052,9 +1225,10 @@
             tSub.textContent='Parado';
         }
 
-        // Auto-select current timer project (by regId) — only when actively running
-        if(t.running&&!t.paused&&!t.appPaused&&t.regId&&t.regId!==selProj){
-            selProj=t.regId;
+        // Sync selected project from app — always, not just when running
+        var syncId=(t.running&&t.regId)?t.regId:state.selectedProject;
+        if(syncId&&syncId!==selProj){
+            selProj=syncId;
             lastCardsJSON='';
         }
 
@@ -1104,24 +1278,95 @@
         document.getElementById('pCyc').innerHTML=dots;
     }
 
+    var lwConnected = false;
+
     function disc(){
         document.getElementById('conn').className='status off';
         document.getElementById('conn').textContent='Desconectado';
+        LWConnection.markDisconnected();
+        if (!lwConnected) return; // already disconnected
+        lwConnected = false;
+        lwSetSectionsDisabled(true);
     }
 
+    function lwSetSectionsDisabled(disabled) {
+        // Sections that need the app to work
+        var ids = ['sectionTimer', 'sectionPomo', 'sectionDownload', 'sectionAutoCut', 'sectionCopyPaste'];
+        for (var i = 0; i < ids.length; i++) {
+            var el = document.getElementById(ids[i]);
+            if (el) {
+                if (disabled) el.classList.add('lw-disabled');
+                else el.classList.remove('lw-disabled');
+            }
+        }
+    }
+
+    /* ═══════ Resilient Polling (adaptive like AutoCut) ═══════ */
+    var _pollTimer=null;
+    var _pollRetries=0;
+    var _MAX_POLL_RETRIES=3;
+
     function poll(){
-        var x=new XMLHttpRequest();
-        x.timeout=2000;
-        x.onload=function(){try{ui(JSON.parse(x.responseText))}catch(e){disc()}};
-        x.onerror=disc;x.ontimeout=disc;
-        x.open('GET',API+'/state');x.send();
+        // Step 1: Check if app is alive via /ping (no auth required)
+        LWHttp.get(API+'/ping',{timeout:3000,retries:0},function(pingErr,pingStatus,pingBody){
+            if(pingErr||!pingBody){
+                // App is truly unreachable
+                _pollRetries++;
+                disc();
+                if(_pollRetries>=_MAX_POLL_RETRIES){
+                    LWLog.warn('poll','App unreachable after '+_pollRetries+' attempts');
+                }
+                _schedulePoll();
+                return;
+            }
+
+            // App is running — mark connected and ALWAYS enable sections
+            _pollRetries=0;
+            LWConnection.markConnected();
+            lwSetSectionsDisabled(false); // always re-enable on every successful ping
+            if (!lwConnected) {
+                lwConnected = true;
+                document.getElementById('conn').className='status ok';
+                document.getElementById('conn').textContent='Conectado';
+            }
+
+            // Step 2: If we have auth, also fetch state data
+            if (!pluginToken) {
+                _schedulePoll();
+                return;
+            }
+            LWHttp.get(API+'/state',{timeout:3000,retries:0},function(err,status,body){
+                if(err==='AUTH_EXPIRED'||status===401){
+                    // App alive but token expired — keep polling, login overlay already shown
+                    _schedulePoll();
+                    return;
+                }
+                if(err||!body){
+                    _schedulePoll();
+                    return;
+                }
+                try{
+                    var data=JSON.parse(body);
+                    ui(data);
+                }catch(e){
+                    LWLog.error('poll','Invalid JSON from /state');
+                }
+                _schedulePoll();
+            });
+        });
+    }
+
+    function _schedulePoll(){
+        if(_pollTimer) clearTimeout(_pollTimer);
+        var interval=LWConnection.getPollInterval();
+        _pollTimer=setTimeout(poll,interval);
     }
 
     function cmd(c){
-        var x=new XMLHttpRequest();
-        x.open('POST',API+'/'+c);
-        x.setRequestHeader('Content-Type','application/json');
-        x.send('{}');
+        LWConnection.resetPollRate(); // User action = poll fast
+        LWHttp.post(API+'/'+c,{},{timeout:5000,retries:1},function(err){
+            if(err) LWLog.warn('cmd','Command failed: '+c);
+        });
         setTimeout(poll,300);
     }
 
@@ -1259,10 +1504,12 @@
         document.getElementById('platYT').classList.toggle('active',p==='youtube');
         document.getElementById('platIG').classList.toggle('active',p==='instagram');
         document.getElementById('platTW').classList.toggle('active',p==='twitter');
+        var ttBtn=document.getElementById('platTT'); if(ttBtn) ttBtn.classList.toggle('active',p==='tiktok');
         var ph='Cole a URL...';
         if(p==='youtube') ph='Cole a URL do YouTube...';
         else if(p==='instagram') ph='Cole a URL do Instagram...';
         else if(p==='twitter') ph='Cole a URL do Twitter/X...';
+        else if(p==='tiktok') ph='Cole a URL do TikTok...';
         document.getElementById('ytUrlPlugin').placeholder=ph;
     }
 
@@ -1271,6 +1518,50 @@
         if(url.includes('youtube.com')||url.includes('youtu.be')) ytSetPlatform('youtube');
         else if(url.includes('instagram.com')) ytSetPlatform('instagram');
         else if(url.includes('twitter.com')||url.includes('x.com')) ytSetPlatform('twitter');
+        else if(url.includes('tiktok.com')||url.includes('vm.tiktok.com')||url.includes('vt.tiktok.com')) ytSetPlatform('tiktok');
+    }
+
+    // Valida URL de mídia antes de baixar — retorna {ok,msg}
+    function ytValidateMediaUrl(raw){
+        var url=(raw||'').trim();
+        if(!url) return {ok:false,msg:'Cole uma URL'};
+        var parsed;
+        try{parsed=new URL(url)}catch(e){return {ok:false,msg:'URL inválida'}}
+        var host=parsed.hostname.replace(/^www\./,'').toLowerCase();
+        var path=parsed.pathname||'';
+
+        if(host==='youtube.com'||host==='m.youtube.com'||host==='music.youtube.com'){
+            if(path.indexOf('/results')===0) return {ok:false,msg:'Página de busca — cole o link de um vídeo'};
+            if(path.indexOf('/@')===0||path.indexOf('/channel/')===0||path.indexOf('/c/')===0||path.indexOf('/user/')===0) return {ok:false,msg:'Isso é um canal, não um vídeo'};
+            if(parsed.searchParams.get('v')) return {ok:true};
+            if(/^\/(shorts|embed|live|v)\//.test(path)) return {ok:true};
+            return {ok:false,msg:'Link do YouTube não é um vídeo'};
+        }
+        if(host==='youtu.be'){
+            if(path.length>1) return {ok:true};
+            return {ok:false,msg:'Link do youtu.be sem ID'};
+        }
+        if(host==='instagram.com'){
+            if(/^\/(reel|reels|p|tv)\/[^\/]+/i.test(path)) return {ok:true};
+            if(/^\/[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil, não um post/reel'};
+            return {ok:false,msg:'Link do Instagram não é um post/reel'};
+        }
+        if(host==='twitter.com'||host==='x.com'||host==='mobile.twitter.com'){
+            if(/\/status\/\d+/i.test(path)) return {ok:true};
+            if(/^\/[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do X, não um tweet'};
+            return {ok:false,msg:'Link do X/Twitter não é um tweet'};
+        }
+        if(host==='tiktok.com'||host==='m.tiktok.com'){
+            if(/\/video\/\d+/i.test(path)) return {ok:true};
+            if(/^\/@[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do TikTok, não um vídeo'};
+            if(path==='/'||/^\/(foryou|following|explore|discover|trending|live)/i.test(path)) return {ok:false,msg:'Cole o link de um vídeo específico'};
+            return {ok:false,msg:'Link do TikTok não é um vídeo'};
+        }
+        if(host==='vm.tiktok.com'||host==='vt.tiktok.com'){
+            if(path.length>1) return {ok:true};
+            return {ok:false,msg:'Link curto do TikTok incompleto'};
+        }
+        return {ok:false,msg:'Aceito YouTube, Instagram, X/Twitter e TikTok'};
     }
 
     // Get Premiere project folder (safe — never crashes if CEP unavailable)
@@ -1325,16 +1616,23 @@
     function ytPluginFetch(){
         var url=document.getElementById('ytUrlPlugin').value.trim();
         if(!url){showMsg('Cole uma URL!');return}
+        var v=ytValidateMediaUrl(url);
+        if(!v.ok){showMsg(v.msg);return}
         var btn=document.getElementById('ytFetchBtn');
         btn.disabled=true;btn.textContent='Buscando...';
         document.getElementById('ytPreview').style.display='none';
+        LWLog.info('download', 'Fetching info: ' + url.substring(0, 60));
 
-        var x=new XMLHttpRequest();
-        x.timeout=60000;
-        x.onload=function(){
+        LWHttp.post(API+'/yt/info',{url:url},{timeout:60000,retries:2},function(err,status,body){
+            btn.disabled=false;btn.textContent='Buscar';
+            if(err){
+                LWLog.error('download','Fetch info failed: '+err);
+                showMsg(err==='TIMEOUT'?'Timeout - tente novamente':'Lion Workspace desconectado');
+                return;
+            }
             try{
-                var info=JSON.parse(x.responseText);
-                if(info.error){showMsg(info.error);btn.disabled=false;btn.textContent='Buscar';return}
+                var info=JSON.parse(body);
+                if(info.error){showMsg(info.error);return}
                 ytPluginInfo=info;
                 document.getElementById('ytThumbPlugin').src=info.thumbnail||'';
                 document.getElementById('ytTitlePlugin').textContent=info.title||'Sem título';
@@ -1343,26 +1641,22 @@
                 var mm=Math.floor(dur/60);var ss=dur%60;
                 document.getElementById('ytDurPlugin').textContent=mm+':'+(ss<10?'0':'')+ss;
                 document.getElementById('ytPreview').style.display='';
-                // Initialize interactive range slider
                 if(ytPlatform!=='instagram'&&dur>0){
                     ytInitRange(dur);
                 } else {
                     document.getElementById('ytTrimSection').style.display='none';
                 }
                 ytGetProjectFolder();
-            }catch(e){showMsg('Erro ao processar resposta')}
-            btn.disabled=false;btn.textContent='Buscar';
-        };
-        x.onerror=function(){showMsg('Lion Workspace desconectado');btn.disabled=false;btn.textContent='Buscar'};
-        x.ontimeout=function(){showMsg('Timeout - tente novamente');btn.disabled=false;btn.textContent='Buscar'};
-        x.open('POST',API+'/yt/info');
-        x.setRequestHeader('Content-Type','application/json');
-        x.send(JSON.stringify({url:url}));
+                LWLog.info('download', 'Info fetched: ' + (info.title||'').substring(0, 40));
+            }catch(e){showMsg('Erro ao processar resposta');LWLog.error('download','Parse error: '+e.message)}
+        });
     }
 
     function ytPluginDownload(){
         var url=document.getElementById('ytUrlPlugin').value.trim();
         if(!url){showMsg('Cole uma URL!');return}
+        var v=ytValidateMediaUrl(url);
+        if(!v.ok){showMsg(v.msg);return}
         var btn=document.getElementById('ytPluginBtn');
         btn.disabled=true;
 
@@ -1371,7 +1665,6 @@
         if(ytPluginLoc_==='project'&&ytProjFolder){
             outDir=ytProjFolder;
         }
-        // else empty = defaults to Downloads in main.js
 
         document.getElementById('ytPluginProgress').style.display='';
         document.getElementById('ytProgressTitle').textContent=ytPluginInfo?ytPluginInfo.title:'Baixando...';
@@ -1382,27 +1675,33 @@
         document.getElementById('ytCancelBtn').style.display='';
         document.getElementById('ytCloseBtn').style.display='none';
 
-        var x=new XMLHttpRequest();
-        x.open('POST',API+'/yt/download');
-        x.setRequestHeader('Content-Type','application/json');
-        x.onload=function(){
-            ytPluginPolling=true;
-        };
-        x.onerror=function(){btn.disabled=false;showMsg('Erro de conexão')};
         var startT=document.getElementById('ytStartTime').value.trim();
         var endT=document.getElementById('ytEndTime').value.trim();
         var payload={url:url,format:ytPluginFormat,outputDir:outDir};
-        // Only send trim times if user actually typed something meaningful
+        if(ytPluginInfo){
+            payload.metaTitle=ytPluginInfo.title||'';
+            payload.metaThumb=ytPluginInfo.thumbnail||'';
+            payload.metaUploader=ytPluginInfo.uploader||'';
+            payload.metaDuration=ytPluginInfo.duration||0;
+        }
         if(startT&&startT!=='0'&&startT!=='00:00'&&startT!=='0:00') payload.startTime=startT;
         if(endT&&endT!=='inf') payload.endTime=endT;
-        x.send(JSON.stringify(payload));
+
+        LWLog.info('download', 'Starting download: ' + url.substring(0, 60) + ' [' + ytPluginFormat + ']');
+        LWHttp.post(API+'/yt/download',payload,{timeout:30000,retries:1},function(err){
+            if(err){
+                btn.disabled=false;
+                showMsg('Erro de conexão');
+                LWLog.error('download','Download request failed: '+err);
+                return;
+            }
+            ytPluginPolling=true;
+            LWLog.info('download', 'Download started successfully');
+        });
     }
 
     function ytPluginCancel(){
-        var x=new XMLHttpRequest();
-        x.open('POST',API+'/yt/cancel');
-        x.setRequestHeader('Content-Type','application/json');
-        x.send('{}');
+        LWHttp.post(API+'/yt/cancel',{},{retries:1},function(){});
         ytPluginPolling=false;
         document.getElementById('ytPluginBtn').disabled=false;
         document.getElementById('ytPluginStat').textContent='Cancelado';
@@ -1416,12 +1715,13 @@
     }
 
     function ytPluginImport(filePath){
-        if(!filePath){showMsg('Erro: caminho vazio');return}
+        if(!filePath){showMsg('Erro: caminho do arquivo vazio');return}
         var autoImport=document.getElementById('ytAutoImport').checked;
-        if(!autoImport)return;
-        if(!window.__adobe_cep__||typeof csInterface==='undefined'){showMsg('CEP indisponivel');return}
+        if(!autoImport){showMsg('Download concluído (auto-import desativado)');return}
+        if(!window.__adobe_cep__||typeof csInterface==='undefined'){showMsg('CEP indisponível — reabra o plugin');return}
         var autoTimeline=document.getElementById('ytAutoTimeline').checked;
-        showMsg('Importando: '+filePath.split(/[/\\]/).pop());
+        var fileName=filePath.split(/[/\\]/).pop()||'arquivo';
+        showMsg('Importando: '+fileName);
         // Wait for file to be fully written/closed by yt-dlp + ffmpeg merge
         setTimeout(function(){
             try{
@@ -1485,11 +1785,10 @@
 
     function ytPluginPollProgress(){
         if(!ytPluginPolling)return;
-        var x=new XMLHttpRequest();
-        x.timeout=2000;
-        x.onload=function(){
+        LWHttp.get(API+'/yt/progress',{timeout:3000,retries:1},function(err,status,body){
+            if(err||!body)return;
             try{
-                var p=JSON.parse(x.responseText);
+                var p=JSON.parse(body);
                 var bar=document.getElementById('ytPluginBar');
                 var pct=document.getElementById('ytPluginPct');
                 var spd=document.getElementById('ytPluginSpeed');
@@ -1527,12 +1826,13 @@
                     stat.style.color='#888';
                 }
             }catch(e){}
-        };
-        x.open('GET',API+'/yt/progress');x.send();
+        });
     }
     setInterval(ytPluginPollProgress,1200);
 
-    setInterval(poll,1000);
+    /* ═══════ Start adaptive polling (like AutoCut) ═══════ */
+    LWInit.complete('plugin-bootstrap');
+    LWLog.info('plugin', 'Plugin ready — starting adaptive poll');
     poll();
 
     // ===== KEYFRAME CURVE EDITOR =====
@@ -1969,6 +2269,7 @@
     var anchorCurrent='cc';
     var anchorTarget='clip'; // 'clip' or 'sequence'
     var anchorVector=false;  // use Vector Motion too
+    var anchorTransform=false; // use Transform effect instead of Motion
     var _ancBusy=false;
 
     // Position labels — main 9 + 16 sub-anchors
@@ -2002,6 +2303,11 @@
         anchorTarget=t;
         document.getElementById('ancTgtClip').className='anc-tgt'+(t==='clip'?' active':'');
         document.getElementById('ancTgtSeq').className='anc-tgt'+(t==='sequence'?' active':'');
+    }
+
+    function toggleAnchorTransform(){
+        anchorTransform=!anchorTransform;
+        document.getElementById('ancTgtTransform').className='anc-tgt'+(anchorTransform?' active':'');
     }
 
     function toggleAnchorVector(){
@@ -2050,7 +2356,7 @@
         ancSetSpinner(true);
         showAnchorMsg('Aplicando...','#f59e0b');
 
-        var script='setClipAnchorPointPro('+coords[0]+','+coords[1]+','+(anchorCompensate?'true':'false')+',"'+anchorTarget+'",'+(anchorVector?'true':'false')+')';
+        var script='setClipAnchorPointPro('+coords[0]+','+coords[1]+','+(anchorCompensate?'true':'false')+',"'+anchorTarget+'",'+(anchorVector?'true':'false')+','+(anchorTransform?'true':'false')+')';
         csInterface.evalScript(script,function(result){
             _ancBusy=false;
             ancSetSpinner(false);
@@ -2072,6 +2378,16 @@
             } else {
                 showAnchorMsg(r||'Erro ao aplicar','#f43f5e');
             }
+        });
+    }
+
+    function debugAnchorClick(){
+        if(!csInterface) return;
+        var dbgEl=document.getElementById('anchorDebug');
+        dbgEl.style.display='block';
+        dbgEl.textContent='Lendo valores...';
+        csInterface.evalScript('debugAnchorValues()',function(r){
+            dbgEl.textContent=String(r||'SEM RESPOSTA').replace(/\|/g,'\n');
         });
     }
 
@@ -2147,14 +2463,15 @@
 
     // Resolve final save dir before paste: returns via callback(dirOrEmpty)
     function cpResolveSaveDir(callback){
-        if (cpSaveMode === 'custom') {
-            callback(cpCustomPath || '');
+        if (cpSaveMode === 'custom' && cpCustomPath) {
+            callback(cpCustomPath);
             return;
         }
-        // project mode: ask ExtendScript for project folder
+        // project mode (or custom without path — fallback to project folder)
         if (!csInterface) { callback(''); return; }
         csInterface.evalScript('getProjectFolder()', function(result){
-            callback(String(result || '').trim());
+            var dir = String(result || '').trim();
+            callback(dir);
         });
     }
 
@@ -2194,7 +2511,7 @@
             var Buf = node.require('buffer').Buffer;
             var b64 = Buf.from(psScript, 'utf16le').toString('base64');
             child_process.exec('powershell -NoProfile -EncodedCommand ' + b64,
-                { maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+                { maxBuffer: 8 * 1024 * 1024, windowsHide: true, timeout: 15000 },
                 function(err, stdout, stderr) {
                     callback(err, String(stdout || ''), String(stderr || ''));
                 }
@@ -2443,6 +2760,10 @@
         if (btn) btn.disabled = true;
         cpShowStatus('Lendo clipboard…', '#f59e0b');
         cpResolveSaveDir(function(saveDir){
+        // If still no save dir, use system TEMP as last resort
+        if (!saveDir) {
+            try { var _n = cpGetNode(); saveDir = _n ? _n.require('os').tmpdir() : ''; } catch(e){}
+        }
         cpReadClipboard(saveDir, function(res){
             if (res.type === 'error') {
                 if (btn) btn.disabled = false;
@@ -2495,6 +2816,510 @@
         });
         });
     }
+
+    // ============================================
+    // AUTOCUT — Silence Detection + Auto-Cutting
+    // Uses FFmpeg silencedetect via Lion Workspace app
+    // then ExtendScript to razor/remove in Premiere
+    // ============================================
+    var acMode = 'remove'; // 'remove' or 'cut'
+    var acSilences = [];   // detected silences [{start, end, duration}]
+    var acClipInfo = null;  // clip info from ExtendScript
+    var acTotalDuration = 0;
+    var acAnalyzing = false;
+    var acProgressInterval = null;
+    var acAiIssues = [];     // AI-detected word issues
+    var acAiFilterType = 'all';
+    var acAiFullText = '';   // full transcript
+
+    function acUpdateThreshold() {
+        var v = document.getElementById('acThreshold').value;
+        document.getElementById('acThreshVal').textContent = v + ' dB';
+    }
+    function acUpdateMinDur() {
+        var v = document.getElementById('acMinDuration').value;
+        document.getElementById('acMinDurVal').textContent = parseFloat(v).toFixed(1) + 's';
+    }
+    function acUpdatePadding() {
+        var v = document.getElementById('acPadding').value;
+        document.getElementById('acPaddingVal').textContent = parseFloat(v).toFixed(2) + 's';
+    }
+    function acSetMode(m) {
+        acMode = m;
+        document.getElementById('acModeRemove').classList.toggle('active', m === 'remove');
+        document.getElementById('acModeCut').classList.toggle('active', m === 'cut');
+    }
+    function acShowStatus(msg, color) {
+        var el = document.getElementById('acStatus');
+        if (el) { el.textContent = msg; el.style.color = color || '#555'; }
+    }
+
+    function acSecsToTime(s) {
+        s = Math.round(s);
+        var m = Math.floor(s / 60), ss = s % 60;
+        return m + ':' + (ss < 10 ? '0' : '') + ss;
+    }
+
+    // Draw visual timeline showing silences
+    function acDrawTimeline() {
+        var el = document.getElementById('acTimeline');
+        if (!el || !acTotalDuration) return;
+        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
+        var html = '';
+        // Draw speaking parts (green) on top of silent bg (red)
+        el.style.background = '#1a1a1a';
+
+        // First, draw the full bar as green (speech)
+        html += '<div style="position:absolute;inset:0;background:rgba(190,242,100,.15);border-radius:4px"></div>';
+
+        // Then overlay red bars for each silence
+        for (var i = 0; i < acSilences.length; i++) {
+            var s = acSilences[i];
+            var silStart = Math.max(0, s.start + padding);
+            var silEnd = Math.max(silStart, s.end - padding);
+            if (silEnd <= silStart) continue;
+            var leftPct = (silStart / acTotalDuration) * 100;
+            var widthPct = ((silEnd - silStart) / acTotalDuration) * 100;
+            html += '<div style="position:absolute;top:0;bottom:0;left:' + leftPct.toFixed(2) + '%;width:' + widthPct.toFixed(2) + '%;background:rgba(244,63,94,.3);border-left:1px solid rgba(244,63,94,.5);border-right:1px solid rgba(244,63,94,.5)" title="Silêncio: ' + acSecsToTime(silStart) + ' - ' + acSecsToTime(silEnd) + '"></div>';
+        }
+        el.innerHTML = html;
+
+        // Update time labels
+        document.getElementById('acTimeStart').textContent = '0:00';
+        document.getElementById('acTimeEnd').textContent = acSecsToTime(acTotalDuration);
+
+        // Update stats
+        var totalRemove = 0;
+        var effectiveCount = 0;
+        for (var j = 0; j < acSilences.length; j++) {
+            var sil = acSilences[j];
+            var effStart = Math.max(0, sil.start + padding);
+            var effEnd = Math.max(effStart, sil.end - padding);
+            if (effEnd > effStart) { totalRemove += (effEnd - effStart); effectiveCount++; }
+        }
+        document.getElementById('acSilCount').textContent = effectiveCount;
+        document.getElementById('acRemoveTime').textContent = acSecsToTime(totalRemove);
+    }
+
+    // ─── Progress bar polling ───
+    function acStartProgressPoll() {
+        acAnalyzing = true;
+        var wrap = document.getElementById('acProgressWrap');
+        if (wrap) wrap.style.display = '';
+        document.getElementById('acProgressBar').style.width = '0%';
+        document.getElementById('acProgressPct').textContent = '0%';
+        document.getElementById('acProgressLabel').textContent = 'Iniciando...';
+
+        acProgressInterval = setInterval(function() {
+            LWHttp.get(API + '/autocut/progress', { timeout: 3000, retries: 0 }, function(err, status, body) {
+                if (err) return;
+                try {
+                    var p = JSON.parse(body);
+                    var pct = Math.min(p.percent || 0, 100);
+                    document.getElementById('acProgressBar').style.width = pct + '%';
+                    document.getElementById('acProgressPct').textContent = pct + '%';
+
+                    var labels = {
+                        'silence': 'Detectando silêncios...',
+                        'transcribe-extract': 'Extraindo áudio...',
+                        'transcribe-api': 'Transcrevendo com IA...',
+                        'transcribe-analyze': 'Analisando palavras...',
+                        'done': 'Concluído!',
+                        'cancelled': 'Cancelado'
+                    };
+                    document.getElementById('acProgressLabel').textContent = labels[p.phase] || 'Processando...';
+
+                    if (!p.active && pct >= 100) acStopProgressPoll();
+                } catch (e) {}
+            });
+        }, 600);
+    }
+
+    function acStopProgressPoll() {
+        acAnalyzing = false;
+        if (acProgressInterval) { clearInterval(acProgressInterval); acProgressInterval = null; }
+        setTimeout(function() {
+            var wrap = document.getElementById('acProgressWrap');
+            if (wrap) wrap.style.display = 'none';
+        }, 1200);
+    }
+
+    function acCancelAnalysis() {
+        LWHttp.post(API + '/autocut/cancel', {}, { retries: 0 }, function() {});
+        acStopProgressPoll();
+        document.getElementById('acAnalyzeBtn').disabled = false;
+        document.getElementById('acAiBtn').disabled = false;
+        acShowStatus('Análise cancelada', '#f59e0b');
+    }
+
+    // ─── Silence analysis (with progress bar) ───
+    function acAnalyze() {
+        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
+        var btn = document.getElementById('acAnalyzeBtn');
+        btn.disabled = true;
+        document.getElementById('acAiBtn').disabled = true;
+        acShowStatus('Obtendo info do clip...', '#f59e0b');
+        document.getElementById('acResults').style.display = 'none';
+        document.getElementById('acAiResults').style.display = 'none';
+        document.getElementById('acApplyBtn').disabled = true;
+
+        csInterface.evalScript('autoCutGetClipInfo()', function(result) {
+            var r = String(result || '');
+            if (r.indexOf('OK:') !== 0) {
+                btn.disabled = false;
+                document.getElementById('acAiBtn').disabled = false;
+                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
+                else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
+                else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
+                else acShowStatus(r || 'Erro', '#f43f5e');
+                return;
+            }
+
+            try {
+                acClipInfo = JSON.parse(r.substring(3));
+            } catch (e) {
+                btn.disabled = false;
+                document.getElementById('acAiBtn').disabled = false;
+                acShowStatus('Erro ao parsear info: ' + e.message, '#f43f5e');
+                return;
+            }
+
+            LWLog.info('autocut', 'Clip: ' + acClipInfo.mediaPath);
+            acShowStatus('Analisando áudio com FFmpeg...', '#f59e0b');
+            acStartProgressPoll(); // Start progress bar
+
+            var threshold = parseInt(document.getElementById('acThreshold').value) || -30;
+            var minDuration = parseFloat(document.getElementById('acMinDuration').value) || 0.5;
+
+            LWHttp.post(API + '/autocut/analyze', {
+                filePath: acClipInfo.mediaPath,
+                threshold: threshold,
+                minDuration: minDuration
+            }, { timeout: 620000, retries: 1 }, function(err, status, body) {
+                btn.disabled = false;
+                document.getElementById('acAiBtn').disabled = false;
+                acStopProgressPoll();
+                if (err) {
+                    LWLog.error('autocut', 'Analysis failed: ' + err);
+                    acShowStatus('Erro: ' + (err === 'TIMEOUT' ? 'Timeout — arquivo muito grande?' : 'App desconectado'), '#f43f5e');
+                    return;
+                }
+                try {
+                    var data = JSON.parse(body);
+                    if (data.error) {
+                        acShowStatus('Erro FFmpeg: ' + data.error, '#f43f5e');
+                        return;
+                    }
+                    acSilences = data.silences || [];
+                    acTotalDuration = data.totalDuration || 0;
+
+                    if (acSilences.length === 0) {
+                        acShowStatus('Nenhum silêncio detectado. Ajuste a sensibilidade.', '#f59e0b');
+                        document.getElementById('acResults').style.display = 'none';
+                        return;
+                    }
+
+                    document.getElementById('acResults').style.display = '';
+                    acDrawTimeline();
+                    document.getElementById('acApplyBtn').disabled = false;
+
+                    var totalSilence = 0;
+                    for (var i = 0; i < acSilences.length; i++) totalSilence += acSilences[i].duration;
+                    var pct = acTotalDuration > 0 ? Math.round((totalSilence / acTotalDuration) * 100) : 0;
+                    acShowStatus(acSilences.length + ' silêncios (' + pct + '% do clip)', '#22c55e');
+                    LWLog.info('autocut', 'Found ' + acSilences.length + ' silences, ' + pct + '% of clip');
+                } catch (e) {
+                    acShowStatus('Erro ao processar resultado', '#f43f5e');
+                    LWLog.error('autocut', 'Parse error: ' + e.message);
+                }
+            });
+        });
+    }
+
+    // ─── AI Word Analysis (Whisper transcription + filler/repeat detection) ───
+    function acAiAnalyze() {
+        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
+
+        var btn = document.getElementById('acAiBtn');
+        btn.disabled = true;
+        document.getElementById('acAnalyzeBtn').disabled = true;
+        acShowStatus('Obtendo info do clip...', '#a78bfa');
+        document.getElementById('acAiResults').style.display = 'none';
+        document.getElementById('acResults').style.display = 'none';
+        document.getElementById('acFullTranscript').style.display = 'none';
+        document.getElementById('acApplyBtn').disabled = true;
+
+        csInterface.evalScript('autoCutGetClipInfo()', function(result) {
+            var r = String(result || '');
+            if (r.indexOf('OK:') !== 0) {
+                btn.disabled = false;
+                document.getElementById('acAnalyzeBtn').disabled = false;
+                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
+                else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
+                else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
+                else acShowStatus(r || 'Erro', '#f43f5e');
+                return;
+            }
+
+            try {
+                acClipInfo = JSON.parse(r.substring(3));
+            } catch (e) {
+                btn.disabled = false;
+                document.getElementById('acAnalyzeBtn').disabled = false;
+                acShowStatus('Erro ao parsear info: ' + e.message, '#f43f5e');
+                return;
+            }
+
+            LWLog.info('autocut', 'AI: Clip = ' + acClipInfo.mediaPath);
+            acShowStatus('Transcrevendo com IA...', '#a78bfa');
+            acStartProgressPoll();
+
+            var apiKey = localStorage.getItem('lw_openai_key') || '';
+            LWHttp.post(API + '/autocut/transcribe', {
+                filePath: acClipInfo.mediaPath,
+                apiKey: apiKey
+            }, { timeout: 320000, retries: 0 }, function(err, status, body) {
+                btn.disabled = false;
+                document.getElementById('acAnalyzeBtn').disabled = false;
+                acStopProgressPoll();
+
+                if (err) {
+                    LWLog.error('autocut', 'AI analysis failed: ' + err);
+                    acShowStatus('Erro: ' + (err === 'TIMEOUT' ? 'Timeout — tente clip menor' : 'Falha na transcrição'), '#f43f5e');
+                    return;
+                }
+
+                try {
+                    var data = JSON.parse(body);
+                    if (data.error) {
+                        acShowStatus('Erro: ' + data.error, '#f43f5e');
+                        // If API key issue, show config
+                        if (data.error.indexOf('API') >= 0 || data.error.indexOf('key') >= 0 || data.error.indexOf('Chave') >= 0) {
+                            document.getElementById('acAiConfig').style.display = '';
+                        }
+                        return;
+                    }
+
+                    acAiIssues = data.issues || [];
+                    acAiFullText = data.text || '';
+                    acTotalDuration = data.totalDuration || 0;
+
+                    LWLog.info('autocut', 'AI: ' + acAiIssues.length + ' issues, lang=' + (data.language || '?'));
+
+                    if (acAiIssues.length === 0) {
+                        acShowStatus('Nenhum problema detectado! Áudio limpo.', '#22c55e');
+                        if (acAiFullText) {
+                            document.getElementById('acAiTranscript').textContent = 'Transcrição ok — clique pra ver';
+                            document.getElementById('acFullTranscript').textContent = acAiFullText;
+                        }
+                        document.getElementById('acAiResults').style.display = '';
+                        document.getElementById('acAiCount').textContent = '0';
+                        return;
+                    }
+
+                    // Convert AI issues to silences format for the Cortar button
+                    acSilences = [];
+                    for (var i = 0; i < acAiIssues.length; i++) {
+                        var iss = acAiIssues[i];
+                        acSilences.push({ start: iss.start, end: iss.end, duration: iss.end - iss.start });
+                    }
+
+                    // Show timeline + results
+                    document.getElementById('acResults').style.display = '';
+                    document.getElementById('acAiResults').style.display = '';
+                    acAiFilterType = 'all';
+                    acDrawAiResults();
+                    acDrawTimeline();
+                    document.getElementById('acApplyBtn').disabled = false;
+
+                    if (acAiFullText) {
+                        document.getElementById('acAiTranscript').textContent = 'Ver transcrição completa';
+                        document.getElementById('acFullTranscript').textContent = acAiFullText;
+                    }
+
+                    // Summary
+                    var fillers = 0, repeats = 0, stutters = 0;
+                    for (var j = 0; j < acAiIssues.length; j++) {
+                        if (acAiIssues[j].type === 'filler') fillers++;
+                        else if (acAiIssues[j].type === 'repeat') repeats++;
+                        else if (acAiIssues[j].type === 'stutter') stutters++;
+                    }
+                    acShowStatus(acAiIssues.length + ' problemas detectados', '#a78bfa');
+                    LWLog.info('autocut', 'AI done: ' + fillers + ' fillers, ' + repeats + ' repeats, ' + stutters + ' stutters');
+
+                } catch (e) {
+                    acShowStatus('Erro ao processar: ' + e.message, '#f43f5e');
+                    LWLog.error('autocut', 'AI parse error: ' + e.message);
+                }
+            });
+        });
+    }
+
+    // ─── AI Results rendering ───
+    function acDrawAiResults() {
+        var el = document.getElementById('acAiIssuesList');
+        if (!el) return;
+        var html = '';
+        var fillers = 0, repeats = 0, stutters = 0;
+        var filtered = [];
+
+        for (var i = 0; i < acAiIssues.length; i++) {
+            var iss = acAiIssues[i];
+            if (iss.type === 'filler') fillers++;
+            else if (iss.type === 'repeat') repeats++;
+            else if (iss.type === 'stutter') stutters++;
+            if (acAiFilterType === 'all' || acAiFilterType === iss.type) filtered.push(iss);
+        }
+
+        document.getElementById('acAiCount').textContent = acAiIssues.length;
+        document.getElementById('acAiFillerN').textContent = fillers;
+        document.getElementById('acAiRepeatN').textContent = repeats;
+        document.getElementById('acAiStutterN').textContent = stutters;
+
+        for (var j = 0; j < filtered.length; j++) {
+            var issue = filtered[j];
+            var colors = { filler: '#f59e0b', repeat: '#f43f5e', stutter: '#a78bfa' };
+            var icons = { filler: '\u25CF', repeat: '\u25C6', stutter: '\u25B2' };
+            var c = colors[issue.type] || '#888';
+            var ic = icons[issue.type] || '\u25CF';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:3px;margin-bottom:2px;background:rgba(255,255,255,.02);border-left:2px solid ' + c + '">';
+            html += '<span style="color:' + c + ';flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + ic + ' ' + issue.label + '</span>';
+            html += '<span style="color:#555;flex-shrink:0;margin-left:6px">' + acSecsToTime(issue.start) + '</span>';
+            html += '</div>';
+        }
+
+        if (filtered.length === 0) html = '<div style="text-align:center;color:#555;padding:8px">Nenhum nesta categoria</div>';
+        el.innerHTML = html;
+
+        // Update filter chip active states
+        var chips = ['All', 'Filler', 'Repeat', 'Stutter'];
+        for (var k = 0; k < chips.length; k++) {
+            var chipEl = document.getElementById('acAiFilter' + chips[k]);
+            if (chipEl) chipEl.classList.toggle('active', acAiFilterType === chips[k].toLowerCase() || (acAiFilterType === 'all' && chips[k] === 'All'));
+        }
+    }
+
+    function acAiFilter(type) {
+        acAiFilterType = type;
+        acDrawAiResults();
+
+        // Also update the silences array to match the filter (for timeline + cutting)
+        acSilences = [];
+        for (var i = 0; i < acAiIssues.length; i++) {
+            var iss = acAiIssues[i];
+            if (type === 'all' || iss.type === type) {
+                acSilences.push({ start: iss.start, end: iss.end, duration: iss.end - iss.start });
+            }
+        }
+        if (acTotalDuration > 0) acDrawTimeline();
+        document.getElementById('acApplyBtn').disabled = (acSilences.length === 0);
+    }
+
+    function acToggleTranscript() {
+        var el = document.getElementById('acFullTranscript');
+        el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    // ─── API Key management ───
+    function acToggleAiConfig() {
+        var el = document.getElementById('acAiConfig');
+        el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    function acSaveAiKey() {
+        var key = document.getElementById('acAiKeyInput').value.trim();
+        if (!key) { acShowStatus('Digite a chave da API', '#f59e0b'); return; }
+        localStorage.setItem('lw_openai_key', key);
+        // Also save on the server side
+        LWHttp.post(API + '/autocut/ai-key', { key: key }, { retries: 1 }, function(err, status, body) {
+            if (err) { acShowStatus('Erro ao salvar chave', '#f43f5e'); return; }
+            try {
+                var r = JSON.parse(body);
+                acShowStatus('Chave salva! (' + (r.masked || 'ok') + ')', '#22c55e');
+                document.getElementById('acAiKeyStatus').textContent = r.masked || '';
+                document.getElementById('acAiConfig').style.display = 'none';
+                document.getElementById('acAiKeyInput').value = '';
+            } catch (e) { acShowStatus('Chave salva!', '#22c55e'); }
+        });
+    }
+
+    // Load AI key status on init
+    function acCheckAiKey() {
+        LWHttp.post(API + '/autocut/ai-key', {}, { retries: 0, timeout: 3000 }, function(err, status, body) {
+            if (err) return;
+            try {
+                var r = JSON.parse(body);
+                if (r.hasKey) {
+                    document.getElementById('acAiKeyStatus').textContent = r.masked || 'API configurada';
+                    // Also load into localStorage if not there
+                    if (!localStorage.getItem('lw_openai_key') && r.masked) {
+                        document.getElementById('acAiKeyStatus').textContent = r.masked;
+                    }
+                }
+            } catch (e) {}
+        });
+    }
+    setTimeout(acCheckAiKey, 3000);
+
+    function acApply() {
+        if (!csInterface || !acSilences.length || !acClipInfo) {
+            acShowStatus('Analise um clip primeiro', '#f43f5e');
+            return;
+        }
+        var btn = document.getElementById('acApplyBtn');
+        btn.disabled = true;
+        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
+
+        acShowStatus('Cortando ' + acSilences.length + ' silêncios...', '#f59e0b');
+        LWLog.info('autocut', 'Applying ' + acSilences.length + ' cuts, mode=' + acMode + ', padding=' + padding);
+
+        var silJson = JSON.stringify(acSilences).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var tIdx = (acClipInfo && acClipInfo.trackIndex >= 0) ? acClipInfo.trackIndex : -1;
+        var tTyp = (acClipInfo && acClipInfo.trackType) ? acClipInfo.trackType : 'video';
+        var script = 'autoCutExecute("' + silJson + '",' + padding + ',"' + acMode + '",' + tIdx + ',"' + tTyp + '")';
+
+        csInterface.evalScript(script, function(result) {
+            btn.disabled = false;
+            var r = String(result || '');
+            LWLog.info('autocut', 'Result: ' + r);
+            if (r.indexOf('OK:') === 0) {
+                // Parse result — format: OK:cuts:removedSec  or  OK:cuts:removedSec|DBG:...
+                var mainPart = r.substring(3).split('|')[0]; // before any |DBG:
+                var parts = mainPart.split(':');
+                var cuts = parseInt(parts[0]) || 0;
+                var removed = parts[1] || '0';
+                if (cuts > 0) {
+                    var msg = cuts + ' cortes aplicados';
+                    if (acMode === 'remove' && removed !== '0') msg += ' — ' + removed + 's removidos';
+                    acShowStatus(msg, '#22c55e');
+                    showMsg('AutoCut: ' + msg);
+                    LWLog.info('autocut', 'Done: ' + msg);
+                    // Reset state
+                    acSilences = [];
+                    acClipInfo = null;
+                    document.getElementById('acResults').style.display = 'none';
+                    document.getElementById('acAiResults').style.display = 'none';
+                } else {
+                    // Razor reported OK but 0 cuts — something went wrong
+                    var dbgInfo = r.indexOf('|DBG:') >= 0 ? r.substring(r.indexOf('|DBG:') + 5) : '';
+                    acShowStatus('Nenhum corte efetivado' + (dbgInfo ? ' — ' + dbgInfo : ''), '#f59e0b');
+                    LWLog.warn('autocut', 'Zero cuts: ' + r);
+                }
+            } else if (r === 'NO_SELECTION') {
+                acShowStatus('Clip não encontrado — selecione novamente', '#f43f5e');
+            } else if (r === 'NO_SILENCES') {
+                acShowStatus('Nenhum silêncio pra cortar', '#f59e0b');
+            } else {
+                acShowStatus(r || 'Erro ao cortar', '#f43f5e');
+                LWLog.error('autocut', 'Cut failed: ' + r);
+            }
+        }, { retries: 1 });
+    }
+
+    // Re-draw timeline when padding changes
+    document.getElementById('acPadding').addEventListener('input', function() {
+        if (acSilences.length > 0) acDrawTimeline();
+    });
 
     </script>
 </body>

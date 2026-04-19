@@ -330,6 +330,7 @@ var _positionNames = ['Position', 'Posicao', 'Posicion'];
 var _scaleNames = ['Scale', 'Escala', 'Skalierung', 'Echelle'];
 var _motionNames = ['Motion', 'Movimento', 'Movement', 'Bewegung', 'Mouvement', 'Movimiento'];
 var _vectorMotionNames = ['Vector Motion', 'Movimento Vetorial', 'Vectorielle Bewegung'];
+var _transformNames = ['Transform', 'Transformar', 'Transformieren', 'Transformer', 'Trasformare'];
 
 // Short prefixes for accent-safe fallback matching (handles Posicao vs Posição etc.)
 var _anchorPrefixes = ['anchor', 'ancor', 'anker', 'ancla'];
@@ -375,6 +376,11 @@ function findMotionComponent(clip) {
 // Find Vector Motion component
 function findVectorMotionComponent(clip) {
     return findComponentByName(clip, _vectorMotionNames);
+}
+
+// Find Transform effect component on clip
+function findTransformComponent(clip) {
+    return findComponentByName(clip, _transformNames);
 }
 
 // Find a property in a component by name (exact, then partial, then prefix)
@@ -451,7 +457,7 @@ function getSourceDimensions(clip) {
 
 // Apply anchor to a single component (Motion or Vector Motion)
 // anchorNorm: [0-1, 0-1], compensate: bool
-// Returns true if applied, false otherwise
+// Auto-detects if Premiere uses normalized (0-1) or pixel values for anchor/position
 // Returns: { ok: bool, debug: string }
 function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH) {
     if (!comp) return { ok: false, debug: 'no-comp' };
@@ -466,19 +472,6 @@ function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH)
     var oldPos = posProp.getValue();
     if (!oldAnchor || !oldPos) return { ok: false, debug: 'no-values' };
 
-    // Source dimensions
-    var srcDims = getSourceDimensions(clip);
-    var srcW, srcH;
-    if (srcDims) { srcW = srcDims.width; srcH = srcDims.height; }
-    else if (oldAnchor[0] > 10 && oldAnchor[1] > 10) {
-        srcW = Math.round(oldAnchor[0] * 2);
-        srcH = Math.round(oldAnchor[1] * 2);
-    } else { srcW = seqW; srcH = seqH; }
-
-    // Target anchor in source pixels
-    var newAx = anchorNorm[0] * srcW;
-    var newAy = anchorNorm[1] * srcH;
-
     // Get current scale
     var scale = 1;
     try {
@@ -487,22 +480,64 @@ function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH)
         else if (sv instanceof Array) scale = sv[0] / 100;
     } catch (e) {}
 
-    if (compensate) {
-        // Calculate compensation BEFORE setting anchor
-        var dAx = newAx - oldAnchor[0];
-        var dAy = newAy - oldAnchor[1];
-        var newPx = oldPos[0] + (dAx * scale) / seqW;
-        var newPy = oldPos[1] + (dAy * scale) / seqH;
+    // AUTO-DETECT: normalized (0-1) vs pixel mode
+    // If both anchor values are < 2.0, Premiere is using normalized coordinates
+    var isNormalized = (Math.abs(oldAnchor[0]) < 2.0 && Math.abs(oldAnchor[1]) < 2.0);
 
-        // Set BOTH atomically
-        anchorProp.setValue([newAx, newAy], true);
-        posProp.setValue([newPx, newPy], true);
+    if (isNormalized) {
+        // ═══ NORMALIZED MODE ═══
+        // Anchor and Position are both 0-1 (Premiere Pro 2025+)
+        // anchorNorm is already in 0-1 space — use directly
+        var newAx = anchorNorm[0];
+        var newAy = anchorNorm[1];
+
+        if (compensate) {
+            var dAx = newAx - oldAnchor[0];
+            var dAy = newAy - oldAnchor[1];
+            // For compensation: need to account for source/sequence size ratio
+            var srcDims = getSourceDimensions(clip);
+            var ratioW = 1, ratioH = 1;
+            if (srcDims && seqW > 0 && seqH > 0) {
+                ratioW = srcDims.width / seqW;
+                ratioH = srcDims.height / seqH;
+            }
+            var newPx = oldPos[0] + dAx * scale * ratioW;
+            var newPy = oldPos[1] + dAy * scale * ratioH;
+            anchorProp.setValue([newAx, newAy], true);
+            posProp.setValue([newPx, newPy], true);
+        } else {
+            anchorProp.setValue([newAx, newAy], true);
+        }
+
+        return { ok: true, debug: 'NORM a[' + newAx.toFixed(3) + ',' + newAy.toFixed(3) + '] pos[' + oldPos[0].toFixed(3) + ',' + oldPos[1].toFixed(3) + ']' };
+
     } else {
-        anchorProp.setValue([newAx, newAy], true);
-    }
+        // ═══ PIXEL MODE ═══
+        // Anchor is in source pixels, Position is normalized to sequence
+        var srcDims = getSourceDimensions(clip);
+        var srcW, srcH;
+        if (srcDims) { srcW = srcDims.width; srcH = srcDims.height; }
+        else if (oldAnchor[0] > 10 && oldAnchor[1] > 10) {
+            srcW = Math.round(oldAnchor[0] * 2);
+            srcH = Math.round(oldAnchor[1] * 2);
+        } else { srcW = seqW; srcH = seqH; }
 
-    var dbg = srcW + 'x' + srcH + ' a[' + Math.round(newAx) + ',' + Math.round(newAy) + ']';
-    return { ok: true, debug: dbg };
+        var newAx = anchorNorm[0] * srcW;
+        var newAy = anchorNorm[1] * srcH;
+
+        if (compensate) {
+            var dAx = newAx - oldAnchor[0];
+            var dAy = newAy - oldAnchor[1];
+            var newPx = oldPos[0] + (dAx * scale) / seqW;
+            var newPy = oldPos[1] + (dAy * scale) / seqH;
+            anchorProp.setValue([newAx, newAy], true);
+            posProp.setValue([newPx, newPy], true);
+        } else {
+            anchorProp.setValue([newAx, newAy], true);
+        }
+
+        return { ok: true, debug: 'PX ' + srcW + 'x' + srcH + ' a[' + Math.round(newAx) + ',' + Math.round(newAy) + ']' };
+    }
 }
 
 // Main entry: set anchor with normalized coords
@@ -510,7 +545,8 @@ function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH)
 // compensate: boolean
 // target: 'clip' or 'sequence'
 // useVector: boolean — also apply to Vector Motion
-function setClipAnchorPointPro(nx, ny, compensate, target, useVector) {
+// useTransform: boolean — apply to Transform effect instead of/alongside Motion
+function setClipAnchorPointPro(nx, ny, compensate, target, useVector, useTransform) {
     try {
         if (!app.project) return 'NO_PROJECT';
         var seq = app.project.activeSequence;
@@ -524,29 +560,35 @@ function setClipAnchorPointPro(nx, ny, compensate, target, useVector) {
         var totalApplied = 0;
         var debug = '';
 
-        // If target is 'sequence', anchor is relative to sequence dimensions
         var anchorNorm = [nx, ny];
 
         for (var ci = 0; ci < clips.length; ci++) {
             var clip = clips[ci];
             try {
-                // Apply to standard Motion
-                var motion = findMotionComponent(clip);
-                var result = _applyAnchorToComponent(motion, clip, anchorNorm, compensate, seqW, seqH);
+                if (useTransform) {
+                    // Apply to Transform effect
+                    var transform = findTransformComponent(clip);
+                    if (transform) {
+                        var tResult = _applyAnchorToComponent(transform, clip, anchorNorm, compensate, seqW, seqH);
+                        if (tResult.ok) { debug = 'Transform:' + tResult.debug; totalApplied++; }
+                        else { debug = 'Transform:' + tResult.debug; }
+                    } else {
+                        debug = 'Transform not found — add the effect first';
+                    }
+                } else {
+                    // Apply to standard Motion
+                    var motion = findMotionComponent(clip);
+                    var result = _applyAnchorToComponent(motion, clip, anchorNorm, compensate, seqW, seqH);
+                    if (result.ok) { debug = result.debug; totalApplied++; }
+                    else { debug = result.debug; }
+                }
 
-                // Apply to Vector Motion if requested
+                // Apply to Vector Motion if requested (alongside Motion or Transform)
                 if (useVector) {
                     var vMotion = findVectorMotionComponent(clip);
                     if (vMotion) {
                         _applyAnchorToComponent(vMotion, clip, anchorNorm, compensate, seqW, seqH);
                     }
-                }
-
-                if (result.ok) {
-                    debug = result.debug;
-                    totalApplied++;
-                } else {
-                    debug = result.debug;
                 }
             } catch (ec) {
                 debug = 'err:' + ec.toString();
@@ -559,6 +601,76 @@ function setClipAnchorPointPro(nx, ny, compensate, target, useVector) {
     } catch (e) {
         return 'ERROR:' + e.toString();
     }
+}
+
+// DIAGNOSTIC: dump all raw values from a selected clip for debugging
+function debugAnchorValues() {
+    try {
+        if (!app.project) return 'NO_PROJECT';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        var clips = getSelectedClips();
+        if (clips.length === 0) return 'NO_SELECTION';
+
+        var seqW = parseInt(seq.frameSizeHorizontal, 10) || 0;
+        var seqH = parseInt(seq.frameSizeVertical, 10) || 0;
+        var clip = clips[0];
+        var motion = findMotionComponent(clip);
+        if (!motion) return 'NO_MOTION|comp_count=' + clip.components.numItems;
+
+        var anchorProp = findProp(motion, _anchorNames, _anchorPrefixes);
+        var posProp = findProp(motion, _positionNames, _positionPrefixes);
+        var scaleProp = findProp(motion, _scaleNames, _scalePrefixes);
+
+        var info = 'seq=' + seqW + 'x' + seqH;
+        info += '|motion=' + motion.displayName;
+
+        // List ALL properties in Motion
+        var propList = [];
+        for (var p = 0; p < motion.properties.numItems; p++) {
+            try {
+                var pr = motion.properties[p];
+                var v = pr.getValue();
+                propList.push(pr.displayName + '=' + JSON.stringify(v));
+            } catch (e) {
+                propList.push(motion.properties[p].displayName + '=ERR');
+            }
+        }
+        info += '|props=[' + propList.join(';') + ']';
+
+        // Source dimensions
+        var srcDims = getSourceDimensions(clip);
+        info += '|srcDims=' + (srcDims ? srcDims.width + 'x' + srcDims.height : 'null');
+
+        // Raw anchor + position values
+        if (anchorProp) {
+            var av = anchorProp.getValue();
+            info += '|anchor=' + anchorProp.displayName + ':' + JSON.stringify(av);
+        } else { info += '|anchor=NOT_FOUND'; }
+        if (posProp) {
+            var pv = posProp.getValue();
+            info += '|pos=' + posProp.displayName + ':' + JSON.stringify(pv);
+        } else { info += '|pos=NOT_FOUND'; }
+        if (scaleProp) {
+            var sv = scaleProp.getValue();
+            info += '|scale=' + scaleProp.displayName + ':' + JSON.stringify(sv);
+        } else { info += '|scale=NOT_FOUND'; }
+
+        // Vector Motion too
+        var vm = findVectorMotionComponent(clip);
+        if (vm) {
+            var vmProps = [];
+            for (var p = 0; p < vm.properties.numItems; p++) {
+                try {
+                    var pr2 = vm.properties[p];
+                    vmProps.push(pr2.displayName + '=' + JSON.stringify(pr2.getValue()));
+                } catch (e) { vmProps.push(vm.properties[p].displayName + '=ERR'); }
+            }
+            info += '|vectorMotion=[' + vmProps.join(';') + ']';
+        } else { info += '|vectorMotion=NONE'; }
+
+        return info;
+    } catch (e) { return 'ERROR:' + e.toString(); }
 }
 
 // Legacy compat — keep old function name working
@@ -755,15 +867,16 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
                 imported++;
                 $.sleep(500);
 
-                // Insere no playhead
+                // Insere no playhead (smart track: encontra track vazia ou cria nova)
                 if (insertAtPlayhead && seq) {
                     var clipItem = _cpFindItemByPath(fp);
                     if (clipItem) {
                         try {
                             var insertTime = seq.getPlayerPosition();
-                            var videoTrack = seq.videoTracks[0];
-                            if (videoTrack) {
-                                videoTrack.insertClip(clipItem, insertTime);
+                            var mType = _getMediaType(fp);
+                            var smartTrack = findEmptyTrackAtPlayhead(seq, mType);
+                            if (smartTrack) {
+                                smartTrack.insertClip(clipItem, insertTime);
                                 inserted++;
                             }
                         } catch (e) {}
@@ -777,6 +890,54 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
 }
 
 // ============================================// ============================================
+
+// Smart track finder: finds an empty video or audio track at playhead, or creates a new one
+// mediaType: 'video' or 'audio'
+// Returns a track object (never null — creates one if needed)
+function findEmptyTrackAtPlayhead(seq, mediaType) {
+    var playhead = seq.getPlayerPosition();
+    var playTicks = Number(playhead.ticks);
+    var tracks = (mediaType === 'audio') ? seq.audioTracks : seq.videoTracks;
+
+    // Check each existing track for a gap at the playhead
+    for (var t = 0; t < tracks.numTracks; t++) {
+        var track = tracks[t];
+        var hasClipAtPlayhead = false;
+        try {
+            for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                var clipStart = Number(clip.start.ticks);
+                var clipEnd = Number(clip.end.ticks);
+                if (playTicks >= clipStart && playTicks < clipEnd) {
+                    hasClipAtPlayhead = true;
+                    break;
+                }
+            }
+        } catch (e) {}
+        if (!hasClipAtPlayhead) return track;
+    }
+
+    // All tracks occupied — add a new track
+    try {
+        if (mediaType === 'audio') {
+            seq.audioTracks.addTrack();
+            return seq.audioTracks[seq.audioTracks.numTracks - 1];
+        } else {
+            seq.videoTracks.addTrack();
+            return seq.videoTracks[seq.videoTracks.numTracks - 1];
+        }
+    } catch (e) {
+        // addTrack not available (older Premiere) — fallback to first track
+        return tracks[0];
+    }
+}
+
+// Detect media type from file extension
+function _getMediaType(filePath) {
+    var ext = filePath.replace(/^.*\./, '').toLowerCase();
+    if (/^(mp3|wav|aac|flac|ogg|m4a|wma|aiff)$/.test(ext)) return 'audio';
+    return 'video';
+}
 
 // Insert a clip into the active sequence at the playhead position
 function insertClipToTimeline(filePath) {
@@ -833,12 +994,338 @@ function insertClipToTimeline(filePath) {
         if (!clipItem) return 'CLIP_NOT_FOUND';
 
         var insertTime = seq.getPlayerPosition();
-        var videoTrack = seq.videoTracks[0];
-        if (!videoTrack) return 'NO_VIDEO_TRACK';
+        var mType = _getMediaType(filePath);
+        var track = findEmptyTrackAtPlayhead(seq, mType);
+        if (!track) return 'NO_TRACK';
 
-        videoTrack.insertClip(clipItem, insertTime);
+        track.insertClip(clipItem, insertTime);
         return 'OK';
     } catch (e) {
         return 'ERROR: ' + e.toString();
+    }
+}
+
+// ============================================
+// AUTOCUT — Silence-based auto-cutting
+// Receives silence timestamps from FFmpeg analysis
+// and performs razor cuts + removes silent segments
+// ============================================
+
+// Get the media file path of the first selected clip
+function autoCutGetClipInfo() {
+    try {
+        if (!app.project) return 'NO_PROJECT';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        var clips = getSelectedClips();
+        if (clips.length === 0) return 'NO_SELECTION';
+
+        var clip = clips[0];
+        var mediaPath = '';
+        try {
+            var pi = clip.projectItem;
+            if (pi) mediaPath = pi.getMediaPath() || '';
+        } catch (e) {}
+
+        if (!mediaPath) return 'NO_MEDIA';
+
+        // Get clip timing info
+        var clipStart = Number(clip.start.ticks);
+        var clipEnd = Number(clip.end.ticks);
+        var clipInPoint = 0;
+        try { clipInPoint = Number(clip.inPoint.ticks); } catch (e) {}
+
+        // Get ticks per second for conversion
+        var tps = 254016000000; // Premiere default ticks per second
+        try {
+            var t = new Time();
+            t.seconds = 1;
+            tps = Number(t.ticks);
+        } catch (e) {}
+
+        // Find which track and index the clip is on
+        var trackIndex = -1;
+        var clipIndex = -1;
+        var trackType = 'video';
+        // Search video tracks
+        for (var vt = 0; vt < seq.videoTracks.numTracks; vt++) {
+            var track = seq.videoTracks[vt];
+            for (var c = 0; c < track.clips.numItems; c++) {
+                if (track.clips[c] === clip || Number(track.clips[c].start.ticks) === clipStart) {
+                    trackIndex = vt;
+                    clipIndex = c;
+                    break;
+                }
+            }
+            if (trackIndex >= 0) break;
+        }
+        // Search audio tracks if not found in video
+        if (trackIndex < 0) {
+            for (var at = 0; at < seq.audioTracks.numTracks; at++) {
+                var atrack = seq.audioTracks[at];
+                for (var c = 0; c < atrack.clips.numItems; c++) {
+                    if (atrack.clips[c] === clip || Number(atrack.clips[c].start.ticks) === clipStart) {
+                        trackIndex = at;
+                        clipIndex = c;
+                        trackType = 'audio';
+                        break;
+                    }
+                }
+                if (trackIndex >= 0) break;
+            }
+        }
+
+        var info = {
+            mediaPath: mediaPath,
+            clipStart: clipStart,
+            clipEnd: clipEnd,
+            clipInPoint: clipInPoint,
+            ticksPerSecond: tps,
+            trackIndex: trackIndex,
+            clipIndex: clipIndex,
+            trackType: trackType,
+            seqName: seq.name
+        };
+        return 'OK:' + JSON.stringify(info);
+    } catch (e) {
+        return 'ERROR:' + e.toString();
+    }
+}
+
+// ─── Razor helper: tries multiple methods, returns true if clip count increased ───
+function _doRazorAt(tickVal, targetTrack, qeTrack, qeSeq, seq) {
+    var nb = targetTrack.clips.numItems;
+    var tickStr = String(Math.round(tickVal));
+
+    // Method A: Set playhead → get native ticks → QE track razor
+    if (qeTrack) {
+        try {
+            seq.setPlayerPosition(tickStr);
+            $.sleep(50);
+            var nativeTicks = seq.getPlayerPosition().ticks;
+            qeTrack.razor(nativeTicks);
+            $.sleep(200);
+            if (targetTrack.clips.numItems > nb) return 'A';
+        } catch (e) {}
+    }
+
+    // Method B: QE track razor with our ticks directly
+    if (qeTrack) {
+        try {
+            qeTrack.razor(tickStr);
+            $.sleep(200);
+            if (targetTrack.clips.numItems > nb) return 'B';
+        } catch (e) {}
+    }
+
+    // Method C: Standard DOM track.razor with Time object
+    try {
+        targetTrack.razor(createTimeAt(tickVal));
+        $.sleep(200);
+        if (targetTrack.clips.numItems > nb) return 'C';
+    } catch (e) {}
+
+    // Method D: QE sequence-level razor (cuts all targeted tracks)
+    if (qeSeq) {
+        try {
+            seq.setPlayerPosition(tickStr);
+            $.sleep(50);
+            qeSeq.razor(seq.getPlayerPosition().ticks);
+            $.sleep(200);
+            if (targetTrack.clips.numItems > nb) return 'D';
+        } catch (e) {}
+    }
+
+    return '';
+}
+
+// Perform the actual cuts based on silence data
+// silencesJson: JSON string of [{start, end}] in seconds (relative to media start)
+// padding: seconds of padding to keep around speech
+// mode: 'remove' (delete silences) or 'cut' (just razor, don't delete)
+// trackIdx: video/audio track index (from autoCutGetClipInfo)
+// trackTyp: 'video' or 'audio'
+function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
+    try {
+        if (!app.project) return 'NO_PROJECT';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+
+        var silences;
+        try { silences = eval('(' + silencesJson + ')'); } catch (ep) { return 'PARSE_ERR'; }
+        if (!silences || silences.length === 0) return 'NO_SILENCES';
+
+        padding = padding || 0;
+        mode = mode || 'remove';
+        trackIdx = parseInt(String(trackIdx), 10);
+        trackTyp = String(trackTyp || 'video');
+
+        var clips = getSelectedClips();
+        if (clips.length === 0) return 'NO_SELECTION';
+
+        var clip = clips[0];
+        var clipStartTicks = Number(clip.start.ticks);
+        var clipEndTicks = Number(clip.end.ticks);
+        var clipInTicks = 0;
+        try { clipInTicks = Number(clip.inPoint.ticks); } catch (e) {}
+
+        var tps = 254016000000;
+        try { var t = new Time(); t.seconds = 1; tps = Number(t.ticks); } catch (e) {}
+
+        // ─── Find track ───
+        var targetTrack = null;
+        var fIdx = trackIdx, fTyp = trackTyp;
+        if (!isNaN(trackIdx) && trackIdx >= 0) {
+            try {
+                if (trackTyp === 'audio') targetTrack = seq.audioTracks[trackIdx];
+                else targetTrack = seq.videoTracks[trackIdx];
+            } catch (e) {}
+        }
+        if (!targetTrack) {
+            for (var vt = 0; vt < seq.videoTracks.numTracks; vt++) {
+                var vtrack = seq.videoTracks[vt];
+                for (var vc = 0; vc < vtrack.clips.numItems; vc++) {
+                    if (Math.abs(Number(vtrack.clips[vc].start.ticks) - clipStartTicks) < tps * 0.01) {
+                        targetTrack = vtrack; fIdx = vt; fTyp = 'video'; break;
+                    }
+                }
+                if (targetTrack) break;
+            }
+        }
+        if (!targetTrack) {
+            for (var at = 0; at < seq.audioTracks.numTracks; at++) {
+                var atrack = seq.audioTracks[at];
+                for (var ac = 0; ac < atrack.clips.numItems; ac++) {
+                    if (Math.abs(Number(atrack.clips[ac].start.ticks) - clipStartTicks) < tps * 0.01) {
+                        targetTrack = atrack; fIdx = at; fTyp = 'audio'; break;
+                    }
+                }
+                if (targetTrack) break;
+            }
+        }
+        if (!targetTrack) return 'NO_TRACK';
+        if (targetTrack.clips.numItems === 0) return 'TRACK_EMPTY';
+
+        // ─── Target ONLY this track (required for razor) ───
+        try {
+            for (var ti = 0; ti < seq.videoTracks.numTracks; ti++) {
+                seq.videoTracks[ti].setTargeted(ti === fIdx && fTyp === 'video', true);
+            }
+            for (var tai = 0; tai < seq.audioTracks.numTracks; tai++) {
+                seq.audioTracks[tai].setTargeted(tai === fIdx && fTyp === 'audio', true);
+            }
+        } catch (eTgt) {}
+
+        // ─── Enable QE DOM ───
+        var qeSeq = null, qeTrack = null;
+        try {
+            app.enableQE();
+            qeSeq = qe.project.getActiveSequence();
+            if (fTyp === 'audio') qeTrack = qeSeq.getAudioTrackAt(fIdx);
+            else qeTrack = qeSeq.getVideoTrackAt(fIdx);
+        } catch (eqe) {}
+
+        // ─── Convert silence times to timeline ticks ───
+        var cutPoints = [];
+        for (var i = 0; i < silences.length; i++) {
+            var s = silences[i];
+            var silStartSec = Math.max(0, s.start + padding);
+            var silEndSec = Math.max(silStartSec, s.end - padding);
+            if (silEndSec <= silStartSec) continue;
+
+            var tlStart = clipStartTicks + Math.round((silStartSec * tps) - clipInTicks);
+            var tlEnd = clipStartTicks + Math.round((silEndSec * tps) - clipInTicks);
+
+            if (tlStart < clipStartTicks) tlStart = clipStartTicks;
+            if (tlEnd > clipEndTicks) tlEnd = clipEndTicks;
+            if (tlEnd <= tlStart) continue;
+
+            cutPoints.push({ start: tlStart, end: tlEnd });
+        }
+
+        if (cutPoints.length === 0) return 'NO_CUTS';
+        cutPoints.sort(function(a, b) { return b.start - a.start; });
+
+        var cutsApplied = 0, removedDuration = 0;
+        var dbg = [];
+        var tol = Math.round(tps * 0.05);
+        var origPlayhead = seq.getPlayerPosition().ticks;
+
+        // ── Diagnostic on first cut: detect which razor method works ──
+        var razorMethod = '';
+
+        for (var ci = 0; ci < cutPoints.length; ci++) {
+            var cp = cutPoints[ci];
+            try {
+                var numBefore = targetTrack.clips.numItems;
+
+                // Razor at END then START
+                var rEnd = _doRazorAt(cp.end, targetTrack, qeTrack, qeSeq, seq);
+                var rStart = _doRazorAt(cp.start, targetTrack, qeTrack, qeSeq, seq);
+                var numAfter = targetTrack.clips.numItems;
+
+                if (ci === 0) {
+                    razorMethod = rEnd + '/' + rStart;
+                    dbg.push('m=' + razorMethod);
+                    dbg.push('n=' + numBefore + '>' + numAfter);
+                }
+
+                if (numAfter <= numBefore) {
+                    // Razor didn't create new clips — dump diagnostics for first failure
+                    if (ci === 0) {
+                        dbg.push('tps=' + tps);
+                        dbg.push('cp=' + (Math.round(cp.start / tps * 100) / 100) + '-' + (Math.round(cp.end / tps * 100) / 100) + 's');
+                        dbg.push('clip=' + (Math.round(clipStartTicks / tps * 100) / 100) + '-' + (Math.round(clipEndTicks / tps * 100) / 100) + 's');
+                        dbg.push('inPt=' + (Math.round(clipInTicks / tps * 100) / 100) + 's');
+                        dbg.push('qeT=' + (qeTrack ? typeof qeTrack.razor : 'null'));
+                        dbg.push('qeS=' + (qeSeq ? typeof qeSeq.razor : 'null'));
+                        // Dump first 3 clips on track
+                        for (var dd = 0; dd < Math.min(targetTrack.clips.numItems, 3); dd++) {
+                            var dc = targetTrack.clips[dd];
+                            dbg.push('t' + dd + '=' + dc.start.ticks + '-' + dc.end.ticks);
+                        }
+                    }
+                    continue;
+                }
+
+                // ── Razor worked! Find and remove silence clip ──
+                if (mode === 'remove') {
+                    var found = false;
+                    for (var fc = targetTrack.clips.numItems - 1; fc >= 0; fc--) {
+                        var tc = targetTrack.clips[fc];
+                        var ts = Number(tc.start.ticks);
+                        var te = Number(tc.end.ticks);
+                        if (Math.abs(ts - cp.start) <= tol && Math.abs(te - cp.end) <= tol) {
+                            removedDuration += (te - ts) / tps;
+                            tc.remove(true, true);
+                            cutsApplied++;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found && ci < 3) {
+                        dbg.push('miss' + ci + ':w=' + Math.round(cp.start) + '-' + Math.round(cp.end));
+                        for (var xx = 0; xx < Math.min(targetTrack.clips.numItems, 5); xx++) {
+                            dbg.push('p' + xx + '=' + targetTrack.clips[xx].start.ticks + '-' + targetTrack.clips[xx].end.ticks);
+                        }
+                    }
+                } else {
+                    cutsApplied++;
+                }
+                $.sleep(30);
+            } catch (eCut) {
+                dbg.push('e' + ci + ':' + eCut.toString().substring(0, 30));
+            }
+        }
+
+        // Restore playhead
+        try { seq.setPlayerPosition(origPlayhead); } catch (e) {}
+        forceUIRefresh();
+
+        var result = 'OK:' + cutsApplied + ':' + (Math.round(removedDuration * 10) / 10);
+        if (dbg.length > 0) result += '|DBG:' + dbg.join(';');
+        return result;
+    } catch (e) {
+        return 'ERROR:' + e.toString();
     }
 }

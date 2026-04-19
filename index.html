@@ -66,10 +66,10 @@
         .stat{background:linear-gradient(145deg,rgba(15,15,15,.8),rgba(25,25,25,.4));backdrop-filter:blur(16px);border:1px solid rgba(190,242,100,.1);border-radius:var(--radius);padding:18px;text-align:center;transition:all .3s;position:relative;overflow:hidden}
         .stat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
         .stat:nth-child(1)::before{background:linear-gradient(90deg,#bef264,#d9f99d)}.stat:nth-child(1) .val{color:#d9f99d}
-        .stat:nth-child(2)::before{background:linear-gradient(90deg,#22c55e,#d9f99d)}.stat:nth-child(2) .val{color:#d9f99d}
-        .stat:nth-child(3)::before{background:linear-gradient(90deg,#f43f5e,#fb7185)}.stat:nth-child(3) .val{color:#fb7185}
-        .stat:nth-child(4)::before{background:linear-gradient(90deg,#d9f99d,#22d3ee)}.stat:nth-child(4) .val{color:#22d3ee}
-        .stat:nth-child(5)::before{background:linear-gradient(90deg,#f59e0b,#fbbf24)}.stat:nth-child(5) .val{color:#fbbf24}
+        .stat:nth-child(2)::before{background:linear-gradient(90deg,#bef264,#a3e635)}.stat:nth-child(2) .val{color:#d9f99d}
+        .stat:nth-child(3)::before{background:linear-gradient(90deg,#ef4444,#f87171)}.stat:nth-child(3) .val{color:#f87171}
+        .stat:nth-child(4)::before{background:linear-gradient(90deg,#ef4444,#f87171)}.stat:nth-child(4) .val{color:#f87171}
+        .stat:nth-child(5)::before{background:linear-gradient(90deg,#bef264,#d9f99d)}.stat:nth-child(5) .val{color:#d9f99d}
         .stat:hover{transform:translateY(-3px);border-color:rgba(190,242,100,.25);box-shadow:0 8px 30px rgba(190,242,100,.12)}
         .stat .val{font-size:1.45rem;font-weight:700;margin-bottom:3px}
         .stat .lbl{font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
@@ -108,16 +108,16 @@
         .btn{padding:10px 18px;border-radius:10px;border:none;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
         .btn-a{background:linear-gradient(135deg,#bef264,#a3e635);color:#0a0a0a;box-shadow:0 4px 15px rgba(190,242,100,.3)}
         .btn-a:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(190,242,100,.4)}
-        .btn-g{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;box-shadow:0 4px 12px rgba(34,197,94,.25)}
-        .btn-g:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(34,197,94,.35)}
+        .btn-g{background:rgba(190,242,100,.12);color:#bef264;border:1px solid rgba(190,242,100,.25);box-shadow:none}
+        .btn-g:hover{transform:translateY(-2px);background:rgba(190,242,100,.2);border-color:rgba(190,242,100,.4)}
         .btn-r{background:rgba(244,63,94,.12);color:var(--red);padding:6px 12px;font-size:.78rem;border:1px solid rgba(244,63,94,.12)}
         .btn-r:hover{background:rgba(244,63,94,.22)}
         .btn-o{background:rgba(190,242,100,.06);color:var(--text2);border:1px solid rgba(190,242,100,.12)}
         .btn-o:hover{background:rgba(190,242,100,.12)}
-        .btn-p{background:linear-gradient(135deg,#22d3ee,#0e7490);color:#fff;box-shadow:0 4px 12px rgba(34,211,238,.25)}
-        .btn-p:hover{transform:translateY(-2px)}
-        .btn-inv{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;box-shadow:0 4px 12px rgba(245,158,11,.25)}
-        .btn-inv:hover{transform:translateY(-2px)}
+        .btn-p{background:rgba(190,242,100,.08);color:var(--text2);border:1px solid rgba(190,242,100,.15);box-shadow:none}
+        .btn-p:hover{transform:translateY(-2px);background:rgba(190,242,100,.15);border-color:rgba(190,242,100,.3)}
+        .btn-inv{background:rgba(190,242,100,.15);color:#bef264;border:1px solid rgba(190,242,100,.25);box-shadow:none}
+        .btn-inv:hover{transform:translateY(-2px);background:rgba(190,242,100,.25);border-color:rgba(190,242,100,.4)}
 
         /* Tags */
         .tag{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:.82rem;font-weight:500}
@@ -372,7 +372,8 @@
         /* Update banner — reserves space so buttons don't hide behind window controls
            (Windows close/max/min on the right ~140px, Mac traffic lights on the left ~80px) */
         .update-banner{display:none;align-items:center;gap:10px;padding:8px 16px;background:rgba(190,242,100,.08);border-bottom:1px solid rgba(190,242,100,.15);font-size:.82rem;color:var(--text2);-webkit-app-region:no-drag;min-height:40px;box-sizing:border-box}
-        body.is-win .update-banner{padding-right:150px}
+        body.is-win .update-banner{padding-right:200px}
+        body.is-win .topbar{padding-right:150px}
         body.is-mac .update-banner{padding-left:84px}
         .update-banner.show{display:flex}
         .update-banner .ub-icon{color:#bef264;flex-shrink:0}
@@ -880,7 +881,6 @@
             </div>
             <div class="fr">
                 <div class="fg"><label>Nome</label><input type="text" id="nomeCliente" placeholder="Nome do cliente"></div>
-                <div class="fg" style="flex:0 0 auto;min-width:auto"><label>&nbsp;</label><button class="btn btn-a" onclick="addCliente()">+ Adicionar</button></div>
             </div>
             <!-- Tipo de Serviço (custom) -->
             <div style="margin-top:10px">
@@ -923,6 +923,7 @@
                 <div class="fg" style="margin-bottom:6px"><label>Bandeira</label></div>
                 <div id="cliFlagPicker" style="display:flex;flex-wrap:wrap;gap:4px"></div>
             </div>
+            <button class="btn btn-a" onclick="addCliente()" style="width:100%;margin-top:16px;padding:10px;font-size:.88rem;justify-content:center">+ Adicionar</button>
         </div>
         <div id="clientGrid" class="client-grid"></div>
     </div>
@@ -1117,6 +1118,9 @@
                 </button>
                 <button class="yt-plat-btn" id="appPlatTW" onclick="ytSetAppPlatform('twitter')" title="Twitter / X">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </button>
+                <button class="yt-plat-btn" id="appPlatTT" onclick="ytSetAppPlatform('tiktok')" title="TikTok">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.1z"/></svg>
                 </button>
             </div>
             <div style="display:flex;gap:8px">
@@ -2220,7 +2224,7 @@ function updMeiTracker(){
     const alertEl=document.getElementById('meiAlertaPrevio');
     if(pct>90){alertEl.style.display='block';alertEl.style.borderColor='rgba(244,63,94,.3)';alertEl.style.color='#f43f5e';alertEl.style.background='rgba(244,63,94,.06)';alertEl.innerHTML='<strong>Atenção!</strong> Você está perto do limite do MEI. Considere migrar para ME antes de ultrapassar.';}
     else if(pct>70){alertEl.style.display='block';alertEl.innerHTML=`<strong>Cuidado:</strong> Você já usou ${pct.toFixed(0)}% do limite anual. ${meiAberturaMsg?'<br>'+meiAberturaMsg:''}`;}
-    else if(!cfg.meiData&&fatApp>0){alertEl.style.display='block';alertEl.innerHTML='Configure a <strong>data de abertura do MEI</strong> e o <strong>faturamento anterior</strong> nas Configurações para um cálculo mais preciso.';}
+    else if(!cfg.meiData&&fatApp>0){alertEl.style.display='block';alertEl.style.borderColor='rgba(244,63,94,.3)';alertEl.style.color='#f43f5e';alertEl.style.background='rgba(244,63,94,.06)';alertEl.innerHTML='<span>Configure a <strong>data de abertura do MEI</strong> e o <strong>faturamento anterior</strong> nas Configurações para um cálculo mais preciso.</span><button onclick="this.parentElement.style.display=\'none\'" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#f43f5e;font-size:1.1rem;cursor:pointer;padding:2px 6px;opacity:.7">&times;</button>';alertEl.style.position='relative';}
     else{alertEl.style.display=meiAberturaMsg?'block':'none';if(meiAberturaMsg)alertEl.innerHTML=meiAberturaMsg;}
 }
 
@@ -2792,6 +2796,7 @@ function registrarVideo(){
     if(selServico)reg.tipoServico=selServico;
     if(cl&&cl.tipoCobranca==='por_hora'&&horas>0)reg.horas=horas;
     regs.push(reg);
+    updProjTimerSelect();document.getElementById('selProjTimer').value=String(reg.id);
     salvar();document.getElementById('qtdVid').value='1';document.getElementById('valVid').value='';document.getElementById('nomeVid').value='';document.getElementById('horasVid').value='';
     fecharMod('modRegistrar');
     const wordReg='Serviço registrado!';
@@ -4399,27 +4404,58 @@ async function fetchYTStats(cl){
             const sr=await fetch(`https://backend.mixerno.space/api/youtube/estv3/${chId}`);
             if(sr.ok){const d=await sr.json();stats=d?.items?.[0]||d}
         }catch(e){}
-        // Fetch recent videos from YouTube RSS feed (no API key needed)
+        // Fetch recent videos — try RSS feed first, then channel page fallback
         let vids=[];
+        // Method 1: YouTube RSS feed
         try{
             const fr=await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${chId}`);
-            const xml=await fr.text();
-            const parser=new DOMParser();
-            const doc=parser.parseFromString(xml,'text/xml');
-            const entries=doc.querySelectorAll('entry');
-            entries.forEach((entry,i)=>{
-                if(i>=15)return;
-                const title=(entry.querySelector('title')?.textContent||'').substring(0,50);
-                const videoId=entry.querySelector('videoId')?.textContent||'';
-                const published=(entry.querySelector('published')?.textContent||'').substring(0,10);
-                const viewsEl=entry.getElementsByTagNameNS('http://search.yahoo.com/mrss/','statistics')[0];
-                const views=parseInt(viewsEl?.getAttribute('views'))||0;
-                const thumbEl=entry.getElementsByTagNameNS('http://search.yahoo.com/mrss/','thumbnail')[0];
-                const thumb=thumbEl?.getAttribute('url')||`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
-                vids.push({title,views,videoId,date:published,thumb});
-            });
-            vids.reverse();
-        }catch(e){}
+            if(fr.ok){
+                const xml=await fr.text();
+                const parser=new DOMParser();
+                const doc=parser.parseFromString(xml,'text/xml');
+                const entries=doc.querySelectorAll('entry');
+                entries.forEach((entry,i)=>{
+                    if(i>=15)return;
+                    const title=(entry.querySelector('title')?.textContent||'').substring(0,50);
+                    const videoId=entry.querySelector('videoId')?.textContent||entry.getElementsByTagNameNS('http://www.youtube.com/xml/schemas/2015','videoId')[0]?.textContent||'';
+                    const published=(entry.querySelector('published')?.textContent||'').substring(0,10);
+                    const viewsEl=entry.getElementsByTagNameNS('http://search.yahoo.com/mrss/','statistics')[0];
+                    const views=parseInt(viewsEl?.getAttribute('views'))||0;
+                    const thumbEl=entry.getElementsByTagNameNS('http://search.yahoo.com/mrss/','thumbnail')[0];
+                    const thumb=thumbEl?.getAttribute('url')||`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                    if(videoId)vids.push({title,views,videoId,date:published,thumb});
+                });
+                vids.reverse();
+            }
+        }catch(e){console.log('RSS feed failed:',e)}
+        // Method 2: Fallback — scrape channel page for video data
+        if(!vids.length){
+            try{
+                const handle=cl.yt.replace(/https?:\/\/(www\.)?youtube\.com\/?/,'').replace(/^@/,'').split(/[/?#]/)[0];
+                const pgRes=await fetch(`https://www.youtube.com/@${handle}/videos`,{headers:{'User-Agent':'Mozilla/5.0'}});
+                const pgHtml=await pgRes.text();
+                const ydMatch=pgHtml.match(/var ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s);
+                if(ydMatch){
+                    const yd=JSON.parse(ydMatch[1]);
+                    const tabs=yd?.contents?.twoColumnBrowseResultsRenderer?.tabs||[];
+                    for(const tab of tabs){
+                        const contents=tab?.tabRenderer?.content?.richGridRenderer?.contents||[];
+                        for(const item of contents){
+                            if(vids.length>=15)break;
+                            const vr=item?.richItemRenderer?.content?.videoRenderer;
+                            if(!vr)continue;
+                            const videoId=vr.videoId||'';
+                            const title=(vr.title?.runs?.[0]?.text||'').substring(0,50);
+                            const viewText=vr.viewCountText?.simpleText||vr.viewCountText?.runs?.[0]?.text||'0';
+                            const views=parseInt(viewText.replace(/[^\d]/g,''))||0;
+                            const date=vr.publishedTimeText?.simpleText||'';
+                            const thumb=`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                            if(videoId)vids.push({title,views,videoId,date,thumb});
+                        }
+                    }
+                }
+            }catch(e2){console.log('Channel page fallback failed:',e2)}
+        }
         const name=stats?.snippet?.title||cl.nome;
         const thumbUrl=stats?.snippet?.thumbnails?.default?.url||stats?.snippet?.thumbnails?.medium?.url||'';
         const subs=parseInt(stats?.statistics?.subscriberCount)||0;
@@ -5134,10 +5170,12 @@ function ytSetAppPlatform(p){
     document.getElementById('appPlatYT').classList.toggle('active',p==='youtube');
     document.getElementById('appPlatIG').classList.toggle('active',p==='instagram');
     document.getElementById('appPlatTW').classList.toggle('active',p==='twitter');
+    const ttBtn=document.getElementById('appPlatTT'); if(ttBtn) ttBtn.classList.toggle('active',p==='tiktok');
     let ph='Cole a URL aqui...';
     if(p==='youtube') ph='Cole a URL do YouTube aqui...';
     else if(p==='instagram') ph='Cole a URL do Instagram aqui...';
     else if(p==='twitter') ph='Cole a URL do Twitter/X aqui...';
+    else if(p==='tiktok') ph='Cole a URL do TikTok aqui...';
     document.getElementById('ytUrl').placeholder=ph;
 }
 function ytAutoDetectAppPlatform(){
@@ -5145,6 +5183,7 @@ function ytAutoDetectAppPlatform(){
     if(url.includes('youtube.com')||url.includes('youtu.be')) ytSetAppPlatform('youtube');
     else if(url.includes('instagram.com')) ytSetAppPlatform('instagram');
     else if(url.includes('twitter.com')||url.includes('x.com')) ytSetAppPlatform('twitter');
+    else if(url.includes('tiktok.com')||url.includes('vm.tiktok.com')||url.includes('vt.tiktok.com')) ytSetAppPlatform('tiktok');
 }
 
 // Valida URL de midia: retorna {ok,msg} indicando se parece um link de video valido
@@ -5187,7 +5226,19 @@ function ytValidateMediaUrl(raw){
         if(/^\/[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do X/Twitter, não um tweet'};
         return {ok:false,msg:'Link do X/Twitter não é um tweet válido'};
     }
-    return {ok:false,msg:'Só aceito links do YouTube, Instagram e X/Twitter'};
+    // TikTok — aceita /video/ID, /@user/video/ID, ou links curtos vm.tiktok.com / vt.tiktok.com
+    if(host==='tiktok.com'||host==='m.tiktok.com'){
+        if(/\/video\/\d+/i.test(path)) return {ok:true};
+        if(/^\/@[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do TikTok, não um vídeo'};
+        if(path==='/'||path===''||/^\/(foryou|following|explore|discover|trending|live)/i.test(path)) return {ok:false,msg:'Cole o link de um vídeo específico do TikTok'};
+        return {ok:false,msg:'Link do TikTok não é um vídeo válido'};
+    }
+    if(host==='vm.tiktok.com'||host==='vt.tiktok.com'){
+        // Links curtos sempre vão redirecionar pro vídeo — aceita se tiver um ID qualquer após /
+        if(path.length>1) return {ok:true};
+        return {ok:false,msg:'Link curto do TikTok incompleto'};
+    }
+    return {ok:false,msg:'Só aceito links do YouTube, Instagram, X/Twitter e TikTok'};
 }
 
 // Helper: promise com timeout (rejeita apos ms)
@@ -5315,16 +5366,22 @@ function ytOnProgress(p){
         bar.style.width='100%';pct.textContent='100%';
         document.getElementById('ytDownloadBtn').disabled=false;
         const _curUrl=(document.getElementById('ytUrl')?.value||'').trim();
-        const _effUrl=(_ytInfo&&_ytInfo._url)?_ytInfo._url:_curUrl;
+        const _metaUrl=p.metaUrl||'';
+        const _effUrl=(_ytInfo&&_ytInfo._url)?_ytInfo._url:(_curUrl||_metaUrl);
         // Extrai ID do YouTube/Shorts pra fallback de thumbnail
         const _ytIdMatch=_effUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
         const _ytId=_ytIdMatch?_ytIdMatch[1]:'';
         const _fallbackThumb=_ytId?`https://i.ytimg.com/vi/${_ytId}/hqdefault.jpg`:'';
+        // Use _ytInfo if available, otherwise fallback to metadata from plugin download
+        const _title=(_ytInfo&&_ytInfo.title)?_ytInfo.title:(p.metaTitle||'Video');
+        const _thumb=(_ytInfo&&_ytInfo.thumbnail)?_ytInfo.thumbnail:(p.metaThumb||_fallbackThumb);
+        const _uploader=(_ytInfo&&_ytInfo.uploader)?_ytInfo.uploader:(p.metaUploader||'');
+        const _duration=(_ytInfo&&_ytInfo.duration)?_ytInfo.duration:(p.metaDuration||0);
         _ytHistory.unshift({
-            title:_ytInfo&&_ytInfo.title?_ytInfo.title:'Video',
-            thumb:_ytInfo&&_ytInfo.thumbnail?_ytInfo.thumbnail:_fallbackThumb,
-            uploader:_ytInfo?_ytInfo.uploader:'',
-            duration:_ytInfo?_ytInfo.duration:0,
+            title:_title,
+            thumb:_thumb,
+            uploader:_uploader,
+            duration:_duration,
             url:_effUrl,
             date:new Date().toISOString(),
             format:_ytFmt

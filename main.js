@@ -567,6 +567,15 @@ const ffprobeBin = isWin ? path.join(ytDlpDir, 'ffprobe.exe') : path.join(ytDlpD
 let ytDownloadProc = null;
 let ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', status: 'idle', error: '' };
 
+// AutoCut progress tracking (polled by plugin)
+let autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+let autoCutProc = null; // current FFmpeg process (so we can cancel)
+
+// AI config storage (OpenAI API key)
+const aiConfigPath = path.join(currentUD, 'ai-config.json');
+function getAiConfig() { try { return JSON.parse(fs.readFileSync(aiConfigPath, 'utf8')); } catch(e) { return {}; } }
+function saveAiConfig(cfg) { try { fs.writeFileSync(aiConfigPath, JSON.stringify(cfg), 'utf8'); } catch(e) {} }
+
 function ytDlpReady() { return fs.existsSync(ytDlpBin); }
 function ffmpegReady() { return fs.existsSync(ffmpegBin); }
 
@@ -959,8 +968,28 @@ ipcMain.handle('yt-open-folder', (event, folderPath) => {
 const SYNC_PORT = 9847;
 let cachedState = { timer: { running: false }, pomodoro: { running: false }, projects: [] };
 
-// Plugin auth tokens (session-based, stored in memory)
+// Plugin auth tokens (persisted to disk so they survive app restarts)
 const pluginSessions = new Map(); // token -> { userId, email, plan, expiresAt }
+const sessionsFile = path.join(currentUD, 'plugin-sessions.json');
+
+function loadPluginSessions() {
+    try {
+        const data = JSON.parse(fs.readFileSync(sessionsFile, 'utf8'));
+        const now = Date.now();
+        for (const [token, session] of Object.entries(data)) {
+            if (session.expiresAt > now) pluginSessions.set(token, session);
+        }
+        if (pluginSessions.size > 0) console.log('Restored ' + pluginSessions.size + ' plugin session(s)');
+    } catch(e) { /* no sessions file yet */ }
+}
+function savePluginSessions() {
+    try {
+        const obj = {};
+        for (const [token, session] of pluginSessions) obj[token] = session;
+        fs.writeFileSync(sessionsFile, JSON.stringify(obj), 'utf8');
+    } catch(e) {}
+}
+loadPluginSessions(); // Restore sessions on startup
 
 function generatePluginToken() {
     return crypto.randomBytes(32).toString('hex');
@@ -974,6 +1003,7 @@ function authenticatePluginRequest(req) {
     if (!session) return null;
     if (Date.now() > session.expiresAt) {
         pluginSessions.delete(token);
+        savePluginSessions();
         return null;
     }
     return session;
@@ -1044,6 +1074,7 @@ function startSyncServer() {
                         plan: sub.plan,
                         expiresAt: Date.now() + (24 * 60 * 60 * 1000)
                     });
+                    savePluginSessions(); // persist to disk
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({
                         token,
@@ -1075,9 +1106,17 @@ function startSyncServer() {
             const authHeader = req.headers['authorization'];
             if (authHeader && authHeader.startsWith('Bearer ')) {
                 pluginSessions.delete(authHeader.slice(7));
+                savePluginSessions();
             }
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));
+            return;
+        }
+
+        // Health check (no auth required — lets plugin detect app is running)
+        if (req.method === 'GET' && req.url === '/ping') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, version: app.getVersion() }));
             return;
         }
 
@@ -1099,6 +1138,13 @@ function startSyncServer() {
         if (req.method === 'GET' && req.url === '/yt/progress') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(ytProgress));
+            return;
+        }
+
+        // AutoCut progress polling (used by plugin for progress bar)
+        if (req.method === 'GET' && req.url === '/autocut/progress') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(autoCutProgress));
             return;
         }
 
@@ -1179,7 +1225,7 @@ function startSyncServer() {
                         }
                         dlArgs.push(cleanDlUrl);
 
-                        ytProgress = { active: true, percent: 0, speed: '', eta: '', title: '', status: 'downloading', error: '', outputDir: outputPath };
+                        ytProgress = { active: true, percent: 0, speed: '', eta: '', title: data.metaTitle||'', status: 'downloading', error: '', outputDir: outputPath, metaTitle: data.metaTitle||'', metaThumb: data.metaThumb||'', metaUploader: data.metaUploader||'', metaDuration: data.metaDuration||0, metaUrl: data.url||'' };
                         ytDownloadProc = spawn(ytDlpBin, dlArgs, { windowsHide: true });
                         let lastFile = '';
                         ytDownloadProc.stdout.on('data', d => {
@@ -1262,6 +1308,356 @@ function startSyncServer() {
                     res.end(JSON.stringify({ ok: true }));
                     return;
                 }
+                // ═══════ AutoCut — Silence Detection via FFmpeg (with progress) ═══════
+                if (command === 'autocut/analyze' && data.filePath) {
+                    try {
+                        if (!ffmpegReady()) await ensureFfmpeg();
+                        if (!ffmpegReady()) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'FFmpeg não disponível' }));
+                            return;
+                        }
+                        const threshold = data.threshold || -30;
+                        const minDuration = data.minDuration || 0.5;
+                        const filePath = data.filePath;
+
+                        if (!fs.existsSync(filePath)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Arquivo não encontrado: ' + filePath }));
+                            return;
+                        }
+
+                        // Reset progress — plugin polls /autocut/progress
+                        autoCutProgress = { active: true, percent: 0, phase: 'silence', eta: '' };
+
+                        const ffArgs = [
+                            '-nostdin',
+                            '-i', filePath,
+                            '-vn',  // skip video decoding (HUGE speedup)
+                            '-af', `silencedetect=noise=${threshold}dB:d=${minDuration}`,
+                            '-f', 'null', '-'
+                        ];
+
+                        const result = await new Promise((resolve) => {
+                            const proc = spawn(ffmpegBin, ffArgs, { windowsHide: true });
+                            autoCutProc = proc;
+                            let stderrFull = '';
+                            let totalDuration = 0;
+                            let durationParsed = false;
+
+                            proc.stderr.on('data', d => {
+                                const chunk = d.toString();
+                                stderrFull += chunk;
+
+                                // Parse Duration on first occurrence
+                                if (!durationParsed) {
+                                    const durMatch = stderrFull.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+                                    if (durMatch) {
+                                        totalDuration = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3]);
+                                        durationParsed = true;
+                                    }
+                                }
+
+                                // Parse time= progress from FFmpeg stderr
+                                const timeMatch = chunk.match(/time=\s*(\d+):(\d+):([\d.]+)/);
+                                if (timeMatch && totalDuration > 0) {
+                                    const currentTime = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseFloat(timeMatch[3]);
+                                    autoCutProgress.percent = Math.min(99, Math.round((currentTime / totalDuration) * 100));
+                                }
+                            });
+
+                            proc.on('close', () => {
+                                autoCutProc = null;
+                                autoCutProgress = { active: false, percent: 100, phase: 'done', eta: '' };
+
+                                // Parse silences from full stderr
+                                const silences = [];
+                                const lines = stderrFull.split('\n');
+                                let currentStart = null;
+                                for (const line of lines) {
+                                    const startMatch = line.match(/silence_start:\s*([\d.]+)/);
+                                    if (startMatch) currentStart = parseFloat(startMatch[1]);
+                                    const endMatch = line.match(/silence_end:\s*([\d.]+)\s*\|\s*silence_duration:\s*([\d.]+)/);
+                                    if (endMatch) {
+                                        silences.push({
+                                            start: currentStart !== null ? currentStart : 0,
+                                            end: parseFloat(endMatch[1]),
+                                            duration: parseFloat(endMatch[2])
+                                        });
+                                        currentStart = null;
+                                    }
+                                }
+
+                                const durMatch = stderrFull.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+                                let dur = 0;
+                                if (durMatch) dur = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3]);
+                                resolve({ silences, totalDuration: dur || totalDuration });
+                            });
+
+                            proc.on('error', e => {
+                                autoCutProc = null;
+                                autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+                                resolve({ silences: [], totalDuration: 0, error: e.message });
+                            });
+
+                            setTimeout(() => {
+                                try { proc.kill(); } catch {}
+                                autoCutProc = null;
+                                autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+                                resolve({ silences: [], totalDuration: 0, error: 'Timeout (10min)' });
+                            }, 600000); // 10 minutes for large files
+                        });
+
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify(result));
+                    } catch (e) {
+                        autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message }));
+                    }
+                    return;
+                }
+
+                // ═══════ AutoCut — AI Cancel (abort running process) ═══════
+                if (command === 'autocut/cancel') {
+                    if (autoCutProc) { try { autoCutProc.kill(); } catch {} autoCutProc = null; }
+                    autoCutProgress = { active: false, percent: 0, phase: 'cancelled', eta: '' };
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
+
+                // ═══════ AutoCut — AI Key management ═══════
+                if (command === 'autocut/ai-key') {
+                    if (data.key !== undefined) {
+                        const cfg = getAiConfig();
+                        cfg.openaiKey = data.key || '';
+                        saveAiConfig(cfg);
+                    }
+                    const cfg = getAiConfig();
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ hasKey: !!(cfg.openaiKey), masked: cfg.openaiKey ? ('sk-...' + cfg.openaiKey.slice(-4)) : '' }));
+                    return;
+                }
+
+                // ═══════ AutoCut — AI Transcription + Word Analysis ═══════
+                if (command === 'autocut/transcribe' && data.filePath) {
+                    try {
+                        // Get API key from request or stored config
+                        const apiKey = data.apiKey || (getAiConfig().openaiKey || '');
+                        if (!apiKey) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Chave da API OpenAI não configurada. Clique em "API Key" para configurar.' }));
+                            return;
+                        }
+
+                        if (!ffmpegReady()) await ensureFfmpeg();
+                        if (!ffmpegReady()) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'FFmpeg não disponível' }));
+                            return;
+                        }
+
+                        const filePath = data.filePath;
+                        if (!fs.existsSync(filePath)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Arquivo não encontrado' }));
+                            return;
+                        }
+
+                        // ── Phase 1: Extract audio as MP3 (64kbps mono 16kHz = ~0.5MB/min) ──
+                        autoCutProgress = { active: true, percent: 5, phase: 'transcribe-extract', eta: '' };
+                        const tmpAudio = path.join(os.tmpdir(), 'lw-ac-audio-' + Date.now() + '.mp3');
+
+                        await new Promise((resolve, reject) => {
+                            const args = ['-i', filePath, '-vn', '-acodec', 'libmp3lame', '-b:a', '64k', '-ac', '1', '-ar', '16000', '-y', tmpAudio];
+                            const proc = spawn(ffmpegBin, args, { windowsHide: true });
+                            autoCutProc = proc;
+                            let extractDur = 0;
+                            let extractDurParsed = false;
+                            proc.stderr.on('data', d => {
+                                const chunk = d.toString();
+                                if (!extractDurParsed) {
+                                    const dm = chunk.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+                                    if (dm) { extractDur = parseInt(dm[1]) * 3600 + parseInt(dm[2]) * 60 + parseFloat(dm[3]); extractDurParsed = true; }
+                                }
+                                const tm = chunk.match(/time=\s*(\d+):(\d+):([\d.]+)/);
+                                if (tm && extractDur > 0) {
+                                    const ct = parseInt(tm[1]) * 3600 + parseInt(tm[2]) * 60 + parseFloat(tm[3]);
+                                    autoCutProgress.percent = 5 + Math.round((ct / extractDur) * 20); // 5-25%
+                                }
+                            });
+                            proc.on('close', code => { autoCutProc = null; code === 0 ? resolve() : reject(new Error('FFmpeg audio extract falhou (code ' + code + ')')); });
+                            proc.on('error', e => { autoCutProc = null; reject(e); });
+                            setTimeout(() => { try { proc.kill(); } catch {} autoCutProc = null; reject(new Error('Timeout extraindo áudio')); }, 120000);
+                        });
+
+                        // Check file size (Whisper API limit: 25MB)
+                        const audioStats = fs.statSync(tmpAudio);
+                        const audioSizeMB = Math.round(audioStats.size / (1024 * 1024));
+                        if (audioStats.size > 25 * 1024 * 1024) {
+                            safeRm(tmpAudio);
+                            autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Áudio muito grande (' + audioSizeMB + 'MB). Máximo: 25MB. Use um clip menor.' }));
+                            return;
+                        }
+
+                        // ── Phase 2: Send to OpenAI Whisper API ──
+                        autoCutProgress = { active: true, percent: 28, phase: 'transcribe-api', eta: '' };
+
+                        const audioData = fs.readFileSync(tmpAudio);
+                        safeRm(tmpAudio);
+
+                        const boundary = '----LWWhisper' + Date.now() + crypto.randomBytes(8).toString('hex');
+                        const lang = data.language || '';
+
+                        // Build multipart form data
+                        const parts = [];
+                        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.mp3"\r\nContent-Type: audio/mpeg\r\n\r\n`));
+                        parts.push(audioData);
+                        parts.push(Buffer.from(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n`));
+                        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="response_format"\r\n\r\nverbose_json\r\n`));
+                        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="timestamp_granularities[]"\r\n\r\nword\r\n`));
+                        if (lang) parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\n${lang}\r\n`));
+                        parts.push(Buffer.from(`--${boundary}--\r\n`));
+                        const fullBody = Buffer.concat(parts);
+
+                        // Simulate progress during API call (we can't know real %)
+                        let apiPct = 28;
+                        const apiProgressTimer = setInterval(() => {
+                            if (apiPct < 78) { apiPct += 2; autoCutProgress.percent = apiPct; }
+                        }, 1500);
+
+                        const whisperResult = await new Promise((resolve, reject) => {
+                            const options = {
+                                hostname: 'api.openai.com',
+                                path: '/v1/audio/transcriptions',
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': 'Bearer ' + apiKey,
+                                    'Content-Type': 'multipart/form-data; boundary=' + boundary,
+                                    'Content-Length': fullBody.length
+                                }
+                            };
+                            const httpsReq = require('https').request(options, (httpsRes) => {
+                                let resData = '';
+                                httpsRes.on('data', chunk => resData += chunk);
+                                httpsRes.on('end', () => {
+                                    try { resolve(JSON.parse(resData)); }
+                                    catch (e) { reject(new Error('Whisper API parse error: ' + resData.substring(0, 300))); }
+                                });
+                            });
+                            httpsReq.on('error', reject);
+                            httpsReq.write(fullBody);
+                            httpsReq.end();
+                            setTimeout(() => { httpsReq.destroy(); reject(new Error('Whisper API timeout (5min)')); }, 300000);
+                        });
+
+                        clearInterval(apiProgressTimer);
+
+                        // Check API errors
+                        if (whisperResult.error) {
+                            autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Whisper API: ' + (whisperResult.error.message || JSON.stringify(whisperResult.error)) }));
+                            return;
+                        }
+
+                        // ── Phase 3: Analyze transcript for repeated words / fillers / stuttering ──
+                        autoCutProgress = { active: true, percent: 82, phase: 'transcribe-analyze', eta: '' };
+
+                        const words = whisperResult.words || [];
+                        const segments = whisperResult.segments || [];
+                        const fullText = whisperResult.text || '';
+
+                        // Filler words (PT + EN)
+                        const FILLERS_PT = ['é', 'ah', 'ãh', 'eh', 'éh', 'uh', 'uhm', 'hum', 'hmm', 'hã',
+                            'tipo', 'né', 'então', 'assim', 'basicamente', 'literalmente', 'enfim',
+                            'bom', 'olha', 'veja', 'cara', 'mano', 'tá', 'ok', 'certo', 'pronto',
+                            'aí', 'daí', 'pois', 'sabe', 'entendeu', 'tá ligado', 'meu'];
+                        const FILLERS_EN = ['uh', 'um', 'uhm', 'hmm', 'like', 'basically', 'literally',
+                            'actually', 'so', 'well', 'right', 'okay', 'oh'];
+                        const FILLERS = new Set([...FILLERS_PT, ...FILLERS_EN]);
+
+                        const issues = [];
+
+                        for (let i = 0; i < words.length; i++) {
+                            const w = words[i];
+                            const wClean = (w.word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
+                            if (!wClean || wClean.length < 1) continue;
+
+                            // ─ Check filler words ─
+                            if (FILLERS.has(wClean)) {
+                                issues.push({
+                                    type: 'filler', word: w.word.trim(),
+                                    start: w.start, end: w.end,
+                                    label: 'Filler: "' + w.word.trim() + '"'
+                                });
+                            }
+
+                            // ─ Check consecutive repeated words ─
+                            if (i > 0) {
+                                const prevClean = (words[i - 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
+                                if (wClean === prevClean && wClean.length > 1) {
+                                    // Find extent of the repetition group
+                                    let groupStart = i - 1;
+                                    while (groupStart > 0) {
+                                        const earlier = (words[groupStart - 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
+                                        if (earlier === wClean) groupStart--;
+                                        else break;
+                                    }
+                                    // Only add at the last word of the group (avoid duplicates)
+                                    const nextClean = (i + 1 < words.length) ? (words[i + 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '') : '';
+                                    if (nextClean !== wClean) {
+                                        const count = i - groupStart + 1;
+                                        issues.push({
+                                            type: 'repeat', word: w.word.trim(),
+                                            start: words[groupStart].start, end: w.end,
+                                            count: count,
+                                            label: '"' + w.word.trim() + '" repetido ' + count + 'x'
+                                        });
+                                    }
+                                }
+                            }
+
+                            // ─ Check stuttering (partial word repetition) ─
+                            if (i > 0 && wClean.length >= 3) {
+                                const prevClean = (words[i - 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
+                                if (prevClean.length >= 1 && prevClean.length <= 3 && prevClean !== wClean) {
+                                    // Previous is a short fragment that starts the same as current word
+                                    if (wClean.startsWith(prevClean)) {
+                                        issues.push({
+                                            type: 'stutter',
+                                            word: words[i - 1].word.trim() + ' ' + w.word.trim(),
+                                            start: words[i - 1].start, end: w.end,
+                                            label: 'Gaguejo: "' + words[i - 1].word.trim() + ' ' + w.word.trim() + '"'
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        autoCutProgress = { active: false, percent: 100, phase: 'done', eta: '' };
+
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({
+                            text: fullText,
+                            words: words,
+                            segments: segments,
+                            issues: issues,
+                            totalDuration: whisperResult.duration || 0,
+                            language: whisperResult.language || lang || 'auto'
+                        }));
+
+                    } catch (e) {
+                        autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message }));
+                    }
+                    return;
+                }
+
                 if (command === 'yt/cancel') {
                     if (ytDownloadProc) { ytDownloadProc.kill(); ytDownloadProc = null; }
                     ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', status: 'cancelled', error: '' };
@@ -1503,7 +1899,10 @@ ipcMain.handle('auth-login', async (_, email, password) => {
             app_version: app.getVersion(),
             last_seen_at: new Date().toISOString(),
             last_heartbeat_at: new Date().toISOString()
-        }, { onConflict: 'user_id,fingerprint' }).then(() => {}, () => {});
+        }, { onConflict: 'user_id,fingerprint' }).then(
+            (res) => { if (res.error) console.error('[device-register] upsert failed:', res.error.message); else console.log('[device-register] OK'); },
+            (err) => { console.error('[device-register] exception:', err.message); }
+        );
 
         return {
             success: true,
@@ -1764,6 +2163,13 @@ app.on('before-quit', () => {
     app.isQuitting = true;
     stopFgDaemon();
     stopHeartbeat();
+    // ── Clean up focus mode so it doesn't run forever ──
+    if (focusActive) {
+        focusActive = false;
+        focusExternal = false;
+        if (focusInterval) { clearInterval(focusInterval); focusInterval = null; }
+        destroyOverlays();
+    }
 });
 
 app.whenReady().then(() => {
