@@ -1076,18 +1076,19 @@
         btn.disabled = true;
         btn.textContent = 'Entrando...';
         LWLog.info('auth', 'Login attempt: ' + email);
-        LWHttp.post(API + '/auth/login', { email: email, password: password }, { timeout: 15000, retries: 2 }, function(err, status, body) {
+        // Uses direct XHR (like v1.3.31) — avoids any wrapper edge cases during auth
+        var xhr = new XMLHttpRequest();
+        xhr.timeout = 15000;
+        xhr.open('POST', API + '/auth/login', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
             btn.disabled = false;
             btn.textContent = 'Entrar';
-            if (err) {
-                LWLog.error('auth', 'Login failed: ' + err);
-                errEl.textContent = (err === 'TIMEOUT') ? 'Timeout — verifique sua conexão.' : 'Abra o Lion Workspace primeiro.';
-                errEl.classList.add('show');
-                return;
-            }
-            if (status === 200) {
+            var raw = xhr.responseText || '';
+            if (xhr.status === 200) {
                 try {
-                    var r = JSON.parse(body);
+                    var r = JSON.parse(raw);
+                    if (!r || !r.token) throw new Error('no token');
                     pluginToken = r.token;
                     localStorage.setItem('lw_plugin_token', r.token);
                     pluginUser = r.user;
@@ -1095,22 +1096,40 @@
                     LWLog.info('auth', 'Login successful: ' + email);
                     pluginShowApp(r.user, r.plan);
                 } catch(e) {
-                    errEl.textContent = 'Erro ao processar resposta.';
+                    LWLog.error('auth', 'Parse error: ' + e.message + ' | raw=' + raw.substring(0, 120));
+                    errEl.textContent = 'Erro ao processar resposta: ' + e.message;
                     errEl.classList.add('show');
                 }
             } else {
                 try {
-                    var errData = JSON.parse(body);
+                    var errData = JSON.parse(raw);
                     var msg = errData.message || errData.error || 'Erro ao fazer login';
                     if (errData.error === 'no_subscription') msg = 'Assinatura necessária para usar o plugin.';
                     else if (msg.indexOf('Invalid login') >= 0) msg = 'Email ou senha incorretos';
                     errEl.textContent = msg;
                 } catch(e) {
-                    errEl.textContent = 'Erro do servidor (' + status + ')';
+                    errEl.textContent = 'Erro do servidor (' + xhr.status + ')';
                 }
                 errEl.classList.add('show');
             }
-        });
+        };
+        xhr.ontimeout = function() {
+            btn.disabled = false; btn.textContent = 'Entrar';
+            errEl.textContent = 'Timeout — verifique se o Lion Workspace está aberto.';
+            errEl.classList.add('show');
+        };
+        xhr.onerror = function() {
+            btn.disabled = false; btn.textContent = 'Entrar';
+            errEl.textContent = 'Abra o Lion Workspace primeiro.';
+            errEl.classList.add('show');
+        };
+        try {
+            xhr.send(JSON.stringify({ email: email, password: password }));
+        } catch(e) {
+            btn.disabled = false; btn.textContent = 'Entrar';
+            errEl.textContent = 'Erro ao enviar: ' + e.message;
+            errEl.classList.add('show');
+        }
     }
 
     function pluginDoLogout() {
