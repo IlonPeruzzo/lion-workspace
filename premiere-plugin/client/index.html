@@ -865,12 +865,15 @@
             }
             tryOnce();
         }
-        return {
+        // NOTE: get/post call obj.request (not local `request`) so any external
+        // interceptor on LWHttp.request (e.g. auth token injection) is applied.
+        var obj = {
             request: request,
-            get:  function(url, options, callback) { request('GET',  url, null, options, callback); },
-            post: function(url, data, options, callback) { request('POST', url, data, options, callback); },
+            get:  function(url, options, callback) { obj.request('GET',  url, null, options, callback); },
+            post: function(url, data, options, callback) { obj.request('POST', url, data, options, callback); },
             isHealthy: function() { return (Date.now() - _lastSuccess) < 10000; }
         };
+        return obj;
     })();
 
     var LWConnection = (function() {
