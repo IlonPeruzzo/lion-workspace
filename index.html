@@ -844,7 +844,7 @@
                         <button type="button" id="fatMetricLiq" onclick="setFatMetric('liq')" style="padding:6px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);border-radius:6px;transition:all .2s">Líquido</button>
                     </div>
                 </div>
-                <canvas id="chartFat"></canvas>
+                <canvas id="chartFat" style="max-height:180px"></canvas>
             </div>
             <div class="chart-card">
                 <h3 id="chartCliTitle" style="margin:0 0 12px 0">Servicos por Cliente</h3>
@@ -4038,7 +4038,7 @@ function renderCharts(){
     charts.fat=new Chart(c1,{type:'bar',
         data:{labels,datasets:[
             {label:metricLabel,data:dataArr,backgroundColor:bgArr,borderColor:bdArr,borderWidth:bwArr,borderRadius:8,borderSkipped:false,hoverBackgroundColor:`rgba(${colRgb},0.95)`,barPercentage:0.65,categoryPercentage:0.85}
-        ]},options:{responsive:true,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+metricLabel+': '+curSym+' '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#a3a3a3',font:{size:11,weight:'600'}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:11},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}}}},
+        ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:900,easing:'easeOutQuart'},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{...ttOpts,callbacks:{label:function(ctx){return ' '+metricLabel+': '+curSym+' '+fb(ctx.raw)}}}},scales:{x:{ticks:{color:'#a3a3a3',font:{size:11,weight:'600'}},grid:{color:gridC,drawBorder:false}},y:{ticks:{color:'#525252',font:{size:10},callback:v=>curSym+' '+fb(v)},grid:{color:gridC,drawBorder:false}}}},
         plugins:[{id:'barValueLabels',afterDatasetsDraw(chart){
             const{ctx:cx}=chart;
             const meta=chart.getDatasetMeta(0);
@@ -4051,78 +4051,84 @@ function renderCharts(){
                 const isSelected=ms[i]===mesSel;
                 const barH=bar.base-bar.y;
                 const barW=bar.width||30;
+                if(barH<14)return; // skip too-small bars
                 const txt=curSym+' '+fb(val);
 
-                if(isSelected && barH>12){
-                    // ─── Liquid wave on top of selected bar ───
-                    const left=bar.x-barW/2;
-                    const right=bar.x+barW/2;
-                    const waveAmp=Math.min(5,barH*0.04);
-                    const waveFreq=(Math.PI*2)/barW*1.5;
-                    // Draw liquid "surface" band above bar top
-                    cx.save();
-                    cx.beginPath();
-                    cx.moveTo(left,bar.y);
-                    for(let x=left;x<=right;x+=1.5){
-                        const y=bar.y+Math.sin(phase+(x-left)*waveFreq)*waveAmp;
-                        cx.lineTo(x,y);
-                    }
-                    cx.lineTo(right,bar.y+barH);
-                    cx.lineTo(left,bar.y+barH);
-                    cx.closePath();
-                    const grad=cx.createLinearGradient(0,bar.y-waveAmp,0,bar.y+barH);
-                    grad.addColorStop(0,`rgba(${colRgb},1)`);
-                    grad.addColorStop(1,`rgba(${colRgb},0.72)`);
-                    cx.fillStyle=grad;
-                    cx.fill();
-                    // Shimmering highlight along the wave crest
-                    cx.beginPath();
-                    for(let x=left;x<=right;x+=1.5){
-                        const y=bar.y+Math.sin(phase+(x-left)*waveFreq)*waveAmp;
-                        if(x===left) cx.moveTo(x,y); else cx.lineTo(x,y);
-                    }
-                    cx.strokeStyle='rgba(255,255,255,0.55)';
-                    cx.lineWidth=1.5;
-                    cx.stroke();
-                    // Second phase-shifted wave for depth
-                    cx.beginPath();
-                    for(let x=left;x<=right;x+=1.5){
-                        const y=bar.y+Math.sin(phase*1.3+(x-left)*waveFreq*0.7+1.2)*waveAmp*0.6+2;
-                        if(x===left) cx.moveTo(x,y); else cx.lineTo(x,y);
-                    }
-                    cx.strokeStyle='rgba(255,255,255,0.22)';
-                    cx.lineWidth=1;
-                    cx.stroke();
-                    cx.restore();
+                // ─── Liquid surface wave — gentle, on EVERY bar, scaled ───
+                const left=bar.x-barW/2;
+                const right=bar.x+barW/2;
+                const ampBase=isSelected?3.5:2.2;
+                const waveAmp=Math.min(ampBase,barH*0.035);
+                const waveFreq=(Math.PI*2)/barW*1.4;
+                const phaseOffset=i*0.7; // each bar oscillates slightly differently
 
-                    // ─── BIG value inside selected bar ───
-                    const fontSize=barH>=90?30:(barH>=60?24:(barH>=40?18:14));
-                    cx.save();
-                    cx.font=`900 ${fontSize}px Inter`;
-                    cx.textAlign='center';
-                    cx.textBaseline='middle';
-                    cx.fillStyle='#0a0a0a';
-                    cx.shadowColor=`rgba(${colRgb},0.6)`;
-                    cx.shadowBlur=14;
-                    const textY=barH>=fontSize*2?bar.y+barH/2:bar.y+fontSize*0.8;
-                    cx.fillText(txt,bar.x,textY);
-                    cx.restore();
-                } else {
-                    // Non-selected bars — small label
-                    cx.save();
-                    cx.font='700 10px Inter';
-                    cx.textAlign='center';
-                    cx.textBaseline='middle';
-                    if(barH>=22){
-                        cx.fillStyle='#0a0a0a';
-                        cx.fillText(txt,bar.x,bar.y+11);
-                    } else {
-                        cx.fillStyle='#f5f5f5';
-                        cx.shadowColor='rgba(0,0,0,0.6)';cx.shadowBlur=3;
-                        cx.fillText(txt,bar.x,bar.y-8);
-                    }
-                    cx.restore();
+                cx.save();
+
+                // Repaint body with liquid gradient (covers default bar fill)
+                cx.beginPath();
+                for(let x=left;x<=right;x+=1.2){
+                    const y=bar.y+Math.sin(phase+phaseOffset+(x-left)*waveFreq)*waveAmp;
+                    if(x===left) cx.moveTo(x,y); else cx.lineTo(x,y);
                 }
+                cx.lineTo(right,bar.base);
+                cx.lineTo(left,bar.base);
+                cx.closePath();
+                const grad=cx.createLinearGradient(0,bar.y-waveAmp,0,bar.y+barH);
+                if(isSelected){
+                    grad.addColorStop(0,`rgba(${colRgb},0.92)`);
+                    grad.addColorStop(0.4,`rgba(${colRgb},0.78)`);
+                    grad.addColorStop(1,`rgba(${colRgb},0.52)`);
+                } else {
+                    grad.addColorStop(0,`rgba(${colRgb},0.55)`);
+                    grad.addColorStop(0.5,`rgba(${colRgb},0.38)`);
+                    grad.addColorStop(1,`rgba(${colRgb},0.18)`);
+                }
+                cx.fillStyle=grad;
+                cx.fill();
+
+                // Soft crest highlight (meniscus)
+                cx.beginPath();
+                for(let x=left;x<=right;x+=1.2){
+                    const y=bar.y+Math.sin(phase+phaseOffset+(x-left)*waveFreq)*waveAmp;
+                    if(x===left) cx.moveTo(x,y); else cx.lineTo(x,y);
+                }
+                cx.strokeStyle=isSelected?'rgba(255,255,255,0.45)':'rgba(255,255,255,0.22)';
+                cx.lineWidth=1;
+                cx.stroke();
+
+                // Secondary wave for subtle depth (slightly below, different phase)
+                cx.beginPath();
+                const amp2=waveAmp*0.5;
+                for(let x=left;x<=right;x+=1.2){
+                    const y=bar.y+Math.sin(phase*1.4+phaseOffset+(x-left)*waveFreq*0.75+1.6)*amp2+2.2;
+                    if(x===left) cx.moveTo(x,y); else cx.lineTo(x,y);
+                }
+                cx.strokeStyle=isSelected?'rgba(255,255,255,0.14)':'rgba(255,255,255,0.08)';
+                cx.lineWidth=0.7;
+                cx.stroke();
+
+                cx.restore();
+
+                // ─── Value text — soft white with glow, no harsh black ───
+                const fontSize=isSelected
+                    ? (barH>=100?18:barH>=70?16:barH>=45?13:11)
+                    : (barH>=70?12:barH>=45?11:barH>=25?10:9);
+                const weight=isSelected?'700':'600';
+                cx.save();
+                cx.font=`${weight} ${fontSize}px Inter`;
+                cx.textAlign='center';
+                cx.textBaseline='middle';
+                cx.letterSpacing='0.3px';
+
+                const textY=barH>=fontSize*2.8?bar.y+barH/2:(bar.y+fontSize*0.9+waveAmp);
+
+                // Dark backing blur for readability on light liquid
+                cx.shadowColor='rgba(0,0,0,0.55)';
+                cx.shadowBlur=isSelected?10:5;
+                cx.shadowOffsetY=1;
+                cx.fillStyle='rgba(255,255,255,0.97)';
+                cx.fillText(txt,bar.x,textY);
+                cx.restore();
             });
         }}]
     });
