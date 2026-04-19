@@ -1022,13 +1022,44 @@
         return pluginToken ? { 'Authorization': 'Bearer ' + pluginToken } : {};
     }
 
+    // Try to get a plugin token automatically using the app's Supabase session.
+    // No credentials needed — the app server validates the local session.
+    function pluginTryAutoLogin(onFail) {
+        var xhr = new XMLHttpRequest();
+        xhr.timeout = 8000;
+        xhr.open('POST', API + '/auth/local-session', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var r = JSON.parse(xhr.responseText || '{}');
+                    if (r && r.token) {
+                        pluginToken = r.token;
+                        localStorage.setItem('lw_plugin_token', r.token);
+                        pluginUser = r.user;
+                        if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
+                        LWLog.info('auth', 'Auto-login via app session: ' + (r.user && r.user.email));
+                        pluginShowApp(r.user, r.plan);
+                        return;
+                    }
+                } catch(e) {}
+            }
+            LWLog.info('auth', 'Auto-login unavailable (status=' + xhr.status + ')');
+            if (onFail) onFail();
+        };
+        xhr.ontimeout = function() { if (onFail) onFail(); };
+        xhr.onerror = function() { if (onFail) onFail(); };
+        try { xhr.send('{}'); } catch(e) { if (onFail) onFail(); }
+    }
+
     function pluginCheckSession() {
         LWInit.start('auth-check');
         var headers = pluginToken ? { 'Authorization': 'Bearer ' + pluginToken } : {};
         LWHttp.get(API + '/auth/check', { timeout: 5000, retries: 2, headers: headers }, function(err, status, body) {
             if (err || !body) {
                 LWInit.fail('auth-check', err || 'no-response');
-                pluginShowLogin();
+                // Before showing login, try auto-login using app session
+                pluginTryAutoLogin(pluginShowLogin);
                 return;
             }
             try {
@@ -1044,11 +1075,12 @@
                         localStorage.removeItem('lw_plugin_token');
                     }
                     LWInit.complete('auth-check');
-                    pluginShowLogin();
+                    // Auth failed/missing — try auto-login first, fallback to login form
+                    pluginTryAutoLogin(pluginShowLogin);
                 }
             } catch(e) {
                 LWInit.fail('auth-check', e.message);
-                pluginShowLogin();
+                pluginTryAutoLogin(pluginShowLogin);
             }
         });
     }

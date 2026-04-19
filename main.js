@@ -1135,6 +1135,69 @@ function startSyncServer() {
             return;
         }
 
+        // Auto-login: plugin pega um token usando a sessão do app principal (sem senha)
+        // Só funciona pra conexões localhost (127.0.0.1), o que já é garantido porque
+        // o server está ouvindo apenas em 127.0.0.1.
+        if (req.method === 'POST' && req.url === '/auth/local-session') {
+            (async () => {
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) {
+                        res.writeHead(401, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'app_not_logged_in', message: 'Faça login no Lion Workspace primeiro.' }));
+                        return;
+                    }
+                    // Check subscription
+                    const { data: sub } = await supabase
+                        .from('subscriptions')
+                        .select('plan, status')
+                        .eq('user_id', user.id)
+                        .in('status', ['active', 'trialing'])
+                        .limit(1)
+                        .single();
+                    if (!sub) {
+                        res.writeHead(403, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'no_subscription', message: 'Assinatura necessária para usar o plugin.' }));
+                        return;
+                    }
+                    // Check device
+                    const fp = getDeviceFingerprint();
+                    const { data: device } = await supabase
+                        .from('devices')
+                        .select('blocked')
+                        .eq('user_id', user.id)
+                        .eq('fingerprint', fp)
+                        .single();
+                    if (device?.blocked) {
+                        res.writeHead(403, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'device_blocked' }));
+                        return;
+                    }
+                    // Generate plugin token
+                    const token = generatePluginToken();
+                    pluginSessions.set(token, {
+                        userId: user.id,
+                        email: user.email,
+                        name: user.user_metadata?.full_name || '',
+                        plan: sub.plan,
+                        expiresAt: Date.now() + (24 * 60 * 60 * 1000)
+                    });
+                    savePluginSessions();
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        token,
+                        user: { email: user.email, name: user.user_metadata?.full_name || '' },
+                        plan: sub.plan,
+                        app_version: app.getVersion()
+                    }));
+                } catch (e) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: e.message }));
+                }
+            })();
+            return;
+        }
+
         if (req.method === 'POST' && req.url === '/auth/logout') {
             const authHeader = req.headers['authorization'];
             if (authHeader && authHeader.startsWith('Bearer ')) {

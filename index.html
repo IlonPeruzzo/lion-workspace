@@ -4032,6 +4032,9 @@ function renderCharts(){
     const bwArr=ms.map(m=>m===mesSel?2.5:1);
     const dataArr=ms.map(m=>isLiq?meses[m].liq:meses[m].bruto);
     if(charts.fat)charts.fat.destroy();
+    // Shared animation state for liquid wave on selected bar
+    if(!window._fatAnim) window._fatAnim={phase:0,rafId:null};
+
     charts.fat=new Chart(c1,{type:'bar',
         data:{labels,datasets:[
             {label:metricLabel,data:dataArr,backgroundColor:bgArr,borderColor:bdArr,borderWidth:bwArr,borderRadius:8,borderSkipped:false,hoverBackgroundColor:`rgba(${colRgb},0.95)`,barPercentage:0.65,categoryPercentage:0.85}
@@ -4040,29 +4043,103 @@ function renderCharts(){
             const{ctx:cx}=chart;
             const meta=chart.getDatasetMeta(0);
             if(!meta||!meta.data)return;
+            const phase=window._fatAnim.phase;
+
             meta.data.forEach((bar,i)=>{
                 const val=chart.data.datasets[0].data[i];
                 if(!val||val<=0)return;
+                const isSelected=ms[i]===mesSel;
+                const barH=bar.base-bar.y;
+                const barW=bar.width||30;
                 const txt=curSym+' '+fb(val);
-                cx.save();
-                cx.font='700 10px Inter';
-                cx.textAlign='center';
-                cx.textBaseline='middle';
-                // Se a barra for pequena, texto vai POR CIMA da barra (preto sobre fundo claro)
-                // Se a barra for grande, texto vai DENTRO da barra (branco sobre fundo colorido)
-                const barHeight=bar.base-bar.y;
-                if(barHeight>=22){
+
+                if(isSelected && barH>12){
+                    // ─── Liquid wave on top of selected bar ───
+                    const left=bar.x-barW/2;
+                    const right=bar.x+barW/2;
+                    const waveAmp=Math.min(5,barH*0.04);
+                    const waveFreq=(Math.PI*2)/barW*1.5;
+                    // Draw liquid "surface" band above bar top
+                    cx.save();
+                    cx.beginPath();
+                    cx.moveTo(left,bar.y);
+                    for(let x=left;x<=right;x+=1.5){
+                        const y=bar.y+Math.sin(phase+(x-left)*waveFreq)*waveAmp;
+                        cx.lineTo(x,y);
+                    }
+                    cx.lineTo(right,bar.y+barH);
+                    cx.lineTo(left,bar.y+barH);
+                    cx.closePath();
+                    const grad=cx.createLinearGradient(0,bar.y-waveAmp,0,bar.y+barH);
+                    grad.addColorStop(0,`rgba(${colRgb},1)`);
+                    grad.addColorStop(1,`rgba(${colRgb},0.72)`);
+                    cx.fillStyle=grad;
+                    cx.fill();
+                    // Shimmering highlight along the wave crest
+                    cx.beginPath();
+                    for(let x=left;x<=right;x+=1.5){
+                        const y=bar.y+Math.sin(phase+(x-left)*waveFreq)*waveAmp;
+                        if(x===left) cx.moveTo(x,y); else cx.lineTo(x,y);
+                    }
+                    cx.strokeStyle='rgba(255,255,255,0.55)';
+                    cx.lineWidth=1.5;
+                    cx.stroke();
+                    // Second phase-shifted wave for depth
+                    cx.beginPath();
+                    for(let x=left;x<=right;x+=1.5){
+                        const y=bar.y+Math.sin(phase*1.3+(x-left)*waveFreq*0.7+1.2)*waveAmp*0.6+2;
+                        if(x===left) cx.moveTo(x,y); else cx.lineTo(x,y);
+                    }
+                    cx.strokeStyle='rgba(255,255,255,0.22)';
+                    cx.lineWidth=1;
+                    cx.stroke();
+                    cx.restore();
+
+                    // ─── BIG value inside selected bar ───
+                    const fontSize=barH>=90?30:(barH>=60?24:(barH>=40?18:14));
+                    cx.save();
+                    cx.font=`900 ${fontSize}px Inter`;
+                    cx.textAlign='center';
+                    cx.textBaseline='middle';
                     cx.fillStyle='#0a0a0a';
-                    cx.fillText(txt,bar.x,bar.y+11);
+                    cx.shadowColor=`rgba(${colRgb},0.6)`;
+                    cx.shadowBlur=14;
+                    const textY=barH>=fontSize*2?bar.y+barH/2:bar.y+fontSize*0.8;
+                    cx.fillText(txt,bar.x,textY);
+                    cx.restore();
                 } else {
-                    cx.fillStyle='#f5f5f5';
-                    cx.shadowColor='rgba(0,0,0,0.6)';cx.shadowBlur=3;
-                    cx.fillText(txt,bar.x,bar.y-8);
+                    // Non-selected bars — small label
+                    cx.save();
+                    cx.font='700 10px Inter';
+                    cx.textAlign='center';
+                    cx.textBaseline='middle';
+                    if(barH>=22){
+                        cx.fillStyle='#0a0a0a';
+                        cx.fillText(txt,bar.x,bar.y+11);
+                    } else {
+                        cx.fillStyle='#f5f5f5';
+                        cx.shadowColor='rgba(0,0,0,0.6)';cx.shadowBlur=3;
+                        cx.fillText(txt,bar.x,bar.y-8);
+                    }
+                    cx.restore();
                 }
-                cx.restore();
             });
         }}]
     });
+
+    // ─── Start liquid animation loop (RAF at ~30fps) ───
+    if(window._fatAnim.rafId) cancelAnimationFrame(window._fatAnim.rafId);
+    let _fatTick=0;
+    function _fatAnimate(){
+        _fatTick++;
+        // Throttle to ~30fps (render every other frame)
+        if(_fatTick%2===0) window._fatAnim.phase+=0.12;
+        if(charts.fat && charts.fat.ctx){
+            try{ charts.fat.draw(); }catch(e){ return; }
+            window._fatAnim.rafId=requestAnimationFrame(_fatAnimate);
+        }
+    }
+    _fatAnimate();
 
     // Titulo do Chart 2 reflete o mes
     const _mnC2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
