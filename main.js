@@ -215,6 +215,16 @@ function createWindow() {
     mainWin = new BrowserWindow(opts);
     mainWin.loadFile('index.html');
     mainWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+    // When main window closes, kill focus mode so overlays don't keep the app alive
+    mainWin.on('close', () => {
+        if (focusActive) {
+            focusActive = false;
+            focusExternal = false;
+            if (focusInterval) { clearInterval(focusInterval); focusInterval = null; }
+            destroyOverlays();
+        }
+    });
 }
 
 /* ═══════ Focus-mode helpers ═══════ */
