@@ -1403,10 +1403,13 @@
             <!-- Date filter -->
             <div style="margin-bottom:12px;padding:10px;background:rgba(245,158,11,.03);border:1px solid rgba(245,158,11,.1);border-radius:10px">
                 <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600;margin-bottom:8px">Filtrar por Data</div>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <div class="fg" style="flex:1"><label style="font-size:.65rem">De</label><input type="date" id="faturaDateFrom" onchange="filterFaturaVideos()" style="font-size:.8rem"></div>
-                    <div class="fg" style="flex:1"><label style="font-size:.65rem">Ate</label><input type="date" id="faturaDateTo" onchange="filterFaturaVideos()" style="font-size:.8rem"></div>
-                    <button class="btn btn-o" onclick="document.getElementById('faturaDateFrom').value='';document.getElementById('faturaDateTo').value='';filterFaturaVideos()" style="font-size:.65rem;padding:4px 8px;margin-top:14px">Limpar</button>
+                <div style="display:flex;gap:8px;align-items:flex-end">
+                    <div class="fg" style="flex:1;margin:0"><label style="font-size:.65rem;display:block;margin-bottom:4px">De</label><input type="date" id="faturaDateFrom" onchange="filterFaturaVideos()" style="font-size:.8rem"></div>
+                    <div class="fg" style="flex:1;margin:0"><label style="font-size:.65rem;display:block;margin-bottom:4px">Ate</label><input type="date" id="faturaDateTo" onchange="filterFaturaVideos()" style="font-size:.8rem"></div>
+                    <button class="btn btn-o" onclick="document.getElementById('faturaDateFrom').value='';document.getElementById('faturaDateTo').value='';filterFaturaVideos()" style="font-size:.7rem;padding:6px 10px;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;height:33px" title="Limpar filtro de datas">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Limpar
+                    </button>
                 </div>
                 <div style="font-size:.6rem;color:var(--text3);margin-top:4px;font-style:italic">Padrao: todos os concluidos e nao pagos</div>
             </div>
