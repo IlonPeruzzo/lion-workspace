@@ -917,10 +917,23 @@
                 </div>
                 <div class="fg"><label>Tipo de Cobranca</label><select id="cliTipoCobranca" onchange="onTipoCobrancaChange()"><option value="por_video">Por serviço</option><option value="por_hora">Por hora trabalhada</option></select></div>
                 <div class="fg"><label id="lblCliValor">Valor por Serviço</label><input type="number" id="cliValorPadrao" placeholder="Ex: 150.00" min="1" step="0.01"></div>
-                <div class="fg" style="max-width:100px"><label>Dia Pag.</label><input type="number" id="cliDiaPag" min="1" max="31" placeholder="15"></div>
+                <div class="fg" style="max-width:120px">
+                    <label>Dia Pag.</label>
+                    <input type="number" id="cliDiaPag" min="1" max="31" placeholder="15">
+                    <label class="chk" style="padding:0;font-size:.68rem;color:var(--text3);margin-top:4px;gap:4px"><input type="checkbox" id="cliSemDataPag" onchange="document.getElementById('cliDiaPag').disabled=this.checked;if(this.checked)document.getElementById('cliDiaPag').value='';"> Sem data fixa</label>
+                </div>
+            </div>
+            <div class="fr" style="margin-top:10px">
+                <div class="fg">
+                    <label>Tipo de Relação</label>
+                    <div class="pills" style="padding:2px;gap:2px">
+                        <input type="radio" name="cliTipoRelacao" id="cliRelRec" value="recorrente" checked><label for="cliRelRec" style="padding:5px 12px;font-size:.78rem">Recorrente</label>
+                        <input type="radio" name="cliTipoRelacao" id="cliRelFree" value="freelance"><label for="cliRelFree" style="padding:5px 12px;font-size:.78rem">Freelance</label>
+                    </div>
+                </div>
             </div>
             <div style="margin-top:10px">
-                <div class="fg" style="margin-bottom:6px"><label>Bandeira</label></div>
+                <div class="fg" style="margin-bottom:6px"><label>País</label></div>
                 <div id="cliFlagPicker" style="display:flex;flex-wrap:wrap;gap:4px"></div>
             </div>
             <button class="btn btn-a" onclick="addCliente()" style="width:100%;margin-top:16px;padding:10px;font-size:.88rem;justify-content:center">+ Adicionar</button>
@@ -1216,13 +1229,30 @@
             </button>
         </div>
 
-        <div class="card-title">Seus Dados (Invoice)</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+        <div class="card-title">Dados para Invoice</div>
+        <div style="display:inline-flex;background:rgba(15,15,15,.6);border:1px solid rgba(190,242,100,.15);border-radius:8px;padding:2px;margin-bottom:12px">
+            <button type="button" id="cfgDataTabPessoal" onclick="cfgSwitchDataTab('pessoal')" style="padding:6px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(190,242,100,.18);color:#bef264;border-radius:6px;transition:all .2s">Pessoais</button>
+            <button type="button" id="cfgDataTabEmpresa" onclick="cfgSwitchDataTab('empresa')" style="padding:6px 14px;border:none;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);border-radius:6px;transition:all .2s">Empresa</button>
+        </div>
+
+        <!-- Dados Pessoais -->
+        <div id="cfgDataPessoal" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
             <div class="fg"><label>Nome Completo</label><input type="text" id="cfgNome" placeholder="Seu nome completo" style="font-size:.82rem"></div>
             <div class="fg"><label>CPF / CNPJ</label><input type="text" id="cfgCpf" placeholder="000.000.000-00" style="font-size:.82rem"></div>
             <div class="fg"><label>Endereço</label><input type="text" id="cfgEndereco" placeholder="Rua, número, bairro" style="font-size:.82rem"></div>
             <div class="fg"><label>Cidade / Estado / CEP</label><input type="text" id="cfgCidade" placeholder="Cidade, UF - CEP" style="font-size:.82rem"></div>
             <div class="fg"><label>País</label><input type="text" id="cfgPais" placeholder="Brazil" value="Brazil" style="font-size:.82rem"></div>
+        </div>
+
+        <!-- Dados da Empresa -->
+        <div id="cfgDataEmpresa" style="display:none;flex-direction:column;gap:10px;margin-bottom:16px">
+            <div class="fg"><label>Razão Social / Nome Fantasia</label><input type="text" id="cfgEmpNome" placeholder="Nome da empresa" style="font-size:.82rem"></div>
+            <div class="fg"><label>CNPJ</label><input type="text" id="cfgEmpCnpj" placeholder="00.000.000/0000-00" style="font-size:.82rem"></div>
+            <div class="fg"><label>Inscrição Estadual / Municipal</label><input type="text" id="cfgEmpInscricao" placeholder="Opcional" style="font-size:.82rem"></div>
+            <div class="fg"><label>Endereço</label><input type="text" id="cfgEmpEndereco" placeholder="Rua, número, bairro" style="font-size:.82rem"></div>
+            <div class="fg"><label>Cidade / Estado / CEP</label><input type="text" id="cfgEmpCidade" placeholder="Cidade, UF - CEP" style="font-size:.82rem"></div>
+            <div class="fg"><label>País</label><input type="text" id="cfgEmpPais" placeholder="Brazil" value="Brazil" style="font-size:.82rem"></div>
+            <div class="fg"><label>Email / Telefone</label><input type="text" id="cfgEmpContato" placeholder="contato@empresa.com · (11) 9999-9999" style="font-size:.82rem"></div>
         </div>
 
         <div style="border-top:1px solid rgba(190,242,100,.08);padding-top:20px;margin-top:8px">
@@ -1291,9 +1321,9 @@
         </div>
         <input type="hidden" id="editCliOriginal">
         <div class="fg" style="margin-bottom:10px"><label>Nome do Cliente</label><input type="text" id="editCliNome" placeholder="Nome do cliente"></div>
-        <!-- Bandeira -->
+        <!-- País -->
         <div style="margin-bottom:10px">
-            <div class="fg" style="margin-bottom:6px"><label>Bandeira</label></div>
+            <div class="fg" style="margin-bottom:6px"><label>País</label></div>
             <div id="editFlagPicker" style="display:flex;flex-wrap:wrap;gap:4px"></div>
         </div>
         <!-- Tipo de Serviço (custom) -->
@@ -1426,6 +1456,10 @@
                     <input type="radio" name="invLang" id="invPT" value="pt"><label for="invPT" style="padding:5px 12px;font-size:.78rem">Português</label>
                 </div>
                 <label class="chk" style="padding:0;font-size:.78rem"><input type="checkbox" id="invSimple" onchange="buildInvoice()"> Simplificada</label>
+                <div class="pills" style="padding:2px;gap:2px" id="invEmitterPills">
+                    <input type="radio" name="invEmitter" id="invEmitPessoal" value="pessoal" checked onchange="buildInvoice()"><label for="invEmitPessoal" style="padding:5px 12px;font-size:.78rem">Pessoal</label>
+                    <input type="radio" name="invEmitter" id="invEmitEmpresa" value="empresa" onchange="buildInvoice()"><label for="invEmitEmpresa" style="padding:5px 12px;font-size:.78rem">Empresa</label>
+                </div>
                 <button class="btn btn-a" onclick="printInvoice()">Imprimir / PDF</button>
                 <button class="btn btn-o" onclick="fecharMod('modInvoice')">Fechar</button>
             </div>
@@ -2143,6 +2177,19 @@ function calcImp(bruto,cliNome){
 }
 
 // ===== CONFIG =====
+function cfgSwitchDataTab(tab){
+    const isPess=tab==='pessoal';
+    document.getElementById('cfgDataPessoal').style.display=isPess?'flex':'none';
+    document.getElementById('cfgDataEmpresa').style.display=isPess?'none':'flex';
+    const tP=document.getElementById('cfgDataTabPessoal'), tE=document.getElementById('cfgDataTabEmpresa');
+    if(isPess){
+        tP.style.background='rgba(190,242,100,.18)'; tP.style.color='#bef264';
+        tE.style.background='transparent'; tE.style.color='var(--text3)';
+    } else {
+        tE.style.background='rgba(190,242,100,.18)'; tE.style.color='#bef264';
+        tP.style.background='transparent'; tP.style.color='var(--text3)';
+    }
+}
 function salvarCfg(){
     cfg.tipoPessoa=document.querySelector('input[name="tp"]:checked').value;
     cfg.custoContador=parseFloat(document.getElementById('custoCont').value)||0;
@@ -2154,6 +2201,15 @@ function salvarCfg(){
         endereco:(document.getElementById('cfgEndereco').value||'').trim(),
         cidade:(document.getElementById('cfgCidade').value||'').trim(),
         pais:(document.getElementById('cfgPais').value||'').trim()
+    };
+    cfg.empresaDados={
+        nome:(document.getElementById('cfgEmpNome').value||'').trim(),
+        cnpj:(document.getElementById('cfgEmpCnpj').value||'').trim(),
+        inscricao:(document.getElementById('cfgEmpInscricao').value||'').trim(),
+        endereco:(document.getElementById('cfgEmpEndereco').value||'').trim(),
+        cidade:(document.getElementById('cfgEmpCidade').value||'').trim(),
+        pais:(document.getElementById('cfgEmpPais').value||'').trim(),
+        contato:(document.getElementById('cfgEmpContato').value||'').trim()
     };
     cfg.meiData=(document.getElementById('cfgMeiData').value||'').trim();
     cfg.meiFatAnterior=parseFloat(document.getElementById('cfgMeiFatAnterior').value)||0;
@@ -2325,18 +2381,23 @@ function addCliente(){
     const moeda=document.getElementById('cliMoeda').value||'BRL';
     const internacional=moeda!=='BRL';
     const servicos=_createServicos.slice();
-    const diaPag=parseInt(document.getElementById('cliDiaPag').value)||0;
+    const semDataPag=document.getElementById('cliSemDataPag')?.checked||false;
+    const diaPag=semDataPag?0:(parseInt(document.getElementById('cliDiaPag').value)||0);
+    const tipoRelacao=document.querySelector('input[name="cliTipoRelacao"]:checked')?.value||'recorrente';
     if(!nome)return;if(clientes.some(c=>c.nome===nome)){showToast('Já existe um cliente com esse nome!','warn');return}
     const valorPadrao=parseFloat(document.getElementById('cliValorPadrao').value)||0;
     if(valorPadrao<1){showToast('Voce nao pode trabalhar de graca amigo :(');return}
     const tipoCobranca=document.getElementById('cliTipoCobranca').value||'por_video';
     const bandeira=document.getElementById('cliFlagPicker').dataset.selected||(moeda==='BRL'?'BR':'US');
     const pipeline=(cfg.etapas||[]).slice();
-    clientes.push({nome,internacional,moeda,servicos,yt,tt,ig,endereco,pagamento,diaPag,valorPadrao,tipoCobranca,bandeira,pipeline});
+    clientes.push({nome,internacional,moeda,servicos,yt,tt,ig,endereco,pagamento,diaPag,semDataPag,tipoRelacao,valorPadrao,tipoCobranca,bandeira,pipeline});
     clientes.sort((a,b)=>a.nome.localeCompare(b.nome));salvar();
     ['nomeCliente','linkYT','linkTT','linkIG','cliValorPadrao','cliEndereco'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});
     document.getElementById('cliTipoCobranca').value='por_video';
     document.getElementById('cliMoeda').value='BRL';
+    // Reset novos campos
+    const semData=document.getElementById('cliSemDataPag');if(semData){semData.checked=false;document.getElementById('cliDiaPag').disabled=false;}
+    const relRec=document.getElementById('cliRelRec');if(relRec)relRec.checked=true;
     _createServicos=[];_renderServicoTags(_createServicos,'cliServicosList','removeServicoCreate','editServicoCreate');
     document.getElementById('lblCliValor').textContent='Valor por Serviço';
     document.getElementById('cliSocialWrap').style.display='none';
@@ -3775,6 +3836,8 @@ function renderFaturasCliente(nome){
 
 // ===== STATS =====
 function updStats(){
+    // Sempre recalcular a barra do MEI (inclui faturamento anterior + regs do ano)
+    try{ updMeiTracker(); }catch(e){}
     const h=hoje();
     const mesAtual=(typeof _dashMonth!=='undefined'&&_dashMonth)?_dashMonth:h.substring(0,7);
     const mesRegs=regs.filter(r=>r.data.substring(0,7)===mesAtual);
@@ -4288,7 +4351,20 @@ function buildInvoice(){
     const dataVenc=dueDate.toLocaleDateString(lang==='pt'?'pt-BR':'en-US');
     const pm=getPayMethod(cl.pagamento);
     const freqTxt=lang==='pt'?(freqLabels[cl.freq]||'Por serviço'):{por_video:'Per service',semanal:'Weekly',quinzenal:'Biweekly',mensal:'Monthly'}[cl.freq]||'Per service';
-    const me=cfg.meusDados||{};
+    // Decide qual emissor usar: pessoal (default) ou empresa
+    const emitter=document.querySelector('input[name="invEmitter"]:checked')?.value||'pessoal';
+    const emp=cfg.empresaDados||{};
+    const pessoal=cfg.meusDados||{};
+    // Se empresa está escolhido MAS vazio, cai pra pessoal
+    const useEmp=emitter==='empresa'&&(emp.nome||emp.cnpj);
+    const me=useEmp?{
+        nome:emp.nome,
+        cpf:emp.cnpj+(emp.inscricao?' · IE '+emp.inscricao:''),
+        endereco:emp.endereco,
+        cidade:emp.cidade,
+        pais:emp.pais,
+        contato:emp.contato
+    }:pessoal;
     const conta=cfg.contas||{};
     // Auto-select account info based on client payment method
     let contaInfo='';
@@ -4330,11 +4406,12 @@ function buildInvoice(){
     const html=`<div class="invoice-preview" id="invoicePrint" style="background:#fff;color:#111;border-radius:12px;padding:40px;font-family:'Inter','Segoe UI',sans-serif">
         <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:28px">
             <div>
-                ${me.nome?`<div style="font-weight:700;color:#1a1a2e;font-size:1rem">${lang==='pt'?'Nome':'Name'}: ${me.nome}</div>`:''}
+                ${me.nome?`<div style="font-weight:700;color:#1a1a2e;font-size:1rem">${useEmp?(lang==='pt'?'Empresa':'Company'):(lang==='pt'?'Nome':'Name')}: ${me.nome}</div>`:''}
                 ${me.endereco?`<div style="font-size:.82rem;color:#666">${lang==='pt'?'Endereço':'Address'}: ${me.endereco}</div>`:''}
                 ${me.cidade?`<div style="font-size:.82rem;color:#666">${me.cidade}</div>`:''}
                 ${me.pais?`<div style="font-size:.82rem;color:#666">${me.pais}</div>`:''}
-                ${me.cpf?`<div style="font-size:.82rem;color:#666">${lang==='pt'?'CPF/CNPJ':'Tax ID'}: ${me.cpf}</div>`:''}
+                ${me.cpf?`<div style="font-size:.82rem;color:#666">${useEmp?'CNPJ':(lang==='pt'?'CPF/CNPJ':'Tax ID')}: ${me.cpf}</div>`:''}
+                ${me.contato?`<div style="font-size:.82rem;color:#666">${me.contato}</div>`:''}
             </div>
             <div style="text-align:right">
                 <div style="font-size:2rem;font-weight:800;color:#1a1a2e;letter-spacing:-1px;font-style:italic">${t.invoice}</div>
@@ -6047,11 +6124,24 @@ function init(){
         if(cfg.meusDados.cidade)document.getElementById('cfgCidade').value=cfg.meusDados.cidade;
         if(cfg.meusDados.pais)document.getElementById('cfgPais').value=cfg.meusDados.pais;
     }
+    if(cfg.empresaDados){
+        if(cfg.empresaDados.nome)document.getElementById('cfgEmpNome').value=cfg.empresaDados.nome;
+        if(cfg.empresaDados.cnpj)document.getElementById('cfgEmpCnpj').value=cfg.empresaDados.cnpj;
+        if(cfg.empresaDados.inscricao)document.getElementById('cfgEmpInscricao').value=cfg.empresaDados.inscricao;
+        if(cfg.empresaDados.endereco)document.getElementById('cfgEmpEndereco').value=cfg.empresaDados.endereco;
+        if(cfg.empresaDados.cidade)document.getElementById('cfgEmpCidade').value=cfg.empresaDados.cidade;
+        if(cfg.empresaDados.pais)document.getElementById('cfgEmpPais').value=cfg.empresaDados.pais;
+        if(cfg.empresaDados.contato)document.getElementById('cfgEmpContato').value=cfg.empresaDados.contato;
+    }
     document.getElementById('badgeRegime').textContent=cfg.tipoPessoa||'MEI';
     document.querySelectorAll('input[name="tp"]').forEach(r=>r.addEventListener('change',salvarCfg));
     document.getElementById('custoCont').addEventListener('change',salvarCfg);
     if(cfg.meiData)document.getElementById('cfgMeiData').value=cfg.meiData;
     if(cfg.meiFatAnterior)document.getElementById('cfgMeiFatAnterior').value=cfg.meiFatAnterior;
+    // Auto-save MEI fields when user edits them (não precisa clicar "Salvar Configurações")
+    document.getElementById('cfgMeiData').addEventListener('change',salvarCfg);
+    document.getElementById('cfgMeiFatAnterior').addEventListener('change',salvarCfg);
+    document.getElementById('cfgMeiFatAnterior').addEventListener('blur',salvarCfg);
     updInfoFiscal();updCustos();updAlert();updBtnCont();updMeiFields();updMeiTracker();
     updEtapasCliSel();renderEtapas();updSelEtapa();updSelPag();
     fetchCotacao();setInterval(fetchCotacao,5*60*1000);
