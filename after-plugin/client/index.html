@@ -1,0 +1,3090 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Lion Workspace · After</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+            background:#232323;color:#f5f5f5;padding:10px;min-height:100vh;
+            user-select:none;-webkit-user-select:none;
+            border:2.5px solid rgba(190,242,100,.45);border-radius:6px;
+            box-shadow:inset 0 0 12px rgba(190,242,100,.05);
+        }
+        ::-webkit-scrollbar{width:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(190,242,100,.2);border-radius:2px}
+
+        .logo{font-size:.95rem;font-weight:800;color:#f5f5f5;text-align:center;margin-bottom:8px;letter-spacing:-.3px}
+        .logo span{color:#bef264}
+        .status{text-align:center;padding:5px 10px;border-radius:8px;margin-bottom:10px;font-size:.7rem;font-weight:600;transition:all .3s}
+        .status.ok{background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.15)}
+        .status.off{background:rgba(244,63,94,.1);color:#f43f5e;border:1px solid rgba(244,63,94,.15)}
+
+        .section{background:rgba(255,255,255,.03);border:1px solid rgba(190,242,100,.08);border-radius:10px;padding:12px;margin-bottom:8px;transition:opacity .4s ease,filter .4s ease}
+        .section.lw-disabled{opacity:.35;pointer-events:none;filter:grayscale(.5);user-select:none}
+        .section.lw-disabled .btn,.section.lw-disabled button,.section.lw-disabled input{pointer-events:none!important;cursor:not-allowed!important}
+        .lw-disc-overlay{display:none;text-align:center;padding:6px 0;font-size:.56rem;color:#f43f5e;font-weight:600;letter-spacing:.3px;opacity:.8}
+        .section-title{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:8px;font-weight:600}
+
+        .proj-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:8px;padding-right:2px}
+        .proj-empty{text-align:center;font-size:.7rem;color:#555;padding:14px 0}
+        .pc{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);cursor:pointer;transition:all .15s}
+        .pc:hover{border-color:rgba(190,242,100,.18);background:rgba(190,242,100,.03)}
+        .pc.sel{border-color:#bef264;background:rgba(190,242,100,.07)}
+        .pc-name{font-size:.78rem;font-weight:600;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .pc-cli{font-size:.66rem;color:#888;margin-top:2px}
+        .pc-stage{display:inline-block;font-size:.56rem;padding:1px 7px;border-radius:8px;margin-top:3px;font-weight:600;letter-spacing:.2px}
+
+        .timer-display{font-size:2.1rem;font-weight:800;text-align:center;letter-spacing:-1px;color:#bef264;margin:4px 0;font-variant-numeric:tabular-nums}
+        .timer-display.app-paused{color:#636363}
+        .timer-sub{text-align:center;font-size:.72rem;color:#888;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+        .timer-sub.app-paused{color:#f59e0b}
+
+        .pomo-phase{text-align:center;margin-bottom:2px}
+        .phase-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.66rem;font-weight:700;letter-spacing:.3px}
+        .cycles{text-align:center;margin-top:5px;display:flex;gap:3px;justify-content:center}
+        .dot{width:7px;height:7px;border-radius:50%;background:#bef264}
+
+        .controls{display:flex;gap:5px;margin-top:8px}
+        .btn{flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .12s;letter-spacing:-.2px}
+        .btn:active{transform:scale(.95)}
+        .btn-go{background:#bef264;color:#0a0a0a}
+        .btn-go:hover{background:#d9f99d}
+        .btn-stop{background:rgba(244,63,94,.1);color:#f43f5e;border:1px solid rgba(244,63,94,.1)}
+        .btn-stop:hover{background:rgba(244,63,94,.2)}
+        .btn-pause{background:rgba(245,158,11,.08);color:#f59e0b;border:1px solid rgba(245,158,11,.1)}
+        .btn-pause:hover{background:rgba(245,158,11,.18)}
+        .btn:disabled{opacity:.2;cursor:default;transform:none}
+
+        /* Pipeline */
+        .pipe-section{margin-top:8px;border-top:1px solid rgba(190,242,100,.06);padding-top:8px}
+        .pipe-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.4px;color:#555;margin-bottom:6px;font-weight:600}
+        .pipe-chips{display:flex;flex-wrap:wrap;gap:4px}
+        .pipe-chip{font-size:.58rem;padding:3px 8px;border-radius:8px;cursor:pointer;font-weight:600;transition:all .15s;letter-spacing:.1px;border:1px solid transparent;display:inline-flex;align-items:center;gap:2px}
+        .pipe-chip svg{width:10px;height:10px;vertical-align:middle}
+        .pipe-chip:hover{transform:scale(1.05)}
+        .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
+
+        .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
+        .yt-q{padding:3px 9px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.025);color:#888;font-size:.58rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s ease;user-select:none}
+        .yt-q:hover{background:rgba(190,242,100,.08);border-color:rgba(190,242,100,.28);color:#bef264;transform:translateY(-1px);box-shadow:0 2px 6px rgba(190,242,100,.08)}
+        .yt-q:active{transform:translateY(0);box-shadow:none}
+        .yt-q.active{background:rgba(190,242,100,.16);border-color:#bef264;color:#bef264;box-shadow:inset 0 0 8px rgba(190,242,100,.12)}
+        .yt-q.active:hover{background:rgba(190,242,100,.22);transform:translateY(-1px)}
+        .plat-btn{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
+        .plat-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+        .plat-btn.active{border-color:rgba(190,242,100,.4);background:rgba(190,242,100,.08)}
+        .plat-btn svg{width:14px;height:14px}
+        .time-input{width:58px;padding:3px 5px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.6rem;font-family:inherit;outline:none;text-align:center}
+        .time-input::placeholder{color:#555}
+
+        /* Anchor Point Pro — inspired by AnchorPro layout */
+        .anc-container{position:relative;margin:0 auto;aspect-ratio:1/1;width:85%}
+        .anc-bg{position:absolute;inset:0;z-index:0}
+        .anc-bg line{stroke:rgba(190,242,100,.12);stroke-width:1.5}
+        .anc-bg rect{fill:none;stroke:rgba(190,242,100,.15);stroke-width:1.5;rx:4}
+        .anc-grid{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;z-index:1;padding:2%}
+        .anc-row{display:flex;justify-content:space-between;align-items:center}
+        .anc-row.sub{width:87.5%;margin:0 auto}
+        .anc-pt{cursor:pointer;transition:transform .12s,filter .12s;padding:2%}
+        .anc-pt:hover{transform:scale(1.12);filter:brightness(1.3)}
+        .anc-pt:active{transform:scale(.95)}
+        .anc-pt.active svg path{d:path('M440-42v-80q-125-14-214.5-103.5T122-440H42v-80h80q14-125 103.5-214.5T440-838v-80h80v80q125 14 214.5 103.5T838-520h80v80h-80q-14 125-103.5 214.5T520-122v80h-80Zm40-158q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Zm0-120q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47Zm0-80q33 0 56.5-23.5T560-480q0-33-23.5-56.5T480-560q-33 0-56.5 23.5T400-480q0 33 23.5 56.5T480-400Zm0-80Z')}
+        .anc-main{width:15%}
+        .anc-main svg{fill:#b5b2b2;width:100%}
+        .anc-main.active svg{fill:#bef264;filter:drop-shadow(0 0 6px rgba(190,242,100,.5))}
+        .anc-sub{width:8%}
+        .anc-sub svg{fill:#666;width:100%}
+        .anc-sub.active svg{fill:#bef264;filter:drop-shadow(0 0 4px rgba(190,242,100,.4))}
+        .anc-targets{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px}
+        .anc-tgt{width:26px;height:26px;border-radius:6px;border:1.5px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:4px}
+        .anc-tgt:hover{border-color:rgba(190,242,100,.25);background:rgba(190,242,100,.05)}
+        .anc-tgt.active{border-color:rgba(190,242,100,.5);background:rgba(190,242,100,.1)}
+        .anc-tgt svg{width:14px;height:14px}
+        .anc-opts{display:flex;align-items:center;gap:6px;margin-top:6px}
+        .anc-spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:80%;border:3px solid rgba(190,242,100,.15);border-top-color:#bef264;border-radius:50%;animation:anc-spin .8s linear infinite;z-index:10;display:none}
+        @keyframes anc-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+        .mini-check{
+            width:12px;height:12px;border-radius:3px;
+            border:1.5px solid rgba(190,242,100,.3);
+            display:flex;align-items:center;justify-content:center;
+            background:rgba(255,255,255,.02);flex-shrink:0;
+            transition:all .15s;
+        }
+        .mini-check.active{background:#bef264;border-color:#bef264}
+        .mini-check svg{display:none}
+        .mini-check.active svg{display:block}
+
+        .footer{text-align:center;margin-top:6px;font-size:.58rem;color:#3a3a3a;letter-spacing:.2px}
+
+        /* Login screen */
+        .login-overlay{position:fixed;inset:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:20px}
+        .login-overlay.hidden{display:none}
+        .login-overlay .logo{font-size:1.1rem;margin-bottom:4px}
+        .login-overlay .login-subtitle{font-size:.72rem;color:#636363;margin-bottom:20px;text-align:center}
+        .login-overlay .login-form{width:100%;max-width:240px;display:flex;flex-direction:column;gap:10px}
+        .login-overlay .login-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 12px;font-size:.78rem;color:#f5f5f5;outline:none;font-family:inherit;transition:border-color .2s}
+        .login-overlay .login-input:focus{border-color:rgba(190,242,100,.4)}
+        .login-overlay .login-input::placeholder{color:#525252}
+        .login-overlay .login-submit{background:#bef264;color:#0a0a0a;border:none;padding:11px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
+        .login-overlay .login-submit:hover{opacity:.9}
+        .login-overlay .login-submit:disabled{opacity:.4;cursor:not-allowed}
+        .login-overlay .login-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;padding:8px 10px;border-radius:6px;font-size:.7rem;display:none;text-align:center}
+        .login-overlay .login-error.show{display:block}
+        .login-user-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;margin-bottom:6px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.08);border-radius:6px}
+        .login-user-bar .user-info{font-size:.62rem;color:#a3a3a3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .login-user-bar .user-plan{font-size:.56rem;padding:1px 6px;border-radius:4px;background:rgba(190,242,100,.1);color:#bef264;font-weight:700;text-transform:uppercase}
+        .login-user-bar .logout-btn{font-size:.58rem;color:#636363;background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 4px;transition:color .2s}
+        .login-user-bar .logout-btn:hover{color:#f43f5e}
+        .gear-btn{background:none;border:none;cursor:pointer;color:#888;padding:2px 4px;transition:all .15s;display:flex;align-items:center}
+        .gear-btn:hover{color:#bef264;transform:rotate(45deg)}
+
+        /* Settings overlay */
+        .settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-start;justify-content:center;z-index:9998;padding:14px;overflow-y:auto}
+        .settings-overlay.hidden{display:none}
+        .settings-card{background:#1c1c1c;border:1px solid rgba(190,242,100,.12);border-radius:10px;padding:14px;width:100%;max-width:260px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+        .settings-card h3{font-size:.78rem;color:#f5f5f5;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
+        .settings-card .close-x{background:none;border:none;color:#666;font-size:1.1rem;cursor:pointer;line-height:1;padding:0 4px}
+        .settings-card .close-x:hover{color:#f43f5e}
+        .settings-card .info-row{font-size:.66rem;color:#aaa;margin-bottom:4px;word-break:break-all;line-height:1.4}
+        .settings-card .info-row strong{color:#f5f5f5;font-weight:600}
+        .settings-card .info-plan{display:inline-block;font-size:.56rem;padding:1px 6px;border-radius:4px;background:rgba(190,242,100,.1);color:#bef264;font-weight:700;text-transform:uppercase;margin-left:4px}
+        .settings-card .sec-title{font-size:.6rem;text-transform:uppercase;letter-spacing:.4px;color:#666;font-weight:600;margin-top:12px;margin-bottom:6px}
+        .settings-card .panel-row{display:flex;align-items:center;gap:7px;cursor:pointer;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.04);margin-bottom:3px;font-size:.66rem;color:#ddd}
+        .settings-card .panel-row:hover{background:rgba(190,242,100,.04)}
+        .settings-card .logout-row{margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)}
+        .settings-card .logout-btn-full{width:100%;padding:8px;border-radius:6px;background:rgba(244,63,94,.08);color:#f43f5e;border:1px solid rgba(244,63,94,.15);font-family:inherit;font-size:.7rem;font-weight:700;cursor:pointer;transition:all .2s}
+        .settings-card .logout-btn-full:hover{background:rgba(244,63,94,.18)}
+    </style>
+</head>
+<body>
+    <!-- Plugin Login Screen -->
+    <div class="login-overlay" id="pluginLogin">
+        <div class="logo">Lion <span>Workspace</span> · After</div>
+        <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
+        <div class="login-form">
+            <div class="login-error" id="pluginLoginError"></div>
+            <input class="login-input" type="email" id="pluginEmail" placeholder="Email" autocomplete="off">
+            <div style="position:relative">
+                <input class="login-input" type="password" id="pluginPassword" placeholder="Senha" style="width:100%;padding-right:36px">
+                <button type="button" onclick="togglePluginPwEye()" id="pluginPwEye" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#525252;cursor:pointer;padding:4px;display:flex;align-items:center;transition:color .2s">
+                    <svg id="pluginEyeOpen" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg id="pluginEyeClosed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+            </div>
+            <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
+            <button type="button" id="pluginAutoLoginBtn" onclick="pluginManualAutoLogin()" style="width:100%;margin-top:8px;padding:10px;background:transparent;border:1px solid rgba(190,242,100,.25);color:#bef264;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .2s" onmouseover="this.style.background='rgba(190,242,100,.08)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 12l2 2 4-4"/></svg>
+                Entrar com sessão do Lion Workspace
+            </button>
+            <div id="pluginAutoLoginHint" style="text-align:center;font-size:.62rem;color:#525252;margin-top:8px">
+                Se o Lion Workspace estiver aberto e logado, o plugin entra sozinho.
+            </div>
+            <div style="text-align:center;font-size:.62rem;color:#525252;margin-top:4px">
+                Não tem conta? Crie pelo app ou pelo site.
+            </div>
+        </div>
+    </div>
+
+    <!-- User bar (shown when logged in) — only gear icon -->
+    <div id="pluginUserBar" style="display:none;text-align:right;margin-bottom:4px">
+        <button class="gear-btn" onclick="openSettings()" title="Configurações" style="display:inline-flex;margin-left:auto">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Settings overlay -->
+    <div class="settings-overlay hidden" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+        <div class="settings-card">
+            <h3>
+                <span>Configurações</span>
+                <button class="close-x" onclick="closeSettings()">×</button>
+            </h3>
+            <div class="info-row"><strong>Email:</strong> <span id="settingsEmail">—</span></div>
+            <div class="info-row"><strong>Plano:</strong> <span class="info-plan" id="settingsPlan">—</span></div>
+
+            <div class="sec-title">Painéis visíveis</div>
+            <div id="panelsList"></div>
+
+            <div class="logout-row">
+                <button class="logout-btn-full" onclick="pluginDoLogout()">Sair da conta</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="logo">Lion <span>Workspace</span> · After</div>
+    <div class="status off" id="conn">Desconectado</div>
+
+    <!-- Timer -->
+    <div class="section" id="sectionTimer">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('timerBody')">
+            Timer do Projeto
+            <svg id="timerChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="timerBody">
+            <div class="proj-list" id="projList"><div class="proj-empty">Nenhum servico ativo</div></div>
+            <div class="timer-display" id="tDisp">00:00:00</div>
+            <div class="timer-sub" id="tSub">Parado</div>
+            <div class="controls">
+                <button class="btn btn-go" id="tStart" onclick="timerStart()">Iniciar</button>
+                <button class="btn btn-pause" id="tPause" onclick="cmd('timer/pause')" disabled>Pausar</button>
+                <button class="btn btn-stop" id="tStop" onclick="cmd('timer/stop')" disabled>Parar</button>
+            </div>
+            <!-- Pipeline -->
+            <div class="pipe-section" id="pipeSection" style="display:none">
+                <div class="pipe-title">Pipeline</div>
+                <div class="pipe-chips" id="pipeChips"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pomodoro -->
+    <div class="section" id="sectionPomo">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('pomoBody')">
+            Pomodoro
+            <svg id="pomoChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="pomoBody">
+            <div class="pomo-phase"><span class="phase-badge" id="pBadge" style="background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)">FOCO</span></div>
+            <div class="timer-display" id="pDisp">25:00</div>
+            <div class="cycles" id="pCyc"></div>
+            <div class="controls">
+                <button class="btn btn-go" id="pStart" onclick="pomoStart()">Iniciar</button>
+                <button class="btn btn-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled>Pausar</button>
+                <button class="btn btn-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled>Reset</button>
+            </div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:.62rem;padding:5px 6px;margin-top:6px;cursor:pointer;border-radius:6px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1);color:#bbb">
+                <input type="checkbox" id="pluginPomoFocus" checked onchange="savePluginPomoFocusPref()" style="accent-color:#bef264">
+                <span>Ativar modo foco (bloqueia distrações)</span>
+            </label>
+        </div>
+    </div>
+
+
+    <div class="footer" id="pluginFooter">Lion Workspace Sync</div>
+
+    <script src="CSInterface.js"></script>
+    <script>
+    /* ═══════════════════════════════════════════════════════════
+       Lion Workspace Plugin — Professional Architecture
+       Inspired by AutoCut V4 patterns:
+       - Step-based initialization with tracking
+       - Resilient HTTP with retry + exponential backoff
+       - Adaptive polling (fast when connected, slow when not)
+       - Connection health monitoring
+       - Structured logging
+       ═══════════════════════════════════════════════════════════ */
+    var API='http://127.0.0.1:9847';
+    var PLUGIN_VERSION='1.3.53-AE';
+    var csInterface=new CSInterface();
+
+    /* ═══════ LW utilities (inline) — lightweight replacements for XHR/logging ═══════ */
+    var LWLog = {
+        _fmt: function(level, cat, msg) {
+            try { console.log('[LW:' + level + '][' + cat + '] ' + msg); } catch(e) {}
+        },
+        info:  function(cat, msg) { this._fmt('INFO',  cat, msg); },
+        warn:  function(cat, msg) { this._fmt('WARN',  cat, msg); },
+        error: function(cat, msg) { this._fmt('ERROR', cat, msg); }
+    };
+
+    var LWInit = {
+        _steps: {},
+        start:    function(name) { this._steps[name] = { startedAt: Date.now(), done: false }; },
+        complete: function(name) { if (this._steps[name]) this._steps[name].done = true; },
+        fail:     function(name, err) { if (this._steps[name]) { this._steps[name].done = true; this._steps[name].err = err; } }
+    };
+
+    var LWHttp = (function() {
+        var _lastSuccess = 0;
+        var _lastError = 0;
+        function request(method, url, data, options, callback) {
+            if (typeof options === 'function') { callback = options; options = {}; }
+            options = options || {};
+            var timeout = options.timeout || 5000;
+            var retries = (options.retries != null) ? options.retries : 0;
+            var headers = options.headers || {};
+            var attempt = 0;
+            function tryOnce() {
+                var xhr = new XMLHttpRequest();
+                var done = false;
+                var to = setTimeout(function() {
+                    if (done) return;
+                    done = true;
+                    try { xhr.abort(); } catch(e) {}
+                    _lastError = Date.now();
+                    if (attempt < retries) { attempt++; setTimeout(tryOnce, 300 * attempt); }
+                    else if (callback) callback('TIMEOUT', 0, '');
+                }, timeout);
+                xhr.open(method, url, true);
+                if (data != null) xhr.setRequestHeader('Content-Type', 'application/json');
+                for (var k in headers) { if (headers.hasOwnProperty(k)) xhr.setRequestHeader(k, headers[k]); }
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState !== 4 || done) return;
+                    done = true;
+                    clearTimeout(to);
+                    if (xhr.status > 0) {
+                        _lastSuccess = Date.now();
+                        if (callback) callback(null, xhr.status, xhr.responseText);
+                    } else {
+                        _lastError = Date.now();
+                        if (attempt < retries) { attempt++; setTimeout(tryOnce, 300 * attempt); }
+                        else if (callback) callback('NETWORK', 0, '');
+                    }
+                };
+                try { xhr.send(data != null ? JSON.stringify(data) : null); }
+                catch(e) {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(to);
+                    _lastError = Date.now();
+                    if (callback) callback(e.message || 'SEND_ERR', 0, '');
+                }
+            }
+            tryOnce();
+        }
+        // NOTE: get/post call obj.request (not local `request`) so any external
+        // interceptor on LWHttp.request (e.g. auth token injection) is applied.
+        var obj = {
+            request: request,
+            get:  function(url, options, callback) { obj.request('GET',  url, null, options, callback); },
+            post: function(url, data, options, callback) { obj.request('POST', url, data, options, callback); },
+            isHealthy: function() { return (Date.now() - _lastSuccess) < 10000; }
+        };
+        return obj;
+    })();
+
+    var LWConnection = (function() {
+        var _state = 'unknown';
+        var _listeners = [];
+        var _interval = 2000;
+        var _apiBase = '';
+        function notify() { for (var i = 0; i < _listeners.length; i++) { try { _listeners[i](_state); } catch(e) {} } }
+        return {
+            init: function(api) { _apiBase = api; },
+            onStateChange: function(fn) { _listeners.push(fn); },
+            markConnected: function() {
+                _interval = 2000;
+                if (_state !== 'connected') { _state = 'connected'; notify(); }
+            },
+            markDisconnected: function() {
+                if (_interval < 8000) _interval = Math.min(8000, _interval * 1.5);
+                if (_state !== 'disconnected') { _state = 'disconnected'; notify(); }
+            },
+            resetPollRate: function() { _interval = 1000; },
+            getPollInterval: function() { return _interval; },
+            getState: function() { return _state; }
+        };
+    })();
+    /* ═══════ end LW utilities ═══════ */
+    var selProj='';
+    var lastCardsJSON='';
+    var lastPipeJSON='';
+    var timerState={running:false,paused:false,appPaused:false};
+    var pomoState={running:false,paused:false};
+    var pluginAppVersion='';
+
+    /* ═══════ Initialization (step-based like AutoCut) ═══════ */
+    LWConnection.init(API);
+    LWConnection.onStateChange(function(newState) {
+        updateFooter();
+        if (newState === 'connected') {
+            document.getElementById('conn').className='status ok';
+            document.getElementById('conn').textContent='Conectado';
+            lwConnected = true;
+            lwSetSectionsDisabled(false);
+        } else {
+            lwConnected = false;
+            lwSetSectionsDisabled(true);
+        }
+    });
+    LWInit.start('plugin-bootstrap');
+    LWLog.info('plugin', 'Lion Workspace After Effects Plugin v' + PLUGIN_VERSION + ' starting...');
+
+    // Start with sections disabled until connected
+    setTimeout(function() { lwSetSectionsDisabled(true); }, 100);
+
+    /* ═══════ Panel visibility ═══════ */
+    var PANELS = [
+        { key: 'timer',    id: 'sectionTimer',     label: 'Timer do Projeto' },
+        { key: 'pomo',     id: 'sectionPomo',      label: 'Pomodoro' }
+    ];
+    var panelsVisible = (function(){
+        try {
+            var saved = JSON.parse(localStorage.getItem('lw_panels_visible') || '{}');
+            var def = {};
+            for (var i=0; i<PANELS.length; i++) def[PANELS[i].key] = (saved[PANELS[i].key] !== false);
+            return def;
+        } catch(e) {
+            var def2 = {};
+            for (var j=0; j<PANELS.length; j++) def2[PANELS[j].key] = true;
+            return def2;
+        }
+    })();
+
+    function applyPanelsVisibility(){
+        for (var i=0; i<PANELS.length; i++){
+            var p = PANELS[i];
+            var el = document.getElementById(p.id);
+            if (el) el.style.display = panelsVisible[p.key] ? '' : 'none';
+        }
+    }
+
+    function togglePanelVisible(key){
+        panelsVisible[key] = !panelsVisible[key];
+        try { localStorage.setItem('lw_panels_visible', JSON.stringify(panelsVisible)); } catch(e){}
+        applyPanelsVisibility();
+        renderPanelsList();
+    }
+
+    function renderPanelsList(){
+        var el = document.getElementById('panelsList');
+        if (!el) return;
+        var html = '';
+        for (var i=0; i<PANELS.length; i++){
+            var p = PANELS[i];
+            var on = !!panelsVisible[p.key];
+            html += '<div class="panel-row" onclick="togglePanelVisible(\'' + p.key + '\')">'
+                  + '<div class="mini-check' + (on?' active':'') + '">'
+                  + '<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+                  + '</div>'
+                  + '<span>' + p.label + '</span>'
+                  + '</div>';
+        }
+        el.innerHTML = html;
+    }
+
+    function openSettings(){
+        var ov = document.getElementById('settingsOverlay');
+        if (!ov) return;
+        document.getElementById('settingsEmail').textContent = (pluginUser && pluginUser.email) || '—';
+        document.getElementById('settingsPlan').textContent = (window._lwPlan || '—');
+        renderPanelsList();
+        ov.classList.remove('hidden');
+    }
+
+    function closeSettings(){
+        var ov = document.getElementById('settingsOverlay');
+        if (ov) ov.classList.add('hidden');
+    }
+
+    function updateFooter(){
+        var f = document.getElementById('pluginFooter');
+        if (!f) return;
+        var txt = 'Plugin v' + PLUGIN_VERSION;
+        if (pluginAppVersion) txt += ' · App v' + pluginAppVersion;
+        // Health indicators (CEP/HTTP)
+        try {
+            var cepHealth = !!(window.__adobe_cep__ && csInterface);
+            var httpHealth = LWHttp.isHealthy();
+            if (!cepHealth) txt += ' · CEP ⚠';
+            if (!httpHealth) txt += ' · HTTP ⚠';
+        } catch(e) {}
+        f.textContent = txt;
+    }
+    updateFooter();
+    // Update footer health every 10s
+    setInterval(updateFooter, 10000);
+    applyPanelsVisibility();
+
+    /* ═══════ Plugin Auth ═══════ */
+    var pluginToken = localStorage.getItem('lw_plugin_token') || '';
+    var pluginUser = null;
+
+    function pluginAuthHeaders() {
+        return pluginToken ? { 'Authorization': 'Bearer ' + pluginToken } : {};
+    }
+
+    // Try to get a plugin token automatically using the app's Supabase session.
+    // No credentials needed — the app server validates the local session.
+    function pluginTryAutoLogin(onFail) {
+        var xhr = new XMLHttpRequest();
+        xhr.timeout = 8000;
+        xhr.open('POST', API + '/auth/local-session', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var r = JSON.parse(xhr.responseText || '{}');
+                    if (r && r.token) {
+                        pluginToken = r.token;
+                        localStorage.setItem('lw_plugin_token', r.token);
+                        pluginUser = r.user;
+                        if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
+                        LWLog.info('auth', 'Auto-login via app session: ' + (r.user && r.user.email));
+                        pluginShowApp(r.user, r.plan);
+                        return;
+                    }
+                } catch(e) {}
+            }
+            LWLog.info('auth', 'Auto-login unavailable (status=' + xhr.status + ')');
+            if (onFail) onFail();
+        };
+        xhr.ontimeout = function() { if (onFail) onFail(); };
+        xhr.onerror = function() { if (onFail) onFail(); };
+        try { xhr.send('{}'); } catch(e) { if (onFail) onFail(); }
+    }
+
+    function pluginCheckSession() {
+        LWInit.start('auth-check');
+        var headers = pluginToken ? { 'Authorization': 'Bearer ' + pluginToken } : {};
+        LWHttp.get(API + '/auth/check', { timeout: 5000, retries: 2, headers: headers }, function(err, status, body) {
+            if (err || !body) {
+                LWInit.fail('auth-check', err || 'no-response');
+                // Before showing login, try auto-login using app session
+                pluginTryAutoLogin(pluginShowLogin);
+                return;
+            }
+            try {
+                var r = JSON.parse(body);
+                if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
+                if (pluginToken && r.authenticated) {
+                    pluginUser = r.user;
+                    LWInit.complete('auth-check');
+                    pluginShowApp(r.user, r.plan);
+                } else {
+                    if (pluginToken) {
+                        pluginToken = '';
+                        localStorage.removeItem('lw_plugin_token');
+                    }
+                    LWInit.complete('auth-check');
+                    // Auth failed/missing — try auto-login first, fallback to login form
+                    pluginTryAutoLogin(pluginShowLogin);
+                }
+            } catch(e) {
+                LWInit.fail('auth-check', e.message);
+                pluginTryAutoLogin(pluginShowLogin);
+            }
+        });
+    }
+
+    function togglePluginPwEye(){
+        var inp = document.getElementById('pluginPassword');
+        var open = document.getElementById('pluginEyeOpen');
+        var closed = document.getElementById('pluginEyeClosed');
+        var btn = document.getElementById('pluginPwEye');
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            open.style.display = 'none';
+            closed.style.display = '';
+            btn.style.color = '#bef264';
+        } else {
+            inp.type = 'password';
+            open.style.display = '';
+            closed.style.display = 'none';
+            btn.style.color = '#525252';
+        }
+    }
+
+    function pluginDoLogin() {
+        var email = document.getElementById('pluginEmail').value.trim();
+        var password = document.getElementById('pluginPassword').value;
+        var errEl = document.getElementById('pluginLoginError');
+        var btn = document.getElementById('pluginLoginBtn');
+        if (!email || !password) { errEl.textContent = 'Preencha email e senha'; errEl.classList.add('show'); return; }
+        errEl.classList.remove('show');
+        btn.disabled = true;
+        btn.textContent = 'Entrando...';
+        LWLog.info('auth', 'Login attempt: ' + email);
+        // Uses direct XHR (like v1.3.31) — avoids any wrapper edge cases during auth
+        var xhr = new XMLHttpRequest();
+        xhr.timeout = 15000;
+        xhr.open('POST', API + '/auth/login', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            btn.disabled = false;
+            btn.textContent = 'Entrar';
+            var raw = xhr.responseText || '';
+            if (xhr.status === 200) {
+                try {
+                    var r = JSON.parse(raw);
+                    if (!r || !r.token) throw new Error('no token');
+                    pluginToken = r.token;
+                    localStorage.setItem('lw_plugin_token', r.token);
+                    pluginUser = r.user;
+                    if (r.app_version) { pluginAppVersion = r.app_version; updateFooter(); }
+                    LWLog.info('auth', 'Login successful: ' + email);
+                    pluginShowApp(r.user, r.plan);
+                } catch(e) {
+                    LWLog.error('auth', 'Parse error: ' + e.message + ' | raw=' + raw.substring(0, 120));
+                    errEl.textContent = 'Erro ao processar resposta: ' + e.message;
+                    errEl.classList.add('show');
+                }
+            } else {
+                try {
+                    var errData = JSON.parse(raw);
+                    var msg = errData.message || errData.error || 'Erro ao fazer login';
+                    if (errData.error === 'no_subscription') msg = 'Assinatura necessária para usar o plugin.';
+                    else if (msg.indexOf('Invalid login') >= 0) msg = 'Email ou senha incorretos';
+                    errEl.textContent = msg;
+                } catch(e) {
+                    errEl.textContent = 'Erro do servidor (' + xhr.status + ')';
+                }
+                errEl.classList.add('show');
+            }
+        };
+        xhr.ontimeout = function() {
+            btn.disabled = false; btn.textContent = 'Entrar';
+            errEl.textContent = 'Timeout — verifique se o Lion Workspace está aberto.';
+            errEl.classList.add('show');
+        };
+        xhr.onerror = function() {
+            btn.disabled = false; btn.textContent = 'Entrar';
+            errEl.textContent = 'Abra o Lion Workspace primeiro.';
+            errEl.classList.add('show');
+        };
+        try {
+            xhr.send(JSON.stringify({ email: email, password: password }));
+        } catch(e) {
+            btn.disabled = false; btn.textContent = 'Entrar';
+            errEl.textContent = 'Erro ao enviar: ' + e.message;
+            errEl.classList.add('show');
+        }
+    }
+
+    function pluginDoLogout() {
+        LWHttp.post(API + '/auth/logout', {}, { headers: { 'Authorization': 'Bearer ' + pluginToken }, retries: 0 }, function(){});
+        pluginToken = '';
+        pluginUser = null;
+        localStorage.removeItem('lw_plugin_token');
+        LWLog.info('auth', 'User logged out');
+        pluginShowLogin();
+    }
+
+    var _autoLoginRetryTimer = null;
+    function pluginShowLogin() {
+        document.getElementById('pluginLogin').classList.remove('hidden');
+        document.getElementById('pluginUserBar').style.display = 'none';
+        // Tenta auto-login a cada 10s enquanto a tela de login estiver aberta
+        // (caso o usuário abra o app principal só DEPOIS de abrir o plugin)
+        if (_autoLoginRetryTimer) clearInterval(_autoLoginRetryTimer);
+        _autoLoginRetryTimer = setInterval(function() {
+            if (document.getElementById('pluginLogin').classList.contains('hidden')) {
+                clearInterval(_autoLoginRetryTimer); _autoLoginRetryTimer = null;
+                return;
+            }
+            pluginTryAutoLogin(function(){}); // silently retry
+        }, 10000);
+    }
+
+    // Botão "Entrar com sessão do Lion Workspace" — feedback visual imediato
+    function pluginManualAutoLogin() {
+        var btn = document.getElementById('pluginAutoLoginBtn');
+        var errEl = document.getElementById('pluginLoginError');
+        var hint = document.getElementById('pluginAutoLoginHint');
+        if (!btn) return;
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'Conectando…';
+        errEl.classList.remove('show');
+        pluginTryAutoLogin(function() {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            errEl.textContent = 'Lion Workspace não está aberto ou você não está logado nele.';
+            errEl.classList.add('show');
+            if (hint) hint.style.display = 'none';
+        });
+    }
+
+    function pluginShowApp(user, plan) {
+        document.getElementById('pluginLogin').classList.add('hidden');
+        document.getElementById('pluginUserBar').style.display = '';
+        window._lwPlan = plan || '';
+        _authExpiredShown = false;
+        lwConnected = true;
+        lwSetSectionsDisabled(false); // ensure sections are enabled after login
+        applyPanelsVisibility();
+        setTimeout(function() { poll(); }, 300);
+    }
+
+    // Enter key to submit login
+    document.getElementById('pluginEmail').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('pluginPassword').focus(); });
+    document.getElementById('pluginPassword').addEventListener('keydown', function(e) { if (e.key === 'Enter') pluginDoLogin(); });
+
+    // Auto-inject auth token into all LWHttp requests via interceptor
+    var _origLWHttpRequest = LWHttp.request.bind(LWHttp);
+    var _authExpiredShown = false; // avoid spamming login overlay
+    LWHttp.request = function(method, url, data, options, callback) {
+        if (typeof options === 'function') { callback = options; options = {}; }
+        options = options || {};
+        // Inject auth header for API calls (except auth & ping endpoints)
+        if (url.indexOf(API) === 0 && url.indexOf('/auth/') === -1 && url.indexOf('/ping') === -1 && pluginToken) {
+            options.headers = options.headers || {};
+            if (!options.headers['Authorization']) {
+                options.headers['Authorization'] = 'Bearer ' + pluginToken;
+            }
+        }
+        // Wrap callback to handle 401
+        var origCallback = callback;
+        callback = function(err, status, body) {
+            if (status === 401 && url.indexOf('/auth/') === -1) {
+                if (!_authExpiredShown) {
+                    _authExpiredShown = true;
+                    LWLog.warn('auth', '401 received — session expired, showing login');
+                    pluginToken = '';
+                    localStorage.removeItem('lw_plugin_token');
+                    pluginShowLogin();
+                }
+                // IMPORTANT: still call original callback so polling continues
+                if (origCallback) origCallback('AUTH_EXPIRED', status, body);
+                return;
+            }
+            if (origCallback) origCallback(err, status, body);
+        };
+        _origLWHttpRequest(method, url, data, options, callback);
+    };
+
+    // Check session on load
+    LWInit.start('session-check');
+    pluginCheckSession();
+
+    function toggleSection(id){
+        var el=document.getElementById(id);
+        if(!el)return;
+        var isHidden=el.style.display==='none';
+        el.style.display=isHidden?'':'none';
+        // Map body id -> chev id
+        var chevMap={
+            'timerBody':'timerChev',
+            'pomoBody':'pomoChev',
+            'easingBody':'easingChev',
+            'anchorBody':'anchorChev',
+            'autoCutBody':'autoCutChev'
+        };
+        var chevId=chevMap[id]||id.replace('Body','Chev');
+        var chev=document.getElementById(chevId);
+        if(chev) chev.style.transform=isHidden?'':'rotate(-90deg)';
+    }
+
+    function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+    function renderCards(cards){
+        var el=document.getElementById('projList');
+        var json=JSON.stringify(cards||[])+selProj;
+        if(json===lastCardsJSON)return;
+        lastCardsJSON=json;
+        if(!cards||!cards.length){
+            el.innerHTML='<div class="proj-empty">Nenhum servico ativo</div>';
+            selProj='';
+            return;
+        }
+        // If selProj doesn't match any card, clear it
+        var hasMatch=cards.some(function(c){return c.value===selProj});
+        if(!hasMatch)selProj='';
+        el.innerHTML=cards.map(function(c){
+            var isSel=c.value===selProj;
+            var stg=c.stageCSS||'background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)';
+            if(!stg)stg='background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)';
+            return '<div class="pc'+(isSel?' sel':'')+'" onclick="pick(\''+c.value.replace(/'/g,"\\'")+'\')">'
+                +'<div class="pc-name">'+esc(c.nome)+'</div>'
+                +'<div class="pc-cli">'+esc(c.cliente)+'</div>'
+                +'<div class="pc-stage" style="'+stg+'">'+esc(c.etapa||'Sem etapa')+'</div>'
+                +'</div>';
+        }).join('');
+    }
+
+    function renderPipeline(pipe){
+        var sec=document.getElementById('pipeSection');
+        var el=document.getElementById('pipeChips');
+        if(!pipe||!pipe.stages||!pipe.stages.length){
+            sec.style.display='none';lastPipeJSON='';return;
+        }
+        sec.style.display='';
+        var json=JSON.stringify(pipe);
+        if(json===lastPipeJSON)return;
+        lastPipeJSON=json;
+        el.innerHTML=pipe.stages.map(function(s){
+            var isCurrent=s.name===pipe.etapa;
+            var css=s.css||'background:rgba(190,242,100,.08);color:#bef264';
+            if(!css)css='background:rgba(190,242,100,.08);color:#bef264';
+            var icon=s.icon||'';
+            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+icon+' '+esc(s.name)+'</span>';
+        }).join('');
+    }
+
+    function setStage(regId,etapa){
+        LWConnection.resetPollRate();
+        LWHttp.post(API+'/timer/set-stage',{regId:regId,etapa:etapa},{retries:1},function(){});
+        setTimeout(poll,300);
+    }
+
+    function pick(val){
+        selProj=val;
+        lastCardsJSON='';
+        LWConnection.resetPollRate();
+        LWHttp.post(API+'/timer/select',{project:val},{retries:1},function(){});
+    }
+
+    function timerStart(){
+        if(timerState.paused){
+            if(!selProj){showMsg('Selecione um video primeiro!');return}
+            cmd('timer/resume');
+        } else if(!timerState.running){
+            if(!selProj){showMsg('Selecione um video primeiro!');return}
+            LWConnection.resetPollRate();
+            LWHttp.post(API+'/timer/start',{project:selProj},{retries:1},function(){});
+            setTimeout(poll,300);
+        }
+    }
+
+    function showMsg(text){
+        var old=document.getElementById('_toast');if(old)old.remove();
+        var d=document.createElement('div');d.id='_toast';
+        d.style.cssText='position:fixed;top:10px;left:10px;right:10px;padding:8px 12px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;font-size:.72rem;font-weight:600;text-align:center;z-index:999;animation:fadeIn .2s';
+        d.textContent=text;document.body.appendChild(d);
+        setTimeout(function(){d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(function(){d.remove()},300)},2500);
+    }
+
+    function savePluginPomoFocusPref(){
+        try{
+            var on=document.getElementById('pluginPomoFocus').checked;
+            localStorage.setItem('lw_plugin_pomo_focus', on?'1':'0');
+        }catch(e){}
+    }
+    function pluginPomoFocusOn(){
+        var el=document.getElementById('pluginPomoFocus');
+        return el?el.checked:true;
+    }
+    // Restaura preferência salva
+    setTimeout(function(){
+        try{
+            var saved=localStorage.getItem('lw_plugin_pomo_focus');
+            if(saved==='0'){
+                var el=document.getElementById('pluginPomoFocus');
+                if(el) el.checked=false;
+            }
+        }catch(e){}
+    },0);
+
+    function pomoStart(){
+        if(pomoState.paused){
+            cmd('pomodoro/start');
+        } else if(!pomoState.running){
+            LWConnection.resetPollRate();
+            LWHttp.post(API+'/pomodoro/start',{fromPlugin:true,focusEnabled:pluginPomoFocusOn()},{retries:1},function(){});
+            setTimeout(poll,300);
+        }
+    }
+
+    function ui(state){
+        if(!state)return;
+        document.getElementById('conn').className='status ok';
+        document.getElementById('conn').textContent='Conectado';
+
+        // Project cards
+        renderCards(state.projectCards||[]);
+
+        // Pipeline
+        renderPipeline(state.pipeline||null);
+
+        // Timer
+        var t=state.timer||{};
+        timerState={running:t.running,paused:t.paused,appPaused:t.appPaused};
+        var tDisp=document.getElementById('tDisp');
+        var tSub=document.getElementById('tSub');
+        tDisp.textContent=t.display||'00:00:00';
+
+        if(t.appPaused){
+            tDisp.className='timer-display app-paused';
+            tSub.className='timer-sub app-paused';
+            tSub.textContent='Pausado (fora do Premiere)';
+        } else if(t.running&&t.paused){
+            tDisp.className='timer-display';
+            tSub.className='timer-sub';
+            tSub.textContent='Pausado: '+(t.project||'');
+        } else if(t.running){
+            tDisp.className='timer-display';
+            tSub.className='timer-sub';
+            tSub.textContent='Trabalhando: '+(t.project||'');
+        } else {
+            tDisp.className='timer-display';
+            tSub.className='timer-sub';
+            tSub.textContent='Parado';
+        }
+
+        // Sync selected project from app — always, not just when running
+        var syncId=(t.running&&t.regId)?t.regId:state.selectedProject;
+        if(syncId&&syncId!==selProj){
+            selProj=syncId;
+            lastCardsJSON='';
+        }
+
+        // Timer buttons
+        var btnStart=document.getElementById('tStart');
+        var btnPause=document.getElementById('tPause');
+        var btnStop=document.getElementById('tStop');
+
+        if(t.paused){
+            btnStart.textContent='Retomar';btnStart.disabled=!selProj;
+            btnPause.disabled=true;btnStop.disabled=false;
+        } else if(t.running){
+            btnStart.textContent='Iniciar';btnStart.disabled=true;
+            btnPause.disabled=false;btnStop.disabled=false;
+        } else {
+            btnStart.textContent='Iniciar';btnStart.disabled=!selProj;
+            btnPause.disabled=true;btnStop.disabled=true;
+        }
+
+        // Pomodoro
+        var p=state.pomodoro||{};
+        pomoState={running:p.running,paused:p.paused};
+        document.getElementById('pDisp').textContent=p.display||'25:00';
+        var b=document.getElementById('pBadge');
+        if(p.phase==='break'){
+            b.textContent='PAUSA';b.style.background='rgba(34,211,238,.08)';b.style.color='#22d3ee';b.style.borderColor='rgba(34,211,238,.15)';
+        }else{
+            b.textContent='FOCO';b.style.background='rgba(190,242,100,.08)';b.style.color='#bef264';b.style.borderColor='rgba(190,242,100,.15)';
+        }
+
+        var pStart=document.getElementById('pStart');
+        var pPause=document.getElementById('pPause');
+        var pReset=document.getElementById('pReset');
+
+        if(p.paused){
+            pStart.textContent='Retomar';pStart.disabled=false;
+            pPause.disabled=true;pReset.disabled=false;
+        } else if(p.running){
+            pStart.textContent='Iniciar';pStart.disabled=true;
+            pPause.disabled=false;pReset.disabled=false;
+        } else {
+            pStart.textContent='Iniciar';pStart.disabled=false;
+            pPause.disabled=true;pReset.disabled=true;
+        }
+
+        var dots='';for(var i=0;i<Math.min(p.cycle||0,8);i++)dots+='<span class="dot"></span>';
+        document.getElementById('pCyc').innerHTML=dots;
+    }
+
+    var lwConnected = false;
+
+    function disc(){
+        document.getElementById('conn').className='status off';
+        document.getElementById('conn').textContent='Desconectado';
+        LWConnection.markDisconnected();
+        if (!lwConnected) return; // already disconnected
+        lwConnected = false;
+        lwSetSectionsDisabled(true);
+    }
+
+    function lwSetSectionsDisabled(disabled) {
+        // Sections that need the app to work
+        var ids = ['sectionTimer', 'sectionPomo'];
+        for (var i = 0; i < ids.length; i++) {
+            var el = document.getElementById(ids[i]);
+            if (el) {
+                if (disabled) el.classList.add('lw-disabled');
+                else el.classList.remove('lw-disabled');
+            }
+        }
+    }
+
+    /* ═══════ Resilient Polling (adaptive like AutoCut) ═══════ */
+    var _pollTimer=null;
+    var _pollRetries=0;
+    var _MAX_POLL_RETRIES=3;
+
+    function poll(){
+        // Step 1: Check if app is alive via /ping (no auth required)
+        LWHttp.get(API+'/ping',{timeout:3000,retries:0},function(pingErr,pingStatus,pingBody){
+            if(pingErr||!pingBody){
+                // App is truly unreachable
+                _pollRetries++;
+                disc();
+                if(_pollRetries>=_MAX_POLL_RETRIES){
+                    LWLog.warn('poll','App unreachable after '+_pollRetries+' attempts');
+                }
+                _schedulePoll();
+                return;
+            }
+
+            // App is running — mark connected and ALWAYS enable sections
+            _pollRetries=0;
+            LWConnection.markConnected();
+            lwSetSectionsDisabled(false); // always re-enable on every successful ping
+            if (!lwConnected) {
+                lwConnected = true;
+                document.getElementById('conn').className='status ok';
+                document.getElementById('conn').textContent='Conectado';
+            }
+
+            // Step 2: If we have auth, also fetch state data
+            if (!pluginToken) {
+                _schedulePoll();
+                return;
+            }
+            LWHttp.get(API+'/state',{timeout:3000,retries:0},function(err,status,body){
+                if(err==='AUTH_EXPIRED'||status===401){
+                    // App alive but token expired — keep polling, login overlay already shown
+                    _schedulePoll();
+                    return;
+                }
+                if(err||!body){
+                    _schedulePoll();
+                    return;
+                }
+                try{
+                    var data=JSON.parse(body);
+                    ui(data);
+                }catch(e){
+                    LWLog.error('poll','Invalid JSON from /state');
+                }
+                _schedulePoll();
+            });
+        });
+    }
+
+    function _schedulePoll(){
+        if(_pollTimer) clearTimeout(_pollTimer);
+        var interval=LWConnection.getPollInterval();
+        _pollTimer=setTimeout(poll,interval);
+    }
+
+    function cmd(c){
+        LWConnection.resetPollRate(); // User action = poll fast
+        LWHttp.post(API+'/'+c,{},{timeout:5000,retries:1},function(err){
+            if(err) LWLog.warn('cmd','Command failed: '+c);
+        });
+        setTimeout(poll,300);
+    }
+
+    // Prevent Space/Enter from accidentally triggering focused buttons
+    document.addEventListener('keydown',function(e){
+        if((e.key===' '||e.key==='Enter')&&e.target.tagName==='BUTTON'){
+            e.preventDefault();e.stopPropagation();
+        }
+    },true);
+
+    // Multi-platform Downloader
+    var ytPluginFormat='best';
+    var ytPluginPolling=false;
+    var ytPluginLoc_='project'; // 'project' or 'downloads'
+    var ytPluginInfo=null;
+    var ytProjFolder='';
+    var ytLastFile='';
+    var ytPlatform='youtube'; // 'youtube', 'instagram', 'twitter'
+    var ytTotalDuration=0; // total video duration in seconds
+    var ytRangeDragging=null; // 'start', 'end', or null
+    var ytRangeStartPct=0; // 0-1
+    var ytRangeEndPct=1; // 0-1
+
+    function ytSecsToTime(s){
+        s=Math.round(s);
+        var h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
+        if(h>0)return h+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+        return m+':'+String(ss).padStart(2,'0');
+    }
+    function ytTimeToSecs(t){
+        if(!t)return 0;
+        var parts=t.split(':').map(Number);
+        if(parts.length===3)return parts[0]*3600+parts[1]*60+parts[2];
+        if(parts.length===2)return parts[0]*60+parts[1];
+        return parts[0]||0;
+    }
+
+    function ytInitRange(duration){
+        ytTotalDuration=duration||0;
+        ytRangeStartPct=0;
+        ytRangeEndPct=1;
+        document.getElementById('ytStartTime').value='';
+        document.getElementById('ytEndTime').value='';
+        if(duration>0){
+            document.getElementById('ytTrimSection').style.display='';
+            document.getElementById('ytEndTime').placeholder=ytSecsToTime(duration);
+            // Time markers
+            var markers=document.getElementById('ytTimeMarkers');
+            var count=duration>300?5:duration>60?4:3;
+            var html='';
+            for(var i=0;i<count;i++){
+                var pct=i/(count-1);
+                var t=Math.round(pct*duration);
+                html+='<span style="font-size:.42rem;color:#555">'+ytSecsToTime(t)+'</span>';
+            }
+            markers.innerHTML=html;
+        }
+        ytUpdateRange();
+    }
+
+    function ytUpdateRange(){
+        var wrap=document.getElementById('ytRangeWrap');
+        if(!wrap)return;
+        var w=wrap.offsetWidth-10; // handle width
+        var fill=document.getElementById('ytRangeFill');
+        var startH=document.getElementById('ytRangeStart');
+        var endH=document.getElementById('ytRangeEnd');
+        var sl=Math.round(ytRangeStartPct*w);
+        var el=Math.round(ytRangeEndPct*w);
+        startH.style.left=sl+'px';
+        endH.style.left=el+'px';
+        fill.style.left=(sl+5)+'px';
+        fill.style.width=Math.max(0,el-sl)+'px';
+        // Update duration label
+        var startSecs=Math.round(ytRangeStartPct*ytTotalDuration);
+        var endSecs=Math.round(ytRangeEndPct*ytTotalDuration);
+        var selDur=endSecs-startSecs;
+        document.getElementById('ytTrimDuration').textContent=ytSecsToTime(startSecs)+' — '+ytSecsToTime(endSecs)+' ('+ytSecsToTime(selDur)+')';
+    }
+
+    function ytHandleDown(e,which){
+        e.preventDefault();e.stopPropagation();
+        ytRangeDragging=which;
+        document.addEventListener('mousemove',ytRangeMove);
+        document.addEventListener('mouseup',ytRangeUp);
+    }
+    function ytRangeDown(e){
+        // Click on track = move nearest handle
+        var wrap=document.getElementById('ytRangeWrap');
+        var rect=wrap.getBoundingClientRect();
+        var pct=Math.max(0,Math.min(1,(e.clientX-rect.left-5)/(rect.width-10)));
+        var distStart=Math.abs(pct-ytRangeStartPct);
+        var distEnd=Math.abs(pct-ytRangeEndPct);
+        if(distStart<distEnd){ytRangeStartPct=Math.min(pct,ytRangeEndPct-0.01);ytRangeDragging='start'}
+        else{ytRangeEndPct=Math.max(pct,ytRangeStartPct+0.01);ytRangeDragging='end'}
+        ytSyncInputsFromRange();
+        ytUpdateRange();
+        document.addEventListener('mousemove',ytRangeMove);
+        document.addEventListener('mouseup',ytRangeUp);
+    }
+    function ytRangeMove(e){
+        if(!ytRangeDragging)return;
+        var wrap=document.getElementById('ytRangeWrap');
+        var rect=wrap.getBoundingClientRect();
+        var pct=Math.max(0,Math.min(1,(e.clientX-rect.left-5)/(rect.width-10)));
+        if(ytRangeDragging==='start'){ytRangeStartPct=Math.min(pct,ytRangeEndPct-0.01)}
+        else{ytRangeEndPct=Math.max(pct,ytRangeStartPct+0.01)}
+        ytSyncInputsFromRange();
+        ytUpdateRange();
+    }
+    function ytRangeUp(){
+        ytRangeDragging=null;
+        document.removeEventListener('mousemove',ytRangeMove);
+        document.removeEventListener('mouseup',ytRangeUp);
+    }
+    function ytSyncInputsFromRange(){
+        var startSecs=Math.round(ytRangeStartPct*ytTotalDuration);
+        var endSecs=Math.round(ytRangeEndPct*ytTotalDuration);
+        document.getElementById('ytStartTime').value=startSecs>0?ytSecsToTime(startSecs):'';
+        document.getElementById('ytEndTime').value=endSecs<ytTotalDuration?ytSecsToTime(endSecs):'';
+    }
+    function ytTimeInputChanged(){
+        if(!ytTotalDuration)return;
+        var sv=document.getElementById('ytStartTime').value.trim();
+        var ev=document.getElementById('ytEndTime').value.trim();
+        if(sv){var ss=ytTimeToSecs(sv);ytRangeStartPct=Math.max(0,Math.min(1,ss/ytTotalDuration))}
+        else{ytRangeStartPct=0}
+        if(ev){var es=ytTimeToSecs(ev);ytRangeEndPct=Math.max(ytRangeStartPct+0.01,Math.min(1,es/ytTotalDuration))}
+        else{ytRangeEndPct=1}
+        ytUpdateRange();
+    }
+
+    function ytSetPlatform(p){
+        ytPlatform=p;
+        document.getElementById('platYT').classList.toggle('active',p==='youtube');
+        document.getElementById('platIG').classList.toggle('active',p==='instagram');
+        document.getElementById('platTW').classList.toggle('active',p==='twitter');
+        var ttBtn=document.getElementById('platTT'); if(ttBtn) ttBtn.classList.toggle('active',p==='tiktok');
+        var ph='Cole a URL...';
+        if(p==='youtube') ph='Cole a URL do YouTube...';
+        else if(p==='instagram') ph='Cole a URL do Instagram...';
+        else if(p==='twitter') ph='Cole a URL do Twitter/X...';
+        else if(p==='tiktok') ph='Cole a URL do TikTok...';
+        document.getElementById('ytUrlPlugin').placeholder=ph;
+    }
+
+    function ytAutoDetectPlatform(){
+        var url=document.getElementById('ytUrlPlugin').value.toLowerCase();
+        if(url.includes('youtube.com')||url.includes('youtu.be')) ytSetPlatform('youtube');
+        else if(url.includes('instagram.com')) ytSetPlatform('instagram');
+        else if(url.includes('twitter.com')||url.includes('x.com')) ytSetPlatform('twitter');
+        else if(url.includes('tiktok.com')||url.includes('vm.tiktok.com')||url.includes('vt.tiktok.com')) ytSetPlatform('tiktok');
+    }
+
+    // Valida URL de mídia antes de baixar — retorna {ok,msg}
+    function ytValidateMediaUrl(raw){
+        var url=(raw||'').trim();
+        if(!url) return {ok:false,msg:'Cole uma URL'};
+        var parsed;
+        try{parsed=new URL(url)}catch(e){return {ok:false,msg:'URL inválida'}}
+        var host=parsed.hostname.replace(/^www\./,'').toLowerCase();
+        var path=parsed.pathname||'';
+
+        if(host==='youtube.com'||host==='m.youtube.com'||host==='music.youtube.com'){
+            if(path.indexOf('/results')===0) return {ok:false,msg:'Página de busca — cole o link de um vídeo'};
+            if(path.indexOf('/@')===0||path.indexOf('/channel/')===0||path.indexOf('/c/')===0||path.indexOf('/user/')===0) return {ok:false,msg:'Isso é um canal, não um vídeo'};
+            if(parsed.searchParams.get('v')) return {ok:true};
+            if(/^\/(shorts|embed|live|v)\//.test(path)) return {ok:true};
+            return {ok:false,msg:'Link do YouTube não é um vídeo'};
+        }
+        if(host==='youtu.be'){
+            if(path.length>1) return {ok:true};
+            return {ok:false,msg:'Link do youtu.be sem ID'};
+        }
+        if(host==='instagram.com'){
+            if(/^\/(reel|reels|p|tv)\/[^\/]+/i.test(path)) return {ok:true};
+            if(/^\/[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil, não um post/reel'};
+            return {ok:false,msg:'Link do Instagram não é um post/reel'};
+        }
+        if(host==='twitter.com'||host==='x.com'||host==='mobile.twitter.com'){
+            if(/\/status\/\d+/i.test(path)) return {ok:true};
+            if(/^\/[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do X, não um tweet'};
+            return {ok:false,msg:'Link do X/Twitter não é um tweet'};
+        }
+        if(host==='tiktok.com'||host==='m.tiktok.com'){
+            if(/\/video\/\d+/i.test(path)) return {ok:true};
+            if(/^\/@[^\/]+\/?$/.test(path)) return {ok:false,msg:'Isso é um perfil do TikTok, não um vídeo'};
+            if(path==='/'||/^\/(foryou|following|explore|discover|trending|live)/i.test(path)) return {ok:false,msg:'Cole o link de um vídeo específico'};
+            return {ok:false,msg:'Link do TikTok não é um vídeo'};
+        }
+        if(host==='vm.tiktok.com'||host==='vt.tiktok.com'){
+            if(path.length>1) return {ok:true};
+            return {ok:false,msg:'Link curto do TikTok incompleto'};
+        }
+        return {ok:false,msg:'Aceito YouTube, Instagram, X/Twitter e TikTok'};
+    }
+
+    // Get Premiere project folder (safe — never crashes if CEP unavailable)
+    function ytGetProjectFolder(){
+        try{
+            if(typeof csInterface==='undefined'||!csInterface||!window.__adobe_cep__) {
+                ytProjFolder='';
+                var el=document.getElementById('ytProjPath');
+                if(el) el.textContent='CEP não disponível';
+                return;
+            }
+            csInterface.evalScript('getProjectFolder()',function(result){
+                var el=document.getElementById('ytProjPath');
+                if(result&&result!=='EvalScript_Error'&&result!=='CEP_NOT_AVAILABLE'&&result!=='undefined'&&result!==''){
+                    ytProjFolder=result;
+                    if(el) el.textContent=result;
+                } else {
+                    ytProjFolder='';
+                    if(el) el.textContent='Nenhum projeto aberto';
+                }
+            });
+        }catch(e){ytProjFolder=''}
+    }
+    // Check project folder periodically (delay first check)
+    setInterval(ytGetProjectFolder,5000);
+    setTimeout(ytGetProjectFolder,2000);
+
+    function ytTogglePreview(){
+        var body=document.getElementById('ytPreviewBody');
+        var chev=document.getElementById('ytPreviewChev');
+        if(!body)return;
+        var isHidden=body.style.display==='none';
+        body.style.display=isHidden?'':'none';
+        if(chev) chev.style.transform=isHidden?'':'rotate(-90deg)';
+    }
+
+    function ytPluginFmt(btn){
+        // Only toggle within the same group (format buttons inside preview)
+        var parent=btn.parentNode;
+        var siblings=parent.querySelectorAll('.yt-q[data-q]');
+        for(var i=0;i<siblings.length;i++) siblings[i].classList.remove('active');
+        btn.classList.add('active');
+        if(btn.getAttribute('data-q')) ytPluginFormat=btn.getAttribute('data-q');
+    }
+
+    function ytPluginLoc(loc){
+        ytPluginLoc_=loc;
+        document.getElementById('ytLocProj').classList.toggle('active',loc==='project');
+        document.getElementById('ytLocDown').classList.toggle('active',loc==='downloads');
+    }
+
+    function ytPluginFetch(){
+        var url=document.getElementById('ytUrlPlugin').value.trim();
+        if(!url){showMsg('Cole uma URL!');return}
+        var v=ytValidateMediaUrl(url);
+        if(!v.ok){showMsg(v.msg);return}
+        var btn=document.getElementById('ytFetchBtn');
+        btn.disabled=true;btn.textContent='Buscando...';
+        document.getElementById('ytPreview').style.display='none';
+        LWLog.info('download', 'Fetching info: ' + url.substring(0, 60));
+
+        LWHttp.post(API+'/yt/info',{url:url},{timeout:60000,retries:2},function(err,status,body){
+            btn.disabled=false;btn.textContent='Buscar';
+            if(err){
+                LWLog.error('download','Fetch info failed: '+err);
+                showMsg(err==='TIMEOUT'?'Timeout - tente novamente':'Lion Workspace desconectado');
+                return;
+            }
+            try{
+                var info=JSON.parse(body);
+                if(info.error){showMsg(info.error);return}
+                ytPluginInfo=info;
+                document.getElementById('ytThumbPlugin').src=info.thumbnail||'';
+                document.getElementById('ytTitlePlugin').textContent=info.title||'Sem título';
+                document.getElementById('ytUploaderPlugin').textContent=info.uploader||'';
+                var dur=info.duration||0;
+                var mm=Math.floor(dur/60);var ss=dur%60;
+                document.getElementById('ytDurPlugin').textContent=mm+':'+(ss<10?'0':'')+ss;
+                document.getElementById('ytPreview').style.display='';
+                if(ytPlatform!=='instagram'&&dur>0){
+                    ytInitRange(dur);
+                } else {
+                    document.getElementById('ytTrimSection').style.display='none';
+                }
+                ytGetProjectFolder();
+                LWLog.info('download', 'Info fetched: ' + (info.title||'').substring(0, 40));
+            }catch(e){showMsg('Erro ao processar resposta');LWLog.error('download','Parse error: '+e.message)}
+        });
+    }
+
+    function ytPluginDownload(){
+        var url=document.getElementById('ytUrlPlugin').value.trim();
+        if(!url){showMsg('Cole uma URL!');return}
+        var v=ytValidateMediaUrl(url);
+        if(!v.ok){showMsg(v.msg);return}
+        var btn=document.getElementById('ytPluginBtn');
+        btn.disabled=true;
+
+        // Determine output dir
+        var outDir='';
+        if(ytPluginLoc_==='project'&&ytProjFolder){
+            outDir=ytProjFolder;
+        }
+
+        document.getElementById('ytPluginProgress').style.display='';
+        document.getElementById('ytProgressTitle').textContent=ytPluginInfo?ytPluginInfo.title:'Baixando...';
+        document.getElementById('ytPluginBar').style.width='0%';
+        document.getElementById('ytPluginPct').textContent='0%';
+        document.getElementById('ytPluginSpeed').textContent='';
+        document.getElementById('ytPluginStat').textContent='Iniciando...';
+        document.getElementById('ytCancelBtn').style.display='';
+        document.getElementById('ytCloseBtn').style.display='none';
+
+        var startT=document.getElementById('ytStartTime').value.trim();
+        var endT=document.getElementById('ytEndTime').value.trim();
+        var payload={url:url,format:ytPluginFormat,outputDir:outDir};
+        if(ytPluginInfo){
+            payload.metaTitle=ytPluginInfo.title||'';
+            payload.metaThumb=ytPluginInfo.thumbnail||'';
+            payload.metaUploader=ytPluginInfo.uploader||'';
+            payload.metaDuration=ytPluginInfo.duration||0;
+        }
+        if(startT&&startT!=='0'&&startT!=='00:00'&&startT!=='0:00') payload.startTime=startT;
+        if(endT&&endT!=='inf') payload.endTime=endT;
+
+        LWLog.info('download', 'Starting download: ' + url.substring(0, 60) + ' [' + ytPluginFormat + ']');
+        LWHttp.post(API+'/yt/download',payload,{timeout:30000,retries:1},function(err){
+            if(err){
+                btn.disabled=false;
+                showMsg('Erro de conexão');
+                LWLog.error('download','Download request failed: '+err);
+                return;
+            }
+            ytPluginPolling=true;
+            LWLog.info('download', 'Download started successfully');
+        });
+    }
+
+    function ytPluginCancel(){
+        LWHttp.post(API+'/yt/cancel',{},{retries:1},function(){});
+        ytPluginPolling=false;
+        document.getElementById('ytPluginBtn').disabled=false;
+        document.getElementById('ytPluginStat').textContent='Cancelado';
+        document.getElementById('ytPluginStat').style.color='#f43f5e';
+        document.getElementById('ytCancelBtn').style.display='none';
+        document.getElementById('ytCloseBtn').style.display='';
+    }
+
+    function ytPluginCloseProgress(){
+        document.getElementById('ytPluginProgress').style.display='none';
+    }
+
+    function ytPluginImport(filePath){
+        if(!filePath){showMsg('Erro: caminho do arquivo vazio');return}
+        var autoImport=document.getElementById('ytAutoImport').checked;
+        if(!autoImport){showMsg('Download concluído (auto-import desativado)');return}
+        if(!window.__adobe_cep__||typeof csInterface==='undefined'){showMsg('CEP indisponível — reabra o plugin');return}
+        var autoTimeline=document.getElementById('ytAutoTimeline').checked;
+        var fileName=filePath.split(/[/\\]/).pop()||'arquivo';
+        showMsg('Importando: '+fileName);
+        // Wait for file to be fully written/closed by yt-dlp + ffmpeg merge
+        setTimeout(function(){
+            try{
+                // First try: simple import to root (most compatible)
+                var script='try{var f=new File("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'");'
+                    +'if(!f.exists)"FILE_NOT_FOUND:"+f.fsName;'
+                    +'else{app.project.importFiles([f.fsName]);'
+                    +'"OK:"+f.fsName}}catch(e){"ERR:"+e.toString()}';
+                csInterface.evalScript(script,function(result){
+                    if(result&&result.indexOf('OK:')===0){
+                        showMsg('Importado!');
+                        // Move to YouTube Downloads bin
+                        setTimeout(function(){
+                            var moveScript='try{var bin=findOrCreateBin("YouTube Downloads");'
+                                +'var root=app.project.rootItem;'
+                                +'for(var i=root.children.numItems-1;i>=0;i--){'
+                                +'var c=root.children[i];'
+                                +'if(c.type!==2){try{c.moveBin(bin);}catch(e){}break;}}'
+                                +'"MOVED"}catch(e){"MOVE_ERR:"+e.toString()}';
+                            csInterface.evalScript(moveScript,function(r2){
+                                // After moving to bin, insert into timeline if checked
+                                if(autoTimeline){
+                                    setTimeout(function(){
+                                        var tlScript='insertClipToTimeline("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'")';
+                                        csInterface.evalScript(tlScript,function(r3){
+                                            if(r3==='OK') showMsg('Adicionado na timeline!');
+                                            else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequence aberta');
+                                            else showMsg('Timeline: '+(r3||'erro'));
+                                        });
+                                    },800);
+                                }
+                            });
+                        },500);
+                    } else if(result&&result.indexOf('FILE_NOT_FOUND')===0){
+                        showMsg('Arquivo nao encontrado - tentando novamente...');
+                        setTimeout(function(){
+                            csInterface.evalScript(script,function(r2){
+                                if(r2&&r2.indexOf('OK:')===0){
+                                    showMsg('Importado! (2a tentativa)');
+                                    if(autoTimeline){
+                                        setTimeout(function(){
+                                            var tlScript='insertClipToTimeline("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'")';
+                                            csInterface.evalScript(tlScript,function(r3){
+                                                if(r3==='OK') showMsg('Adicionado na timeline!');
+                                                else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequence aberta');
+                                            });
+                                        },1500);
+                                    }
+                                } else {
+                                    showMsg('Retry: '+(r2||'sem resposta'));
+                                }
+                            });
+                        },3000);
+                    } else {
+                        showMsg('Import: '+(result||'sem resposta'));
+                    }
+                });
+            }catch(e){showMsg('Erro JS: '+e)}
+        },3000);
+    }
+
+    function ytPluginPollProgress(){
+        if(!ytPluginPolling)return;
+        LWHttp.get(API+'/yt/progress',{timeout:3000,retries:1},function(err,status,body){
+            if(err||!body)return;
+            try{
+                var p=JSON.parse(body);
+                var bar=document.getElementById('ytPluginBar');
+                var pct=document.getElementById('ytPluginPct');
+                var spd=document.getElementById('ytPluginSpeed');
+                var stat=document.getElementById('ytPluginStat');
+                if(!bar)return;
+                bar.style.width=Math.min(p.percent||0,100)+'%';
+                pct.textContent=Math.round(p.percent||0)+'%';
+                spd.textContent=p.speed||'';
+                if(p.status==='merging'){stat.textContent='Mesclando...';stat.style.color='#f59e0b'}
+                else if(p.status==='done'){
+                    stat.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="11" fill="#22c55e" opacity="0.15"/><circle cx="12" cy="12" r="11" stroke="#22c55e" stroke-width="1.5" fill="none"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="vertical-align:middle">Concluído!</span>';
+                    stat.style.color='#22c55e';
+                    bar.style.width='100%';pct.textContent='100%';
+                    document.getElementById('ytPluginBtn').disabled=false;
+                    ytPluginPolling=false;
+                    document.getElementById('ytCancelBtn').style.display='none';
+                    document.getElementById('ytCloseBtn').style.display='';
+                    ytLastFile=p.file||'';
+                    if(ytLastFile) ytPluginImport(ytLastFile);
+                    else showMsg('Download OK mas caminho do arquivo vazio');
+                }else if(p.status==='error'){
+                    stat.textContent=p.error?'Erro: '+p.error.substring(0,40):'Erro';stat.style.color='#f43f5e';
+                    document.getElementById('ytPluginBtn').disabled=false;
+                    ytPluginPolling=false;
+                    document.getElementById('ytCancelBtn').style.display='none';
+                    document.getElementById('ytCloseBtn').style.display='';
+                }else if(p.status==='cancelled'){
+                    stat.textContent='Cancelado';stat.style.color='#f43f5e';
+                    document.getElementById('ytPluginBtn').disabled=false;
+                    ytPluginPolling=false;
+                    document.getElementById('ytCancelBtn').style.display='none';
+                    document.getElementById('ytCloseBtn').style.display='';
+                }else{
+                    stat.textContent=p.eta?'ETA: '+p.eta:'';
+                    stat.style.color='#888';
+                }
+            }catch(e){}
+        });
+    }
+    setInterval(ytPluginPollProgress,1200);
+
+    /* ═══════ Start adaptive polling (like AutoCut) ═══════ */
+    LWInit.complete('plugin-bootstrap');
+    LWLog.info('plugin', 'Plugin ready — starting adaptive poll');
+    poll();
+
+    // ===== KEYFRAME CURVE EDITOR =====
+    var curveCP1={x:0.25,y:0.10};
+    var curveCP2={x:0.25,y:1.00};
+    var curveDir='in'; // in, out, inout
+    var curveApplyMode='between';
+    var curveDragging=null; // 'cp1' or 'cp2'
+    var curvePresetName='cubic';
+
+    // Easing presets (control points for ease-in variants)
+    var easingPresets={
+        linear:    {in:{cp1:{x:0.25,y:0.25},cp2:{x:0.75,y:0.75}},out:{cp1:{x:0.25,y:0.25},cp2:{x:0.75,y:0.75}},inout:{cp1:{x:0.25,y:0.25},cp2:{x:0.75,y:0.75}}},
+        sine:      {in:{cp1:{x:0.47,y:0},cp2:{x:0.745,y:0.715}},out:{cp1:{x:0.39,y:0.575},cp2:{x:0.565,y:1}},inout:{cp1:{x:0.445,y:0.05},cp2:{x:0.55,y:0.95}}},
+        quad:      {in:{cp1:{x:0.55,y:0.085},cp2:{x:0.68,y:0.53}},out:{cp1:{x:0.25,y:0.46},cp2:{x:0.45,y:0.94}},inout:{cp1:{x:0.455,y:0.03},cp2:{x:0.515,y:0.955}}},
+        cubic:     {in:{cp1:{x:0.55,y:0.055},cp2:{x:0.675,y:0.19}},out:{cp1:{x:0.215,y:0.61},cp2:{x:0.355,y:1}},inout:{cp1:{x:0.645,y:0.045},cp2:{x:0.355,y:1}}},
+        quart:     {in:{cp1:{x:0.895,y:0.03},cp2:{x:0.685,y:0.22}},out:{cp1:{x:0.165,y:0.84},cp2:{x:0.44,y:1}},inout:{cp1:{x:0.77,y:0},cp2:{x:0.175,y:1}}},
+        quint:     {in:{cp1:{x:0.755,y:0.05},cp2:{x:0.855,y:0.06}},out:{cp1:{x:0.23,y:1},cp2:{x:0.32,y:1}},inout:{cp1:{x:0.86,y:0},cp2:{x:0.07,y:1}}},
+        expo:      {in:{cp1:{x:0.95,y:0.05},cp2:{x:0.795,y:0.035}},out:{cp1:{x:0.19,y:1},cp2:{x:0.22,y:1}},inout:{cp1:{x:1,y:0},cp2:{x:0,y:1}}},
+        circ:      {in:{cp1:{x:0.6,y:0.04},cp2:{x:0.98,y:0.335}},out:{cp1:{x:0.075,y:0.82},cp2:{x:0.165,y:1}},inout:{cp1:{x:0.785,y:0.135},cp2:{x:0.15,y:0.86}}},
+        back:      {in:{cp1:{x:0.6,y:-0.28},cp2:{x:0.735,y:0.045}},out:{cp1:{x:0.175,y:0.885},cp2:{x:0.32,y:1.275}},inout:{cp1:{x:0.68,y:-0.55},cp2:{x:0.265,y:1.55}}},
+        elastic:   {in:{cp1:{x:0.5,y:-0.5},cp2:{x:0.75,y:-0.15}},out:{cp1:{x:0.25,y:1.15},cp2:{x:0.5,y:1.5}},inout:{cp1:{x:0.5,y:-0.5},cp2:{x:0.5,y:1.5}}},
+        bounce:    {in:{cp1:{x:0.4,y:0},cp2:{x:0.7,y:0.2}},out:{cp1:{x:0.3,y:0.8},cp2:{x:0.6,y:1}},inout:{cp1:{x:0.5,y:0},cp2:{x:0.5,y:1}}}
+    };
+
+    function setPreset(name,btn){
+        curvePresetName=name;
+        // Toggle active on preset buttons
+        var btns=document.getElementById('presetBtns').querySelectorAll('.yt-q');
+        for(var i=0;i<btns.length;i++) btns[i].classList.remove('active');
+        if(btn) btn.classList.add('active');
+        if(name==='custom') return; // Keep current custom points
+        var p=easingPresets[name];
+        if(!p) return;
+        var d=p[curveDir]||p['in'];
+        curveCP1={x:d.cp1.x,y:d.cp1.y};
+        curveCP2={x:d.cp2.x,y:d.cp2.y};
+        drawCurve();
+        updateCoords();
+    }
+
+    function setEaseDir(dir){
+        curveDir=dir;
+        document.getElementById('easeIn').classList.toggle('active',dir==='in');
+        document.getElementById('easeOut').classList.toggle('active',dir==='out');
+        document.getElementById('easeInOut').classList.toggle('active',dir==='inout');
+        if(curvePresetName!=='custom') setPreset(curvePresetName,null);
+        else drawCurve();
+    }
+
+    function setApplyMode(mode){
+        curveApplyMode=mode;
+        document.getElementById('applyBetween').classList.toggle('active',mode==='between');
+        document.getElementById('applyAll').classList.toggle('active',mode==='all');
+    }
+
+    function drawCurve(){
+        var canvas=document.getElementById('curveCanvas');
+        if(!canvas) return;
+        var ctx=canvas.getContext('2d');
+        var w=canvas.width,h=canvas.height;
+        var pad=20;
+        var gw=w-2*pad,gh=h-2*pad;
+
+        ctx.clearRect(0,0,w,h);
+
+        // Background grid
+        ctx.strokeStyle='rgba(190,242,100,.06)';
+        ctx.lineWidth=1;
+        for(var i=0;i<=4;i++){
+            var x=pad+gw*(i/4);
+            var y=pad+gh*(i/4);
+            ctx.beginPath();ctx.moveTo(x,pad);ctx.lineTo(x,pad+gh);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(pad+gw,y);ctx.stroke();
+        }
+
+        // Diagonal reference line
+        ctx.strokeStyle='rgba(255,255,255,.08)';
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();
+        ctx.moveTo(pad,pad+gh);
+        ctx.lineTo(pad+gw,pad);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Convert control points to canvas coords
+        function toCanvas(p){return{x:pad+p.x*gw,y:pad+gh-p.y*gh}}
+        var start=toCanvas({x:0,y:0});
+        var end=toCanvas({x:1,y:1});
+        var c1=toCanvas(curveCP1);
+        var c2=toCanvas(curveCP2);
+
+        // Control point lines
+        ctx.strokeStyle='rgba(190,242,100,.3)';
+        ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.lineTo(c1.x,c1.y);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(end.x,end.y);ctx.lineTo(c2.x,c2.y);ctx.stroke();
+
+        // Bezier curve
+        ctx.strokeStyle='#bef264';
+        ctx.lineWidth=2.5;
+        ctx.beginPath();
+        ctx.moveTo(start.x,start.y);
+        ctx.bezierCurveTo(c1.x,c1.y,c2.x,c2.y,end.x,end.y);
+        ctx.stroke();
+
+        // Start/end points
+        ctx.fillStyle='#fff';
+        ctx.beginPath();ctx.arc(start.x,start.y,3,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(end.x,end.y,3,0,Math.PI*2);ctx.fill();
+
+        // Control point handles
+        // CP1 - green
+        ctx.fillStyle='#bef264';
+        ctx.strokeStyle='#fff';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.arc(c1.x,c1.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+        // CP2 - cyan
+        ctx.fillStyle='#22d3ee';
+        ctx.beginPath();ctx.arc(c2.x,c2.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+        // Labels
+        ctx.fillStyle='rgba(255,255,255,.3)';
+        ctx.font='9px sans-serif';
+        ctx.textAlign='left';
+        ctx.fillText('0',pad-3,pad+gh+12);
+        ctx.fillText('1',pad+gw-3,pad-5);
+    }
+
+    function updateCoords(){
+        document.getElementById('cp1x').textContent=curveCP1.x.toFixed(2);
+        document.getElementById('cp1y').textContent=curveCP1.y.toFixed(2);
+        document.getElementById('cp2x').textContent=curveCP2.x.toFixed(2);
+        document.getElementById('cp2y').textContent=curveCP2.y.toFixed(2);
+        document.getElementById('curveCSS').textContent='cubic-bezier('+curveCP1.x.toFixed(2)+','+curveCP1.y.toFixed(2)+','+curveCP2.x.toFixed(2)+','+curveCP2.y.toFixed(2)+')';
+    }
+
+    function copyCurveCSS(){
+        var txt='cubic-bezier('+curveCP1.x.toFixed(2)+','+curveCP1.y.toFixed(2)+','+curveCP2.x.toFixed(2)+','+curveCP2.y.toFixed(2)+')';
+        try{navigator.clipboard.writeText(txt)}catch(e){}
+        var el=document.getElementById('curveCSS');
+        el.style.color='#bef264';setTimeout(function(){el.style.color='#555'},800);
+    }
+
+    function curveFlipH(){
+        curveCP1={x:1-curveCP1.x,y:curveCP1.y};
+        curveCP2={x:1-curveCP2.x,y:curveCP2.y};
+        curvePresetName='custom';
+        activateCustomBtn();
+        drawCurve();updateCoords();
+    }
+    function curveFlipV(){
+        curveCP1={x:curveCP1.x,y:1-curveCP1.y};
+        curveCP2={x:curveCP2.x,y:1-curveCP2.y};
+        curvePresetName='custom';
+        activateCustomBtn();
+        drawCurve();updateCoords();
+    }
+    function curveReset(){
+        curveCP1={x:0.25,y:0.10};curveCP2={x:0.25,y:1.00};
+        curvePresetName='cubic';
+        setPreset('cubic',document.getElementById('presetBtns').querySelector('.yt-q'));
+        drawCurve();updateCoords();
+    }
+    function activateCustomBtn(){
+        var btns=document.getElementById('presetBtns').querySelectorAll('.yt-q');
+        for(var i=0;i<btns.length;i++) btns[i].classList.remove('active');
+        document.getElementById('presetCustomBtn').classList.add('active');
+    }
+
+    // Mouse interaction on canvas — drag via document pra nao travar na borda
+    (function(){
+        var canvas=document.getElementById('curveCanvas');
+        if(!canvas) return;
+        var pad=20;
+
+        function getMousePos(e){
+            var rect=canvas.getBoundingClientRect();
+            var scaleX=canvas.width/rect.width;
+            var scaleY=canvas.height/rect.height;
+            return{x:(e.clientX-rect.left)*scaleX,y:(e.clientY-rect.top)*scaleY};
+        }
+        function toNorm(px){
+            var gw=canvas.width-2*pad,gh=canvas.height-2*pad;
+            // X: 0-1 (obrigatorio pra cubic-bezier valido), Y: -4 a 5 (permite overshoot extremo)
+            return{x:Math.max(0,Math.min(1,(px.x-pad)/gw)),y:Math.max(-4,Math.min(5,1-(px.y-pad)/gh))};
+        }
+        function dist(a,b){return Math.sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y))}
+        function toCanvas(p){
+            var gw=canvas.width-2*pad,gh=canvas.height-2*pad;
+            return{x:pad+p.x*gw,y:pad+gh-p.y*gh};
+        }
+
+        function onDragMove(e){
+            if(!curveDragging) return;
+            e.preventDefault();
+            var mp=getMousePos(e);
+            var np=toNorm(mp);
+            if(curveDragging==='cp1'){curveCP1.x=np.x;curveCP1.y=np.y;}
+            else{curveCP2.x=np.x;curveCP2.y=np.y;}
+            curvePresetName='custom';
+            activateCustomBtn();
+            drawCurve();updateCoords();
+        }
+        function onDragEnd(){
+            curveDragging=null;
+            document.removeEventListener('mousemove',onDragMove);
+            document.removeEventListener('mouseup',onDragEnd);
+        }
+
+        canvas.addEventListener('mousedown',function(e){
+            var mp=getMousePos(e);
+            var c1=toCanvas(curveCP1);
+            var c2=toCanvas(curveCP2);
+            if(dist(mp,c1)<14) curveDragging='cp1';
+            else if(dist(mp,c2)<14) curveDragging='cp2';
+            if(curveDragging){
+                e.preventDefault();
+                document.addEventListener('mousemove',onDragMove);
+                document.addEventListener('mouseup',onDragEnd);
+            }
+        });
+    })();
+
+    // Initial draw
+    drawCurve();
+    updateCoords();
+
+    // Apply easing to Premiere keyframes
+    function showEasingMsg(msg,color){
+        var el=document.getElementById('easingMsg');
+        el.textContent=msg;
+        el.style.color=color||'#888';
+        clearTimeout(el._t);
+        el._t=setTimeout(function(){el.textContent=''},4000);
+    }
+
+    function applyEasing(){
+        if(!window.__adobe_cep__||typeof csInterface==='undefined'){
+            showEasingMsg('CEP indisponivel','#f43f5e');
+            return;
+        }
+        var cp1x=curveCP1.x,cp1y=curveCP1.y,cp2x=curveCP2.x,cp2y=curveCP2.y;
+        var mode=curveApplyMode; // 'between' or 'all'
+
+        showEasingMsg('Aplicando easing...','#f59e0b');
+
+        var script='applyBezierEasing('+cp1x.toFixed(4)+','+cp1y.toFixed(4)+','+cp2x.toFixed(4)+','+cp2y.toFixed(4)+',"'+mode+'")';
+        csInterface.evalScript(script,function(result){
+            if(result&&result.indexOf('OK')===0){
+                var parts=result.split(':');
+                showEasingMsg('Easing aplicado! ('+( parts[1]||'')+' props, '+(parts[2]||'')+' keys)','#22c55e');
+            }else if(result==='NO_SEQUENCE'){
+                showEasingMsg('Nenhuma sequence aberta','#f43f5e');
+            }else if(result==='NO_SELECTION'){
+                showEasingMsg('Selecione um clip na timeline','#f43f5e');
+            }else if(result==='NO_KEYS'){
+                showEasingMsg('Clip sem keyframes — adicione keyframes primeiro','#f43f5e');
+            }else if(result&&result.indexOf('ERRORS:')===0){
+                showEasingMsg('Erro ExtendScript: '+result.substring(7),'#f43f5e');
+            }else{
+                showEasingMsg(result||'Erro ao aplicar','#f43f5e');
+            }
+        });
+    }
+
+    // ===== SAVED PRESETS SYSTEM =====
+    var savedPresets=[];
+    var presetEditMode=false;
+
+    function loadSavedPresets(){
+        try{
+            var data=localStorage.getItem('lw_easing_presets');
+            if(data) savedPresets=JSON.parse(data);
+        }catch(e){savedPresets=[]}
+        renderSavedPresets();
+    }
+
+    function saveSavedPresets(){
+        try{localStorage.setItem('lw_easing_presets',JSON.stringify(savedPresets))}catch(e){}
+    }
+
+    function saveCurrentPreset(){
+        var name=prompt('Nome do preset:');
+        if(!name||!name.trim()) return;
+        savedPresets.push({
+            name:name.trim(),
+            cp1:{x:curveCP1.x,y:curveCP1.y},
+            cp2:{x:curveCP2.x,y:curveCP2.y},
+            dir:curveDir
+        });
+        saveSavedPresets();
+        renderSavedPresets();
+        showEasingMsg('Preset "'+name.trim()+'" salvo!','#22c55e');
+    }
+
+    function loadPreset(idx){
+        if(presetEditMode) return;
+        if(idx<0||idx>=savedPresets.length) return;
+        var p=savedPresets[idx];
+        curveCP1={x:p.cp1.x,y:p.cp1.y};
+        curveCP2={x:p.cp2.x,y:p.cp2.y};
+        if(p.dir) setEaseDir(p.dir);
+        curvePresetName='custom';
+        activateCustomBtn();
+        drawCurve();
+        updateCoords();
+    }
+
+    function deletePreset(idx){
+        if(idx<0||idx>=savedPresets.length) return;
+        var name=savedPresets[idx].name;
+        savedPresets.splice(idx,1);
+        saveSavedPresets();
+        renderSavedPresets();
+        showEasingMsg('Preset "'+name+'" removido','#f43f5e');
+    }
+
+    function togglePresetEdit(){
+        presetEditMode=!presetEditMode;
+        var btn=document.getElementById('presetEditBtn');
+        if(presetEditMode){
+            btn.style.color='#f43f5e';btn.style.borderColor='rgba(244,63,94,.3)';btn.textContent='Pronto';
+        }else{
+            btn.style.color='';btn.style.borderColor='';btn.textContent='Editar';
+        }
+        renderSavedPresets();
+    }
+
+    // Draw mini curve thumbnail on a small canvas
+    function drawMiniCurve(canvas,cp1,cp2){
+        var ctx=canvas.getContext('2d');
+        var w=canvas.width,h=canvas.height;
+        var pad=3;
+        var gw=w-2*pad,gh=h-2*pad;
+        ctx.clearRect(0,0,w,h);
+
+        // Background
+        ctx.fillStyle='#1a1a1a';
+        ctx.fillRect(0,0,w,h);
+
+        // Subtle grid
+        ctx.strokeStyle='rgba(190,242,100,.06)';
+        ctx.lineWidth=0.5;
+        ctx.beginPath();ctx.moveTo(pad,pad+gh/2);ctx.lineTo(pad+gw,pad+gh/2);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(pad+gw/2,pad);ctx.lineTo(pad+gw/2,pad+gh);ctx.stroke();
+
+        // Diagonal ref
+        ctx.strokeStyle='rgba(255,255,255,.06)';
+        ctx.lineWidth=0.5;
+        ctx.setLineDash([2,2]);
+        ctx.beginPath();ctx.moveTo(pad,pad+gh);ctx.lineTo(pad+gw,pad);ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Curve
+        var sx=pad,sy=pad+gh;
+        var ex=pad+gw,ey=pad;
+        var c1x=pad+cp1.x*gw,c1y=pad+gh-cp1.y*gh;
+        var c2x=pad+cp2.x*gw,c2y=pad+gh-cp2.y*gh;
+
+        ctx.strokeStyle='#bef264';
+        ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx,sy);
+        ctx.bezierCurveTo(c1x,c1y,c2x,c2y,ex,ey);
+        ctx.stroke();
+
+        // Points
+        ctx.fillStyle='#fff';
+        ctx.beginPath();ctx.arc(sx,sy,1.5,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(ex,ey,1.5,0,Math.PI*2);ctx.fill();
+    }
+
+    function renderSavedPresets(){
+        var grid=document.getElementById('savedPresetsGrid');
+        var noMsg=document.getElementById('noPresets');
+        if(!grid) return;
+        grid.innerHTML='';
+
+        if(savedPresets.length===0){
+            if(noMsg) noMsg.style.display='';
+            return;
+        }
+        if(noMsg) noMsg.style.display='none';
+
+        for(var i=0;i<savedPresets.length;i++){
+            (function(idx){
+                var p=savedPresets[idx];
+                var item=document.createElement('div');
+                item.style.cssText='position:relative;cursor:pointer;border-radius:4px;border:1px solid rgba(190,242,100,.08);overflow:hidden;transition:all .12s;background:#1a1a1a';
+                item.title=p.name;
+
+                // Mini canvas
+                var cv=document.createElement('canvas');
+                cv.width=36;cv.height=36;
+                cv.style.cssText='width:100%;height:auto;display:block';
+                item.appendChild(cv);
+
+                // Name label
+                var label=document.createElement('div');
+                label.style.cssText='font-size:.42rem;color:#888;text-align:center;padding:1px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(0,0,0,.4)';
+                label.textContent=p.name;
+                item.appendChild(label);
+
+                if(presetEditMode){
+                    // Delete button overlay
+                    var del=document.createElement('div');
+                    del.style.cssText='position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,63,94,.15);display:flex;align-items:center;justify-content:center;cursor:pointer';
+                    del.innerHTML='<span style="color:#f43f5e;font-size:.7rem;font-weight:800">X</span>';
+                    del.onclick=function(e){e.stopPropagation();deletePreset(idx)};
+                    item.appendChild(del);
+                }else{
+                    item.onmouseenter=function(){item.style.borderColor='rgba(190,242,100,.3)'};
+                    item.onmouseleave=function(){item.style.borderColor='rgba(190,242,100,.08)'};
+                    item.onclick=function(){loadPreset(idx)};
+                }
+
+                grid.appendChild(item);
+
+                // Draw the mini curve after appended to DOM
+                setTimeout(function(){drawMiniCurve(cv,p.cp1,p.cp2)},10);
+            })(i);
+        }
+    }
+
+    // Load presets on init
+    loadSavedPresets();
+
+    // ============================================
+    // ANCHOR POINT PRO (5x5 grid, target modes, vector motion)
+    // ============================================
+    var anchorCompensate=true;
+    var anchorCurrent='cc';
+    var anchorTarget='clip'; // 'clip' or 'sequence'
+    var anchorVector=false;  // use Vector Motion too
+    var anchorTransform=false; // use Transform effect instead of Motion
+    var _ancBusy=false;
+
+    // Position labels — main 9 + 16 sub-anchors
+    var anchorLabels={
+        'tl':'Sup. Esquerdo','tlc':'Sup. Esq-Centro','tc':'Sup. Centro','tcr':'Sup. Centro-Dir','tr':'Sup. Direito',
+        'tlcl':'Esq. Sup-Meio','q1':'Quadrante 1','tccc':'Sup-Centro','q2':'Quadrante 2','trcr':'Dir. Sup-Meio',
+        'cl':'Meio Esquerdo','clcc':'Esq-Centro','cc':'Centro','cccr':'Centro-Dir','cr':'Meio Direito',
+        'clbl':'Esq. Meio-Inf','q3':'Quadrante 3','ccbc':'Centro-Inf','q4':'Quadrante 4','crbr':'Dir. Meio-Inf',
+        'bl':'Inf. Esquerdo','blc':'Inf. Esq-Centro','bc':'Inf. Centro','bcr':'Inf. Centro-Dir','br':'Inf. Direito'
+    };
+
+    // Map each position name to normalized [x, y] where (0,0)=top-left, (1,1)=bottom-right
+    var anchorPosMap={
+        'tl':[0,0],'tlc':[.25,0],'tc':[.5,0],'tcr':[.75,0],'tr':[1,0],
+        'tlcl':[0,.25],'q1':[.25,.25],'tccc':[.5,.25],'q2':[.75,.25],'trcr':[1,.25],
+        'cl':[0,.5],'clcc':[.25,.5],'cc':[.5,.5],'cccr':[.75,.5],'cr':[1,.5],
+        'clbl':[0,.75],'q3':[.25,.75],'ccbc':[.5,.75],'q4':[.75,.75],'crbr':[1,.75],
+        'bl':[0,1],'blc':[.25,1],'bc':[.5,1],'bcr':[.75,1],'br':[1,1]
+    };
+
+    function toggleCompensate(){
+        anchorCompensate=!anchorCompensate;
+        var el=document.getElementById('anchorCompCheck');
+        if(el){
+            if(anchorCompensate) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+    }
+
+    function setAnchorTarget(t){
+        anchorTarget=t;
+        document.getElementById('ancTgtClip').className='anc-tgt'+(t==='clip'?' active':'');
+        document.getElementById('ancTgtSeq').className='anc-tgt'+(t==='sequence'?' active':'');
+    }
+
+    function toggleAnchorTransform(){
+        anchorTransform=!anchorTransform;
+        document.getElementById('ancTgtTransform').className='anc-tgt'+(anchorTransform?' active':'');
+    }
+
+    function toggleAnchorVector(){
+        anchorVector=!anchorVector;
+        document.getElementById('ancTgtVector').className='anc-tgt'+(anchorVector?' active':'');
+    }
+
+    function showAnchorMsg(msg,color){
+        var el=document.getElementById('anchorMsg');
+        if(!el) return;
+        el.textContent=msg;
+        el.style.color=color||'#555';
+        setTimeout(function(){
+            if(el.textContent===msg) el.textContent='';
+        },4000);
+    }
+
+    function ancSetSpinner(show){
+        var sp=document.getElementById('ancSpinner');
+        if(sp) sp.style.display=show?'block':'none';
+    }
+
+    // Grid click: only SELECT the position (no apply)
+    function setAnchor(pos){
+        anchorCurrent=pos;
+        var pts=document.querySelectorAll('.anc-pt');
+        for(var i=0;i<pts.length;i++){
+            if(pts[i].getAttribute('data-pos')===pos) pts[i].classList.add('active');
+            else pts[i].classList.remove('active');
+        }
+        var lblEl=document.getElementById('anchorLabel');
+        if(lblEl) lblEl.textContent=anchorLabels[pos]||pos;
+    }
+
+    // Apply button: send to Premiere
+    function applyAnchor(){
+        if(_ancBusy) return;
+        if(!csInterface){
+            showAnchorMsg('CEP indisponivel','#f43f5e');
+            return;
+        }
+        var coords=anchorPosMap[anchorCurrent];
+        if(!coords){showAnchorMsg('Selecione uma posicao','#f43f5e');return;}
+
+        _ancBusy=true;
+        ancSetSpinner(true);
+        showAnchorMsg('Aplicando...','#f59e0b');
+
+        var script='setClipAnchorPointPro('+coords[0]+','+coords[1]+','+(anchorCompensate?'true':'false')+',"'+anchorTarget+'",'+(anchorVector?'true':'false')+','+(anchorTransform?'true':'false')+')';
+        csInterface.evalScript(script,function(result){
+            _ancBusy=false;
+            ancSetSpinner(false);
+            var r=String(result||'');
+            var pipe=r.indexOf('|');
+            var debugInfo=pipe>=0?r.substring(pipe+1):'';
+            var mainResult=pipe>=0?r.substring(0,pipe):r;
+            if(mainResult.indexOf('OK')===0){
+                var n=mainResult.split(':')[1]||'1';
+                showAnchorMsg(n+' clip'+(n>1?'s':'')+' - '+debugInfo,'#22c55e');
+            } else if(mainResult==='NO_SEQUENCE'){
+                showAnchorMsg('Abra uma sequence','#f43f5e');
+            } else if(mainResult==='NO_SELECTION'){
+                showAnchorMsg('Selecione clips na timeline','#f43f5e');
+            } else if(mainResult.indexOf('NO_APPLIED')===0){
+                showAnchorMsg('Erro: '+debugInfo,'#f43f5e');
+            } else if(mainResult==='NO_PROJECT'){
+                showAnchorMsg('Nenhum projeto aberto','#f43f5e');
+            } else {
+                showAnchorMsg(r||'Erro ao aplicar','#f43f5e');
+            }
+        });
+    }
+
+    function debugAnchorClick(){
+        if(!csInterface) return;
+        var dbgEl=document.getElementById('anchorDebug');
+        dbgEl.style.display='block';
+        dbgEl.textContent='Lendo valores...';
+        csInterface.evalScript('debugAnchorValues()',function(r){
+            dbgEl.textContent=String(r||'SEM RESPOSTA').replace(/\|/g,'\n');
+        });
+    }
+
+    // ============================================
+    // COPY / PASTE (Lion Copy-Pasta) - arquivo do SO <-> Premiere
+    // ============================================
+    var cpFlags = {
+        insertAtPlayhead: true,
+        useBin: true
+    };
+
+    // Save mode for clipboard images: 'project' (next to .prproj) or 'custom' (user-chosen folder)
+    var cpSaveMode = localStorage.getItem('lw_cp_save_mode') || 'project';
+    var cpCustomPath = localStorage.getItem('lw_cp_save_path') || '';
+
+    function cpToggleFlag(key){
+        cpFlags[key] = !cpFlags[key];
+        var id = 'cpFlag' + key.charAt(0).toUpperCase() + key.slice(1);
+        var el = document.getElementById(id);
+        if (el) el.classList.toggle('active', cpFlags[key]);
+    }
+
+    function cpShowStatus(text, color){
+        var el = document.getElementById('cpStatus');
+        if (!el) return;
+        el.textContent = text;
+        el.style.color = color || '#777';
+    }
+
+    function cpSetSaveMode(mode){
+        cpSaveMode = mode;
+        localStorage.setItem('lw_cp_save_mode', mode);
+        var bProj = document.getElementById('cpSaveModeProj');
+        var bCust = document.getElementById('cpSaveModeCustom');
+        if (bProj) bProj.classList.toggle('active', mode === 'project');
+        if (bCust) bCust.classList.toggle('active', mode === 'custom');
+        var row = document.getElementById('cpCustomPathRow');
+        if (row) row.style.display = (mode === 'custom') ? 'flex' : 'none';
+        cpUpdatePathHint();
+    }
+
+    function cpSavePathChanged(){
+        var inp = document.getElementById('cpCustomPathInput');
+        if (inp) {
+            cpCustomPath = inp.value.trim();
+            localStorage.setItem('lw_cp_save_path', cpCustomPath);
+            cpUpdatePathHint();
+        }
+    }
+
+    function cpUpdatePathHint(){
+        var el = document.getElementById('cpPathHint');
+        if (!el) return;
+        if (cpSaveMode === 'custom') {
+            el.textContent = cpCustomPath ? ('→ ' + cpCustomPath) : 'Defina uma pasta personalizada';
+        } else {
+            el.textContent = 'Salva na pasta do .prproj atual';
+        }
+    }
+
+    function cpPickFolder(){
+        if (!csInterface) return;
+        csInterface.evalScript('cpSelectFolder()', function(result){
+            var r = String(result || '').trim();
+            if (!r || r === 'CANCEL' || r === 'NO_FOLDER') return;
+            cpCustomPath = r;
+            localStorage.setItem('lw_cp_save_path', r);
+            var inp = document.getElementById('cpCustomPathInput');
+            if (inp) inp.value = r;
+            cpUpdatePathHint();
+        });
+    }
+
+    // Resolve final save dir before paste: returns via callback(dirOrEmpty)
+    function cpResolveSaveDir(callback){
+        if (cpSaveMode === 'custom' && cpCustomPath) {
+            callback(cpCustomPath);
+            return;
+        }
+        // project mode (or custom without path — fallback to project folder)
+        if (!csInterface) { callback(''); return; }
+        csInterface.evalScript('getProjectFolder()', function(result){
+            var dir = String(result || '').trim();
+            callback(dir);
+        });
+    }
+
+    // Init UI on load
+    setTimeout(function(){
+        var inp = document.getElementById('cpCustomPathInput');
+        if (inp) inp.value = cpCustomPath;
+        cpSetSaveMode(cpSaveMode);
+    }, 0);
+
+    // Acesso ao Node.js via CEP
+    function cpGetNode(){
+        try {
+            if (typeof window.cep_node !== 'undefined' && window.cep_node.require) return window.cep_node;
+        } catch(e) {}
+        try {
+            if (typeof require !== 'undefined') return { require: require };
+        } catch(e) {}
+        return null;
+    }
+
+    function cpIsWindows(){
+        try {
+            var node = cpGetNode();
+            if (!node) return true; // assume windows
+            var os = node.require('os');
+            return os.platform() === 'win32';
+        } catch(e) { return true; }
+    }
+
+    // ─── Exec helpers (OS-specific) ───
+    function cpExecPS(psScript, callback){
+        var node = cpGetNode();
+        if (!node) { callback('NODE_UNAVAILABLE', null); return; }
+        try {
+            var child_process = node.require('child_process');
+            var Buf = node.require('buffer').Buffer;
+            var b64 = Buf.from(psScript, 'utf16le').toString('base64');
+            child_process.exec('powershell -NoProfile -EncodedCommand ' + b64,
+                { maxBuffer: 8 * 1024 * 1024, windowsHide: true, timeout: 15000 },
+                function(err, stdout, stderr) {
+                    callback(err, String(stdout || ''), String(stderr || ''));
+                }
+            );
+        } catch(e) { callback(e.message || e.toString(), null); }
+    }
+
+    function cpExecShell(cmd, callback){
+        var node = cpGetNode();
+        if (!node) { callback('NODE_UNAVAILABLE', null); return; }
+        try {
+            var child_process = node.require('child_process');
+            child_process.exec(cmd,
+                { maxBuffer: 8 * 1024 * 1024 },
+                function(err, stdout, stderr) {
+                    callback(err, String(stdout || ''), String(stderr || ''));
+                }
+            );
+        } catch(e) { callback(e.message || e.toString(), null); }
+    }
+
+    // Executa JXA (JavaScript for Automation) via osascript — muito mais robusto que AppleScript pra ObjC bridge
+    function cpRunJXA(scriptLines, callback){
+        var node = cpGetNode();
+        if (!node) { callback('NODE_UNAVAILABLE', null); return; }
+        var fs = node.require('fs');
+        var tmpFile = '/tmp/lw-cb-' + Date.now() + '.js';
+        fs.writeFileSync(tmpFile, scriptLines.join('\n'), 'utf8');
+        cpExecShell('osascript -l JavaScript "' + tmpFile + '"', function(err, stdout, stderr){
+            try { fs.unlinkSync(tmpFile); } catch(e){}
+            callback(err, stdout, stderr);
+        });
+    }
+
+    // ─── Clipboard Read (cross-platform) ───
+    function cpReadClipboard(saveDir, callback){
+        if (typeof saveDir === 'function') { callback = saveDir; saveDir = ''; }
+        if (cpIsWindows()) {
+            cpReadClipboardWin(saveDir, callback);
+        } else {
+            cpReadClipboardMac(saveDir, callback);
+        }
+    }
+
+    function cpParseClipboardOutput(stdout, callback){
+        var out = (stdout || '').trim();
+        if (out.indexOf('FILES:') === 0) {
+            var paths = out.substring(6).split('|').map(function(s){return s.trim();}).filter(Boolean);
+            callback({ type: 'files', paths: paths });
+        } else if (out.indexOf('IMAGE:') === 0) {
+            callback({ type: 'image', paths: [out.substring(6).trim()] });
+        } else {
+            callback({ type: 'empty' });
+        }
+    }
+
+    function cpReadClipboardWin(saveDir, callback){
+        var saveDirEsc = String(saveDir || '').replace(/'/g, "''");
+        var saveDirLine = saveDirEsc
+            ? ("    $dir = '" + saveDirEsc + "'")
+            : "    $dir = $env:TEMP";
+        var ps = [
+            'Add-Type -AssemblyName System.Windows.Forms',
+            'Add-Type -AssemblyName System.Drawing',
+            'try {',
+            '  $files = [System.Windows.Forms.Clipboard]::GetFileDropList()',
+            '  if ($files -and $files.Count -gt 0) {',
+            '    $paths = @()',
+            '    foreach ($f in $files) { $paths += $f }',
+            '    Write-Output ("FILES:" + ($paths -join "|"))',
+            '    exit 0',
+            '  }',
+            '} catch {}',
+            'try {',
+            '  $img = [System.Windows.Forms.Clipboard]::GetImage()',
+            '  if ($img -ne $null) {',
+            saveDirLine,
+            '    if (-not (Test-Path $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $dir = $env:TEMP } }',
+            '    $ts = [int][double]::Parse((Get-Date -UFormat %s))',
+            '    $outPath = Join-Path $dir ("lw-clip-" + $ts + ".png")',
+            '    $img.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)',
+            '    Write-Output ("IMAGE:" + $outPath)',
+            '    exit 0',
+            '  }',
+            '} catch {}',
+            'Write-Output "EMPTY"'
+        ].join("\r\n");
+        cpExecPS(ps, function(err, stdout){
+            if (err) { callback({type:'error', msg: String(err.message || err)}); return; }
+            cpParseClipboardOutput(stdout, callback);
+        });
+    }
+
+    function cpReadClipboardMac(saveDir, callback){
+        var node = cpGetNode();
+        if (!node) { callback({type:'error', msg:'NODE_UNAVAILABLE'}); return; }
+        var fs = node.require('fs');
+        var dir = saveDir || '/tmp';
+        // Try to create the requested dir; if it fails (permission/drive unmounted), fall back to /tmp
+        try { fs.mkdirSync(dir, {recursive: true}); } catch(e){ dir = '/tmp'; }
+        // Verify writability — if the dir isn't writable (SMB drive, sandbox, etc.) fall back to /tmp
+        try {
+            var testFile = dir + '/.lw-write-test-' + Date.now();
+            fs.writeFileSync(testFile, '');
+            fs.unlinkSync(testFile);
+        } catch(e){ dir = '/tmp'; }
+        var dirEsc = dir.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var jxa = [
+            'ObjC.import("AppKit");',
+            'ObjC.import("Foundation");',
+            '(function(){',
+            '    var pb = $.NSPasteboard.generalPasteboard;',
+            '    var debug = [];',
+            '',
+            '    // Method 1: file URLs via readObjectsForClasses',
+            '    try {',
+            '        var opts = $.NSDictionary.dictionary;',
+            '        var urls = pb.readObjectsForClassesOptions([$.NSURL], opts);',
+            '        if (urls && urls.count > 0) {',
+            '            var paths = [];',
+            '            for (var i = 0; i < urls.count; i++) {',
+            '                var u = urls.objectAtIndex(i);',
+            '                if (u.isFileURL) {',
+            '                    var p = ObjC.unwrap(u.path);',
+            '                    if (p) paths.push(p);',
+            '                }',
+            '            }',
+            '            if (paths.length > 0) return "FILES:" + paths.join("|");',
+            '        }',
+            '    } catch(e) { debug.push("m1:" + e.message); }',
+            '',
+            '    // Method 2: NSFilenamesPboardType (older Finder format)',
+            '    try {',
+            '        var fnames = pb.propertyListForType("NSFilenamesPboardType");',
+            '        if (fnames && fnames.count > 0) {',
+            '            var paths = [];',
+            '            for (var i = 0; i < fnames.count; i++) {',
+            '                paths.push(ObjC.unwrap(fnames.objectAtIndex(i)));',
+            '            }',
+            '            if (paths.length > 0) return "FILES:" + paths.join("|");',
+            '        }',
+            '    } catch(e) { debug.push("m2:" + e.message); }',
+            '',
+            '    // Method 3: image data (PNG then TIFF)',
+            '    try {',
+            '        var imgData = pb.dataForType("public.png");',
+            '        var wasPng = imgData && imgData.length > 0;',
+            '        if (!wasPng) imgData = pb.dataForType("public.tiff");',
+            '        if (imgData && imgData.length > 0) {',
+            '            var ts = Math.floor(Date.now()/1000);',
+            '            var outPath = "' + dirEsc + '/lw-clip-" + ts + ".png";',
+            '            var ok = false;',
+            '            if (wasPng) {',
+            '                // Already PNG — write raw data directly (avoids NSBitmapImageFileTypePNG deprecation on macOS 11+)',
+            '                ok = imgData.writeToFileAtomically(outPath, true);',
+            '            } else {',
+            '                // Convert TIFF → PNG. NSBitmapImageFileTypePNG raw value = 4',
+            '                var bmp = $.NSBitmapImageRep.imageRepWithData(imgData);',
+            '                if (bmp) {',
+            '                    var png;',
+            '                    try { png = bmp.representationUsingTypeProperties(4, $()); }',
+            '                    catch(e) { debug.push("repr:" + e.message); }',
+            '                    if (png) ok = png.writeToFileAtomically(outPath, true);',
+            '                }',
+            '            }',
+            '            if (ok) return "IMAGE:" + outPath;',
+            '            // Write failed — try /tmp as last resort',
+            '            var tmpPath = "/tmp/lw-clip-" + ts + ".png";',
+            '            if (wasPng) {',
+            '                if (imgData.writeToFileAtomically(tmpPath, true)) return "IMAGE:" + tmpPath;',
+            '            }',
+            '            return "ERROR:write_failed|" + debug.join(";");',
+            '        }',
+            '    } catch(e) { debug.push("m3:" + e.message); }',
+            '',
+            '    if (debug.length > 0) return "EMPTY_DBG:" + debug.join(";");',
+            '    return "EMPTY";',
+            '})()'
+        ];
+        cpRunJXA(jxa, function(err, stdout, stderr){
+            if (err) { callback({type:'error', msg: String(err.message || err) + (stderr ? ' | ' + String(stderr).substring(0,200) : '')}); return; }
+            var out = String(stdout || '').trim();
+            if (out.indexOf('ERROR:') === 0) { callback({type:'error', msg: out.substring(6)}); return; }
+            if (out.indexOf('EMPTY_DBG:') === 0) { callback({type:'empty', debug: out.substring(10)}); return; }
+            cpParseClipboardOutput(out, callback);
+        });
+    }
+
+    // ─── Clipboard Write (cross-platform) ───
+    function cpWriteFileToClipboard(filePath, callback){
+        if (cpIsWindows()) {
+            cpWriteFileToClipboardWin(filePath, callback);
+        } else {
+            cpWriteFileToClipboardMac(filePath, callback);
+        }
+    }
+
+    function cpWriteFileToClipboardWin(filePath, callback){
+        var escaped = String(filePath).replace(/'/g, "''");
+        var ps = [
+            'Add-Type -AssemblyName System.Windows.Forms',
+            'try {',
+            '  $files = New-Object System.Collections.Specialized.StringCollection',
+            "  [void]$files.Add('" + escaped + "')",
+            '  [System.Windows.Forms.Clipboard]::SetFileDropList($files)',
+            '  Write-Output "OK"',
+            '} catch {',
+            '  Write-Output ("ERR:" + $_.Exception.Message)',
+            '}'
+        ].join("\r\n");
+        cpExecPS(ps, function(err, stdout){
+            if (err) { callback('ERR:' + String(err.message || err)); return; }
+            callback((stdout || '').trim());
+        });
+    }
+
+    function cpWriteFileToClipboardMac(filePath, callback){
+        var pathEsc = String(filePath).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var jxa = [
+            'ObjC.import("AppKit");',
+            'ObjC.import("Foundation");',
+            '(function(){',
+            '    try {',
+            '        var pb = $.NSPasteboard.generalPasteboard;',
+            '        pb.clearContents;',
+            '        var url = $.NSURL.fileURLWithPath("' + pathEsc + '");',
+            '        var arr = $.NSArray.arrayWithObject(url);',
+            '        var ok = pb.writeObjects(arr);',
+            '        return ok ? "OK" : "ERR:writeObjects failed";',
+            '    } catch(e) { return "ERR:" + e.message; }',
+            '})()'
+        ];
+        cpRunJXA(jxa, function(err, stdout){
+            if (err) { callback('ERR:' + String(err.message || err)); return; }
+            callback((stdout || '').trim());
+        });
+    }
+
+    function cpDoCopy(){
+        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js nao disponivel no CEP', '#f43f5e'); return; }
+        var btn = document.getElementById('cpCopyBtn');
+        if (btn) btn.disabled = true;
+        cpShowStatus('Pegando arquivo do clip…', '#f59e0b');
+        csInterface.evalScript('cpGetSelectedClipMediaPath()', function(result){
+            var r = String(result || '');
+            if (r.indexOf('OK:') !== 0) {
+                if (btn) btn.disabled = false;
+                if (r === 'NO_SELECTION') cpShowStatus('Selecione um clip na timeline', '#f43f5e');
+                else if (r === 'NO_SEQUENCE') cpShowStatus('Nenhuma sequence aberta', '#f43f5e');
+                else if (r === 'NO_PROJECT') cpShowStatus('Nenhum projeto aberto', '#f43f5e');
+                else if (r === 'NO_MEDIA') cpShowStatus('Clip sem arquivo de origem', '#f43f5e');
+                else if (r === 'FILE_NOT_FOUND') cpShowStatus('Arquivo nao existe no disco', '#f43f5e');
+                else cpShowStatus(r || 'Erro', '#f43f5e');
+                return;
+            }
+            var mediaPath = r.substring(3);
+            cpShowStatus('Pondo no clipboard…', '#f59e0b');
+            cpWriteFileToClipboard(mediaPath, function(resp){
+                if (btn) btn.disabled = false;
+                if (resp === 'OK') {
+                    var name = mediaPath.split(/[\\\/]/).pop();
+                    if (name.length > 26) name = name.substring(0, 26) + '…';
+                    cpShowStatus('Copiado: ' + name, '#22c55e');
+                } else {
+                    cpShowStatus('Erro ao copiar: ' + resp, '#f43f5e');
+                }
+            });
+        });
+    }
+
+    function cpDoPaste(){
+        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js nao disponivel no CEP', '#f43f5e'); return; }
+        var btn = document.getElementById('cpPasteBtn');
+        if (btn) btn.disabled = true;
+        cpShowStatus('Lendo clipboard…', '#f59e0b');
+        cpResolveSaveDir(function(saveDir){
+        // If still no save dir, use system TEMP as last resort
+        if (!saveDir) {
+            try { var _n = cpGetNode(); saveDir = _n ? _n.require('os').tmpdir() : ''; } catch(e){}
+        }
+        cpReadClipboard(saveDir, function(res){
+            if (res.type === 'error') {
+                if (btn) btn.disabled = false;
+                cpShowStatus('Erro clipboard: ' + (res.msg || ''), '#f43f5e');
+                return;
+            }
+            if (res.type === 'empty') {
+                if (btn) btn.disabled = false;
+                cpShowStatus('Clipboard vazio. Copie um arquivo ou tire um print', '#f59e0b');
+                return;
+            }
+            var paths = res.paths || [];
+            if (paths.length === 0) {
+                if (btn) btn.disabled = false;
+                cpShowStatus('Nada pra colar', '#f59e0b');
+                return;
+            }
+            var kind = res.type === 'image' ? 'print' : 'arquivo' + (paths.length > 1 ? 's' : '');
+            cpShowStatus('Importando ' + paths.length + ' ' + kind + '…', '#f59e0b');
+
+            // Passa caminhos como JSON pra ExtendScript via string literal segura
+            var pathsJson = JSON.stringify(paths).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            var scr = 'cpImportFiles("' + pathsJson + '",'
+                    + (cpFlags.insertAtPlayhead?'true':'false') + ','
+                    + (cpFlags.useBin?'true':'false') + ','
+                    + '"Copy-Pasta")';
+            csInterface.evalScript(scr, function(result){
+                if (btn) btn.disabled = false;
+                var r = String(result || '');
+                if (r.indexOf('OK:') === 0) {
+                    // OK:<imported>:<inserted>:<failed>
+                    var parts = r.substring(3).split(':');
+                    var imp = parts[0] || '0';
+                    var ins = parts[1] || '0';
+                    var fail = Number(parts[2] || 0);
+                    var msg = '✓ Importado ' + imp + ' no projeto';
+                    if (Number(ins) > 0) msg += ' + ' + ins + ' no playhead';
+                    if (fail > 0) msg += ' (' + fail + ' falhou)';
+                    cpShowStatus(msg, '#22c55e');
+                } else if (r === 'NO_PROJECT') {
+                    cpShowStatus('Abra um projeto primeiro', '#f43f5e');
+                } else if (r === 'NO_FILES') {
+                    cpShowStatus('Nenhum arquivo valido', '#f43f5e');
+                } else if (r === 'PARSE_ERROR') {
+                    cpShowStatus('Erro ao processar caminhos', '#f43f5e');
+                } else {
+                    cpShowStatus(r || 'Erro ao importar', '#f43f5e');
+                }
+            });
+        });
+        });
+    }
+
+    // ============================================
+    // AUTOCUT — Silence Detection + Auto-Cutting
+    // Uses FFmpeg silencedetect via Lion Workspace app
+    // then ExtendScript to razor/remove in Premiere
+    // ============================================
+    var acMode = 'remove'; // 'remove' or 'cut'
+    var acSilences = [];   // detected silences [{start, end, duration}]
+    var acClipInfo = null;  // clip info from ExtendScript
+    var acTotalDuration = 0;
+    var acAnalyzing = false;
+    var acProgressInterval = null;
+    var acAiIssues = [];     // AI-detected word issues
+    var acAiFilterType = 'all';
+    var acAiFullText = '';   // full transcript
+
+    function acUpdateThreshold() {
+        var v = document.getElementById('acThreshold').value;
+        document.getElementById('acThreshVal').textContent = v + ' dB';
+    }
+    function acUpdateMinDur() {
+        var v = document.getElementById('acMinDuration').value;
+        document.getElementById('acMinDurVal').textContent = parseFloat(v).toFixed(1) + 's';
+    }
+    function acUpdatePadding() {
+        var v = document.getElementById('acPadding').value;
+        document.getElementById('acPaddingVal').textContent = parseFloat(v).toFixed(2) + 's';
+    }
+    function acSetMode(m) {
+        acMode = m;
+        document.getElementById('acModeRemove').classList.toggle('active', m === 'remove');
+        document.getElementById('acModeCut').classList.toggle('active', m === 'cut');
+    }
+    function acShowStatus(msg, color) {
+        var el = document.getElementById('acStatus');
+        if (el) { el.textContent = msg; el.style.color = color || '#555'; }
+    }
+
+    function acSecsToTime(s) {
+        s = Math.round(s);
+        var m = Math.floor(s / 60), ss = s % 60;
+        return m + ':' + (ss < 10 ? '0' : '') + ss;
+    }
+
+    // Draw visual timeline showing silences
+    function acDrawTimeline() {
+        var el = document.getElementById('acTimeline');
+        if (!el || !acTotalDuration) return;
+        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
+        var html = '';
+        // Draw speaking parts (green) on top of silent bg (red)
+        el.style.background = '#1a1a1a';
+
+        // First, draw the full bar as green (speech)
+        html += '<div style="position:absolute;inset:0;background:rgba(190,242,100,.15);border-radius:4px"></div>';
+
+        // Then overlay red bars for each silence
+        for (var i = 0; i < acSilences.length; i++) {
+            var s = acSilences[i];
+            var silStart = Math.max(0, s.start + padding);
+            var silEnd = Math.max(silStart, s.end - padding);
+            if (silEnd <= silStart) continue;
+            var leftPct = (silStart / acTotalDuration) * 100;
+            var widthPct = ((silEnd - silStart) / acTotalDuration) * 100;
+            html += '<div style="position:absolute;top:0;bottom:0;left:' + leftPct.toFixed(2) + '%;width:' + widthPct.toFixed(2) + '%;background:rgba(244,63,94,.3);border-left:1px solid rgba(244,63,94,.5);border-right:1px solid rgba(244,63,94,.5)" title="Silêncio: ' + acSecsToTime(silStart) + ' - ' + acSecsToTime(silEnd) + '"></div>';
+        }
+        el.innerHTML = html;
+
+        // Update time labels
+        document.getElementById('acTimeStart').textContent = '0:00';
+        document.getElementById('acTimeEnd').textContent = acSecsToTime(acTotalDuration);
+
+        // Update stats
+        var totalRemove = 0;
+        var effectiveCount = 0;
+        for (var j = 0; j < acSilences.length; j++) {
+            var sil = acSilences[j];
+            var effStart = Math.max(0, sil.start + padding);
+            var effEnd = Math.max(effStart, sil.end - padding);
+            if (effEnd > effStart) { totalRemove += (effEnd - effStart); effectiveCount++; }
+        }
+        document.getElementById('acSilCount').textContent = effectiveCount;
+        document.getElementById('acRemoveTime').textContent = acSecsToTime(totalRemove);
+    }
+
+    // ─── Progress bar polling ───
+    function acStartProgressPoll() {
+        acAnalyzing = true;
+        var wrap = document.getElementById('acProgressWrap');
+        if (wrap) wrap.style.display = '';
+        document.getElementById('acProgressBar').style.width = '0%';
+        document.getElementById('acProgressPct').textContent = '0%';
+        document.getElementById('acProgressLabel').textContent = 'Iniciando...';
+
+        acProgressInterval = setInterval(function() {
+            LWHttp.get(API + '/autocut/progress', { timeout: 3000, retries: 0 }, function(err, status, body) {
+                if (err) return;
+                try {
+                    var p = JSON.parse(body);
+                    var pct = Math.min(p.percent || 0, 100);
+                    document.getElementById('acProgressBar').style.width = pct + '%';
+                    document.getElementById('acProgressPct').textContent = pct + '%';
+
+                    var labels = {
+                        'silence': 'Detectando silêncios...',
+                        'transcribe-extract': 'Extraindo áudio...',
+                        'transcribe-api': 'Transcrevendo com IA...',
+                        'transcribe-analyze': 'Analisando palavras...',
+                        'done': 'Concluído!',
+                        'cancelled': 'Cancelado'
+                    };
+                    document.getElementById('acProgressLabel').textContent = labels[p.phase] || 'Processando...';
+
+                    if (!p.active && pct >= 100) acStopProgressPoll();
+                } catch (e) {}
+            });
+        }, 600);
+    }
+
+    function acStopProgressPoll() {
+        acAnalyzing = false;
+        if (acProgressInterval) { clearInterval(acProgressInterval); acProgressInterval = null; }
+        setTimeout(function() {
+            var wrap = document.getElementById('acProgressWrap');
+            if (wrap) wrap.style.display = 'none';
+        }, 1200);
+    }
+
+    function acCancelAnalysis() {
+        LWHttp.post(API + '/autocut/cancel', {}, { retries: 0 }, function() {});
+        acStopProgressPoll();
+        document.getElementById('acAnalyzeBtn').disabled = false;
+        document.getElementById('acAiBtn').disabled = false;
+        acShowStatus('Análise cancelada', '#f59e0b');
+    }
+
+    // ─── Silence analysis (with progress bar) ───
+    function acAnalyze() {
+        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
+        var btn = document.getElementById('acAnalyzeBtn');
+        btn.disabled = true;
+        document.getElementById('acAiBtn').disabled = true;
+        acShowStatus('Obtendo info do clip...', '#f59e0b');
+        document.getElementById('acResults').style.display = 'none';
+        document.getElementById('acAiResults').style.display = 'none';
+        document.getElementById('acApplyBtn').disabled = true;
+
+        csInterface.evalScript('autoCutGetClipInfo()', function(result) {
+            var r = String(result || '');
+            if (r.indexOf('OK:') !== 0) {
+                btn.disabled = false;
+                document.getElementById('acAiBtn').disabled = false;
+                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
+                else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
+                else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
+                else acShowStatus(r || 'Erro', '#f43f5e');
+                return;
+            }
+
+            try {
+                acClipInfo = JSON.parse(r.substring(3));
+            } catch (e) {
+                btn.disabled = false;
+                document.getElementById('acAiBtn').disabled = false;
+                acShowStatus('Erro ao parsear info: ' + e.message, '#f43f5e');
+                return;
+            }
+
+            LWLog.info('autocut', 'Clip: ' + acClipInfo.mediaPath);
+            acShowStatus('Analisando áudio com FFmpeg...', '#f59e0b');
+            acStartProgressPoll(); // Start progress bar
+
+            var threshold = parseInt(document.getElementById('acThreshold').value) || -30;
+            var minDuration = parseFloat(document.getElementById('acMinDuration').value) || 0.5;
+
+            LWHttp.post(API + '/autocut/analyze', {
+                filePath: acClipInfo.mediaPath,
+                threshold: threshold,
+                minDuration: minDuration
+            }, { timeout: 620000, retries: 1 }, function(err, status, body) {
+                btn.disabled = false;
+                document.getElementById('acAiBtn').disabled = false;
+                acStopProgressPoll();
+                if (err) {
+                    LWLog.error('autocut', 'Analysis failed: ' + err);
+                    acShowStatus('Erro: ' + (err === 'TIMEOUT' ? 'Timeout — arquivo muito grande?' : 'App desconectado'), '#f43f5e');
+                    return;
+                }
+                try {
+                    var data = JSON.parse(body);
+                    if (data.error) {
+                        acShowStatus('Erro FFmpeg: ' + data.error, '#f43f5e');
+                        return;
+                    }
+                    acSilences = data.silences || [];
+                    acTotalDuration = data.totalDuration || 0;
+
+                    if (acSilences.length === 0) {
+                        acShowStatus('Nenhum silêncio detectado. Ajuste a sensibilidade.', '#f59e0b');
+                        document.getElementById('acResults').style.display = 'none';
+                        return;
+                    }
+
+                    document.getElementById('acResults').style.display = '';
+                    acDrawTimeline();
+                    document.getElementById('acApplyBtn').disabled = false;
+
+                    var totalSilence = 0;
+                    for (var i = 0; i < acSilences.length; i++) totalSilence += acSilences[i].duration;
+                    var pct = acTotalDuration > 0 ? Math.round((totalSilence / acTotalDuration) * 100) : 0;
+                    acShowStatus(acSilences.length + ' silêncios (' + pct + '% do clip)', '#22c55e');
+                    LWLog.info('autocut', 'Found ' + acSilences.length + ' silences, ' + pct + '% of clip');
+                } catch (e) {
+                    acShowStatus('Erro ao processar resultado', '#f43f5e');
+                    LWLog.error('autocut', 'Parse error: ' + e.message);
+                }
+            });
+        });
+    }
+
+    // ─── AI Word Analysis (Whisper transcription + filler/repeat detection) ───
+    function acAiAnalyze() {
+        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
+
+        // Check if API key is configured first — if not, expand config inline and focus input
+        var savedKey = localStorage.getItem('lw_openai_key') || '';
+        if (!savedKey) {
+            // Also check server-side config (in case key is stored in app)
+            LWHttp.post(API + '/autocut/ai-key', {}, { retries: 0, timeout: 3000 }, function(err, st, body) {
+                var hasKey = false;
+                try { var r = JSON.parse(body || '{}'); hasKey = !!r.configured; } catch(e) {}
+                if (!hasKey) {
+                    var cfg = document.getElementById('acAiConfig');
+                    cfg.style.display = '';
+                    var input = document.getElementById('acAiKeyInput');
+                    if (input) { input.focus(); input.placeholder = 'Cole sua chave OpenAI aqui (sk-proj-...)'; }
+                    acShowStatus('Configure a chave da OpenAI abaixo pra usar IA', '#a78bfa');
+                    // Scroll into view
+                    try { cfg.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                    return;
+                }
+                // Key is on server — continue normally
+                _acAiAnalyzeProceed();
+            });
+            return;
+        }
+        _acAiAnalyzeProceed();
+    }
+
+    function _acAiAnalyzeProceed() {
+        var btn = document.getElementById('acAiBtn');
+        btn.disabled = true;
+        document.getElementById('acAnalyzeBtn').disabled = true;
+        acShowStatus('Obtendo info do clip...', '#a78bfa');
+        document.getElementById('acAiResults').style.display = 'none';
+        document.getElementById('acResults').style.display = 'none';
+        document.getElementById('acFullTranscript').style.display = 'none';
+        document.getElementById('acApplyBtn').disabled = true;
+
+        csInterface.evalScript('autoCutGetClipInfo()', function(result) {
+            var r = String(result || '');
+            if (r.indexOf('OK:') !== 0) {
+                btn.disabled = false;
+                document.getElementById('acAnalyzeBtn').disabled = false;
+                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
+                else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
+                else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
+                else acShowStatus(r || 'Erro', '#f43f5e');
+                return;
+            }
+
+            try {
+                acClipInfo = JSON.parse(r.substring(3));
+            } catch (e) {
+                btn.disabled = false;
+                document.getElementById('acAnalyzeBtn').disabled = false;
+                acShowStatus('Erro ao parsear info: ' + e.message, '#f43f5e');
+                return;
+            }
+
+            LWLog.info('autocut', 'AI: Clip = ' + acClipInfo.mediaPath);
+            acShowStatus('Transcrevendo com IA...', '#a78bfa');
+            acStartProgressPoll();
+
+            var apiKey = localStorage.getItem('lw_openai_key') || '';
+            LWHttp.post(API + '/autocut/transcribe', {
+                filePath: acClipInfo.mediaPath,
+                apiKey: apiKey
+            }, { timeout: 320000, retries: 0 }, function(err, status, body) {
+                btn.disabled = false;
+                document.getElementById('acAnalyzeBtn').disabled = false;
+                acStopProgressPoll();
+
+                if (err) {
+                    LWLog.error('autocut', 'AI analysis failed: ' + err);
+                    acShowStatus('Erro: ' + (err === 'TIMEOUT' ? 'Timeout — tente clip menor' : 'Falha na transcrição'), '#f43f5e');
+                    return;
+                }
+
+                try {
+                    var data = JSON.parse(body);
+                    if (data.error) {
+                        acShowStatus('Erro: ' + data.error, '#f43f5e');
+                        // If API key issue, show config
+                        if (data.error.indexOf('API') >= 0 || data.error.indexOf('key') >= 0 || data.error.indexOf('Chave') >= 0) {
+                            document.getElementById('acAiConfig').style.display = '';
+                        }
+                        return;
+                    }
+
+                    acAiIssues = data.issues || [];
+                    acAiFullText = data.text || '';
+                    acTotalDuration = data.totalDuration || 0;
+
+                    LWLog.info('autocut', 'AI: ' + acAiIssues.length + ' issues, lang=' + (data.language || '?'));
+
+                    if (acAiIssues.length === 0) {
+                        acShowStatus('Nenhum problema detectado! Áudio limpo.', '#22c55e');
+                        if (acAiFullText) {
+                            document.getElementById('acAiTranscript').textContent = 'Transcrição ok — clique pra ver';
+                            document.getElementById('acFullTranscript').textContent = acAiFullText;
+                        }
+                        document.getElementById('acAiResults').style.display = '';
+                        document.getElementById('acAiCount').textContent = '0';
+                        return;
+                    }
+
+                    // Convert AI issues to silences format for the Cortar button
+                    acSilences = [];
+                    for (var i = 0; i < acAiIssues.length; i++) {
+                        var iss = acAiIssues[i];
+                        acSilences.push({ start: iss.start, end: iss.end, duration: iss.end - iss.start });
+                    }
+
+                    // Show timeline + results
+                    document.getElementById('acResults').style.display = '';
+                    document.getElementById('acAiResults').style.display = '';
+                    acAiFilterType = 'all';
+                    acDrawAiResults();
+                    acDrawTimeline();
+                    document.getElementById('acApplyBtn').disabled = false;
+
+                    if (acAiFullText) {
+                        document.getElementById('acAiTranscript').textContent = 'Ver transcrição completa';
+                        document.getElementById('acFullTranscript').textContent = acAiFullText;
+                    }
+
+                    // Summary
+                    var fillers = 0, repeats = 0, stutters = 0;
+                    for (var j = 0; j < acAiIssues.length; j++) {
+                        if (acAiIssues[j].type === 'filler') fillers++;
+                        else if (acAiIssues[j].type === 'repeat') repeats++;
+                        else if (acAiIssues[j].type === 'stutter') stutters++;
+                    }
+                    acShowStatus(acAiIssues.length + ' problemas detectados', '#a78bfa');
+                    LWLog.info('autocut', 'AI done: ' + fillers + ' fillers, ' + repeats + ' repeats, ' + stutters + ' stutters');
+
+                } catch (e) {
+                    acShowStatus('Erro ao processar: ' + e.message, '#f43f5e');
+                    LWLog.error('autocut', 'AI parse error: ' + e.message);
+                }
+            });
+        });
+    }
+
+    // ─── AI Results rendering ───
+    function acDrawAiResults() {
+        var el = document.getElementById('acAiIssuesList');
+        if (!el) return;
+        var html = '';
+        var fillers = 0, repeats = 0, stutters = 0;
+        var filtered = [];
+
+        for (var i = 0; i < acAiIssues.length; i++) {
+            var iss = acAiIssues[i];
+            if (iss.type === 'filler') fillers++;
+            else if (iss.type === 'repeat') repeats++;
+            else if (iss.type === 'stutter') stutters++;
+            if (acAiFilterType === 'all' || acAiFilterType === iss.type) filtered.push(iss);
+        }
+
+        document.getElementById('acAiCount').textContent = acAiIssues.length;
+        document.getElementById('acAiFillerN').textContent = fillers;
+        document.getElementById('acAiRepeatN').textContent = repeats;
+        document.getElementById('acAiStutterN').textContent = stutters;
+
+        for (var j = 0; j < filtered.length; j++) {
+            var issue = filtered[j];
+            var colors = { filler: '#f59e0b', repeat: '#f43f5e', stutter: '#a78bfa' };
+            var icons = { filler: '\u25CF', repeat: '\u25C6', stutter: '\u25B2' };
+            var c = colors[issue.type] || '#888';
+            var ic = icons[issue.type] || '\u25CF';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:3px;margin-bottom:2px;background:rgba(255,255,255,.02);border-left:2px solid ' + c + '">';
+            html += '<span style="color:' + c + ';flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + ic + ' ' + issue.label + '</span>';
+            html += '<span style="color:#555;flex-shrink:0;margin-left:6px">' + acSecsToTime(issue.start) + '</span>';
+            html += '</div>';
+        }
+
+        if (filtered.length === 0) html = '<div style="text-align:center;color:#555;padding:8px">Nenhum nesta categoria</div>';
+        el.innerHTML = html;
+
+        // Update filter chip active states
+        var chips = ['All', 'Filler', 'Repeat', 'Stutter'];
+        for (var k = 0; k < chips.length; k++) {
+            var chipEl = document.getElementById('acAiFilter' + chips[k]);
+            if (chipEl) chipEl.classList.toggle('active', acAiFilterType === chips[k].toLowerCase() || (acAiFilterType === 'all' && chips[k] === 'All'));
+        }
+    }
+
+    function acAiFilter(type) {
+        acAiFilterType = type;
+        acDrawAiResults();
+
+        // Also update the silences array to match the filter (for timeline + cutting)
+        acSilences = [];
+        for (var i = 0; i < acAiIssues.length; i++) {
+            var iss = acAiIssues[i];
+            if (type === 'all' || iss.type === type) {
+                acSilences.push({ start: iss.start, end: iss.end, duration: iss.end - iss.start });
+            }
+        }
+        if (acTotalDuration > 0) acDrawTimeline();
+        document.getElementById('acApplyBtn').disabled = (acSilences.length === 0);
+    }
+
+    function acToggleTranscript() {
+        var el = document.getElementById('acFullTranscript');
+        el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    // ─── API Key management ───
+    function acToggleAiConfig() {
+        var el = document.getElementById('acAiConfig');
+        el.style.display = el.style.display === 'none' ? '' : 'none';
+    }
+
+    function _acUpdateKeyUI(hasKey, masked) {
+        var statusEl = document.getElementById('acAiKeyStatus');
+        var btnTxt = document.getElementById('acAiKeyBtnTxt');
+        if (hasKey) {
+            if (statusEl) statusEl.textContent = '✓ ' + (masked || 'API configurada');
+            if (btnTxt) btnTxt.textContent = 'Trocar chave';
+        } else {
+            if (statusEl) statusEl.textContent = '';
+            if (btnTxt) btnTxt.textContent = 'Configurar chave OpenAI';
+        }
+    }
+
+    function acSaveAiKey() {
+        var key = document.getElementById('acAiKeyInput').value.trim();
+        if (!key) { acShowStatus('Cole a chave da API primeiro', '#f59e0b'); return; }
+        if (key.indexOf('sk-') !== 0) { acShowStatus('Chave OpenAI inválida (começa com sk-)', '#f43f5e'); return; }
+        localStorage.setItem('lw_openai_key', key);
+        // Also save on the server side
+        LWHttp.post(API + '/autocut/ai-key', { key: key }, { retries: 1 }, function(err, status, body) {
+            if (err) { acShowStatus('Erro ao salvar chave', '#f43f5e'); return; }
+            try {
+                var r = JSON.parse(body);
+                acShowStatus('✓ Chave salva! Pode usar IA agora', '#22c55e');
+                _acUpdateKeyUI(true, r.masked);
+                document.getElementById('acAiConfig').style.display = 'none';
+                document.getElementById('acAiKeyInput').value = '';
+            } catch (e) { acShowStatus('Chave salva!', '#22c55e'); _acUpdateKeyUI(true); }
+        });
+    }
+
+    // Load AI key status on init
+    function acCheckAiKey() {
+        LWHttp.post(API + '/autocut/ai-key', {}, { retries: 0, timeout: 3000 }, function(err, status, body) {
+            if (err) return;
+            try {
+                var r = JSON.parse(body);
+                _acUpdateKeyUI(!!r.hasKey, r.masked);
+            } catch (e) {}
+        });
+    }
+    setTimeout(acCheckAiKey, 3000);
+
+    function acApply() {
+        if (!csInterface || !acSilences.length || !acClipInfo) {
+            acShowStatus('Analise um clip primeiro', '#f43f5e');
+            return;
+        }
+        var btn = document.getElementById('acApplyBtn');
+        btn.disabled = true;
+        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
+
+        acShowStatus('Criando backup da sequência...', '#a78bfa');
+        // Step 1: create backup sequence before any destructive action
+        csInterface.evalScript('autoCutBackupSequence()', function(bkResult) {
+            var bk = String(bkResult || '');
+            LWLog.info('autocut', 'Backup: ' + bk);
+            var bkMsg = '';
+            if (bk.indexOf('CLONED:') === 0) bkMsg = 'Backup: sequência "' + bk.substring(7) + '"';
+            else if (bk === 'SAVED') bkMsg = 'Backup: projeto salvo';
+            else if (bk === 'MARKER') bkMsg = 'Marker adicionado (Ctrl+Z pra desfazer)';
+
+            acShowStatus('Cortando ' + acSilences.length + ' silêncios...', '#f59e0b');
+            LWLog.info('autocut', 'Applying ' + acSilences.length + ' cuts, mode=' + acMode + ', padding=' + padding);
+
+            var silJson = JSON.stringify(acSilences).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            var tIdx = (acClipInfo && acClipInfo.trackIndex >= 0) ? acClipInfo.trackIndex : -1;
+            var tTyp = (acClipInfo && acClipInfo.trackType) ? acClipInfo.trackType : 'video';
+            var script = 'autoCutExecute("' + silJson + '",' + padding + ',"' + acMode + '",' + tIdx + ',"' + tTyp + '")';
+            window._acBackupMsg = bkMsg;
+            _acRunExecute(script, btn);
+        });
+    }
+
+    function _acRunExecute(script, btn) {
+        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
+
+        csInterface.evalScript(script, function(result) {
+            btn.disabled = false;
+            var r = String(result || '');
+            LWLog.info('autocut', 'Result: ' + r);
+            var bkInfo = window._acBackupMsg || '';
+            if (r.indexOf('OK:') === 0) {
+                // Parse result — format: OK:cuts:removedSec  or  OK:cuts:removedSec|DBG:...
+                var mainPart = r.substring(3).split('|')[0]; // before any |DBG:
+                var parts = mainPart.split(':');
+                var cuts = parseInt(parts[0]) || 0;
+                var removed = parts[1] || '0';
+                if (cuts > 0) {
+                    var msg = cuts + ' cortes' + (acMode === 'remove' && removed !== '0' ? ' — ' + removed + 's removidos' : '');
+                    if (bkInfo) msg += ' · ' + bkInfo;
+                    acShowStatus(msg, '#22c55e');
+                    showMsg('AutoCut: ' + cuts + ' cortes' + (bkInfo ? ' (' + bkInfo + ')' : ''));
+                    LWLog.info('autocut', 'Done: ' + msg);
+                    // Reset state
+                    acSilences = [];
+                    acClipInfo = null;
+                    document.getElementById('acResults').style.display = 'none';
+                    document.getElementById('acAiResults').style.display = 'none';
+                } else {
+                    // Razor reported OK but 0 cuts — something went wrong
+                    var dbgInfo = r.indexOf('|DBG:') >= 0 ? r.substring(r.indexOf('|DBG:') + 5) : '';
+                    acShowStatus('Nenhum corte efetivado' + (dbgInfo ? ' — ' + dbgInfo : ''), '#f59e0b');
+                    LWLog.warn('autocut', 'Zero cuts: ' + r);
+                }
+            } else if (r === 'NO_SELECTION') {
+                acShowStatus('Clip não encontrado — selecione novamente', '#f43f5e');
+            } else if (r === 'NO_SILENCES') {
+                acShowStatus('Nenhum silêncio pra cortar', '#f59e0b');
+            } else {
+                acShowStatus(r || 'Erro ao cortar', '#f43f5e');
+                LWLog.error('autocut', 'Cut failed: ' + r);
+            }
+        }, { retries: 1 });
+    }
+
+    // Re-draw timeline when padding changes
+    document.getElementById('acPadding').addEventListener('input', function() {
+        if (acSilences.length > 0) acDrawTimeline();
+    });
+
+    </script>
+</body>
+</html>

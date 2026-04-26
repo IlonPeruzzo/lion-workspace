@@ -2379,22 +2379,18 @@ app.whenReady().then(() => {
 });
 
 // Auto-install Premiere plugin on startup (works on both Mac and Windows)
-function autoInstallPremierePlugin() {
+// Helper genérico: instala um plugin CEP (Premiere ou After) na pasta padrão do Adobe.
+// srcFolderName: 'premiere-plugin' ou 'after-plugin' (relativo à pasta do app)
+// extensionId:   'com.lionworkspace.premiere' ou 'com.lionworkspace.after'
+function autoInstallCepPlugin(srcFolderName, extensionId) {
     try {
-        // Check if user opted out of plugin during installation
-        const skipFlag = path.join(path.dirname(process.execPath), 'skip-plugin.flag');
-        if (fs.existsSync(skipFlag)) {
-            console.log('Plugin installation skipped by user choice');
-            return;
-        }
-
         // Find the plugin source (bundled with app in extraResources)
-        let pluginSrc = path.join(process.resourcesPath, 'premiere-plugin');
+        let pluginSrc = path.join(process.resourcesPath, srcFolderName);
         if (!fs.existsSync(pluginSrc)) {
             // Dev mode: plugin is next to the app
-            pluginSrc = path.join(__dirname, 'premiere-plugin');
+            pluginSrc = path.join(__dirname, srcFolderName);
         }
-        if (!fs.existsSync(pluginSrc)) return;
+        if (!fs.existsSync(pluginSrc)) return false;
 
         // Determine CEP extensions folder
         let cepDir;
@@ -2403,7 +2399,7 @@ function autoInstallPremierePlugin() {
         } else {
             cepDir = path.join(process.env.APPDATA || '', 'Adobe', 'CEP', 'extensions');
         }
-        const pluginDest = path.join(cepDir, 'com.lionworkspace.premiere');
+        const pluginDest = path.join(cepDir, extensionId);
 
         // Check if plugin needs update (compare manifest or just overwrite)
         if (!fs.existsSync(path.join(pluginDest, 'host', 'index.jsx')) ||
@@ -2414,7 +2410,7 @@ function autoInstallPremierePlugin() {
             try {
                 const srcStat = fs.statSync(path.join(pluginSrc, 'client', 'index.html'));
                 const dstStat = fs.statSync(path.join(pluginDest, 'client', 'index.html'));
-                if (srcStat.mtimeMs <= dstStat.mtimeMs) return; // Already up to date
+                if (srcStat.mtimeMs <= dstStat.mtimeMs) return false; // Already up to date
             } catch (e) { /* install anyway */ }
         }
 
@@ -2444,20 +2440,34 @@ function autoInstallPremierePlugin() {
         const debugFile = path.join(pluginSrc, '.debug');
         if (fs.existsSync(debugFile)) fs.copyFileSync(debugFile, path.join(pluginDest, '.debug'));
 
-        // Enable CEP debug mode (unsigned extensions)
-        if (isMac) {
-            for (let v = 9; v <= 14; v++) {
-                exec(`defaults write com.adobe.CSXS.${v} PlayerDebugMode 1`, () => {});
-            }
-        } else {
-            for (let v = 9; v <= 14; v++) {
-                exec(`reg add "HKCU\\SOFTWARE\\Adobe\\CSXS.${v}" /v PlayerDebugMode /t REG_SZ /d 1 /f`, () => {});
-            }
-        }
-
-        console.log('Premiere plugin installed to:', pluginDest);
+        console.log(extensionId + ' installed to: ' + pluginDest);
+        return true;
     } catch (e) {
-        console.log('Plugin auto-install skipped:', e.message);
+        console.log('Plugin auto-install skipped (' + extensionId + '):', e.message);
+        return false;
+    }
+}
+
+function autoInstallPremierePlugin() {
+    // Check if user opted out
+    const skipFlag = path.join(path.dirname(process.execPath), 'skip-plugin.flag');
+    if (fs.existsSync(skipFlag)) {
+        console.log('Plugin installation skipped by user choice');
+        return;
+    }
+    // Install Premiere + After plugins
+    autoInstallCepPlugin('premiere-plugin', 'com.lionworkspace.premiere');
+    autoInstallCepPlugin('after-plugin',    'com.lionworkspace.after');
+
+    // Enable CEP debug mode once (covers both plugins)
+    if (isMac) {
+        for (let v = 9; v <= 14; v++) {
+            exec(`defaults write com.adobe.CSXS.${v} PlayerDebugMode 1`, () => {});
+        }
+    } else {
+        for (let v = 9; v <= 14; v++) {
+            exec(`reg add "HKCU\\SOFTWARE\\Adobe\\CSXS.${v}" /v PlayerDebugMode /t REG_SZ /d 1 /f`, () => {});
+        }
     }
 }
 
