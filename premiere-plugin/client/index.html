@@ -259,7 +259,10 @@
                 <button class="btn btn-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled>Pausar</button>
                 <button class="btn btn-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled>Reset</button>
             </div>
-            <div class="focus-note">Modo Foco: escurece telas e bloqueia apps</div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:.62rem;padding:5px 6px;margin-top:6px;cursor:pointer;border-radius:6px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1);color:#bbb">
+                <input type="checkbox" id="pluginPomoFocus" checked onchange="savePluginPomoFocusPref()" style="accent-color:#bef264">
+                <span>Ativar modo foco (bloqueia distrações)</span>
+            </label>
         </div>
     </div>
 
@@ -1376,12 +1379,33 @@
         setTimeout(function(){d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(function(){d.remove()},300)},2500);
     }
 
+    function savePluginPomoFocusPref(){
+        try{
+            var on=document.getElementById('pluginPomoFocus').checked;
+            localStorage.setItem('lw_plugin_pomo_focus', on?'1':'0');
+        }catch(e){}
+    }
+    function pluginPomoFocusOn(){
+        var el=document.getElementById('pluginPomoFocus');
+        return el?el.checked:true;
+    }
+    // Restaura preferência salva
+    setTimeout(function(){
+        try{
+            var saved=localStorage.getItem('lw_plugin_pomo_focus');
+            if(saved==='0'){
+                var el=document.getElementById('pluginPomoFocus');
+                if(el) el.checked=false;
+            }
+        }catch(e){}
+    },0);
+
     function pomoStart(){
         if(pomoState.paused){
             cmd('pomodoro/start');
         } else if(!pomoState.running){
             LWConnection.resetPollRate();
-            LWHttp.post(API+'/pomodoro/start',{fromPlugin:true},{retries:1},function(){});
+            LWHttp.post(API+'/pomodoro/start',{fromPlugin:true,focusEnabled:pluginPomoFocusOn()},{retries:1},function(){});
             setTimeout(poll,300);
         }
     }

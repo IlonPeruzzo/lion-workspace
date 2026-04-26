@@ -1056,9 +1056,13 @@
                     <button class="btn btn-o" id="btnPomoPause" onclick="pausePomodoro()" style="display:none">Pausar</button>
                     <button class="btn btn-r" id="btnPomoReset" onclick="resetPomodoro()" style="display:none">Resetar</button>
                 </div>
-                <div style="text-align:center;font-size:.65rem;color:var(--text3);margin-bottom:6px">
+                <label class="chk" style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:.78rem;padding:6px 10px;margin-bottom:6px;cursor:pointer;border-radius:8px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1)">
+                    <input type="checkbox" id="pomoFocusEnabled" checked onchange="savePomoFocusPref()">
+                    <span>Ativar modo foco (bloqueia apps de distração)</span>
+                </label>
+                <div id="pomoFocusHint" style="text-align:center;font-size:.62rem;color:var(--text3);margin-bottom:6px">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                    Modo foco ativado automaticamente (bloqueia tela + fullscreen)
+                    Apenas apps autorizados ficam abertos durante o foco
                 </div>
                 <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(190,242,100,.08)">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1271,6 +1275,36 @@
                 <div class="fg"><label style="font-size:.75rem">Faturamento Anterior (R$)</label><input type="number" id="cfgMeiFatAnterior" placeholder="0.00" min="0" step="0.01">
                     <span style="font-size:.68rem;color:var(--text3);margin-top:4px;display:block">Valor já faturado este ano antes de usar o app</span>
                 </div>
+            </div>
+            <div style="margin-top:12px;padding:10px;background:rgba(245,158,11,.08);border-radius:8px;font-size:.78rem;color:#fbbf24;line-height:1.5">
+                <strong>Atenção:</strong> Limite MEI é R$ 81.000/ano. Se passar, você precisa migrar pra ME e vai pagar mais imposto (6% ou 15,5% ao invés de 0%). O app avisa antes de você atingir o limite.
+            </div>
+        </div>
+        <div id="cfgMeFields" style="display:none;margin-bottom:16px;padding:14px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.12);border-radius:10px">
+            <div style="font-weight:600;font-size:.85rem;margin-bottom:10px;color:#22d3ee">Dados do ME (Simples Nacional)</div>
+            <div style="margin-bottom:12px">
+                <label style="font-size:.75rem;color:var(--text2);display:block;margin-bottom:6px">Anexo onde sua empresa está enquadrada</label>
+                <div class="pills" style="gap:4px">
+                    <input type="radio" name="meAnexo" id="meAnexoIII" value="III" checked><label for="meAnexoIII" style="font-size:.78rem">Anexo III (6%)</label>
+                    <input type="radio" name="meAnexo" id="meAnexoV" value="V"><label for="meAnexoV" style="font-size:.78rem">Anexo V (15,5%)</label>
+                </div>
+                <span style="font-size:.68rem;color:var(--text3);margin-top:4px;display:block">Não sabe? Anexo III é o mais comum pra editor de vídeo (Fator R).</span>
+            </div>
+            <div style="margin-bottom:8px">
+                <label class="chk" style="display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer">
+                    <input type="checkbox" id="cfgMeProlabore" onchange="toggleProlaboreField()">
+                    Pago pró-labore mensal (recomendado pra ficar no Anexo III)
+                </label>
+            </div>
+            <div id="cfgMeProlaboreField" class="fg" style="display:none;margin-bottom:8px">
+                <label style="font-size:.75rem">Valor do pró-labore (R$/mês)</label>
+                <input type="number" id="cfgMeProlaboreValor" placeholder="1518.00" min="0" step="0.01">
+                <span style="font-size:.68rem;color:var(--text3);margin-top:4px;display:block">Mínimo legal: R$ 1.518,00 (1 salário mínimo)</span>
+            </div>
+            <div style="margin-top:10px;padding:10px;background:rgba(245,158,11,.08);border-radius:8px;font-size:.76rem;color:#fbbf24;line-height:1.55">
+                <strong>Como funciona o Fator R (regra dos 28%):</strong><br>
+                Pra ficar no <strong>Anexo III (6%)</strong> você precisa que seu pró-labore + folha de pagamento seja <strong>≥ 28% do faturamento</strong> dos últimos 12 meses.<br>
+                Se for menor que 28%, a Receita te joga pro <strong>Anexo V (15,5%)</strong> automaticamente. Diferença: a cada R$ 10.000 faturados, você paga R$ 950 a mais.
             </div>
         </div>
 
@@ -2092,11 +2126,24 @@ function getDynStageColor(name){
     let h=0;for(let i=0;i<name.length;i++)h=name.charCodeAt(i)+((h<<5)-h);
     return _dynStageColors[Math.abs(h)%_dynStageColors.length];
 }
+// Hex color por etapa default (mesmas cores das classes .stage-*)
+const _stageHex={
+    cortando:'#fbbf24',
+    'músicas':'#a855f7', musica:'#a855f7', musicas:'#a855f7',
+    'efeitos sonoros':'#f97316',
+    'efeitos visuais':'#ec4899',
+    efeitos:'#22d3ee',
+    zooms:'#6366f1',
+    'color grading':'#f472b6',
+    legendas:'#2dd4bf',
+    renderizando:'#f43f5e',
+    'concluído':'#22c55e', concluido:'#22c55e'
+};
 function stageStyle(name){
     const l=(name||'').toLowerCase();
-    if(stageColors[l])return'';
-    const c=getDynStageColor(l);
-    return `background:${c}18;color:${c};border:1px solid ${c}30`;
+    // Sempre retorna CSS inline para que possa ser consumido pelo plugin (que não tem as classes)
+    const c=_stageHex[l]||getDynStageColor(l);
+    return `background:${c}1f;color:${c};border:1px solid ${c}3a`;
 }
 function getStageColorClass(name){
     const l=(name||'').toLowerCase();
@@ -2163,20 +2210,38 @@ function fecharConfig(){document.getElementById('configPanel').classList.remove(
 function calcImp(bruto,cliNome){
     const t=cfg.tipoPessoa, cl=getCl(cliNome), inter=cl?cl.internacional:false;
     let total=0;
-    if(t==='MEI'){if(inter) total+=bruto*0.0038}
-    else if(t==='ME'){
-        if(inter){total+=bruto*0.0399;total+=bruto*0.0038}
-        else total+=bruto*0.06;
+    let breakdown=[]; // detalhe por imposto pra mostrar pro usuário
+    if(t==='MEI'){
+        if(inter){const v=bruto*0.0038;total+=v;breakdown.push({nome:'IOF',valor:v,desc:'0,38% sobre câmbio (operação internacional)'})}
+        // Nacional: zero. ISS dispensado pelo MEI. Único custo é DAS fixo (R$ 80,90/mês).
+    } else if(t==='ME'){
+        // Anexo III padrão (Fator R OK), Anexo V se pro-labore < 28%
+        const anexo=cfg.meAnexo||'III';
+        const aliqNac=anexo==='V'?0.155:0.06;
+        const aliqInter=anexo==='V'?0.105:0.0399; // Internacional: ISS isento, fica só Simples
+        if(inter){
+            const v=bruto*aliqInter;total+=v;
+            breakdown.push({nome:'Simples Nacional ('+anexo+')',valor:v,desc:(aliqInter*100).toFixed(2)+'% (ISS isento por ser internacional)'});
+            const iof=bruto*0.0038;total+=iof;
+            breakdown.push({nome:'IOF',valor:iof,desc:'0,38% sobre câmbio'});
+        } else {
+            const v=bruto*aliqNac;total+=v;
+            breakdown.push({nome:'Simples Nacional ('+anexo+')',valor:v,desc:(aliqNac*100).toFixed(1)+'% (inclui ISS)'});
+        }
     } else {
+        // PF (Carnê-leão)
         const inss=Math.min(bruto*0.20,1631.48);total+=inss;
+        breakdown.push({nome:'INSS',valor:inss,desc:'20% (teto R$ 1.631,48)'});
         const base=bruto-inss;let ir=0;
         if(base<=2259.20)ir=0;else if(base<=2826.65)ir=base*0.075-169.44;
         else if(base<=3751.05)ir=base*0.15-381.44;else if(base<=4664.68)ir=base*0.225-662.77;
         else ir=base*0.275-896;
-        total+=Math.max(0,ir);
-        if(inter)total+=bruto*0.0038;else total+=bruto*0.05;
+        ir=Math.max(0,ir);total+=ir;
+        if(ir>0) breakdown.push({nome:'IRPF',valor:ir,desc:'tabela progressiva'});
+        if(inter){const iof=bruto*0.0038;total+=iof;breakdown.push({nome:'IOF',valor:iof,desc:'0,38% sobre câmbio'})}
+        else{const iss=bruto*0.05;total+=iss;breakdown.push({nome:'ISS',valor:iss,desc:'5% (serviço nacional)'})}
     }
-    return {total,liquido:bruto-total,inter};
+    return {total,liquido:bruto-total,inter,breakdown};
 }
 
 // ===== CONFIG =====
@@ -2216,6 +2281,11 @@ function salvarCfg(){
     };
     cfg.meiData=(document.getElementById('cfgMeiData').value||'').trim();
     cfg.meiFatAnterior=parseFloat(document.getElementById('cfgMeiFatAnterior').value)||0;
+    // ME — Anexo + pro-labore
+    const meAnexoEl=document.querySelector('input[name="meAnexo"]:checked');
+    cfg.meAnexo=meAnexoEl?meAnexoEl.value:'III';
+    cfg.meProlabore=document.getElementById('cfgMeProlabore')?.checked||false;
+    cfg.meProlaboreValor=parseFloat(document.getElementById('cfgMeProlaboreValor')?.value)||0;
     localStorage.setItem('vc_config',JSON.stringify(cfg));
     document.getElementById('badgeRegime').textContent=cfg.tipoPessoa;
     updInfoFiscal();updCustos();updAlert();updBtnCont();renderRegs();updStats();renderCharts();renderTaxas();updMeiFields();updMeiTracker();
@@ -2243,6 +2313,14 @@ function updBtnCont(){document.getElementById('btnCont').style.display=cfg.tipoP
 function updMeiFields(){
     const show=cfg.tipoPessoa==='MEI';
     document.getElementById('cfgMeiFields').style.display=show?'block':'none';
+    const meEl=document.getElementById('cfgMeFields');
+    if(meEl) meEl.style.display=cfg.tipoPessoa==='ME'?'block':'none';
+}
+function toggleProlaboreField(){
+    const cb=document.getElementById('cfgMeProlabore');
+    const f=document.getElementById('cfgMeProlaboreField');
+    if(f) f.style.display=cb&&cb.checked?'block':'none';
+    salvarCfg();
 }
 function updMeiTracker(){
     const tracker=document.getElementById('meiTracker');
@@ -3010,8 +3088,11 @@ function showImpInfo(){
         porCliente[cli].imp+=impBRL;
     });
     let regimeDesc='';
-    if(tp==='MEI')regimeDesc='MEI - DAS fixo mensal, sem imposto por nota nacional';
-    else if(tp==='ME')regimeDesc='ME - Simples Nacional (6% ou ~4,37% internacional)';
+    if(tp==='MEI')regimeDesc='MEI - DAS fixo mensal, sem imposto por nota nacional. Limite: R$ 81k/ano.';
+    else if(tp==='ME'){
+        const an=cfg.meAnexo||'III';
+        regimeDesc='ME - Simples Nacional Anexo '+an+(an==='III'?' (6% nacional / ~4% internacional)':' (15,5% nacional / 10,5% internacional)');
+    }
     else regimeDesc='PF - INSS 20% (teto R$1.631) + IRPF progressivo + ISS 5%';
     const baseTrib=totalBruto-totalTaxas;
     let rows='<div class="ip-row"><span class="ip-lbl">Bruto do mes</span><span class="ip-val">R$ '+fb(totalBruto)+'</span></div>';
@@ -3024,7 +3105,45 @@ function showImpInfo(){
         const tag=d.inter?' <span style="font-size:.55rem;color:#22d3ee">INT</span>':'';
         rows+='<div class="ip-row"><span class="ip-lbl">'+cli+tag+'</span><span class="ip-val" style="color:#fbbf24">-R$ '+fb(d.imp)+' <span style="font-size:.6rem;opacity:.6">('+pct+'%)</span></span></div>';
     });
-    panel.innerHTML='<div class="ip-title">Impostos - '+tp+'</div><div style="font-size:.65rem;color:var(--text3);margin-bottom:8px">'+regimeDesc+'</div>'+rows+'<div class="ip-total"><span>Total Impostos</span><span style="color:#fbbf24">-R$ '+fb(totalImp)+'</span></div><div class="ip-note">Calculado: (Bruto - Taxas) x Aliquota do regime '+tp+'</div>';
+
+    // ─── WARNINGS EXPLÍCITOS ─────────────────────────────────────────
+    let warnings='';
+    if(tp==='ME'){
+        const an=cfg.meAnexo||'III';
+        const proLab=cfg.meProlabore?(cfg.meProlaboreValor||0):0;
+        if(an==='III'){
+            // Anexo III precisa que pro-labore mensal seja ≥ 28% do faturamento médio mensal
+            const fatMensal=baseTrib;
+            const pctProlabore=fatMensal>0?(proLab/fatMensal*100):0;
+            if(proLab===0){
+                warnings+='<div style="margin-top:10px;padding:10px;background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.2);border-radius:8px;font-size:.74rem;color:#fb7185;line-height:1.5"><strong>⚠ ALERTA Fator R:</strong><br>Você está no Anexo III mas não declarou pró-labore. A Receita pode te jogar pro <strong>Anexo V (15,5%)</strong>, ou seja, <strong>+R$ '+fb(baseTrib*0.095)+' a mais este mês</strong>.</div>';
+            } else if(pctProlabore<28){
+                const extra=baseTrib*0.095;
+                warnings+='<div style="margin-top:10px;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:.74rem;color:#fbbf24;line-height:1.5"><strong>⚠ Fator R abaixo de 28%:</strong><br>Seu pró-labore é '+pctProlabore.toFixed(1)+'% do faturamento. Pra ficar no Anexo III (6%) precisa ser <strong>≥ 28%</strong>. Falta <strong>R$ '+fb(fatMensal*0.28-proLab)+'</strong> de pró-labore. Se a Receita te reclassificar pro Anexo V, você paga <strong>+R$ '+fb(extra)+'</strong> em imposto este mês.</div>';
+            } else {
+                warnings+='<div style="margin-top:10px;padding:10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:.74rem;color:#22c55e;line-height:1.5"><strong>✓ Fator R OK ('+pctProlabore.toFixed(1)+'%):</strong> Você está enquadrado corretamente no Anexo III (6%).</div>';
+            }
+        } else if(an==='V'){
+            const possivelEcon=baseTrib*0.095;
+            warnings+='<div style="margin-top:10px;padding:10px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.2);border-radius:8px;font-size:.74rem;color:#22d3ee;line-height:1.5"><strong>💡 Você pode economizar:</strong><br>Migrando pro <strong>Anexo III (6%)</strong> com pró-labore ≥ 28% do faturamento, você pagaria <strong>R$ '+fb(possivelEcon)+'</strong> a menos este mês. Fale com seu contador.</div>';
+        }
+        // Internacional sem ISS
+        const interVids=mesRegs.filter(r=>{const c=getCl(r.cliente);return c&&c.internacional}).length;
+        if(interVids>0){
+            warnings+='<div style="margin-top:10px;padding:10px;background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.15);border-radius:8px;font-size:.72rem;color:#22d3ee;line-height:1.5"><strong>🌍 Serviços internacionais ('+interVids+' este mês):</strong><br>ISS é isento (serviço exportado). Pagando só Simples Nacional + IOF 0,38% no câmbio.</div>';
+        }
+    } else if(tp==='MEI'){
+        const fatAno=(cfg.meiFatAnterior||0)+regs.filter(r=>r.data&&r.data.substring(0,4)===String(new Date().getFullYear())).reduce((s,r)=>{const c=getCl(r.cliente);const v=r.quantidade*r.valor;return s+(c&&c.internacional?v*getCotacaoMoeda(c.moeda||'USD'):v)},0);
+        const pctMEI=fatAno/81000*100;
+        if(pctMEI>=100){
+            const excedente=fatAno-81000;
+            warnings+='<div style="margin-top:10px;padding:10px;background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.25);border-radius:8px;font-size:.74rem;color:#fb7185;line-height:1.5"><strong>🚨 ULTRAPASSOU O LIMITE MEI!</strong><br>Você faturou R$ '+fb(fatAno)+' este ano (limite: R$ 81.000). Excedente: <strong>R$ '+fb(excedente)+'</strong>. Vai precisar pagar <strong>~R$ '+fb(excedente*0.155)+'</strong> de imposto retroativo. <strong>Migre pra ME urgentemente</strong>.</div>';
+        } else if(pctMEI>=80){
+            warnings+='<div style="margin-top:10px;padding:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:.74rem;color:#fbbf24;line-height:1.5"><strong>⚠ Atenção MEI ('+pctMEI.toFixed(0)+'% do limite):</strong><br>Você já faturou R$ '+fb(fatAno)+' este ano. Faltam só <strong>R$ '+fb(81000-fatAno)+'</strong> pra ultrapassar. Considere migrar pra ME antes de bater o teto.</div>';
+        }
+    }
+
+    panel.innerHTML='<div class="ip-title">Impostos - '+tp+'</div><div style="font-size:.65rem;color:var(--text3);margin-bottom:8px">'+regimeDesc+'</div>'+rows+'<div class="ip-total"><span>Total Impostos</span><span style="color:#fbbf24">-R$ '+fb(totalImp)+'</span></div><div class="ip-note">Calculado: (Bruto - Taxas) x Aliquota do regime '+tp+'</div>'+warnings;
     panel.classList.add('open');
 }
 function excReg(id){regs=regs.filter(r=>r.id!==id);salvar();renderRegs();updStats();renderCli();renderCharts()}
@@ -4928,16 +5047,24 @@ function playBeep(){
     try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;o.type='sine';g.gain.value=0.3;o.start();o.stop(c.currentTime+0.4);setTimeout(()=>{const o2=c.createOscillator(),g2=c.createGain();o2.connect(g2);g2.connect(c.destination);o2.frequency.value=1100;o2.type='sine';g2.gain.value=0.3;o2.start();o2.stop(c.currentTime+0.3)},500)}catch(e){}
 }
 
+function isPomoFocusEnabled(){
+    const el=document.getElementById('pomoFocusEnabled');
+    return el?el.checked:true;
+}
+function savePomoFocusPref(){
+    try{ localStorage.setItem('vc_pomo_focus_enabled', isPomoFocusEnabled()?'1':'0'); }catch(e){}
+}
 function startPomodoro(){
     if(pomoT.running)return;
+    const focusOn=isPomoFocusEnabled();
     if(pomoT._paused){
         pomoT.running=true;pomoT._paused=false;
         pomoInt=setInterval(tickPomodoro,1000);
         document.getElementById('btnPomoStart').style.display='none';
         document.getElementById('btnPomoPause').style.display='';
         document.getElementById('btnPomoReset').style.display='';
-        // Resume focus mode (external — no fullscreen)
-        if(window.focusMode)window.focusMode.startExternal();
+        // Resume focus mode (only if user chose it)
+        if(focusOn && window.focusMode)window.focusMode.startExternal();
         return;
     }
     const w=parseInt(document.getElementById('pomoWork').value)||25;
@@ -4949,9 +5076,8 @@ function startPomodoro(){
     document.getElementById('btnPomoStart').style.display='none';
     document.getElementById('btnPomoPause').style.display='';
     document.getElementById('btnPomoReset').style.display='';
-    // Focus mode — always use EXTERNAL mode (no fullscreen, no black screen)
-    // Just monitors foreground apps and minimizes non-allowed ones
-    if(window.focusMode){
+    // Focus mode — only if user enabled the checkbox
+    if(focusOn && window.focusMode){
         window.focusMode.startExternal();
     }
 }
@@ -5339,6 +5465,11 @@ function handleSyncCommand(data){
             if(payload.regId&&payload.etapa){changeStage(payload.regId,payload.etapa)}
             break;
         case'pomodoro/start':
+            // Honor plugin's focus preference if explicitly set
+            if(payload.fromPlugin && typeof payload.focusEnabled==='boolean'){
+                const cb=document.getElementById('pomoFocusEnabled');
+                if(cb) cb.checked=payload.focusEnabled;
+            }
             if(pomoT._paused){startPomodoro()}
             else if(!pomoT.running){
                 if(payload.fromPlugin){_externalPomo=true}
@@ -6141,10 +6272,23 @@ function init(){
     document.getElementById('custoCont').addEventListener('change',salvarCfg);
     if(cfg.meiData)document.getElementById('cfgMeiData').value=cfg.meiData;
     if(cfg.meiFatAnterior)document.getElementById('cfgMeiFatAnterior').value=cfg.meiFatAnterior;
-    // Auto-save MEI fields when user edits them (não precisa clicar "Salvar Configurações")
+    // ME — restore Anexo + pro-labore
+    if(cfg.meAnexo){
+        const r=document.getElementById('meAnexo'+cfg.meAnexo);
+        if(r) r.checked=true;
+    }
+    if(cfg.meProlabore){
+        const cb=document.getElementById('cfgMeProlabore');
+        if(cb){cb.checked=true;document.getElementById('cfgMeProlaboreField').style.display='block';}
+    }
+    if(cfg.meProlaboreValor)document.getElementById('cfgMeProlaboreValor').value=cfg.meProlaboreValor;
+    // Auto-save fields
     document.getElementById('cfgMeiData').addEventListener('change',salvarCfg);
     document.getElementById('cfgMeiFatAnterior').addEventListener('change',salvarCfg);
     document.getElementById('cfgMeiFatAnterior').addEventListener('blur',salvarCfg);
+    document.querySelectorAll('input[name="meAnexo"]').forEach(r=>r.addEventListener('change',salvarCfg));
+    const proValor=document.getElementById('cfgMeProlaboreValor');
+    if(proValor){proValor.addEventListener('change',salvarCfg);proValor.addEventListener('blur',salvarCfg);}
     updInfoFiscal();updCustos();updAlert();updBtnCont();updMeiFields();updMeiTracker();
     updEtapasCliSel();renderEtapas();updSelEtapa();updSelPag();
     fetchCotacao();setInterval(fetchCotacao,5*60*1000);
@@ -6158,6 +6302,11 @@ function init(){
     if(prodState.pomoWork)document.getElementById('pomoWork').value=prodState.pomoWork;
     if(prodState.pomoBreak)document.getElementById('pomoBreak').value=prodState.pomoBreak;
     pomoT.remaining=(prodState.pomoWork||25)*60;updatePomoUI();
+    // Restaura preferência do foco no Pomodoro (default: ligado)
+    try{
+        const saved=localStorage.getItem('vc_pomo_focus_enabled');
+        if(saved==='0') document.getElementById('pomoFocusEnabled').checked=false;
+    }catch(e){}
     // App catalog & whitelist
     renderAppButtons();renderWhitelist();
     // Inactivity detection

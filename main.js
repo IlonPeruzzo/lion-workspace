@@ -828,21 +828,24 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
     if (format === 'mp3') {
         args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
     } else if (hasFfmpeg) {
-        // ffmpeg available — download best video+audio separately, merge to mp4
+        // ffmpeg available — separate video+audio streams + merge to mp4.
+        // 4K em geral só vem em VP9/AV1 no YouTube; H.264 raramente existe acima de 1080p.
+        // Por isso pra 4K pulamos o filtro avc1 e deixamos pegar o melhor disponível.
         if (format === '4k') {
-            args.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]');
+            args.push('-f', 'bestvideo[height<=2160]+bestaudio/best[height<=2160]/bestvideo+bestaudio/best');
         } else if (format === '1080') {
-            args.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]');
+            args.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best');
         } else if (format === '720') {
-            args.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]');
+            args.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best');
         } else {
-            args.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best');
+            args.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best/best');
         }
-        args.push('-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+        // Sort prefers H.264 quando disponível, mas não exige
+        args.push('-S', 'res,codec:h264:m4a,br', '--merge-output-format', 'mp4');
     } else {
-        // No ffmpeg — use single stream (video+audio combined, no merge needed)
+        // No ffmpeg — single stream (no merge needed). Note: 4K geralmente NÃO existe como single file.
         if (format === '4k') {
-            args.push('-f', 'best[height<=2160][ext=mp4]/best[height<=2160]/best');
+            args.push('-f', 'best[height<=2160][ext=mp4]/best[height<=2160]/best[ext=mp4]/best');
         } else if (format === '1080') {
             args.push('-f', 'best[height<=1080][ext=mp4]/best[height<=1080]/best');
         } else if (format === '720') {
@@ -1327,13 +1330,14 @@ function startSyncServer() {
                         const hasFf = ffmpegReady();
                         if (fmt === 'mp3') { dlArgs.push('-x', '--audio-format', 'mp3', '--audio-quality', '0'); }
                         else if (hasFf) {
-                            if (fmt === '4k') dlArgs.push('-f', 'bestvideo[height<=2160][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]');
-                            else if (fmt === '1080') dlArgs.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]');
-                            else if (fmt === '720') dlArgs.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]');
-                            else dlArgs.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best');
-                            dlArgs.push('-S', 'vcodec:h264,acodec:aac', '--merge-output-format', 'mp4');
+                            // 4K raramente vem em H.264 — não exigir avc1 ou falha em maioria das plataformas
+                            if (fmt === '4k') dlArgs.push('-f', 'bestvideo[height<=2160]+bestaudio/best[height<=2160]/bestvideo+bestaudio/best');
+                            else if (fmt === '1080') dlArgs.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best');
+                            else if (fmt === '720') dlArgs.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best');
+                            else dlArgs.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best/best');
+                            dlArgs.push('-S', 'res,codec:h264:m4a,br', '--merge-output-format', 'mp4');
                         } else {
-                            if (fmt === '4k') dlArgs.push('-f', 'best[height<=2160][ext=mp4]/best[height<=2160]/best');
+                            if (fmt === '4k') dlArgs.push('-f', 'best[height<=2160][ext=mp4]/best[height<=2160]/best[ext=mp4]/best');
                             else if (fmt === '1080') dlArgs.push('-f', 'best[height<=1080][ext=mp4]/best[height<=1080]/best');
                             else if (fmt === '720') dlArgs.push('-f', 'best[height<=720][ext=mp4]/best[height<=720]/best');
                             else dlArgs.push('-f', 'best[ext=mp4]/best');
