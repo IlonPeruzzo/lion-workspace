@@ -1032,11 +1032,20 @@
                     <div id="projTimerDisplay" style="font-size:2.8rem;font-weight:800;font-variant-numeric:tabular-nums;color:#bef264;letter-spacing:1px">00:00:00</div>
                     <div id="projTimerStatus" style="font-size:.78rem;color:var(--text3);margin-top:4px">Parado</div>
                 </div>
-                <div style="display:flex;gap:8px;justify-content:center">
-                    <button class="btn btn-a" id="btnProjStart" onclick="startProjTimer()">Iniciar</button>
+                <div id="projStartGroup" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+                    <button class="btn btn-a" id="btnProjStartPremiere" onclick="startProjTimer(false,'premiere')" title="Conta o tempo só quando o Premiere Pro está em foco. Pausa automaticamente quando você troca pra outro app." style="display:flex;align-items:center;gap:6px">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                        Iniciar pelo Premiere
+                    </button>
+                    <button class="btn btn-o" id="btnProjStartApp" onclick="startProjTimer(false,'app')" title="Conta o tempo livre, sem depender do Premiere. Use se você edita em outro programa (DaVinci, Final Cut, etc)." style="display:flex;align-items:center;gap:6px">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Iniciar pelo app
+                    </button>
                     <button class="btn btn-o" id="btnProjPause" onclick="pauseProjTimer()" style="display:none">Pausar</button>
                     <button class="btn btn-r" id="btnProjStop" onclick="stopProjTimer()" style="display:none">Parar</button>
                 </div>
+                <!-- Mantém ID antigo escondido pra retrocompat com JS que usava btnProjStart -->
+                <button id="btnProjStart" onclick="startProjTimer(false,'premiere')" style="display:none"></button>
             </div>
 
             <!-- Pomodoro -->
@@ -4961,27 +4970,37 @@ function _startStageTracking(reg){
     projT.stageStart=Date.now();
     projT.stageElapsed=0;
 }
-async function startProjTimer(skipWorkCheck){
+async function startProjTimer(skipWorkCheck, trackMode){
     const proj=getProjName();
     if(!proj){showToast('Selecione um vídeo!','warn');return}
-    // Check if user is in a work app (Premiere, etc.) — skip when auto-switching videos
-    if(!skipWorkCheck&&window.syncBridge&&window.syncBridge.isInWorkApp){
+    // Modo de tracking: 'premiere' (default — pausa quando sai do Premiere) ou 'app' (corre livre)
+    const mode=trackMode||'premiere';
+    // Só verifica Premiere quando modo é 'premiere'
+    if(mode==='premiere' && !skipWorkCheck && window.syncBridge && window.syncBridge.isInWorkApp){
         try{const inWork=await window.syncBridge.isInWorkApp();if(!inWork){showToast('Abra o Premiere Pro para iniciar o timer!','warn');return}}catch(e){}
     }
     const regId=getSelectedRegId();
-    projT={running:true,paused:false,start:Date.now(),elapsed:0,project:proj,regId:regId,autoPauses:0,autoPaused:false,stageStart:0,stageElapsed:0,currentStage:'',currentRegId:regId};
+    projT={running:true,paused:false,start:Date.now(),elapsed:0,project:proj,regId:regId,autoPauses:0,autoPaused:false,stageStart:0,stageElapsed:0,currentStage:'',currentRegId:regId,trackMode:mode};
     const reg=regId?regs.find(r=>r.id===regId):_findRegForProj(proj);
     _startStageTracking(reg);
     projInt=setInterval(updateProjDisplay,1000);
-    document.getElementById('btnProjStart').style.display='none';
+    // Esconde os DOIS botões de iniciar
+    const grp=document.getElementById('projStartGroup');
+    if(grp){
+        const sp=document.getElementById('btnProjStartPremiere'); if(sp) sp.style.display='none';
+        const sa=document.getElementById('btnProjStartApp'); if(sa) sa.style.display='none';
+    }
     document.getElementById('btnProjPause').style.display='';
     document.getElementById('btnProjStop').style.display='';
-    document.getElementById('projTimerStatus').textContent='Trabalhando em: '+proj;
+    const statusTxt=mode==='app'?'Trabalhando (livre): ':'Trabalhando em: ';
+    document.getElementById('projTimerStatus').textContent=statusTxt+proj;
     document.getElementById('workBar').style.display='flex';
     document.getElementById('workBarText').textContent=proj;
     lastActivity=Date.now();
-    localStorage.setItem('vc_prod_active',JSON.stringify({project:proj,start:projT.start}));
-    startTimerFgCheck();
+    localStorage.setItem('vc_prod_active',JSON.stringify({project:proj,start:projT.start,trackMode:mode}));
+    // Auto-pause por foreground SÓ no modo Premiere
+    if(mode==='premiere') startTimerFgCheck();
+    else stopTimerFgCheck(); // garante que não tem nada rodando
 }
 
 function pauseProjTimer(){
@@ -5002,9 +5021,11 @@ function resumeProjTimer(){
     projInt=setInterval(updateProjDisplay,1000);
     document.getElementById('btnProjPause').textContent='Pausar';
     document.getElementById('btnProjPause').onclick=pauseProjTimer;
-    document.getElementById('projTimerStatus').textContent='Trabalhando em: '+projT.project;
+    const statusTxt=projT.trackMode==='app'?'Trabalhando (livre): ':'Trabalhando em: ';
+    document.getElementById('projTimerStatus').textContent=statusTxt+projT.project;
     document.getElementById('inactivityNotice').style.display='none';
-    startTimerFgCheck();
+    if(projT.trackMode==='app') stopTimerFgCheck();
+    else startTimerFgCheck();
 }
 
 function stopProjTimer(){
@@ -5026,7 +5047,9 @@ function stopProjTimer(){
     projT={running:false,paused:false,start:0,elapsed:0,project:'',regId:null,autoPauses:0,autoPaused:false,stageStart:0,stageElapsed:0,currentStage:'',currentRegId:null};
     document.getElementById('projTimerDisplay').textContent='00:00:00';
     document.getElementById('projTimerStatus').textContent='Parado';
-    document.getElementById('btnProjStart').style.display='';
+    // Mostra os 2 botões de iniciar de volta
+    const sp=document.getElementById('btnProjStartPremiere'); if(sp) sp.style.display='';
+    const sa=document.getElementById('btnProjStartApp'); if(sa) sa.style.display='';
     document.getElementById('btnProjPause').style.display='none';
     document.getElementById('btnProjStop').style.display='none';
     document.getElementById('btnProjPause').textContent='Pausar';
@@ -6342,8 +6365,10 @@ function init(){
         setInterval(()=>{try{window.syncBridge.pushState(getSyncState())}catch(e){}},1000);
         window.syncBridge.onCommand(handleSyncCommand);
         // Timer auto-pause when not in work apps (events from main process)
+        // Modo 'app' ignora isso — o timer corre livre
         if(window.syncBridge.onTimerFgPause){
             window.syncBridge.onTimerFgPause(()=>{
+                if(projT.trackMode==='app') return; // modo livre: não pausa
                 if(projT.running&&!projT.paused){
                     _appAutoPaused=true;
                     pauseProjTimer();
@@ -6365,8 +6390,9 @@ function init(){
     if(active&&active.project){
         const elapsed=Math.floor((Date.now()-active.start)/1000);
         if(elapsed>0&&elapsed<24*3600){
-            projT={running:true,paused:true,start:Date.now(),elapsed:elapsed,project:active.project,autoPauses:0,autoPaused:false};
-            document.getElementById('btnProjStart').style.display='none';
+            projT={running:true,paused:true,start:Date.now(),elapsed:elapsed,project:active.project,autoPauses:0,autoPaused:false,trackMode:active.trackMode||'premiere'};
+            const sp=document.getElementById('btnProjStartPremiere'); if(sp) sp.style.display='none';
+            const sa=document.getElementById('btnProjStartApp'); if(sa) sa.style.display='none';
             document.getElementById('btnProjPause').style.display='';
             document.getElementById('btnProjPause').textContent='Retomar';
             document.getElementById('btnProjPause').onclick=resumeProjTimer;
