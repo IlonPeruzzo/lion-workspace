@@ -9,7 +9,8 @@
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
             background:#232323;color:#f5f5f5;padding:10px;min-height:100vh;
             user-select:none;-webkit-user-select:none;
-            border:1px solid rgba(190,242,100,.25);border-radius:4px;
+            border:2.5px solid rgba(190,242,100,.45);border-radius:6px;
+            box-shadow:inset 0 0 12px rgba(190,242,100,.05);
         }
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-track{background:transparent}
@@ -67,9 +68,11 @@
         .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
 
         .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
-        .yt-q{padding:2px 7px;border-radius:5px;border:1px solid rgba(190,242,100,.08);background:rgba(255,255,255,.02);color:#888;font-size:.58rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s}
-        .yt-q:hover{background:rgba(190,242,100,.04);border-color:rgba(190,242,100,.15)}
-        .yt-q.active{background:rgba(190,242,100,.1);border-color:rgba(190,242,100,.3);color:#bef264}
+        .yt-q{padding:3px 9px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.025);color:#888;font-size:.58rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s ease;user-select:none}
+        .yt-q:hover{background:rgba(190,242,100,.08);border-color:rgba(190,242,100,.28);color:#bef264;transform:translateY(-1px);box-shadow:0 2px 6px rgba(190,242,100,.08)}
+        .yt-q:active{transform:translateY(0);box-shadow:none}
+        .yt-q.active{background:rgba(190,242,100,.16);border-color:#bef264;color:#bef264;box-shadow:inset 0 0 8px rgba(190,242,100,.12)}
+        .yt-q.active:hover{background:rgba(190,242,100,.22);transform:translateY(-1px)}
         .plat-btn{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
         .plat-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
         .plat-btn.active{border-color:rgba(190,242,100,.4);background:rgba(190,242,100,.08)}
@@ -404,9 +407,9 @@
             <svg id="easingChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="easingBody">
-            <!-- Curve canvas -->
-            <div style="position:relative;margin-bottom:8px">
-                <canvas id="curveCanvas" width="240" height="240" style="width:100%;height:auto;border-radius:8px;background:#1a1a1a;border:1px solid rgba(190,242,100,.08);cursor:crosshair"></canvas>
+            <!-- Curve canvas (limited to keep proportional even on wide panels) -->
+            <div style="position:relative;margin:0 auto 8px;max-width:260px;width:100%">
+                <canvas id="curveCanvas" width="240" height="240" style="display:block;width:100%;height:auto;aspect-ratio:1/1;border-radius:8px;background:#1a1a1a;border:1px solid rgba(190,242,100,.08);cursor:crosshair"></canvas>
                 <div style="position:absolute;bottom:6px;right:6px;display:flex;gap:3px">
                     <button class="yt-q" onclick="curveFlipH()" title="Espelhar horizontal" style="font-size:.5rem;padding:1px 5px">↔</button>
                     <button class="yt-q" onclick="curveFlipV()" title="Espelhar vertical" style="font-size:.5rem;padding:1px 5px">↕</button>
@@ -571,7 +574,10 @@
             </div>
 
             <!-- Apply Button -->
-            <button class="yt-q" onclick="applyAnchor()" style="width:100%;padding:6px;margin-top:6px;font-weight:600">Aplicar</button>
+            <button class="btn btn-go" onclick="applyAnchor()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-top:6px;display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+                Aplicar
+            </button>
 
             <div id="anchorMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
             <button class="yt-q" onclick="debugAnchorClick()" style="width:100%;padding:4px;margin-top:4px;font-size:.55rem;opacity:.6">🔍 Debug Values</button>
