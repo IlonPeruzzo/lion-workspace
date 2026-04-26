@@ -1141,12 +1141,29 @@ function startSyncServer() {
         if (req.method === 'POST' && req.url === '/auth/local-session') {
             (async () => {
                 try {
-                    const { data: { user } } = await supabase.auth.getUser();
+                    // First try the in-memory snapshot (set on login or app startup)
+                    let user = currentAppUser;
+                    // Fall back to Supabase session if snapshot is null
                     if (!user) {
+                        try {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (session && session.user) {
+                                user = {
+                                    id: session.user.id,
+                                    email: session.user.email,
+                                    name: session.user.user_metadata?.full_name || ''
+                                };
+                                currentAppUser = user; // cache for next call
+                            }
+                        } catch(e) {}
+                    }
+                    if (!user) {
+                        console.log('[auto-login] No app session — plugin will show manual login');
                         res.writeHead(401, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'app_not_logged_in', message: 'Faça login no Lion Workspace primeiro.' }));
                         return;
                     }
+                    console.log('[auto-login] Found app user: ' + user.email);
                     // Check subscription
                     const { data: sub } = await supabase
                         .from('subscriptions')
@@ -1156,6 +1173,7 @@ function startSyncServer() {
                         .limit(1)
                         .single();
                     if (!sub) {
+                        console.log('[auto-login] No active subscription for ' + user.email);
                         res.writeHead(403, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'no_subscription', message: 'Assinatura necessária para usar o plugin.' }));
                         return;
@@ -1178,15 +1196,16 @@ function startSyncServer() {
                     pluginSessions.set(token, {
                         userId: user.id,
                         email: user.email,
-                        name: user.user_metadata?.full_name || '',
+                        name: user.name || '',
                         plan: sub.plan,
                         expiresAt: Date.now() + (24 * 60 * 60 * 1000)
                     });
                     savePluginSessions();
+                    console.log('[auto-login] Issued plugin token for ' + user.email);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({
                         token,
-                        user: { email: user.email, name: user.user_metadata?.full_name || '' },
+                        user: { email: user.email, name: user.name || '' },
                         plan: sub.plan,
                         app_version: app.getVersion()
                     }));
@@ -2013,10 +2032,19 @@ function withTimeout(promise, ms = 15000) {
 }
 
 // IPC: Login
+// Snapshot do usuário atualmente logado no app (alimenta auto-login do plugin)
+let currentAppUser = null; // { id, email, name }
 ipcMain.handle('auth-login', async (_, email, password) => {
     try {
         const { data, error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }));
         if (error) return { success: false, error: error.message };
+
+        // Save snapshot for plugin auto-login
+        currentAppUser = {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.user_metadata?.full_name || ''
+        };
 
         // Register/update device (don't block login for this)
         const fingerprint = getDeviceFingerprint();
@@ -2048,6 +2076,7 @@ ipcMain.handle('auth-login', async (_, email, password) => {
 // IPC: Logout
 ipcMain.handle('auth-logout', async () => {
     try {
+        currentAppUser = null;
         await supabase.auth.signOut();
         clearLicenseCache();
         return { success: true };
@@ -2055,6 +2084,21 @@ ipcMain.handle('auth-logout', async () => {
         return { success: false, error: err.message };
     }
 });
+
+// On startup, try to restore user from persisted Supabase session
+(async () => {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && session.user) {
+            currentAppUser = {
+                id: session.user.id,
+                email: session.user.email,
+                name: session.user.user_metadata?.full_name || ''
+            };
+            console.log('[auth] Restored user session from disk: ' + currentAppUser.email);
+        }
+    } catch(e) { console.warn('[auth] Could not restore session:', e.message); }
+})();
 
 // IPC: Get current session/user
 ipcMain.handle('auth-get-session', async () => {

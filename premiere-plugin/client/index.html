@@ -173,6 +173,13 @@
                 </button>
             </div>
             <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
+            <button type="button" id="pluginAutoLoginBtn" onclick="pluginManualAutoLogin()" style="width:100%;margin-top:8px;padding:10px;background:transparent;border:1px solid rgba(190,242,100,.25);color:#bef264;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .2s" onmouseover="this.style.background='rgba(190,242,100,.08)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 12l2 2 4-4"/></svg>
+                Entrar com sessão do Lion Workspace
+            </button>
+            <div id="pluginAutoLoginHint" style="text-align:center;font-size:.62rem;color:#525252;margin-top:8px">
+                Se o Lion Workspace estiver aberto e logado, o plugin entra sozinho.
+            </div>
             <div style="text-align:center;font-size:.62rem;color:#525252;margin-top:4px">
                 Não tem conta? Crie pelo app ou pelo site.
             </div>
@@ -1179,9 +1186,39 @@
         pluginShowLogin();
     }
 
+    var _autoLoginRetryTimer = null;
     function pluginShowLogin() {
         document.getElementById('pluginLogin').classList.remove('hidden');
         document.getElementById('pluginUserBar').style.display = 'none';
+        // Tenta auto-login a cada 10s enquanto a tela de login estiver aberta
+        // (caso o usuário abra o app principal só DEPOIS de abrir o plugin)
+        if (_autoLoginRetryTimer) clearInterval(_autoLoginRetryTimer);
+        _autoLoginRetryTimer = setInterval(function() {
+            if (document.getElementById('pluginLogin').classList.contains('hidden')) {
+                clearInterval(_autoLoginRetryTimer); _autoLoginRetryTimer = null;
+                return;
+            }
+            pluginTryAutoLogin(function(){}); // silently retry
+        }, 10000);
+    }
+
+    // Botão "Entrar com sessão do Lion Workspace" — feedback visual imediato
+    function pluginManualAutoLogin() {
+        var btn = document.getElementById('pluginAutoLoginBtn');
+        var errEl = document.getElementById('pluginLoginError');
+        var hint = document.getElementById('pluginAutoLoginHint');
+        if (!btn) return;
+        var origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'Conectando…';
+        errEl.classList.remove('show');
+        pluginTryAutoLogin(function() {
+            btn.disabled = false;
+            btn.innerHTML = origHTML;
+            errEl.textContent = 'Lion Workspace não está aberto ou você não está logado nele.';
+            errEl.classList.add('show');
+            if (hint) hint.style.display = 'none';
+        });
     }
 
     function pluginShowApp(user, plan) {
