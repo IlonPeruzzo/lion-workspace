@@ -199,6 +199,26 @@ function isWorkApp(name) {
     return WORK_APPS_TIMER.some(a => lower.includes(a));
 }
 
+// Detecta apenas Premiere Pro (não pega outros apps Adobe)
+function isPremiereApp(name) {
+    const lower = (name || '').toLowerCase();
+    return /(adobe\s+)?premiere(\s+pro)?/i.test(lower);
+}
+
+// Detecta apenas After Effects
+function isAfterApp(name) {
+    const lower = (name || '').toLowerCase();
+    return /afterfx|after\s+effects/i.test(lower);
+}
+
+// Modo de tracking ativo: 'work' (qualquer work app), 'premiere', 'after'
+let timerFgMode = 'work';
+function appMatchesMode(name, mode) {
+    if (mode === 'premiere') return isPremiereApp(name);
+    if (mode === 'after')    return isAfterApp(name);
+    return isWorkApp(name);
+}
+
 /* ═══════ Window ═══════ */
 function createWindow() {
     const opts = {
@@ -463,7 +483,7 @@ function checkTimerForeground() {
     getFgProc(procName => {
         if (!procName || !mainWin || mainWin.isDestroyed()) return;
 
-        if (!isWorkApp(procName)) {
+        if (!appMatchesMode(procName, timerFgMode)) {
             fgMissCount++;
             if (fgMissCount >= FG_MISS_THRESHOLD && !timerFgPaused) {
                 timerFgPaused = true;
@@ -479,15 +499,17 @@ function checkTimerForeground() {
     });
 }
 
-ipcMain.handle('check-foreground', () => {
+ipcMain.handle('check-foreground', (_, mode) => {
     return new Promise(resolve => {
-        getFgProc(proc => resolve(proc ? isWorkApp(proc) : false));
+        const m = mode || 'work';
+        getFgProc(proc => resolve(proc ? appMatchesMode(proc, m) : false));
     });
 });
 
-ipcMain.handle('timer-fg-start', () => {
+ipcMain.handle('timer-fg-start', (_, mode) => {
     timerFgPaused = false;
     fgMissCount = 0;
+    timerFgMode = mode || 'work';
     if (!timerFgInterval) {
         timerFgInterval = setInterval(checkTimerForeground, 1200);
     }

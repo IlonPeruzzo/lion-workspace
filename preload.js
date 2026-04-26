@@ -30,11 +30,11 @@ contextBridge.exposeInMainWorld('ytDownloader', {
 contextBridge.exposeInMainWorld('syncBridge', {
     pushState: (state) => ipcRenderer.invoke('sync-push-state', state),
     onCommand: (callback) => ipcRenderer.on('sync-command', (event, data) => callback(data)),
-    startTimerFg: () => ipcRenderer.invoke('timer-fg-start'),
+    startTimerFg: (mode) => ipcRenderer.invoke('timer-fg-start', mode),
     stopTimerFg: () => ipcRenderer.invoke('timer-fg-stop'),
     onTimerFgPause: (cb) => ipcRenderer.on('timer-fg-pause', () => cb()),
     onTimerFgResume: (cb) => ipcRenderer.on('timer-fg-resume', () => cb()),
-    isInWorkApp: () => ipcRenderer.invoke('check-foreground')
+    isInWorkApp: (mode) => ipcRenderer.invoke('check-foreground', mode)
 });
 
 contextBridge.exposeInMainWorld('appUpdater', {

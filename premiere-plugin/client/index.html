@@ -1341,8 +1341,7 @@
             var isCurrent=s.name===pipe.etapa;
             var css=s.css||'background:rgba(190,242,100,.08);color:#bef264';
             if(!css)css='background:rgba(190,242,100,.08);color:#bef264';
-            var icon=s.icon||'';
-            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+icon+' '+esc(s.name)+'</span>';
+            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+esc(s.name)+'</span>';
         }).join('');
     }
 

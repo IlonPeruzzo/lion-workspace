@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Lion Workspace · After</title>
+    <title>Lion Workspace</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{
@@ -163,7 +163,7 @@
 <body>
     <!-- Plugin Login Screen -->
     <div class="login-overlay" id="pluginLogin">
-        <div class="logo">Lion <span>Workspace</span> · After</div>
+        <div class="logo">Lion <span>Workspace</span></div>
         <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
         <div class="login-form">
             <div class="login-error" id="pluginLoginError"></div>
@@ -218,7 +218,7 @@
         </div>
     </div>
 
-    <div class="logo">Lion <span>Workspace</span> · After</div>
+    <div class="logo">Lion <span>Workspace</span></div>
     <div class="status off" id="conn">Desconectado</div>
 
     <!-- Timer -->
@@ -803,8 +803,7 @@
             var isCurrent=s.name===pipe.etapa;
             var css=s.css||'background:rgba(190,242,100,.08);color:#bef264';
             if(!css)css='background:rgba(190,242,100,.08);color:#bef264';
-            var icon=s.icon||'';
-            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+icon+' '+esc(s.name)+'</span>';
+            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+esc(s.name)+'</span>';
         }).join('');
     }
 
@@ -893,7 +892,7 @@
         if(t.appPaused){
             tDisp.className='timer-display app-paused';
             tSub.className='timer-sub app-paused';
-            tSub.textContent='Pausado (fora do Premiere)';
+            tSub.textContent='Pausado (fora do After)';
         } else if(t.running&&t.paused){
             tDisp.className='timer-display';
             tSub.className='timer-sub';
