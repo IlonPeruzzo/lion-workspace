@@ -1465,6 +1465,58 @@ function startSyncServer() {
                     res.end(JSON.stringify({ ok: true }));
                     return;
                 }
+                // ═══════ Background Remover — IA local via @imgly/background-removal-node ═══════
+                if (command === 'bg/remove' && data.filePath) {
+                    try {
+                        const filePath = data.filePath;
+                        if (!fs.existsSync(filePath)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Arquivo não encontrado: ' + filePath }));
+                            return;
+                        }
+                        // Lazy-load — só carrega o módulo Node-side quando precisa
+                        let removeBackground;
+                        try {
+                            const mod = require('@imgly/background-removal-node');
+                            removeBackground = mod.removeBackground || mod.default;
+                        } catch (e) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'IA indisponível: ' + e.message }));
+                            return;
+                        }
+                        // Processa: lê imagem como Buffer → Blob → removeBackground
+                        const buf = fs.readFileSync(filePath);
+                        const ext = path.extname(filePath).toLowerCase().substring(1);
+                        const mimeMap = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', tif:'image/tiff', tiff:'image/tiff', bmp:'image/bmp' };
+                        const mime = mimeMap[ext] || 'image/png';
+                        // node-side accepts Buffer directly
+                        const resultBlob = await removeBackground(buf, {
+                            output: { format: 'image/png', quality: 0.95 },
+                            debug: false,
+                            progress: (key, current, total) => {
+                                // Could be exposed via IPC later if needed
+                            }
+                        });
+                        // Salva resultado: ao lado do original com suffix _nobg, ou em userData se sem permissão
+                        const dir = path.dirname(filePath);
+                        const base = path.basename(filePath, path.extname(filePath));
+                        let outPath = path.join(dir, base + '_nobg.png');
+                        const resultBuf = Buffer.from(await resultBlob.arrayBuffer());
+                        try {
+                            fs.writeFileSync(outPath, resultBuf);
+                        } catch (eW) {
+                            outPath = path.join(currentUD, 'bgremoved-' + Date.now() + '.png');
+                            fs.writeFileSync(outPath, resultBuf);
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, outPath: outPath }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+
                 // ═══════ AutoCut — Silence Detection via FFmpeg (with progress) ═══════
                 if (command === 'autocut/analyze' && data.filePath) {
                     try {

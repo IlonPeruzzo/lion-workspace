@@ -3079,26 +3079,11 @@
         });
     }
 
-    /* ═══════ BACKGROUND REMOVER (Premiere) ═══════ */
-    var _bgRemoveLib = null;
-
-    async function _bgEnsureLib() {
-        if (_bgRemoveLib) return _bgRemoveLib;
-        var cdns = [
-            'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm',
-            'https://esm.sh/@imgly/background-removal@1.7.0',
-            'https://unpkg.com/@imgly/background-removal@1.7.0/dist/index.mjs?module'
-        ];
-        var lastErr = null;
-        for (var i = 0; i < cdns.length; i++) {
-            try {
-                var mod = await import(/* @vite-ignore */ cdns[i]);
-                _bgRemoveLib = mod;
-                return mod;
-            } catch (e) { lastErr = e; }
-        }
-        throw lastErr || new Error('All CDNs failed');
-    }
+    /* ═══════ BACKGROUND REMOVER (Premiere) ═══════
+       Estratégia: a IA roda no MAIN APP (Lion Workspace), não no plugin.
+       Plugin envia path da imagem → app processa via @imgly/background-removal-node
+       (que usa onnxruntime-node nativamente, sem worker_threads issue) → retorna
+       path do PNG sem fundo. Plugin importa esse PNG no Premiere. */
 
     function _bgMsg(txt, color) {
         var el = document.getElementById('bgRemoveMsg');
@@ -3116,19 +3101,18 @@
 
     async function bgRemoveStart() {
         if (!csInterface) { _bgMsg('CEP indisponível', '#f43f5e'); return; }
-        var node = (typeof window.cep_node !== 'undefined' && window.cep_node.require) ? window.cep_node : (typeof require !== 'undefined' ? { require: require } : null);
-        if (!node) { _bgMsg('Node.js indisponível no CEP', '#f43f5e'); return; }
+        if (!lwConnected) { _bgMsg('Lion Workspace desconectado — abra o app', '#f43f5e'); return; }
 
         var btn = document.getElementById('bgRemoveBtn');
         btn.disabled = true;
         document.getElementById('bgRemovePreview').style.display = 'none';
         _bgMsg('');
 
-        // 1. Pega info do clip selecionado
+        // 1) Pega info do clip selecionado via ExtendScript
         _bgShowLoading(true, 'Lendo clip selecionado...');
-        _bgSetProgress(5);
+        _bgSetProgress(8);
 
-        csInterface.evalScript('lwBgGetSelected()', async function(rawResult) {
+        csInterface.evalScript('lwBgGetSelected()', function(rawResult) {
             var raw = String(rawResult || '');
             if (raw.indexOf('OK:') !== 0) {
                 _bgShowLoading(false);
@@ -3146,71 +3130,62 @@
                 _bgMsg('Erro parsing clip info', '#f43f5e'); return;
             }
 
-            try {
-                // 2. Lê imagem do disco
-                _bgShowLoading(true, 'Lendo imagem...');
-                _bgSetProgress(15);
-                var fs = node.require('fs');
-                var path = node.require('path');
-                var imgBuffer = fs.readFileSync(info.path);
-                var ext = (path.extname(info.path) || '.png').toLowerCase().substring(1);
-                var mimeMap = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', tif:'image/tiff', tiff:'image/tiff' };
-                var mime = mimeMap[ext] || 'image/png';
-                // Converte Node Buffer → Uint8Array → Blob
-                var u8 = new Uint8Array(imgBuffer);
-                var blob = new Blob([u8], { type: mime });
+            // 2) Pede pro main app processar (via /bg/remove). App usa
+            //    @imgly/background-removal-node (com onnxruntime-node nativo)
+            //    que NÃO tem o problema de worker_threads do CEP.
+            _bgShowLoading(true, 'Enviando pra IA...');
+            _bgSetProgress(25);
 
-                // 3. Carrega lib
-                _bgShowLoading(true, 'Carregando IA...');
-                _bgSetProgress(25);
-                var lib = await _bgEnsureLib();
+            // Animação de progresso enquanto processa (não temos progresso real do server)
+            var fakeP = 25;
+            var ticker = setInterval(function() {
+                fakeP = Math.min(90, fakeP + 1.5);
+                _bgSetProgress(fakeP);
+                if (fakeP > 30 && fakeP < 60) _bgShowLoading(true, 'Carregando IA...');
+                else if (fakeP >= 60) _bgShowLoading(true, 'Removendo fundo...');
+            }, 600);
 
-                // 4. Processa
-                _bgShowLoading(true, 'Removendo fundo...');
-                var resultBlob = await lib.removeBackground(blob, {
-                    progress: function(key, current, total) {
-                        var pct = total > 0 ? Math.round((current/total)*100) : 0;
-                        if (key.indexOf('fetch') >= 0) {
-                            _bgShowLoading(true, 'Baixando modelo... ' + pct + '%');
-                            _bgSetProgress(25 + pct * 0.5);
-                        } else {
-                            _bgShowLoading(true, 'Processando... ' + pct + '%');
-                            _bgSetProgress(75 + pct * 0.2);
-                        }
-                    }
-                });
-
-                // 5. Salva PNG ao lado do original
-                _bgShowLoading(true, 'Salvando arquivo...');
-                _bgSetProgress(95);
-                var arr = new Uint8Array(await resultBlob.arrayBuffer());
-                var nodeBuf = node.require('buffer').Buffer.from(arr);
-                var dirName = path.dirname(info.path);
-                var baseName = path.basename(info.path, path.extname(info.path));
-                var outPath = path.join(dirName, baseName + '_nobg.png');
-                try {
-                    fs.writeFileSync(outPath, nodeBuf);
-                } catch (eWrite) {
-                    // fallback: salva no temp do user
-                    var os = node.require('os');
-                    outPath = path.join(os.tmpdir(), baseName + '_nobg.png');
-                    fs.writeFileSync(outPath, nodeBuf);
+            LWHttp.post(API + '/bg/remove', { filePath: info.path }, { timeout: 120000, retries: 0 }, function(err, status, body) {
+                clearInterval(ticker);
+                if (err || status !== 200) {
+                    _bgShowLoading(false); btn.disabled = false;
+                    var msg = 'Falha no servidor';
+                    try { msg = JSON.parse(body || '{}').error || msg; } catch(e) {}
+                    _bgMsg(msg, '#f43f5e');
+                    return;
+                }
+                var resp;
+                try { resp = JSON.parse(body); } catch (e) {
+                    _bgShowLoading(false); btn.disabled = false;
+                    _bgMsg('Resposta inválida do servidor', '#f43f5e'); return;
+                }
+                if (!resp.outPath) {
+                    _bgShowLoading(false); btn.disabled = false;
+                    _bgMsg(resp.error || 'Sem path de saída', '#f43f5e'); return;
                 }
 
-                // 6. Mostra preview
-                document.getElementById('bgRemovePreviewImg').src = URL.createObjectURL(resultBlob);
-                document.getElementById('bgRemovePreview').style.display = 'block';
+                // 3) Mostra preview lendo o arquivo do disco
+                try {
+                    var node = (typeof window.cep_node !== 'undefined' && window.cep_node.require) ? window.cep_node : { require: require };
+                    var fs = node.require('fs');
+                    var imgBuf = fs.readFileSync(resp.outPath);
+                    var u8 = new Uint8Array(imgBuf);
+                    var pngBlob = new Blob([u8], { type: 'image/png' });
+                    document.getElementById('bgRemovePreviewImg').src = URL.createObjectURL(pngBlob);
+                    document.getElementById('bgRemovePreview').style.display = 'block';
+                } catch (e) { /* preview opcional */ }
 
-                // 7. Importa e insere no timeline
+                // 4) Importa no Premiere e insere na track acima do original
                 _bgShowLoading(true, 'Importando no Premiere...');
-                _bgSetProgress(98);
+                _bgSetProgress(96);
                 var infoEsc = JSON.stringify(info).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-                var pathEsc = outPath.replace(/\\/g, '/').replace(/"/g, '\\"');
+                var pathEsc = resp.outPath.replace(/\\/g, '/').replace(/"/g, '\\"');
                 var importScript = 'lwBgImportAndPlace("' + pathEsc + '","' + infoEsc + '")';
                 csInterface.evalScript(importScript, function(impR) {
                     impR = String(impR || '');
                     _bgShowLoading(false);
                     btn.disabled = false;
+                    _bgSetProgress(100);
                     if (impR.indexOf('OK:') === 0) {
                         var what = impR.substring(3);
                         if (what === 'placed') _bgMsg('✓ Pronto! PNG sem fundo na track de cima', '#22c55e');
@@ -3220,11 +3195,7 @@
                         _bgMsg('Erro ao importar: ' + impR, '#f43f5e');
                     }
                 });
-            } catch (e) {
-                _bgShowLoading(false);
-                btn.disabled = false;
-                _bgMsg('Erro: ' + (e.message || e), '#f43f5e');
-            }
+            });
         });
     }
 
