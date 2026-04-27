@@ -91,7 +91,20 @@
       "main.js",
       "preload.js",
       "index.html",
-      "build/icon.png"
+      "build/icon.png",
+      "node_modules/**/*",
+      "!node_modules/**/*.{md,markdown,ts,tsx,map,d.ts,gypi}",
+      "!node_modules/**/{test,tests,__tests__,examples,example,docs,doc}/**",
+      "!node_modules/**/.bin/**",
+      "!node_modules/**/.github/**"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@imgly/background-removal-node/**/*",
+      "node_modules/@imgly/background-removal/**/*",
+      "node_modules/onnxruntime-node/**/*",
+      "node_modules/onnxruntime-common/**/*",
+      "node_modules/sharp/**/*"
     ],
     "extraResources": [
       {

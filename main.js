@@ -1486,6 +1486,15 @@ function startSyncServer() {
                             return;
                         }
 
+                        // publicPath: aponta pros recursos da lib (resources.json, modelos onnx).
+                        // Em produção, lib fica em app.asar.unpacked. Em dev, no node_modules normal.
+                        const imglyPublicPath = (() => {
+                            const base = app.isPackaged
+                                ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@imgly', 'background-removal-node', 'dist')
+                                : path.join(__dirname, 'node_modules', '@imgly', 'background-removal-node', 'dist');
+                            return 'file://' + base.replace(/\\/g, '/') + '/';
+                        })();
+
                         // Lib só suporta PNG/JPG/WEBP. Pra outros formatos (PSD/TIFF/BMP/SVG/etc),
                         // converte pra PNG primeiro usando Electron nativeImage (já vem no Electron).
                         const ext = path.extname(origPath).toLowerCase().substring(1);
@@ -1513,6 +1522,7 @@ function startSyncServer() {
                         try {
                             resultBlob = await removeBackground(workingPath, {
                                 output: { format: 'image/png', quality: 0.95 },
+                                publicPath: imglyPublicPath,
                                 debug: false
                             });
                         } catch (eP) {
@@ -1521,6 +1531,7 @@ function startSyncServer() {
                             const blob = new Blob([buf], { type: 'image/png' });
                             resultBlob = await removeBackground(blob, {
                                 output: { format: 'image/png', quality: 0.95 },
+                                publicPath: imglyPublicPath,
                                 debug: false
                             });
                         }
