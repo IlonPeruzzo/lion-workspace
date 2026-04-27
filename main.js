@@ -1468,13 +1468,14 @@ function startSyncServer() {
                 // ═══════ Background Remover — IA local via @imgly/background-removal-node ═══════
                 if (command === 'bg/remove' && data.filePath) {
                     try {
-                        const filePath = data.filePath;
-                        if (!fs.existsSync(filePath)) {
+                        const origPath = data.filePath;
+                        if (!fs.existsSync(origPath)) {
                             res.writeHead(400, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Arquivo não encontrado: ' + filePath }));
+                            res.end(JSON.stringify({ error: 'Arquivo não encontrado: ' + origPath }));
                             return;
                         }
-                        // Lazy-load — só carrega o módulo Node-side quando precisa
+
+                        // Lazy-load
                         let removeBackground;
                         try {
                             const mod = require('@imgly/background-removal-node');
@@ -1484,22 +1485,49 @@ function startSyncServer() {
                             res.end(JSON.stringify({ error: 'IA indisponível: ' + e.message }));
                             return;
                         }
-                        // Processa: lê imagem como Buffer → Blob → removeBackground
-                        const buf = fs.readFileSync(filePath);
-                        const ext = path.extname(filePath).toLowerCase().substring(1);
-                        const mimeMap = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', tif:'image/tiff', tiff:'image/tiff', bmp:'image/bmp' };
-                        const mime = mimeMap[ext] || 'image/png';
-                        // node-side accepts Buffer directly
-                        const resultBlob = await removeBackground(buf, {
-                            output: { format: 'image/png', quality: 0.95 },
-                            debug: false,
-                            progress: (key, current, total) => {
-                                // Could be exposed via IPC later if needed
+
+                        // Lib só suporta PNG/JPG/WEBP. Pra outros formatos (PSD/TIFF/BMP/SVG/etc),
+                        // converte pra PNG primeiro usando Electron nativeImage (já vem no Electron).
+                        const ext = path.extname(origPath).toLowerCase().substring(1);
+                        const SUPPORTED = new Set(['png','jpg','jpeg','webp']);
+                        let workingPath = origPath;
+                        let tmpConverted = null;
+                        if (!SUPPORTED.has(ext)) {
+                            try {
+                                const { nativeImage } = require('electron');
+                                const img = nativeImage.createFromPath(origPath);
+                                if (img.isEmpty()) throw new Error('formato não decodificável: ' + ext);
+                                const pngBuf = img.toPNG();
+                                tmpConverted = path.join(currentUD, 'bg-input-' + Date.now() + '.png');
+                                fs.writeFileSync(tmpConverted, pngBuf);
+                                workingPath = tmpConverted;
+                            } catch (eConv) {
+                                res.writeHead(400, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ error: 'Formato não suportado (' + ext + '). Use PNG, JPG ou WEBP.' }));
+                                return;
                             }
-                        });
-                        // Salva resultado: ao lado do original com suffix _nobg, ou em userData se sem permissão
-                        const dir = path.dirname(filePath);
-                        const base = path.basename(filePath, path.extname(filePath));
+                        }
+
+                        // Tenta processar — primeiro com path (deixa lib detectar), depois com Blob
+                        let resultBlob;
+                        try {
+                            resultBlob = await removeBackground(workingPath, {
+                                output: { format: 'image/png', quality: 0.95 },
+                                debug: false
+                            });
+                        } catch (eP) {
+                            // Fallback: passa como Blob explícito com MIME
+                            const buf = fs.readFileSync(workingPath);
+                            const blob = new Blob([buf], { type: 'image/png' });
+                            resultBlob = await removeBackground(blob, {
+                                output: { format: 'image/png', quality: 0.95 },
+                                debug: false
+                            });
+                        }
+
+                        // Salva resultado ao lado do original (não do convertido)
+                        const dir = path.dirname(origPath);
+                        const base = path.basename(origPath, path.extname(origPath));
                         let outPath = path.join(dir, base + '_nobg.png');
                         const resultBuf = Buffer.from(await resultBlob.arrayBuffer());
                         try {
@@ -1508,6 +1536,10 @@ function startSyncServer() {
                             outPath = path.join(currentUD, 'bgremoved-' + Date.now() + '.png');
                             fs.writeFileSync(outPath, resultBuf);
                         }
+
+                        // Cleanup do arquivo convertido temporário
+                        if (tmpConverted) { try { fs.unlinkSync(tmpConverted); } catch(e) {} }
+
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ ok: true, outPath: outPath }));
                     } catch (e) {
