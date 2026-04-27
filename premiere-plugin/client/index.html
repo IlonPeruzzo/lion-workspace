@@ -68,6 +68,48 @@
         .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
 
         .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
+
+        /* Magic CTA — botão action-card com ícone destacado, gradient sutil e shimmer */
+        .magic-cta{
+            position:relative;display:flex;align-items:center;gap:10px;
+            width:100%;padding:10px 14px;
+            background:linear-gradient(135deg,rgba(190,242,100,.14),rgba(34,197,94,.08));
+            border:1px solid rgba(190,242,100,.28);border-radius:10px;
+            cursor:pointer;font-family:inherit;color:#bef264;
+            transition:all .2s cubic-bezier(.4,0,.2,1);
+            overflow:hidden;
+        }
+        .magic-cta::before{
+            content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;
+            background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);
+            transition:left .6s ease;pointer-events:none;
+        }
+        .magic-cta:hover::before{left:130%}
+        .magic-cta:hover{
+            background:linear-gradient(135deg,rgba(190,242,100,.22),rgba(34,197,94,.12));
+            border-color:rgba(190,242,100,.55);
+            box-shadow:0 4px 16px rgba(190,242,100,.18),inset 0 1px 0 rgba(255,255,255,.05);
+            transform:translateY(-1px);
+        }
+        .magic-cta:active{transform:translateY(0);box-shadow:0 2px 8px rgba(190,242,100,.12)}
+        .magic-cta:disabled{opacity:.45;cursor:not-allowed;transform:none}
+        .magic-cta .mc-icon{
+            width:34px;height:34px;border-radius:9px;flex-shrink:0;
+            display:flex;align-items:center;justify-content:center;
+            background:linear-gradient(135deg,rgba(190,242,100,.22),rgba(190,242,100,.05));
+            border:1px solid rgba(190,242,100,.3);
+            color:#bef264;
+            transition:transform .25s cubic-bezier(.4,0,.2,1),box-shadow .2s;
+        }
+        .magic-cta:hover .mc-icon{transform:rotate(-8deg) scale(1.06);box-shadow:0 0 12px rgba(190,242,100,.3)}
+        .magic-cta .mc-text{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;text-align:left}
+        .magic-cta .mc-title{font-size:.78rem;font-weight:700;color:#eee;letter-spacing:-.1px}
+        .magic-cta .mc-sub{font-size:.6rem;color:#888;font-weight:500}
+        .magic-cta:hover .mc-title{color:#fff}
+        .magic-cta:hover .mc-sub{color:#bef264}
+        .magic-cta .mc-arrow{flex-shrink:0;color:#bef264;opacity:.6;transition:transform .25s,opacity .2s}
+        .magic-cta:hover .mc-arrow{opacity:1;transform:translateX(2px)}
+
         /* Easing preset grid (estilo JerryFlow) */
         .ease-preset{position:relative;aspect-ratio:1/1;border-radius:7px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:all .15s ease;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px;overflow:hidden}
         .ease-preset:hover{background:rgba(190,242,100,.05);border-color:rgba(190,242,100,.2);transform:translateY(-1px)}
@@ -770,12 +812,19 @@
             <svg id="bgRemoveChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="bgRemoveBody">
-            <div style="font-size:.58rem;color:#666;margin-bottom:8px;text-align:center;line-height:1.4">
-                Selecione um clip de imagem na timeline. O fundo é removido e o PNG sem fundo é colocado na track de cima.
-            </div>
-            <button class="btn btn-go" onclick="bgRemoveStart()" id="bgRemoveBtn" style="width:100%;justify-content:center;padding:8px;font-size:.74rem;display:flex;align-items:center;gap:5px">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                Remover Fundo do Clip
+            <button class="magic-cta" onclick="bgRemoveStart()" id="bgRemoveBtn">
+                <span class="mc-icon">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 13l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z"/>
+                        <path d="M5 3l1.2 3.6L10 8l-3.8 1.4L5 13l-1.2-3.6L0 8l3.8-1.4L5 3z"/>
+                        <path d="M14 4l.7 2.1L17 7l-2.1.7L14 10l-.7-2.1L11 7l2.1-.7L14 4z"/>
+                    </svg>
+                </span>
+                <span class="mc-text">
+                    <span class="mc-title">Remover fundo</span>
+                    <span class="mc-sub">IA local · clip selecionado</span>
+                </span>
+                <svg class="mc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
 
             <!-- Loading -->
