@@ -268,6 +268,30 @@
         .cost-item{background:rgba(190,242,100,.04);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center;border:1px solid rgba(190,242,100,.06)}
         .cost-item .cl{font-size:.82rem;color:var(--text3)}.cost-item .cv{font-size:.92rem;font-weight:600;color:var(--orange)}
 
+        /* Meta stepper — design custom (sem spinners feios do navegador) */
+        .meta-stepper{display:inline-flex;align-items:stretch;border:1px solid rgba(245,158,11,.22);background:rgba(245,158,11,.06);border-radius:10px;overflow:hidden;height:38px;transition:border-color .15s,box-shadow .15s}
+        .meta-stepper:focus-within{border-color:rgba(245,158,11,.5);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+        .meta-stepper input[type="number"]{width:120px;border:none;outline:none;background:transparent;color:var(--text);text-align:right;font-size:1rem;font-weight:700;font-family:inherit;padding:0 12px;-moz-appearance:textfield}
+        .meta-stepper input[type="number"]::-webkit-inner-spin-button,
+        .meta-stepper input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+        .meta-step-btn{display:flex;align-items:center;justify-content:center;width:30px;border:none;cursor:pointer;background:transparent;color:#f59e0b;font-family:inherit;transition:background .12s,color .12s}
+        .meta-step-btn:first-child{border-right:1px solid rgba(245,158,11,.18)}
+        .meta-step-btn:last-child{border-left:1px solid rgba(245,158,11,.18)}
+        .meta-step-btn:hover{background:rgba(245,158,11,.18);color:#fbbf24}
+        .meta-step-btn:active{background:rgba(245,158,11,.28)}
+
+        /* Timer mode buttons — pills compactas com hover animado */
+        .timer-mode-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+        .timer-mode-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:-.1px;transition:all .18s cubic-bezier(.4,0,.2,1);user-select:none;white-space:nowrap}
+        .timer-mode-btn svg{width:13px;height:13px;flex-shrink:0;transition:transform .25s}
+        .timer-mode-btn:hover svg{transform:scale(1.15)}
+        .timer-mode-btn.tmb-primary{background:transparent;color:#bef264;border:1.5px solid rgba(190,242,100,.45)}
+        .timer-mode-btn.tmb-primary:hover{background:#bef264;color:#0a0a0a;border-color:#bef264;box-shadow:0 4px 14px rgba(190,242,100,.35);transform:translateY(-1px)}
+        .timer-mode-btn.tmb-primary:active{transform:translateY(0);box-shadow:0 2px 6px rgba(190,242,100,.25)}
+        .timer-mode-btn.tmb-ghost{background:rgba(255,255,255,.03);color:var(--text3);border:1.5px solid rgba(255,255,255,.08)}
+        .timer-mode-btn.tmb-ghost:hover{background:rgba(255,255,255,.07);color:var(--text);border-color:rgba(255,255,255,.18);transform:translateY(-1px)}
+        .timer-mode-btn.tmb-ghost:active{transform:translateY(0)}
+
         /* Charts */
         .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
         .chart-card{background:linear-gradient(135deg,rgba(15,15,15,.7),rgba(25,25,25,.5));border:1px solid rgba(190,242,100,.1);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden;box-shadow:0 0 30px rgba(190,242,100,.04),inset 0 1px 0 rgba(190,242,100,.06)}
@@ -796,8 +820,14 @@
                         <button type="button" id="metaMoedaBRL" onclick="setMetaMoeda('BRL')" class="meta-moeda-btn active" style="padding:6px 14px;border:none;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;background:transparent;color:var(--text3)">R$</button>
                         <button type="button" id="metaMoedaUSD" onclick="setMetaMoeda('USD')" class="meta-moeda-btn" style="padding:6px 14px;border:none;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;background:transparent;color:var(--text3)">$</button>
                     </div>
-                    <div style="position:relative;display:flex;align-items:center">
-                        <input type="number" id="metaValor" placeholder="5.000" min="0" step="100" style="max-width:130px;padding:8px 12px;font-size:1rem;font-weight:700;border:1px solid rgba(245,158,11,.2);background:rgba(245,158,11,.06);border-radius:8px;color:var(--text);text-align:right" oninput="salvarMeta()">
+                    <div class="meta-stepper">
+                        <button type="button" class="meta-step-btn" onclick="metaStep(-1)" title="Diminuir 100" aria-label="Diminuir">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
+                        <input type="number" id="metaValor" placeholder="5.000" min="0" step="100" oninput="salvarMeta()" inputmode="numeric">
+                        <button type="button" class="meta-step-btn" onclick="metaStep(1)" title="Aumentar 100" aria-label="Aumentar">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1032,18 +1062,18 @@
                     <div id="projTimerDisplay" style="font-size:2.8rem;font-weight:800;font-variant-numeric:tabular-nums;color:#bef264;letter-spacing:1px">00:00:00</div>
                     <div id="projTimerStatus" style="font-size:.78rem;color:var(--text3);margin-top:4px">Parado</div>
                 </div>
-                <div id="projStartGroup" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-                    <button class="btn btn-a" id="btnProjStartPremiere" onclick="startProjTimer(false,'premiere')" title="Conta o tempo só quando o Premiere Pro está em foco. Pausa automaticamente quando você troca pra outro app." style="display:flex;align-items:center;gap:6px">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                        Iniciar pelo Premiere
+                <div id="projStartGroup" class="timer-mode-row">
+                    <button class="timer-mode-btn tmb-primary" id="btnProjStartPremiere" onclick="startProjTimer(false,'premiere')" title="Conta o tempo só quando o Premiere Pro está em foco. Pausa automaticamente quando você troca pra outro app.">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                        Premiere
                     </button>
-                    <button class="btn btn-a" id="btnProjStartAfter" onclick="startProjTimer(false,'after')" title="Conta o tempo só quando o After Effects está em foco. Pausa automaticamente quando você troca pra outro app." style="display:flex;align-items:center;gap:6px">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                        Iniciar pelo After
+                    <button class="timer-mode-btn tmb-primary" id="btnProjStartAfter" onclick="startProjTimer(false,'after')" title="Conta o tempo só quando o After Effects está em foco. Pausa automaticamente quando você troca pra outro app.">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                        After
                     </button>
-                    <button class="btn btn-o" id="btnProjStartApp" onclick="startProjTimer(false,'app')" title="Conta o tempo livre, sem depender de nenhum programa específico. Use se você edita em outro programa (DaVinci, Final Cut, etc)." style="display:flex;align-items:center;gap:6px">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        Iniciar pelo app
+                    <button class="timer-mode-btn tmb-ghost" id="btnProjStartApp" onclick="startProjTimer(false,'app')" title="Conta o tempo livre, sem depender de nenhum programa específico. Use se você edita em outro programa (DaVinci, Final Cut, etc).">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                        Livre
                     </button>
                     <button class="btn btn-o" id="btnProjPause" onclick="pauseProjTimer()" style="display:none">Pausar</button>
                     <button class="btn btn-r" id="btnProjStop" onclick="stopProjTimer()" style="display:none">Parar</button>
@@ -4061,6 +4091,15 @@ function updStats(){
 }
 
 // ===== META MENSAL =====
+function metaStep(direction){
+    const inp=document.getElementById('metaValor');
+    if(!inp)return;
+    const step=parseFloat(inp.step)||100;
+    const cur=parseFloat(inp.value)||0;
+    const next=Math.max(0, cur + (direction*step));
+    inp.value=next;
+    salvarMeta();
+}
 function salvarMeta(){
     const val=parseFloat(document.getElementById('metaValor').value)||0;
     const moeda=document.getElementById('metaMoeda').value||'BRL';
