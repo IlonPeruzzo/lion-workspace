@@ -288,6 +288,175 @@
     </div>
 
 
+    <!-- ═══════ ANCHOR POINT (AE) ═══════ -->
+    <div class="section" id="sectionAEAnchor">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeAnchorBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+                Anchor Point
+            </span>
+            <svg id="aeAnchorChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeAnchorBody">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-width:180px;margin:0 auto 8px">
+                <button class="yt-q" onclick="aeAnchor('tl')">TL</button>
+                <button class="yt-q" onclick="aeAnchor('tc')">TC</button>
+                <button class="yt-q" onclick="aeAnchor('tr')">TR</button>
+                <button class="yt-q" onclick="aeAnchor('cl')">CL</button>
+                <button class="yt-q active" onclick="aeAnchor('cc')">CC</button>
+                <button class="yt-q" onclick="aeAnchor('cr')">CR</button>
+                <button class="yt-q" onclick="aeAnchor('bl')">BL</button>
+                <button class="yt-q" onclick="aeAnchor('bc')">BC</button>
+                <button class="yt-q" onclick="aeAnchor('br')">BR</button>
+            </div>
+            <label class="focus-toggle" style="margin:6px 0">
+                <span class="ft-text"><span class="ft-title">Compensar posição</span><span class="ft-sub">A layer não pula ao mudar âncora</span></span>
+                <input type="checkbox" id="aeAnchorCompensate" checked>
+                <span class="ft-switch"></span>
+            </label>
+            <div id="aeAnchorMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ EASING / CURVAS (AE) ═══════ -->
+    <div class="section" id="sectionAEEasing">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeEasingBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><path d="M3 20C3 20 7 20 10 12C13 4 21 4 21 4"/></svg>
+                Easing
+            </span>
+            <svg id="aeEasingChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeEasingBody">
+            <div style="display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap" id="aeEasingPresets">
+                <button class="yt-q active" data-cp="0.25,0.1,0.25,1.0" onclick="aePickEasing(this)">Padrão</button>
+                <button class="yt-q" data-cp="0.55,0.05,0.22,0.99" onclick="aePickEasing(this)">Suave</button>
+                <button class="yt-q" data-cp="0.42,0,0.58,1" onclick="aePickEasing(this)">Cubic</button>
+                <button class="yt-q" data-cp="0.5,0,0.5,1" onclick="aePickEasing(this)">Sine</button>
+                <button class="yt-q" data-cp="0.68,-0.55,0.27,1.55" onclick="aePickEasing(this)">Back</button>
+                <button class="yt-q" data-cp="0.7,0,1,1" onclick="aePickEasing(this)">Snappy</button>
+                <button class="yt-q" data-cp="0.85,0,0.15,1" onclick="aePickEasing(this)">Quint</button>
+            </div>
+            <div style="display:flex;gap:3px;margin-bottom:6px">
+                <button class="yt-q active" id="aeEaseBetween" onclick="aeSetEaseMode('selected')">Selecionados</button>
+                <button class="yt-q" id="aeEaseAll" onclick="aeSetEaseMode('all')">Todos os keys</button>
+            </div>
+            <button class="btn btn-go" onclick="aeApplyEasing()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem">Aplicar Easing</button>
+            <div id="aeEasingMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ EXPRESSIONS (Wiggle/Loop/Bounce) ═══════ -->
+    <div class="section" id="sectionAEExpr">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeExprBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                Expressions
+            </span>
+            <svg id="aeExprChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeExprBody">
+            <div style="font-size:.56rem;color:#555;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Aplicar em</div>
+            <div style="display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap" id="aeExprTargets">
+                <button class="yt-q active" data-target="position" onclick="aePickExprTarget(this)">Position</button>
+                <button class="yt-q" data-target="rotation" onclick="aePickExprTarget(this)">Rotation</button>
+                <button class="yt-q" data-target="scale" onclick="aePickExprTarget(this)">Scale</button>
+                <button class="yt-q" data-target="opacity" onclick="aePickExprTarget(this)">Opacity</button>
+            </div>
+            <div style="font-size:.56rem;color:#555;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Preset</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
+                <button class="yt-q" onclick="aeApplyExpr('wiggle')">Wiggle</button>
+                <button class="yt-q" onclick="aeApplyExpr('shake')">Shake</button>
+                <button class="yt-q" onclick="aeApplyExpr('bounce')">Bounce</button>
+                <button class="yt-q" onclick="aeApplyExpr('inertia')">Inertia</button>
+                <button class="yt-q" onclick="aeApplyExpr('loopout-cycle')">Loop ↻</button>
+                <button class="yt-q" onclick="aeApplyExpr('loopout-pingpong')">PingPong</button>
+                <button class="yt-q" onclick="aeApplyExpr('loopout-continue')">Continue</button>
+                <button class="yt-q" onclick="aeApplyExpr('clear')" style="color:#f43f5e;border-color:rgba(244,63,94,.2)">Limpar</button>
+            </div>
+            <div id="aeExprMsg" style="text-align:center;font-size:.55rem;color:#555;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ QUICK RIGS ═══════ -->
+    <div class="section" id="sectionAERigs">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeRigsBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="12" y1="7" x2="5" y2="17"/><line x1="12" y1="7" x2="19" y2="17"/></svg>
+                Rigs
+            </span>
+            <svg id="aeRigsChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeRigsBody">
+            <button class="btn btn-go" onclick="aeNullParent()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-bottom:5px">+ Null Parent</button>
+            <button class="btn btn-go" onclick="aeCameraRig()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-bottom:7px">+ Camera 2-node</button>
+            <div style="font-size:.56rem;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Auto-Orient</div>
+            <div style="display:flex;gap:3px">
+                <button class="yt-q" onclick="aeAutoOrient('off')">Off</button>
+                <button class="yt-q" onclick="aeAutoOrient('path')">Path</button>
+                <button class="yt-q" onclick="aeAutoOrient('camera')">Camera</button>
+            </div>
+            <div id="aeRigsMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ ALIGN / DISTRIBUTE ═══════ -->
+    <div class="section" id="sectionAEAlign">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeAlignBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+                Align
+            </span>
+            <svg id="aeAlignChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeAlignBody">
+            <div style="font-size:.56rem;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Referência</div>
+            <div style="display:flex;gap:3px;margin-bottom:6px">
+                <button class="yt-q active" id="aeAlignRefComp" onclick="aeSetAlignRef('comp')">Composição</button>
+                <button class="yt-q" id="aeAlignRefSel" onclick="aeSetAlignRef('selection')">Seleção</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-bottom:6px">
+                <button class="yt-q" onclick="aeAlign('left')" title="Esquerda">⫷</button>
+                <button class="yt-q" onclick="aeAlign('centerH')" title="Centro horizontal">⊟</button>
+                <button class="yt-q" onclick="aeAlign('right')" title="Direita">⫸</button>
+                <button class="yt-q" onclick="aeAlign('top')" title="Topo">⊺</button>
+                <button class="yt-q" onclick="aeAlign('center')" title="Centro total">✛</button>
+                <button class="yt-q" onclick="aeAlign('bottom')" title="Base">⊥</button>
+            </div>
+            <div style="font-size:.56rem;color:#555;margin:6px 0 4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Distribuir (3+ layers)</div>
+            <div style="display:flex;gap:3px">
+                <button class="yt-q" onclick="aeDistribute('h')">Horizontal</button>
+                <button class="yt-q" onclick="aeDistribute('v')">Vertical</button>
+            </div>
+            <div id="aeAlignMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ COLOR ═══════ -->
+    <div class="section" id="sectionAEColor">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeColorBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M22 12h-4M6 12H2"/></svg>
+                Color
+            </span>
+            <svg id="aeColorChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeColorBody">
+            <button class="btn btn-go" onclick="aeLoadLUT()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-bottom:7px;display:flex;align-items:center;gap:5px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Carregar LUT (.cube)
+            </button>
+            <div style="font-size:.56rem;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Presets rápidos</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+                <button class="yt-q" onclick="aeColorPreset('cinematic-fade')">Fade Cine</button>
+                <button class="yt-q" onclick="aeColorPreset('punch-contrast')">Punch</button>
+                <button class="yt-q" onclick="aeColorPreset('warm')">Quente</button>
+                <button class="yt-q" onclick="aeColorPreset('cool')">Frio</button>
+            </div>
+            <div id="aeColorMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
+        </div>
+    </div>
+
     <div class="footer" id="pluginFooter">Lion Workspace Sync</div>
 
     <script src="CSInterface.js"></script>
@@ -434,7 +603,13 @@
     /* ═══════ Panel visibility ═══════ */
     var PANELS = [
         { key: 'timer',    id: 'sectionTimer',     label: 'Timer do Projeto' },
-        { key: 'pomo',     id: 'sectionPomo',      label: 'Pomodoro' }
+        { key: 'pomo',     id: 'sectionPomo',      label: 'Pomodoro' },
+        { key: 'aeAnchor', id: 'sectionAEAnchor',  label: 'Anchor Point' },
+        { key: 'aeEasing', id: 'sectionAEEasing',  label: 'Easing' },
+        { key: 'aeExpr',   id: 'sectionAEExpr',    label: 'Expressions' },
+        { key: 'aeRigs',   id: 'sectionAERigs',    label: 'Rigs' },
+        { key: 'aeAlign',  id: 'sectionAEAlign',   label: 'Align' },
+        { key: 'aeColor',  id: 'sectionAEColor',   label: 'Color' }
     ];
     var panelsVisible = (function(){
         try {
@@ -892,6 +1067,173 @@
         }
     }
 
+    /* ═══════ AE-SPECIFIC HANDLERS ═══════ */
+    function _msg(id, txt, color){
+        var el=document.getElementById(id); if(!el)return;
+        el.textContent=txt||''; el.style.color=color||'#555';
+    }
+    function _esc(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/"/g,'\\"'); }
+
+    // ─── Anchor Point ───
+    function aeAnchor(pos){
+        document.querySelectorAll('#sectionAEAnchor .yt-q').forEach(function(b){b.classList.remove('active')});
+        if(event && event.target.closest) {
+            var btn=event.target.closest('.yt-q'); if(btn) btn.classList.add('active');
+        }
+        var compensate=document.getElementById('aeAnchorCompensate').checked?'true':'false';
+        if(!csInterface){_msg('aeAnchorMsg','CEP indisponível','#f43f5e');return}
+        csInterface.evalScript('lwAESetAnchor("'+pos+'",'+compensate+')', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeAnchorMsg','Aplicado em '+r.substring(3)+' layer(s)','#22c55e');
+            else if(r==='NO_COMP') _msg('aeAnchorMsg','Abra uma comp','#f59e0b');
+            else if(r==='NO_SELECTION') _msg('aeAnchorMsg','Selecione layer(s)','#f59e0b');
+            else _msg('aeAnchorMsg', r, '#f43f5e');
+        });
+    }
+
+    // ─── Easing ───
+    var aeEasingCP=[0.25,0.1,0.25,1.0]; var aeEasingMode='selected';
+    function aePickEasing(btn){
+        document.querySelectorAll('#aeEasingPresets .yt-q').forEach(function(b){b.classList.remove('active')});
+        btn.classList.add('active');
+        var cp=btn.getAttribute('data-cp').split(',').map(parseFloat);
+        aeEasingCP=cp;
+    }
+    function aeSetEaseMode(m){
+        aeEasingMode=m;
+        document.getElementById('aeEaseBetween').classList.toggle('active', m==='selected');
+        document.getElementById('aeEaseAll').classList.toggle('active', m==='all');
+    }
+    function aeApplyEasing(){
+        if(!csInterface){_msg('aeEasingMsg','CEP indisponível','#f43f5e');return}
+        var c=aeEasingCP;
+        var script='lwAEApplyEasing('+c[0]+','+c[1]+','+c[2]+','+c[3]+',"'+aeEasingMode+'")';
+        csInterface.evalScript(script, function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0){
+                var p=r.substring(3).split(':');
+                _msg('aeEasingMsg', p[0]+' keys em '+p[1]+' props','#22c55e');
+            } else if(r==='NO_SELECTION') _msg('aeEasingMsg','Selecione layer(s) com keyframes','#f59e0b');
+            else if(r==='NO_COMP') _msg('aeEasingMsg','Abra uma comp','#f59e0b');
+            else _msg('aeEasingMsg', r,'#f43f5e');
+        });
+    }
+
+    // ─── Expressions ───
+    var aeExprTarget='position';
+    function aePickExprTarget(btn){
+        document.querySelectorAll('#aeExprTargets .yt-q').forEach(function(b){b.classList.remove('active')});
+        btn.classList.add('active');
+        aeExprTarget=btn.getAttribute('data-target');
+    }
+    function aeApplyExpr(kind){
+        if(!csInterface){_msg('aeExprMsg','CEP indisponível','#f43f5e');return}
+        // Default params; could be made configurable in UI later
+        var defaults={
+            wiggle:{freq:2,amp:30}, shake:{freq:8,amp:50},
+            bounce:{amp:0.1,freq:2,decay:8}, inertia:{amp:0.05,freq:4,decay:5}
+        };
+        var params=defaults[kind]||{};
+        var paramsStr=JSON.stringify(params).replace(/"/g,'\\"');
+        var script='lwAEApplyExpression("'+aeExprTarget+'","'+kind+'",'+JSON.stringify(params).replace(/'/g,"\\'")+')';
+        // ExtendScript doesn't parse JSON natively in all versions — pass as obj literal
+        // Build via eval-friendly literal
+        var litParts=[];
+        for(var k in params){ litParts.push(k+':'+JSON.stringify(params[k])); }
+        var lit='{'+litParts.join(',')+'}';
+        script='lwAEApplyExpression("'+aeExprTarget+'","'+kind+'",'+lit+')';
+        csInterface.evalScript(script, function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeExprMsg', kind+' aplicado em '+r.substring(3)+' layer(s)','#22c55e');
+            else if(r==='NO_SELECTION') _msg('aeExprMsg','Selecione layer(s)','#f59e0b');
+            else _msg('aeExprMsg', r,'#f43f5e');
+        });
+    }
+
+    // ─── Rigs ───
+    function aeNullParent(){
+        if(!csInterface) return;
+        csInterface.evalScript('lwAECreateNullParent()', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeRigsMsg','Null parent criado ('+r.substring(3)+' layers)','#22c55e');
+            else _msg('aeRigsMsg', r,'#f43f5e');
+        });
+    }
+    function aeCameraRig(){
+        if(!csInterface) return;
+        csInterface.evalScript('lwAECreateCamera()', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeRigsMsg','Câmera 2-node criada','#22c55e');
+            else _msg('aeRigsMsg', r,'#f43f5e');
+        });
+    }
+    function aeAutoOrient(mode){
+        if(!csInterface) return;
+        csInterface.evalScript('lwAEAutoOrient("'+mode+'")', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeRigsMsg','Auto-orient: '+mode,'#22c55e');
+            else _msg('aeRigsMsg', r,'#f43f5e');
+        });
+    }
+
+    // ─── Align ───
+    var aeAlignRef='comp';
+    function aeSetAlignRef(r){
+        aeAlignRef=r;
+        document.getElementById('aeAlignRefComp').classList.toggle('active', r==='comp');
+        document.getElementById('aeAlignRefSel').classList.toggle('active', r==='selection');
+    }
+    function aeAlign(where){
+        if(!csInterface) return;
+        csInterface.evalScript('lwAEAlign("'+where+'","'+aeAlignRef+'")', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeAlignMsg','Alinhado: '+r.substring(3)+' layer(s)','#22c55e');
+            else _msg('aeAlignMsg', r,'#f43f5e');
+        });
+    }
+    function aeDistribute(axis){
+        if(!csInterface) return;
+        csInterface.evalScript('lwAEDistribute("'+axis+'")', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeAlignMsg','Distribuído '+r.substring(3)+' layer(s) entre as bordas','#22c55e');
+            else if(r==='NEED_3') _msg('aeAlignMsg','Selecione no mínimo 3 layers','#f59e0b');
+            else _msg('aeAlignMsg', r,'#f43f5e');
+        });
+    }
+
+    // ─── Color ───
+    function aeLoadLUT(){
+        // Use a file dialog via Node (CEP) to pick the .cube file
+        try {
+            var node = (typeof window.cep_node!=='undefined' && window.cep_node.require) ? window.cep_node : (typeof require!=='undefined'?{require:require}:null);
+            // Fallback: ExtendScript File dialog
+        } catch(e) {}
+        // ExtendScript File pickerse direto:
+        if(!csInterface){_msg('aeColorMsg','CEP indisponível','#f43f5e');return}
+        var pickScript='(function(){var f=File.openDialog("Escolha um arquivo .cube","*.cube"); if(!f) return "CANCELLED"; return "PATH:"+f.fsName.replace(/\\\\/g,"/");})()';
+        csInterface.evalScript(pickScript, function(r){
+            r=String(r||'');
+            if(r==='CANCELLED'||!r) return;
+            if(r.indexOf('PATH:')!==0){_msg('aeColorMsg','Erro ao abrir dialog','#f43f5e');return}
+            var path=r.substring(5);
+            var apply='lwAEApplyLUT("'+_esc(path)+'")';
+            csInterface.evalScript(apply, function(r2){
+                r2=String(r2||'');
+                if(r2.indexOf('OK:')===0) _msg('aeColorMsg','LUT aplicado em '+r2.substring(3)+' layer(s)','#22c55e');
+                else if(r2==='FILE_NOT_FOUND') _msg('aeColorMsg','Arquivo não encontrado','#f43f5e');
+                else _msg('aeColorMsg', r2,'#f43f5e');
+            });
+        });
+    }
+    function aeColorPreset(p){
+        if(!csInterface) return;
+        csInterface.evalScript('lwAEColorPreset("'+p+'")', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeColorMsg','Aplicado em '+r.substring(3)+' layer(s)','#22c55e');
+            else _msg('aeColorMsg', r,'#f43f5e');
+        });
+    }
+
     function ui(state){
         if(!state)return;
         document.getElementById('conn').className='status ok';
@@ -994,7 +1336,7 @@
 
     function lwSetSectionsDisabled(disabled) {
         // Sections that need the app to work
-        var ids = ['sectionTimer', 'sectionPomo'];
+        var ids = ['sectionTimer', 'sectionPomo', 'sectionAEAnchor', 'sectionAEEasing', 'sectionAEExpr', 'sectionAERigs', 'sectionAEAlign', 'sectionAEColor'];
         for (var i = 0; i < ids.length; i++) {
             var el = document.getElementById(ids[i]);
             if (el) {
