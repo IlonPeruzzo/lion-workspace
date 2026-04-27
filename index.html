@@ -5859,18 +5859,29 @@ async function _rmbgEnsureLib(){
     document.getElementById('rmbgLoadingTxt').textContent = _rmbgFirstLoad ? 'Baixando IA (~80MB, só na 1ª vez)...' : 'Carregando modelo...';
     document.getElementById('rmbgLoadingHint').textContent = '';
     document.getElementById('rmbgProgress').style.width = '5%';
-    try {
-        const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
-        _rmbgLib = mod;
-        localStorage.setItem('vc_rmbg_loaded','1');
-        _rmbgFirstLoad = false;
-    } catch(e) {
-        document.getElementById('rmbgLoading').style.display='none';
-        document.getElementById('rmbgFirstTime').style.display='none';
-        showToast('Erro ao carregar lib: ' + e.message, 'err');
-        throw e;
+    // Tenta múltiplos CDNs (jsdelivr, esm.sh, unpkg) — alguns ISPs/redes corporativas
+    // bloqueiam um ou outro. Mac/Win mesmo binário do Electron, então diferença real
+    // é só a rede do usuário.
+    const cdns = [
+        'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm',
+        'https://esm.sh/@imgly/background-removal@1.7.0',
+        'https://unpkg.com/@imgly/background-removal@1.7.0/dist/index.mjs?module'
+    ];
+    let lastErr = null;
+    for (const url of cdns) {
+        try {
+            document.getElementById('rmbgLoadingHint').textContent = 'Conectando a ' + (new URL(url).hostname) + '...';
+            const mod = await import(/* @vite-ignore */ url);
+            _rmbgLib = mod;
+            localStorage.setItem('vc_rmbg_loaded','1');
+            _rmbgFirstLoad = false;
+            return _rmbgLib;
+        } catch(e) { lastErr = e; }
     }
-    return _rmbgLib;
+    document.getElementById('rmbgLoading').style.display='none';
+    document.getElementById('rmbgFirstTime').style.display='none';
+    showToast('Não foi possível baixar a IA. Verifique sua internet. ' + (lastErr ? lastErr.message : ''), 'err');
+    throw lastErr || new Error('All CDNs failed');
 }
 
 function rmbgPickFile(files){
@@ -5941,12 +5952,24 @@ function rmbgDownload(){
 
 async function rmbgCopy(){
     if (!_rmbgResultBlob) return;
+    // Tenta API moderna primeiro (Win, Mac, Linux). Em Mac antigo ou se sandbox bloqueia,
+    // cai pro fallback de copiar via canvas + execCommand.
     try {
-        await navigator.clipboard.write([ new ClipboardItem({ 'image/png': _rmbgResultBlob }) ]);
-        showToast('Imagem copiada pra clipboard!', 'ok');
-    } catch (e) {
-        showToast('Erro ao copiar: ' + e.message, 'err');
-    }
+        if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+            await navigator.clipboard.write([ new ClipboardItem({ 'image/png': _rmbgResultBlob }) ]);
+            showToast('Imagem copiada pra clipboard!', 'ok');
+            return;
+        }
+    } catch (e) { /* fall through */ }
+    // Fallback: usa Electron clipboard via IPC (mais confiável no Mac)
+    try {
+        if (window.electronAPI && window.electronAPI.copyImageToClipboard) {
+            const arrayBuf = await _rmbgResultBlob.arrayBuffer();
+            const ok = await window.electronAPI.copyImageToClipboard(arrayBuf);
+            if (ok) { showToast('Imagem copiada pra clipboard!', 'ok'); return; }
+        }
+    } catch(e) { /* fall through */ }
+    showToast('Erro ao copiar — use o botão Baixar PNG', 'warn');
 }
 
 function rmbgReset(){

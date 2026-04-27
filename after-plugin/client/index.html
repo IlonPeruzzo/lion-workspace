@@ -68,6 +68,30 @@
         .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
 
         .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
+        /* Easing preset grid (estilo JerryFlow) */
+        .ease-preset{
+            position:relative;aspect-ratio:1/1;border-radius:7px;
+            background:rgba(0,0,0,.35);
+            border:1px solid rgba(255,255,255,.06);
+            cursor:pointer;transition:all .15s ease;
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            padding:3px;overflow:hidden;
+        }
+        .ease-preset:hover{background:rgba(190,242,100,.05);border-color:rgba(190,242,100,.2);transform:translateY(-1px)}
+        .ease-preset.active{background:rgba(190,242,100,.08);border-color:#bef264;box-shadow:0 0 8px rgba(190,242,100,.15)}
+        .ease-preset svg{width:75%;height:75%;display:block}
+        .ease-preset .ep-curve{stroke:#888;stroke-width:1.4;fill:none;transition:stroke .15s}
+        .ease-preset .ep-grid{stroke:rgba(255,255,255,.08);stroke-width:.5;fill:none}
+        .ease-preset .ep-dot{fill:#666;transition:fill .15s}
+        .ease-preset:hover .ep-curve, .ease-preset.active .ep-curve{stroke:#bef264}
+        .ease-preset:hover .ep-dot, .ease-preset.active .ep-dot{fill:#bef264}
+        .ease-preset .ep-label{
+            position:absolute;bottom:2px;left:0;right:0;text-align:center;
+            font-size:.46rem;color:#777;font-weight:600;letter-spacing:.2px;
+            text-transform:uppercase;pointer-events:none;
+            text-shadow:0 1px 2px rgba(0,0,0,.7);
+        }
+        .ease-preset:hover .ep-label, .ease-preset.active .ep-label{color:#bef264}
         /* Focus toggle — switch moderno (compacto pro plugin) */
         .focus-toggle{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;background:linear-gradient(135deg,rgba(190,242,100,.05),rgba(190,242,100,.012));border:1px solid rgba(190,242,100,.1);cursor:pointer;user-select:none;transition:all .18s ease;margin-top:7px}
         .focus-toggle:hover{background:linear-gradient(135deg,rgba(190,242,100,.09),rgba(190,242,100,.025));border-color:rgba(190,242,100,.2)}
@@ -328,15 +352,7 @@
             <svg id="aeEasingChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="aeEasingBody">
-            <div style="display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap" id="aeEasingPresets">
-                <button class="yt-q active" data-cp="0.25,0.1,0.25,1.0" onclick="aePickEasing(this)">Padrão</button>
-                <button class="yt-q" data-cp="0.55,0.05,0.22,0.99" onclick="aePickEasing(this)">Suave</button>
-                <button class="yt-q" data-cp="0.42,0,0.58,1" onclick="aePickEasing(this)">Cubic</button>
-                <button class="yt-q" data-cp="0.5,0,0.5,1" onclick="aePickEasing(this)">Sine</button>
-                <button class="yt-q" data-cp="0.68,-0.55,0.27,1.55" onclick="aePickEasing(this)">Back</button>
-                <button class="yt-q" data-cp="0.7,0,1,1" onclick="aePickEasing(this)">Snappy</button>
-                <button class="yt-q" data-cp="0.85,0,0.15,1" onclick="aePickEasing(this)">Quint</button>
-            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:6px" id="aeEasingPresets"></div>
             <div style="display:flex;gap:3px;margin-bottom:6px">
                 <button class="yt-q active" id="aeEaseBetween" onclick="aeSetEaseMode('selected')">Selecionados</button>
                 <button class="yt-q" id="aeEaseAll" onclick="aeSetEaseMode('all')">Todos os keys</button>
@@ -1093,12 +1109,53 @@
 
     // ─── Easing ───
     var aeEasingCP=[0.25,0.1,0.25,1.0]; var aeEasingMode='selected';
+    // Lista de presets — nome + control points (cp1x, cp1y, cp2x, cp2y)
+    var AE_EASING_PRESETS = [
+        { name:'Linear',  cp:[0,0,1,1] },
+        { name:'Padrão',  cp:[0.25,0.1,0.25,1.0] },
+        { name:'Suave',   cp:[0.55,0.05,0.22,0.99] },
+        { name:'Cubic',   cp:[0.42,0,0.58,1] },
+        { name:'Sine',    cp:[0.5,0,0.5,1] },
+        { name:'Quart',   cp:[0.77,0,0.18,1] },
+        { name:'Quint',   cp:[0.85,0,0.15,1] },
+        { name:'Expo',    cp:[1,0,0,1] },
+        { name:'Circ',    cp:[0.95,0.05,0.795,0.035] },
+        { name:'Back',    cp:[0.68,-0.55,0.27,1.55] },
+        { name:'Snappy',  cp:[0.7,0,1,1] },
+        { name:'Smooth',  cp:[0.4,0,0.2,1] }
+    ];
+    // Renderiza grid de presets com SVG mostrando cada curva
+    function renderAEEasingPresets(){
+        var el=document.getElementById('aeEasingPresets');
+        if(!el) return;
+        var cur = aeEasingCP.join(',');
+        el.innerHTML = AE_EASING_PRESETS.map(function(p){
+            var cp = p.cp;
+            var isAct = cp.join(',') === cur;
+            // SVG bezier: M 0 100 → C cp1x*100 (1-cp1y)*100, cp2x*100 (1-cp2y)*100, 100 0
+            var x1 = (cp[0]*100).toFixed(1), y1 = ((1-cp[1])*100).toFixed(1);
+            var x2 = (cp[2]*100).toFixed(1), y2 = ((1-cp[3])*100).toFixed(1);
+            var path = 'M 0 100 C ' + x1 + ' ' + y1 + ', ' + x2 + ' ' + y2 + ', 100 0';
+            // Allow overshoot (back) — viewBox slightly larger
+            return '<div class="ease-preset' + (isAct?' active':'') + '" data-cp="' + cp.join(',') + '" onclick="aePickEasing(this)" title="' + p.name + '">' +
+                '<svg viewBox="-15 -15 130 130" preserveAspectRatio="xMidYMid meet">' +
+                  '<path class="ep-grid" d="M 0 100 L 100 100 M 0 0 L 0 100"/>' +
+                  '<path class="ep-curve" d="' + path + '"/>' +
+                  '<circle class="ep-dot" cx="0" cy="100" r="3"/>' +
+                  '<circle class="ep-dot" cx="100" cy="0" r="3"/>' +
+                '</svg>' +
+                '<span class="ep-label">' + p.name + '</span>' +
+              '</div>';
+        }).join('');
+    }
     function aePickEasing(btn){
-        document.querySelectorAll('#aeEasingPresets .yt-q').forEach(function(b){b.classList.remove('active')});
+        document.querySelectorAll('#aeEasingPresets .ease-preset').forEach(function(b){b.classList.remove('active')});
         btn.classList.add('active');
         var cp=btn.getAttribute('data-cp').split(',').map(parseFloat);
         aeEasingCP=cp;
     }
+    // Render on load
+    setTimeout(renderAEEasingPresets, 0);
     function aeSetEaseMode(m){
         aeEasingMode=m;
         document.getElementById('aeEaseBetween').classList.toggle('active', m==='selected');

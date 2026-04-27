@@ -14,7 +14,8 @@ contextBridge.exposeInMainWorld('focusMode', {
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    openExternal: (url) => ipcRenderer.invoke('open-external', url)
+    openExternal: (url) => ipcRenderer.invoke('open-external', url),
+    copyImageToClipboard: (arrayBuf) => ipcRenderer.invoke('copy-image-to-clipboard', arrayBuf)
 });
 
 contextBridge.exposeInMainWorld('ytDownloader', {

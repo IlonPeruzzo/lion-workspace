@@ -592,6 +592,22 @@ ipcMain.handle('open-external', (event, url) => {
     return true;
 });
 
+// Copy image to OS clipboard (works on Win/Mac/Linux uniformly).
+// Used as fallback when navigator.clipboard.write is blocked (sandbox no Mac).
+ipcMain.handle('copy-image-to-clipboard', (event, arrayBuf) => {
+    try {
+        const { clipboard, nativeImage } = require('electron');
+        const buf = Buffer.from(arrayBuf);
+        const img = nativeImage.createFromBuffer(buf);
+        if (img.isEmpty()) return false;
+        clipboard.writeImage(img);
+        return true;
+    } catch (e) {
+        console.error('copy-image-to-clipboard:', e.message);
+        return false;
+    }
+});
+
 ipcMain.handle('open-folder', () => {
     if (focusActive) {
         const wasActive = focusActive;

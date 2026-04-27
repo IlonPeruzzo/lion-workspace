@@ -68,6 +68,18 @@
         .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
 
         .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
+        /* Easing preset grid (estilo JerryFlow) */
+        .ease-preset{position:relative;aspect-ratio:1/1;border-radius:7px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:all .15s ease;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px;overflow:hidden}
+        .ease-preset:hover{background:rgba(190,242,100,.05);border-color:rgba(190,242,100,.2);transform:translateY(-1px)}
+        .ease-preset.active{background:rgba(190,242,100,.08);border-color:#bef264;box-shadow:0 0 8px rgba(190,242,100,.15)}
+        .ease-preset svg{width:75%;height:75%;display:block}
+        .ease-preset .ep-curve{stroke:#888;stroke-width:1.4;fill:none;transition:stroke .15s}
+        .ease-preset .ep-grid{stroke:rgba(255,255,255,.08);stroke-width:.5;fill:none}
+        .ease-preset .ep-dot{fill:#666;transition:fill .15s}
+        .ease-preset:hover .ep-curve, .ease-preset.active .ep-curve{stroke:#bef264}
+        .ease-preset:hover .ep-dot, .ease-preset.active .ep-dot{fill:#bef264}
+        .ease-preset .ep-label{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.46rem;color:#777;font-weight:600;letter-spacing:.2px;text-transform:uppercase;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+        .ease-preset:hover .ep-label, .ease-preset.active .ep-label{color:#bef264}
         /* Focus toggle — switch moderno (compacto pro plugin) */
         .focus-toggle{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;background:linear-gradient(135deg,rgba(190,242,100,.05),rgba(190,242,100,.012));border:1px solid rgba(190,242,100,.1);cursor:pointer;user-select:none;transition:all .18s ease;margin-top:7px}
         .focus-toggle:hover{background:linear-gradient(135deg,rgba(190,242,100,.09),rgba(190,242,100,.025));border-color:rgba(190,242,100,.2)}
@@ -448,20 +460,8 @@
                 <button class="yt-q" id="easeInOut" onclick="setEaseDir('inout')">In-Out</button>
             </div>
 
-            <!-- Preset categories -->
-            <div style="display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap" id="presetBtns">
-                <button class="yt-q active" onclick="setPreset('cubic',this)">Cubic</button>
-                <button class="yt-q" onclick="setPreset('sine',this)">Sine</button>
-                <button class="yt-q" onclick="setPreset('quad',this)">Quad</button>
-                <button class="yt-q" onclick="setPreset('quart',this)">Quart</button>
-                <button class="yt-q" onclick="setPreset('quint',this)">Quint</button>
-                <button class="yt-q" onclick="setPreset('expo',this)">Expo</button>
-                <button class="yt-q" onclick="setPreset('circ',this)">Circ</button>
-                <button class="yt-q" onclick="setPreset('back',this)">Back</button>
-                <button class="yt-q" onclick="setPreset('elastic',this)">Elastic</button>
-                <button class="yt-q" onclick="setPreset('bounce',this)">Bounce</button>
-                <button class="yt-q" onclick="setPreset('custom',this)" id="presetCustomBtn">Custom</button>
-            </div>
+            <!-- Preset grid (estilo JerryFlow — SVG da curva por célula) -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:6px" id="presetBtns"></div>
 
             <!-- Coordinate display -->
             <div style="display:flex;gap:6px;margin-bottom:6px;font-size:.54rem;color:#888;align-items:center">
@@ -2099,18 +2099,53 @@
         bounce:    {in:{cp1:{x:0.4,y:0},cp2:{x:0.7,y:0.2}},out:{cp1:{x:0.3,y:0.8},cp2:{x:0.6,y:1}},inout:{cp1:{x:0.5,y:0},cp2:{x:0.5,y:1}}}
     };
 
-    function setPreset(name,btn){
-        curvePresetName=name;
-        // Toggle active on preset buttons
-        var btns=document.getElementById('presetBtns').querySelectorAll('.yt-q');
-        for(var i=0;i<btns.length;i++) btns[i].classList.remove('active');
-        if(btn) btn.classList.add('active');
-        if(name==='custom') return; // Keep current custom points
-        var p=easingPresets[name];
-        if(!p) return;
-        var d=p[curveDir]||p['in'];
-        curveCP1={x:d.cp1.x,y:d.cp1.y};
-        curveCP2={x:d.cp2.x,y:d.cp2.y};
+    var PRESET_NAMES = ['cubic','sine','quad','quart','quint','expo','circ','back','elastic','bounce','custom'];
+    function _curvePathSVG(cp1, cp2) {
+        var x1 = (cp1.x*100).toFixed(1), y1 = ((1-cp1.y)*100).toFixed(1);
+        var x2 = (cp2.x*100).toFixed(1), y2 = ((1-cp2.y)*100).toFixed(1);
+        return 'M 0 100 C ' + x1 + ' ' + y1 + ', ' + x2 + ' ' + y2 + ', 100 0';
+    }
+    function renderPresetGrid() {
+        var el = document.getElementById('presetBtns');
+        if (!el) return;
+        el.innerHTML = PRESET_NAMES.map(function(name) {
+            var preset = easingPresets[name];
+            var path = '';
+            if (preset) {
+                var d = preset[curveDir] || preset['in'];
+                path = _curvePathSVG(d.cp1, d.cp2);
+            } else if (name === 'custom') {
+                // Use current points pra custom
+                path = _curvePathSVG(curveCP1, curveCP2);
+            }
+            var isAct = name === curvePresetName;
+            return '<div class="ease-preset' + (isAct?' active':'') + '" data-preset="' + name + '" onclick="setPreset(\'' + name + '\', this)" title="' + name + '">' +
+                '<svg viewBox="-15 -15 130 130" preserveAspectRatio="xMidYMid meet">' +
+                  '<path class="ep-grid" d="M 0 100 L 100 100 M 0 0 L 0 100"/>' +
+                  '<path class="ep-curve" d="' + path + '"/>' +
+                  '<circle class="ep-dot" cx="0" cy="100" r="3"/>' +
+                  '<circle class="ep-dot" cx="100" cy="0" r="3"/>' +
+                '</svg>' +
+                '<span class="ep-label">' + name + '</span>' +
+              '</div>';
+        }).join('');
+    }
+    function setPreset(name, btn) {
+        curvePresetName = name;
+        // Toggle active visual
+        var cells = document.getElementById('presetBtns').querySelectorAll('.ease-preset');
+        for (var i = 0; i < cells.length; i++) cells[i].classList.remove('active');
+        if (btn) btn.classList.add('active');
+        else {
+            var target = document.querySelector('.ease-preset[data-preset="' + name + '"]');
+            if (target) target.classList.add('active');
+        }
+        if (name === 'custom') return;
+        var p = easingPresets[name];
+        if (!p) return;
+        var d = p[curveDir] || p['in'];
+        curveCP1 = { x: d.cp1.x, y: d.cp1.y };
+        curveCP2 = { x: d.cp2.x, y: d.cp2.y };
         drawCurve();
         updateCoords();
     }
@@ -2120,6 +2155,7 @@
         document.getElementById('easeIn').classList.toggle('active',dir==='in');
         document.getElementById('easeOut').classList.toggle('active',dir==='out');
         document.getElementById('easeInOut').classList.toggle('active',dir==='inout');
+        renderPresetGrid(); // re-renderiza curvas com a nova direção
         if(curvePresetName!=='custom') setPreset(curvePresetName,null);
         else drawCurve();
     }
@@ -2236,14 +2272,19 @@
     function curveReset(){
         curveCP1={x:0.25,y:0.10};curveCP2={x:0.25,y:1.00};
         curvePresetName='cubic';
-        setPreset('cubic',document.getElementById('presetBtns').querySelector('.yt-q'));
+        renderPresetGrid();
+        setPreset('cubic', null);
         drawCurve();updateCoords();
     }
     function activateCustomBtn(){
-        var btns=document.getElementById('presetBtns').querySelectorAll('.yt-q');
-        for(var i=0;i<btns.length;i++) btns[i].classList.remove('active');
-        document.getElementById('presetCustomBtn').classList.add('active');
+        var cells=document.getElementById('presetBtns').querySelectorAll('.ease-preset');
+        for(var i=0;i<cells.length;i++) cells[i].classList.remove('active');
+        var custom=document.querySelector('.ease-preset[data-preset="custom"]');
+        if(custom) custom.classList.add('active');
+        curvePresetName = 'custom';
     }
+    // Inicializa o grid no startup
+    setTimeout(renderPresetGrid, 0);
 
     // Mouse interaction on canvas — drag via document pra nao travar na borda
     (function(){
