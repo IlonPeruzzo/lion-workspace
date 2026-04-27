@@ -68,6 +68,20 @@
         .pipe-chip.current{box-shadow:0 0 0 2px #bef264}
 
         .focus-note{text-align:center;margin-top:6px;font-size:.62rem;color:#555;line-height:1.4}
+        /* Focus toggle — switch moderno (compacto pro plugin) */
+        .focus-toggle{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;background:linear-gradient(135deg,rgba(190,242,100,.05),rgba(190,242,100,.012));border:1px solid rgba(190,242,100,.1);cursor:pointer;user-select:none;transition:all .18s ease;margin-top:7px}
+        .focus-toggle:hover{background:linear-gradient(135deg,rgba(190,242,100,.09),rgba(190,242,100,.025));border-color:rgba(190,242,100,.2)}
+        .focus-toggle input[type="checkbox"]{display:none}
+        .focus-toggle .ft-switch{position:relative;width:28px;height:16px;border-radius:16px;flex-shrink:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);transition:all .25s cubic-bezier(.4,0,.2,1)}
+        .focus-toggle .ft-switch::after{content:'';position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;background:#666;transition:all .25s cubic-bezier(.4,0,.2,1);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+        .focus-toggle input[type="checkbox"]:checked + .ft-switch{background:rgba(190,242,100,.3);border-color:rgba(190,242,100,.55);box-shadow:inset 0 0 5px rgba(190,242,100,.18)}
+        .focus-toggle input[type="checkbox"]:checked + .ft-switch::after{left:13px;background:#bef264;box-shadow:0 0 5px rgba(190,242,100,.5),0 1px 2px rgba(0,0,0,.3)}
+        .focus-toggle .ft-icon{width:22px;height:22px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(190,242,100,.08);color:#bef264;transition:all .2s}
+        .focus-toggle:has(input:checked) .ft-icon{background:rgba(190,242,100,.18);color:#d9f99d;box-shadow:0 0 5px rgba(190,242,100,.2)}
+        .focus-toggle .ft-text{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+        .focus-toggle .ft-title{font-size:.66rem;font-weight:600;color:#eee;letter-spacing:-.1px}
+        .focus-toggle .ft-sub{font-size:.55rem;color:#666;line-height:1.25}
+        .focus-toggle:has(input:checked) .ft-title{color:#bef264}
         .yt-q{padding:3px 9px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.025);color:#888;font-size:.58rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s ease;user-select:none}
         .yt-q:hover{background:rgba(190,242,100,.08);border-color:rgba(190,242,100,.28);color:#bef264;transform:translateY(-1px);box-shadow:0 2px 6px rgba(190,242,100,.08)}
         .yt-q:active{transform:translateY(0);box-shadow:none}
@@ -259,9 +273,16 @@
                 <button class="btn btn-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled>Pausar</button>
                 <button class="btn btn-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled>Reset</button>
             </div>
-            <label style="display:flex;align-items:center;gap:5px;font-size:.62rem;padding:5px 6px;margin-top:6px;cursor:pointer;border-radius:6px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1);color:#bbb">
-                <input type="checkbox" id="pluginPomoFocus" checked onchange="savePluginPomoFocusPref()" style="accent-color:#bef264">
-                <span>Ativar modo foco (bloqueia distrações)</span>
+            <label class="focus-toggle">
+                <span class="ft-icon">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </span>
+                <span class="ft-text">
+                    <span class="ft-title">Modo foco</span>
+                    <span class="ft-sub">Bloqueia distrações no ciclo</span>
+                </span>
+                <input type="checkbox" id="pluginPomoFocus" checked onchange="savePluginPomoFocusPref()">
+                <span class="ft-switch"></span>
             </label>
         </div>
     </div>

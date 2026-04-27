@@ -280,6 +280,55 @@
         .meta-step-btn:hover{background:rgba(245,158,11,.18);color:#fbbf24}
         .meta-step-btn:active{background:rgba(245,158,11,.28)}
 
+        /* Focus toggle — switch moderno pro Pomodoro */
+        .focus-toggle{
+            display:flex;align-items:center;gap:10px;
+            padding:10px 14px;border-radius:10px;
+            background:linear-gradient(135deg,rgba(190,242,100,.06),rgba(190,242,100,.015));
+            border:1px solid rgba(190,242,100,.12);
+            cursor:pointer;user-select:none;
+            transition:all .2s ease;
+        }
+        .focus-toggle:hover{background:linear-gradient(135deg,rgba(190,242,100,.1),rgba(190,242,100,.03));border-color:rgba(190,242,100,.22)}
+        .focus-toggle input[type="checkbox"]{display:none}
+        .focus-toggle .ft-switch{
+            position:relative;width:36px;height:20px;border-radius:20px;flex-shrink:0;
+            background:rgba(255,255,255,.08);
+            border:1px solid rgba(255,255,255,.12);
+            transition:all .25s cubic-bezier(.4,0,.2,1);
+        }
+        .focus-toggle .ft-switch::after{
+            content:'';position:absolute;top:2px;left:2px;
+            width:14px;height:14px;border-radius:50%;
+            background:#666;
+            transition:all .25s cubic-bezier(.4,0,.2,1);
+            box-shadow:0 1px 2px rgba(0,0,0,.3);
+        }
+        .focus-toggle input[type="checkbox"]:checked + .ft-switch{
+            background:rgba(190,242,100,.3);
+            border-color:rgba(190,242,100,.55);
+            box-shadow:inset 0 0 6px rgba(190,242,100,.2);
+        }
+        .focus-toggle input[type="checkbox"]:checked + .ft-switch::after{
+            left:18px;
+            background:#bef264;
+            box-shadow:0 0 6px rgba(190,242,100,.5),0 1px 2px rgba(0,0,0,.3);
+        }
+        .focus-toggle .ft-icon{
+            width:28px;height:28px;border-radius:8px;flex-shrink:0;
+            display:flex;align-items:center;justify-content:center;
+            background:rgba(190,242,100,.08);color:#bef264;
+            transition:all .2s;
+        }
+        .focus-toggle:has(input:checked) .ft-icon{
+            background:rgba(190,242,100,.18);color:#d9f99d;
+            box-shadow:0 0 8px rgba(190,242,100,.2);
+        }
+        .focus-toggle .ft-text{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+        .focus-toggle .ft-title{font-size:.82rem;font-weight:600;color:var(--text);letter-spacing:-.1px}
+        .focus-toggle .ft-sub{font-size:.66rem;color:var(--text3);line-height:1.3}
+        .focus-toggle:has(input:checked) .ft-title{color:#bef264}
+
         /* Tax info cards — caixas explicativas (Fator R, Internacional, etc) */
         .tax-info{
             position:relative;border-radius:12px;padding:14px 14px 14px 16px;
@@ -1141,14 +1190,17 @@
                     <button class="btn btn-o" id="btnPomoPause" onclick="pausePomodoro()" style="display:none">Pausar</button>
                     <button class="btn btn-r" id="btnPomoReset" onclick="resetPomodoro()" style="display:none">Resetar</button>
                 </div>
-                <label class="chk" style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:.78rem;padding:6px 10px;margin-bottom:6px;cursor:pointer;border-radius:8px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1)">
+                <label class="focus-toggle" style="margin-bottom:8px">
+                    <span class="ft-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    </span>
+                    <span class="ft-text">
+                        <span class="ft-title">Modo foco</span>
+                        <span class="ft-sub">Bloqueia apps de distração durante o ciclo</span>
+                    </span>
                     <input type="checkbox" id="pomoFocusEnabled" checked onchange="savePomoFocusPref()">
-                    <span>Ativar modo foco (bloqueia apps de distração)</span>
+                    <span class="ft-switch"></span>
                 </label>
-                <div id="pomoFocusHint" style="text-align:center;font-size:.62rem;color:var(--text3);margin-bottom:6px">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                    Apenas apps autorizados ficam abertos durante o foco
-                </div>
                 <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(190,242,100,.08)">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
                         <div style="font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Abrir Programas</div>
