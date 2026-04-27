@@ -1420,3 +1420,133 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
         return 'ERROR:' + e.toString();
     }
 }
+
+
+// ============================================
+// BACKGROUND REMOVER — pega clip selecionado
+// ============================================
+function lwBgGetSelected() {
+    try {
+        if (!app.project) return "NO_PROJECT";
+        var seq = app.project.activeSequence;
+        var info = null;
+
+        // 1) Tenta pegar do timeline (clip selecionado em alguma track)
+        if (seq) {
+            var foundClip = null, foundTrackIdx = -1, foundTrackTyp = "video";
+            for (var v = 0; v < seq.videoTracks.numTracks; v++) {
+                var trk = seq.videoTracks[v];
+                for (var c = 0; c < trk.clips.numItems; c++) {
+                    var cl = trk.clips[c];
+                    if (cl.isSelected && cl.isSelected()) {
+                        foundClip = cl;
+                        foundTrackIdx = v;
+                        break;
+                    }
+                }
+                if (foundClip) break;
+            }
+            if (foundClip) {
+                var path = "";
+                try { path = foundClip.projectItem.getMediaPath(); } catch(e) {}
+                info = {
+                    source: "timeline",
+                    path: path,
+                    name: foundClip.name,
+                    startTicks: String(foundClip.start.ticks),
+                    endTicks: String(foundClip.end.ticks),
+                    inPointTicks: "0",
+                    trackIdx: foundTrackIdx,
+                    trackTyp: foundTrackTyp
+                };
+                try { info.inPointTicks = String(foundClip.inPoint.ticks); } catch(e) {}
+            }
+        }
+
+        // 2) Senão, tenta selection do project panel
+        if (!info) {
+            var sel = app.project.getSelection ? app.project.getSelection() : null;
+            if (sel && sel.length > 0) {
+                var item = sel[0];
+                var p = "";
+                try { p = item.getMediaPath(); } catch(e) {}
+                if (p) {
+                    info = { source: "project", path: p, name: item.name };
+                }
+            }
+        }
+
+        if (!info) return "NO_SELECTION";
+        if (!info.path) return "NO_MEDIA_PATH";
+        return "OK:" + JSON.stringify(info);
+    } catch (e) {
+        return "ERROR:" + e.toString();
+    }
+}
+
+// Importa o PNG e insere no timeline na MESMA posicao do clip original,
+// numa track ACIMA (cria nova track se preciso). Se origem nao e timeline,
+// soh importa pra raiz do projeto.
+function lwBgImportAndPlace(filePath, srcInfoJson) {
+    try {
+        if (!app.project) return "NO_PROJECT";
+        var f = new File(filePath);
+        if (!f.exists) return "FILE_NOT_FOUND";
+
+        var info = null;
+        try { info = eval("(" + srcInfoJson + ")"); } catch(e) {}
+
+        // Importa o PNG
+        var beforeIds = {};
+        for (var i = 0; i < app.project.rootItem.children.numItems; i++) {
+            beforeIds[app.project.rootItem.children[i].nodeId] = true;
+        }
+        app.project.importFiles([filePath]);
+        $.sleep(400);
+
+        // Acha o item recem importado
+        var newItem = null;
+        for (var j = app.project.rootItem.children.numItems - 1; j >= 0; j--) {
+            var ch = app.project.rootItem.children[j];
+            if (!beforeIds[ch.nodeId]) { newItem = ch; break; }
+        }
+        if (!newItem) {
+            // fallback: pega o ultimo
+            newItem = app.project.rootItem.children[app.project.rootItem.children.numItems - 1];
+        }
+
+        // Move pro bin "Lion BG Remover"
+        try {
+            var bin = findOrCreateBin("Lion BG Remover");
+            if (bin && newItem) try { newItem.moveBin(bin); } catch(e) {}
+        } catch(e) {}
+
+        if (!info || info.source !== "timeline") {
+            return "OK:imported";
+        }
+
+        // Insere no timeline na MESMA posicao do clip original, em uma track ACIMA
+        var seq = app.project.activeSequence;
+        if (!seq) return "OK:imported";
+
+        var targetTrackIdx = (info.trackIdx >= 0 ? info.trackIdx + 1 : 0);
+        // Cria track de video extra se nao existe a track acima
+        while (seq.videoTracks.numTracks <= targetTrackIdx) {
+            try { seq.addTracks(1, 0); } catch(e) { break; }
+        }
+        var dstTrack = seq.videoTracks[targetTrackIdx];
+
+        // Cria Time pro start
+        var startTime = new Time();
+        startTime.ticks = info.startTicks;
+        try {
+            dstTrack.insertClip(newItem, startTime);
+        } catch (eIns) {
+            // fallback: overwrite
+            try { dstTrack.overwriteClip(newItem, startTime); } catch(e2) {}
+        }
+        return "OK:placed";
+    } catch (e) {
+        return "ERROR:" + e.toString();
+    }
+}
