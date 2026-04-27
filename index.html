@@ -841,6 +841,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:2px"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
             YouTube
         </button>
+        <button data-tab="rmbg" onclick="showTab('rmbg',this)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Remover Fundo
+        </button>
     </div>
 
     <!-- ====== DASHBOARD ====== -->
@@ -1349,6 +1353,84 @@
             </div>
             <div id="ytHistoryList" style="display:flex;flex-direction:column;gap:6px"></div>
         </div>
+    </div>
+
+    <!-- ====== REMOVER FUNDO ====== -->
+    <div class="tab-content" id="tab-rmbg">
+        <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+                <div>
+                    <div class="card-title" style="margin:0">Remover Fundo</div>
+                    <div style="font-size:.74rem;color:var(--text3);margin-top:2px">Faça upload da imagem — o fundo é removido automaticamente, 100% local no seu PC.</div>
+                </div>
+                <span id="rmbgStatus" style="font-size:.66rem;padding:3px 10px;border-radius:10px;background:rgba(99,99,99,.15);color:var(--text3)">Pronto</span>
+            </div>
+
+            <!-- Drop zone -->
+            <div id="rmbgDropZone" onclick="document.getElementById('rmbgFileInput').click()"
+                 style="margin-top:12px;border:2px dashed rgba(190,242,100,.25);border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(190,242,100,.025)">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <div style="font-size:.92rem;font-weight:600;color:var(--text);margin-bottom:4px">Clique ou arraste uma imagem aqui</div>
+                <div style="font-size:.72rem;color:var(--text3)">PNG, JPG, WEBP — qualquer tamanho</div>
+            </div>
+            <input type="file" id="rmbgFileInput" accept="image/*" style="display:none" onchange="rmbgPickFile(this.files)">
+
+            <!-- Loading -->
+            <div id="rmbgLoading" style="display:none;margin-top:14px;padding:14px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.12);border-radius:10px;text-align:center">
+                <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px">
+                    <div style="width:16px;height:16px;border:2.5px solid rgba(190,242,100,.2);border-top-color:#bef264;border-radius:50%;animation:rmbg-spin .7s linear infinite"></div>
+                    <span id="rmbgLoadingTxt" style="font-size:.85rem;color:var(--text);font-weight:600">Processando...</span>
+                </div>
+                <div id="rmbgLoadingHint" style="font-size:.7rem;color:var(--text3)"></div>
+                <div style="background:rgba(190,242,100,.08);border-radius:6px;height:5px;overflow:hidden;margin-top:8px">
+                    <div id="rmbgProgress" style="height:100%;background:linear-gradient(90deg,#22c55e,#bef264);width:0%;transition:width .3s ease"></div>
+                </div>
+            </div>
+
+            <!-- Preview -->
+            <div id="rmbgPreview" style="display:none;margin-top:14px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                    <div>
+                        <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px;font-weight:600">Original</div>
+                        <div style="background:#1a1a1a;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.05);aspect-ratio:1/1;display:flex;align-items:center;justify-content:center">
+                            <img id="rmbgImgOriginal" style="max-width:100%;max-height:100%;object-fit:contain">
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px;font-weight:600">Sem fundo</div>
+                        <div style="border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.05);aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;background-image:linear-gradient(45deg,#2a2a2a 25%,transparent 25%),linear-gradient(-45deg,#2a2a2a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2a2a2a 75%),linear-gradient(-45deg,transparent 75%,#2a2a2a 75%);background-size:14px 14px;background-position:0 0,0 7px,7px -7px,7px 0;background-color:#1a1a1a">
+                            <img id="rmbgImgResult" style="max-width:100%;max-height:100%;object-fit:contain">
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="btn btn-a" onclick="rmbgDownload()" style="flex:1;min-width:140px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Baixar PNG
+                    </button>
+                    <button class="btn btn-o" onclick="rmbgCopy()" style="flex:1;min-width:140px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copiar pra clipboard
+                    </button>
+                    <button class="btn btn-o" onclick="rmbgReset()" style="flex:0 0 auto">Nova imagem</button>
+                </div>
+            </div>
+
+            <!-- First-time notice -->
+            <div id="rmbgFirstTime" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.18);border-radius:8px;font-size:.74rem;color:#22d3ee;line-height:1.5">
+                <strong>Primeira vez:</strong> O modelo de IA (~80MB) está sendo baixado. Isso só acontece UMA vez — depois processa instantâneo offline.
+            </div>
+        </div>
+
+        <style>
+            @keyframes rmbg-spin{to{transform:rotate(360deg)}}
+            #rmbgDropZone:hover{background:rgba(190,242,100,.06);border-color:rgba(190,242,100,.45)}
+            #rmbgDropZone.dragover{background:rgba(190,242,100,.12);border-color:#bef264;border-style:solid}
+        </style>
     </div>
 
 </div>
@@ -5762,6 +5844,144 @@ function handleSyncCommand(data){
         case'pomodoro/reset':resetPomodoro();break;
     }
 }
+
+// ===== REMOVE BACKGROUND =====
+// Lazy-load @imgly/background-removal from CDN (ESM). Works offline after first download (browser cache).
+let _rmbgLib = null;
+let _rmbgOriginalBlob = null;
+let _rmbgResultBlob = null;
+let _rmbgFirstLoad = !localStorage.getItem('vc_rmbg_loaded');
+
+async function _rmbgEnsureLib(){
+    if (_rmbgLib) return _rmbgLib;
+    if (_rmbgFirstLoad) document.getElementById('rmbgFirstTime').style.display='block';
+    document.getElementById('rmbgLoading').style.display='block';
+    document.getElementById('rmbgLoadingTxt').textContent = _rmbgFirstLoad ? 'Baixando IA (~80MB, só na 1ª vez)...' : 'Carregando modelo...';
+    document.getElementById('rmbgLoadingHint').textContent = '';
+    document.getElementById('rmbgProgress').style.width = '5%';
+    try {
+        const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
+        _rmbgLib = mod;
+        localStorage.setItem('vc_rmbg_loaded','1');
+        _rmbgFirstLoad = false;
+    } catch(e) {
+        document.getElementById('rmbgLoading').style.display='none';
+        document.getElementById('rmbgFirstTime').style.display='none';
+        showToast('Erro ao carregar lib: ' + e.message, 'err');
+        throw e;
+    }
+    return _rmbgLib;
+}
+
+function rmbgPickFile(files){
+    if (!files || !files.length) return;
+    const f = files[0];
+    if (!f.type.startsWith('image/')) { showToast('Selecione um arquivo de imagem', 'warn'); return; }
+    rmbgProcess(f);
+}
+
+async function rmbgProcess(blobOrFile){
+    _rmbgOriginalBlob = blobOrFile;
+    document.getElementById('rmbgPreview').style.display='none';
+    document.getElementById('rmbgDropZone').style.display='none';
+
+    // Show original immediately
+    const reader = new FileReader();
+    reader.onload = (e) => { document.getElementById('rmbgImgOriginal').src = e.target.result; };
+    reader.readAsDataURL(blobOrFile);
+
+    try {
+        const lib = await _rmbgEnsureLib();
+        document.getElementById('rmbgLoadingTxt').textContent = 'Removendo fundo...';
+        const config = {
+            progress: (key, current, total) => {
+                const pct = total > 0 ? Math.round((current/total)*100) : 0;
+                document.getElementById('rmbgProgress').style.width = pct + '%';
+                if (key.includes('fetch')) {
+                    document.getElementById('rmbgLoadingTxt').textContent = 'Baixando modelo... ' + pct + '%';
+                } else if (key.includes('compute')) {
+                    document.getElementById('rmbgLoadingTxt').textContent = 'Processando IA... ' + pct + '%';
+                }
+            }
+        };
+        const resultBlob = await lib.removeBackground(blobOrFile, config);
+        _rmbgResultBlob = resultBlob;
+        const resultUrl = URL.createObjectURL(resultBlob);
+        document.getElementById('rmbgImgResult').src = resultUrl;
+
+        document.getElementById('rmbgLoading').style.display='none';
+        document.getElementById('rmbgFirstTime').style.display='none';
+        document.getElementById('rmbgPreview').style.display='block';
+        document.getElementById('rmbgStatus').textContent='Pronto';
+        document.getElementById('rmbgStatus').style.background='rgba(34,197,94,.1)';
+        document.getElementById('rmbgStatus').style.color='#22c55e';
+        showToast('Fundo removido!', 'ok');
+    } catch (e) {
+        console.error('rmbg error:', e);
+        document.getElementById('rmbgLoading').style.display='none';
+        document.getElementById('rmbgFirstTime').style.display='none';
+        document.getElementById('rmbgDropZone').style.display='block';
+        showToast('Erro: ' + (e.message || e), 'err');
+    }
+}
+
+function rmbgDownload(){
+    if (!_rmbgResultBlob) return;
+    const url = URL.createObjectURL(_rmbgResultBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    const baseName = _rmbgOriginalBlob && _rmbgOriginalBlob.name ? _rmbgOriginalBlob.name.replace(/\.[^.]+$/,'') : 'sem-fundo';
+    a.download = baseName + '_sem-fundo.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    showToast('Imagem baixada!', 'ok');
+}
+
+async function rmbgCopy(){
+    if (!_rmbgResultBlob) return;
+    try {
+        await navigator.clipboard.write([ new ClipboardItem({ 'image/png': _rmbgResultBlob }) ]);
+        showToast('Imagem copiada pra clipboard!', 'ok');
+    } catch (e) {
+        showToast('Erro ao copiar: ' + e.message, 'err');
+    }
+}
+
+function rmbgReset(){
+    _rmbgOriginalBlob = null;
+    _rmbgResultBlob = null;
+    document.getElementById('rmbgFileInput').value = '';
+    document.getElementById('rmbgPreview').style.display='none';
+    document.getElementById('rmbgLoading').style.display='none';
+    document.getElementById('rmbgFirstTime').style.display='none';
+    document.getElementById('rmbgDropZone').style.display='block';
+    document.getElementById('rmbgImgOriginal').src = '';
+    document.getElementById('rmbgImgResult').src = '';
+}
+
+// Drag & drop
+document.addEventListener('DOMContentLoaded', () => {
+    const dz = document.getElementById('rmbgDropZone');
+    if (!dz) return;
+    ['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('dragover'); }));
+    dz.addEventListener('drop', e => { rmbgPickFile(e.dataTransfer.files); });
+    // Paste from clipboard
+    window.addEventListener('paste', e => {
+        if (document.getElementById('tab-rmbg').classList.contains('active')) {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    if (blob) { rmbgPickFile([blob]); break; }
+                }
+            }
+        }
+    });
+});
 
 // ===== YOUTUBE DOWNLOADER =====
 let _ytFmt='best';
