@@ -280,6 +280,48 @@
         .meta-step-btn:hover{background:rgba(245,158,11,.18);color:#fbbf24}
         .meta-step-btn:active{background:rgba(245,158,11,.28)}
 
+        /* Tax info cards — caixas explicativas (Fator R, Internacional, etc) */
+        .tax-info{
+            position:relative;border-radius:12px;padding:14px 14px 14px 16px;
+            margin-top:12px;font-size:.78rem;line-height:1.65;
+            background:linear-gradient(135deg,rgba(255,255,255,.025),rgba(255,255,255,.005));
+            border:1px solid rgba(255,255,255,.06);
+            overflow:hidden;
+        }
+        .tax-info::before{
+            content:'';position:absolute;top:0;left:0;bottom:0;width:3px;
+            background:var(--accent-tax,#fbbf24);
+            border-radius:3px 0 0 3px;
+        }
+        .tax-info.tax-warn{--accent-tax:#fbbf24;background:linear-gradient(135deg,rgba(245,158,11,.10),rgba(245,158,11,.02))}
+        .tax-info.tax-info-blue{--accent-tax:#22d3ee;background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(34,211,238,.02))}
+        .tax-info.tax-success{--accent-tax:#22c55e;background:linear-gradient(135deg,rgba(34,197,94,.08),rgba(34,197,94,.02))}
+        .tax-info.tax-danger{--accent-tax:#f43f5e;background:linear-gradient(135deg,rgba(244,63,94,.08),rgba(244,63,94,.02))}
+        .tax-info-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+        .tax-info-icon{width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:var(--accent-tax-bg,rgba(251,191,36,.15));color:var(--accent-tax,#fbbf24);flex-shrink:0;font-size:.85rem}
+        .tax-info.tax-warn .tax-info-icon{background:rgba(251,191,36,.15)}
+        .tax-info.tax-info-blue .tax-info-icon{background:rgba(34,211,238,.15)}
+        .tax-info.tax-success .tax-info-icon{background:rgba(34,197,94,.15)}
+        .tax-info.tax-danger .tax-info-icon{background:rgba(244,63,94,.15)}
+        .tax-info-title{font-weight:700;font-size:.86rem;color:var(--accent-tax,#fbbf24);letter-spacing:-.1px}
+        .tax-info-body{color:#d4d4d4;font-size:.76rem;line-height:1.65}
+        .tax-info-body strong{color:#f5f5f5;font-weight:700}
+        .tax-info-divider{height:1px;background:rgba(255,255,255,.05);margin:10px 0}
+        .tax-info-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;font-size:.75rem;color:#bdbdbd}
+        .tax-info-row .tir-label{color:#a3a3a3;font-weight:600;flex-shrink:0;min-width:62px}
+        .tax-info-row .tir-arrow{color:#666;font-size:.7rem}
+        .tax-info-row .tir-from{color:#a3a3a3;text-decoration:line-through;text-decoration-color:rgba(163,163,163,.4)}
+        .tax-info-row .tir-to{color:var(--accent-tax,#22d3ee);font-weight:700}
+        .tax-info-row .tir-extra{color:#888;font-size:.7rem;margin-left:auto}
+        .tax-info-stat{
+            display:inline-flex;align-items:baseline;gap:4px;padding:2px 8px;
+            border-radius:6px;background:rgba(255,255,255,.04);
+            font-weight:700;color:var(--accent-tax,#22d3ee);font-size:.78rem;
+            border:1px solid rgba(255,255,255,.04);
+        }
+        .tax-info-pct{font-weight:800;color:var(--accent-tax)}
+        .tax-info-foot{margin-top:10px;font-size:.7rem;color:#888;font-style:italic;line-height:1.5}
+
         /* Timer mode buttons — pills compactas com hover animado */
         .timer-mode-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
         .timer-mode-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;letter-spacing:-.1px;transition:all .18s cubic-bezier(.4,0,.2,1);user-select:none;white-space:nowrap}
@@ -1319,8 +1361,20 @@
                     <span style="font-size:.68rem;color:var(--text3);margin-top:4px;display:block">Valor já faturado este ano antes de usar o app</span>
                 </div>
             </div>
-            <div style="margin-top:12px;padding:10px;background:rgba(245,158,11,.08);border-radius:8px;font-size:.78rem;color:#fbbf24;line-height:1.5">
-                <strong>Atenção:</strong> Limite MEI é R$ 81.000/ano. Se passar, você precisa migrar pra ME e vai pagar mais imposto (6% ou 15,5% ao invés de 0%). O app avisa antes de você atingir o limite.
+            <div class="tax-info tax-warn">
+                <div class="tax-info-header">
+                    <span class="tax-info-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </span>
+                    <span class="tax-info-title">Limite MEI</span>
+                    <span class="tax-info-stat" style="margin-left:auto">R$ 81.000/ano</span>
+                </div>
+                <div class="tax-info-body">
+                    Se passar do limite, você precisa migrar pra <strong>ME (Simples Nacional)</strong> e vai pagar imposto sobre tudo: <span class="tax-info-pct">6%</span> (Anexo III) ou <span class="tax-info-pct">15,5%</span> (Anexo V) — em vez de zero.
+                </div>
+                <div class="tax-info-foot">
+                    O app avisa quando você se aproxima do limite.
+                </div>
             </div>
         </div>
         <div id="cfgMeFields" style="display:none;margin-bottom:16px;padding:14px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.12);border-radius:10px">
@@ -1344,17 +1398,54 @@
                 <input type="number" id="cfgMeProlaboreValor" placeholder="1518.00" min="0" step="0.01">
                 <span style="font-size:.68rem;color:var(--text3);margin-top:4px;display:block">Mínimo legal: R$ 1.518,00 (1 salário mínimo)</span>
             </div>
-            <div style="margin-top:10px;padding:10px;background:rgba(245,158,11,.08);border-radius:8px;font-size:.76rem;color:#fbbf24;line-height:1.55">
-                <strong>Como funciona o Fator R (regra dos 28%):</strong><br>
-                Pra ficar no <strong>Anexo III (6%)</strong> você precisa que seu pró-labore + folha de pagamento seja <strong>≥ 28% do faturamento</strong> dos últimos 12 meses.<br>
-                Se for menor que 28%, a Receita te joga pro <strong>Anexo V (15,5%)</strong> automaticamente. Diferença: a cada R$ 10.000 faturados, você paga R$ 950 a mais.
+            <div class="tax-info tax-warn">
+                <div class="tax-info-header">
+                    <span class="tax-info-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </span>
+                    <span class="tax-info-title">Como funciona o Fator R</span>
+                    <span class="tax-info-stat" style="margin-left:auto;font-size:.7rem">regra dos 28%</span>
+                </div>
+                <div class="tax-info-body">
+                    Pra ficar no <strong>Anexo III</strong> (alíquota <span class="tax-info-pct">6%</span>) você precisa que seu pró-labore + folha de pagamento seja <strong>≥ 28% do faturamento</strong> dos últimos 12 meses.
+                </div>
+                <div class="tax-info-divider"></div>
+                <div class="tax-info-body">
+                    Se ficar menor que 28%, a Receita te joga pro <strong>Anexo V</strong> automaticamente — alíquota sobe pra <span class="tax-info-pct">15,5%</span>.
+                </div>
+                <div class="tax-info-foot">
+                    Impacto real: a cada <strong style="color:#f5f5f5">R$ 10.000</strong> faturados, você paga <strong style="color:#fbbf24">R$ 950 a mais</strong>.
+                </div>
             </div>
-            <div style="margin-top:10px;padding:10px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.18);border-radius:8px;font-size:.76rem;color:#22d3ee;line-height:1.55">
-                <strong>🌍 Serviço internacional paga MENOS imposto:</strong><br>
-                Quando o cliente é estrangeiro (gringo), o serviço é considerado <strong>exportação</strong> e o <strong>ISS fica isento</strong>. Resultado:<br>
-                • <strong>Anexo III:</strong> 6% nacional → <strong>~3,99% internacional</strong> + IOF 0,38% no câmbio<br>
-                • <strong>Anexo V:</strong> 15,5% nacional → <strong>~10,5% internacional</strong> + IOF 0,38%<br>
-                Quando você marcar um cliente como "internacional" no app, o cálculo já desconta o ISS automaticamente.
+
+            <div class="tax-info tax-info-blue">
+                <div class="tax-info-header">
+                    <span class="tax-info-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                    </span>
+                    <span class="tax-info-title">Serviço internacional = menos imposto</span>
+                </div>
+                <div class="tax-info-body">
+                    Quando o cliente é estrangeiro, o serviço é considerado <strong>exportação</strong> — o <strong>ISS fica isento</strong>. Resultado prático:
+                </div>
+                <div class="tax-info-divider"></div>
+                <div class="tax-info-row">
+                    <span class="tir-label">Anexo III</span>
+                    <span class="tir-from">6%</span>
+                    <span class="tir-arrow">→</span>
+                    <span class="tir-to">3,99%</span>
+                    <span class="tir-extra">+ IOF 0,38%</span>
+                </div>
+                <div class="tax-info-row">
+                    <span class="tir-label">Anexo V</span>
+                    <span class="tir-from">15,5%</span>
+                    <span class="tir-arrow">→</span>
+                    <span class="tir-to">10,5%</span>
+                    <span class="tir-extra">+ IOF 0,38%</span>
+                </div>
+                <div class="tax-info-foot">
+                    Marque o cliente como "internacional" no app — o cálculo já desconta o ISS automaticamente.
+                </div>
             </div>
         </div>
 
@@ -3166,21 +3257,34 @@ function showImpInfo(){
             const fatMensal=baseTrib;
             const pctProlabore=fatMensal>0?(proLab/fatMensal*100):0;
             if(proLab===0){
-                warnings+='<div style="margin-top:10px;padding:10px;background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.2);border-radius:8px;font-size:.74rem;color:#fb7185;line-height:1.5"><strong>⚠ ALERTA Fator R:</strong><br>Você está no Anexo III mas não declarou pró-labore. A Receita pode te jogar pro <strong>Anexo V (15,5%)</strong>, ou seja, <strong>+R$ '+fb(baseTrib*0.095)+' a mais este mês</strong>.</div>';
+                warnings+=_taxBox('danger','⚠','Alerta Fator R',
+                    'Você está no Anexo III mas <strong>não declarou pró-labore</strong>. A Receita pode te jogar pro <strong>Anexo V</strong> (15,5%).',
+                    [{label:'A mais este mês',value:'+R$ '+fb(baseTrib*0.095),color:'#fb7185'}],
+                    'Configure o pró-labore acima ou aceite migrar pro Anexo V.');
             } else if(pctProlabore<28){
                 const extra=baseTrib*0.095;
-                warnings+='<div style="margin-top:10px;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:.74rem;color:#fbbf24;line-height:1.5"><strong>⚠ Fator R abaixo de 28%:</strong><br>Seu pró-labore é '+pctProlabore.toFixed(1)+'% do faturamento. Pra ficar no Anexo III (6%) precisa ser <strong>≥ 28%</strong>. Falta <strong>R$ '+fb(fatMensal*0.28-proLab)+'</strong> de pró-labore. Se a Receita te reclassificar pro Anexo V, você paga <strong>+R$ '+fb(extra)+'</strong> em imposto este mês.</div>';
+                warnings+=_taxBox('warn','⚠','Fator R abaixo de 28%',
+                    'Seu pró-labore é <strong>'+pctProlabore.toFixed(1)+'%</strong> do faturamento. Pra ficar no Anexo III precisa ser <strong>≥ 28%</strong>.',
+                    [
+                        {label:'Falta de pró-labore',value:'R$ '+fb(fatMensal*0.28-proLab),color:'#fbbf24'},
+                        {label:'A mais se reclassificar',value:'+R$ '+fb(extra),color:'#fb7185'}
+                    ],
+                    'Aumente o pró-labore ou prepare-se pra alíquota de 15,5%.');
             } else {
-                warnings+='<div style="margin-top:10px;padding:10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:.74rem;color:#22c55e;line-height:1.5"><strong>✓ Fator R OK ('+pctProlabore.toFixed(1)+'%):</strong> Você está enquadrado corretamente no Anexo III (6%).</div>';
+                warnings+=_taxBox('success','✓','Fator R OK ('+pctProlabore.toFixed(1)+'%)',
+                    'Você está enquadrado corretamente no <strong>Anexo III (6%)</strong>. Continue com pró-labore ≥ 28% do faturamento.',
+                    null, null);
             }
         } else if(an==='V'){
             const possivelEcon=baseTrib*0.095;
-            warnings+='<div style="margin-top:10px;padding:10px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.2);border-radius:8px;font-size:.74rem;color:#22d3ee;line-height:1.5"><strong>💡 Você pode economizar:</strong><br>Migrando pro <strong>Anexo III (6%)</strong> com pró-labore ≥ 28% do faturamento, você pagaria <strong>R$ '+fb(possivelEcon)+'</strong> a menos este mês. Fale com seu contador.</div>';
+            warnings+=_taxBox('info','💡','Você pode economizar',
+                'Migrando pro <strong>Anexo III (6%)</strong> com pró-labore ≥ 28% do faturamento, você pagaria menos imposto.',
+                [{label:'Economia mensal',value:'R$ '+fb(possivelEcon),color:'#22c55e'}],
+                'Fale com seu contador.');
         }
         // Internacional sem ISS — calcula a economia real
         const interRegs=mesRegs.filter(r=>{const c=getCl(r.cliente);return c&&c.internacional});
         if(interRegs.length>0){
-            // Soma quanto seria pago se fosse nacional vs como internacional
             let brutoIntBRL=0;
             interRegs.forEach(r=>{
                 const c=getCl(r.cliente);
@@ -3193,21 +3297,31 @@ function showImpInfo(){
             const seriaPagoNac=brutoIntBRL*aliqNac;
             const pagandoInt=brutoIntBRL*(aliqInt+0.0038);
             const economia=seriaPagoNac-pagandoInt;
-            warnings+='<div style="margin-top:10px;padding:12px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.2);border-radius:8px;font-size:.74rem;color:#22d3ee;line-height:1.6">'+
-                '<strong>🌍 Serviços internacionais ('+interRegs.length+' este mês):</strong><br>'+
-                'Como o serviço é prestado pra fora do Brasil, o <strong>ISS é isento</strong> (exportação de serviço). Você paga só o Simples Nacional reduzido + IOF de 0,38% no câmbio.<br><br>'+
-                '<span style="color:#fff;font-weight:600">Alíquota efetiva:</span> '+((aliqInt+0.0038)*100).toFixed(2)+'% <span style="opacity:.7">(seria '+ (aliqNac*100).toFixed(1)+'% se fosse nacional)</span><br>'+
-                '<span style="color:#22c55e;font-weight:600">💚 Economia este mês: R$ '+fb(economia)+'</span> só por ser serviço internacional.'+
-                '</div>';
+            warnings+=_taxBox('info','🌍','Serviços internacionais ('+interRegs.length+')',
+                '<strong>ISS isento</strong> (exportação de serviço). Você paga só o Simples reduzido + IOF de 0,38%.',
+                [
+                    {label:'Alíquota efetiva',value:((aliqInt+0.0038)*100).toFixed(2)+'%',color:'#22d3ee',extra:'(seria '+(aliqNac*100).toFixed(1)+'% se nacional)'},
+                    {label:'💚 Economia este mês',value:'R$ '+fb(economia),color:'#22c55e'}
+                ],
+                null);
         }
     } else if(tp==='MEI'){
         const fatAno=(cfg.meiFatAnterior||0)+regs.filter(r=>r.data&&r.data.substring(0,4)===String(new Date().getFullYear())).reduce((s,r)=>{const c=getCl(r.cliente);const v=r.quantidade*r.valor;return s+(c&&c.internacional?v*getCotacaoMoeda(c.moeda||'USD'):v)},0);
         const pctMEI=fatAno/81000*100;
         if(pctMEI>=100){
             const excedente=fatAno-81000;
-            warnings+='<div style="margin-top:10px;padding:10px;background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.25);border-radius:8px;font-size:.74rem;color:#fb7185;line-height:1.5"><strong>🚨 ULTRAPASSOU O LIMITE MEI!</strong><br>Você faturou R$ '+fb(fatAno)+' este ano (limite: R$ 81.000). Excedente: <strong>R$ '+fb(excedente)+'</strong>. Vai precisar pagar <strong>~R$ '+fb(excedente*0.155)+'</strong> de imposto retroativo. <strong>Migre pra ME urgentemente</strong>.</div>';
+            warnings+=_taxBox('danger','🚨','ULTRAPASSOU O LIMITE MEI',
+                'Você faturou <strong>R$ '+fb(fatAno)+'</strong> este ano. Limite MEI: R$ 81.000.',
+                [
+                    {label:'Excedente',value:'R$ '+fb(excedente),color:'#fb7185'},
+                    {label:'Imposto retroativo (~)',value:'R$ '+fb(excedente*0.155),color:'#fb7185'}
+                ],
+                'Migre pra ME urgentemente.');
         } else if(pctMEI>=80){
-            warnings+='<div style="margin-top:10px;padding:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:.74rem;color:#fbbf24;line-height:1.5"><strong>⚠ Atenção MEI ('+pctMEI.toFixed(0)+'% do limite):</strong><br>Você já faturou R$ '+fb(fatAno)+' este ano. Faltam só <strong>R$ '+fb(81000-fatAno)+'</strong> pra ultrapassar. Considere migrar pra ME antes de bater o teto.</div>';
+            warnings+=_taxBox('warn','⚠','Atenção MEI ('+pctMEI.toFixed(0)+'% do limite)',
+                'Você já faturou <strong>R$ '+fb(fatAno)+'</strong> este ano.',
+                [{label:'Falta pra ultrapassar',value:'R$ '+fb(81000-fatAno),color:'#fbbf24'}],
+                'Considere migrar pra ME antes de bater o teto.');
         }
     }
 
@@ -4088,6 +4202,26 @@ function updStats(){
     if(statsEl)statsEl.style.display=hasClients?'grid':'none';
     renderTaxasResumo();
     updMeta();
+}
+
+// Helper: monta uma tax-info card com header + body + linhas + foot
+// kind: 'warn' | 'info' | 'success' | 'danger'
+function _taxBox(kind, icon, title, bodyHtml, rows, footText){
+    const klass = kind==='info'?'tax-info-blue':kind==='success'?'tax-success':kind==='danger'?'tax-danger':'tax-warn';
+    let h='<div class="tax-info '+klass+'">';
+    h+='<div class="tax-info-header"><span class="tax-info-icon">'+icon+'</span><span class="tax-info-title">'+title+'</span></div>';
+    if(bodyHtml) h+='<div class="tax-info-body">'+bodyHtml+'</div>';
+    if(rows && rows.length){
+        h+='<div class="tax-info-divider"></div>';
+        rows.forEach(r=>{
+            h+='<div class="tax-info-row"><span class="tir-label">'+r.label+'</span><span class="tir-to" style="color:'+(r.color||'#22d3ee')+'">'+r.value+'</span>';
+            if(r.extra) h+='<span class="tir-extra">'+r.extra+'</span>';
+            h+='</div>';
+        });
+    }
+    if(footText) h+='<div class="tax-info-foot">'+footText+'</div>';
+    h+='</div>';
+    return h;
 }
 
 // ===== META MENSAL =====
