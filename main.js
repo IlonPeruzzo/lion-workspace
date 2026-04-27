@@ -2178,6 +2178,7 @@ ipcMain.handle('auth-login', async (_, email, password) => {
             user_id: data.user.id,
             fingerprint,
             name: os.hostname(),
+            os: os.platform(),
             platform: os.platform(),
             os_version: os.release(),
             hostname: os.hostname(),
