@@ -2924,6 +2924,109 @@
         });
     }
 
+    // ─── Sanitiza imagens antes de importar pro Premiere ───
+    // Bug: PNGs de IAs (Grok/Midjourney/etc) e screenshots às vezes têm
+    // profile ICC complexo ou metadata exótica que o Premiere rejeita com
+    // "Unsupported format or damaged file". Solução: re-encodar via
+    // System.Drawing (GDI+) pra gerar PNG limpo que o Premiere sempre aceita.
+    function cpSanitizeImagePaths(saveDir, paths, callback) {
+        if (!paths || paths.length === 0) { callback(paths || []); return; }
+        var imageExts = /\.(png|jpe?g|bmp|tiff?|gif|webp)$/i;
+        var hasImage = paths.some(function(p){ return imageExts.test(p); });
+        if (!hasImage) { callback(paths); return; }
+
+        if (!cpIsWindows()) {
+            // Mac: re-encoda via sips (built-in)
+            cpSanitizeImagePathsMac(saveDir, paths, callback);
+            return;
+        }
+
+        var dirEsc = String(saveDir || '').replace(/'/g, "''");
+        var dirLine = dirEsc ? "$dir = '" + dirEsc + "'" : "$dir = $env:TEMP";
+
+        // Monta lista PS-safe dos paths
+        var pathsList = paths.map(function(p){ return "'" + String(p).replace(/'/g, "''") + "'"; }).join(',');
+
+        var ps = [
+            'Add-Type -AssemblyName System.Drawing',
+            dirLine,
+            'if (-not (Test-Path $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $dir = $env:TEMP } }',
+            // Limpa arquivos lw-paste-* com mais de 1h pra evitar acúmulo
+            'try { Get-ChildItem -Path $dir -Filter "lw-paste-*.png" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddHours(-1) } | Remove-Item -Force -ErrorAction SilentlyContinue } catch {}',
+            '$srcs = @(' + pathsList + ')',
+            '$results = @()',
+            '$ts = [int][double]::Parse((Get-Date -UFormat %s))',
+            '$idx = 0',
+            'foreach ($src in $srcs) {',
+            '  $idx++',
+            '  $ext = [System.IO.Path]::GetExtension($src).ToLower()',
+            '  $isImg = @(".png",".jpg",".jpeg",".bmp",".tif",".tiff",".gif",".webp") -contains $ext',
+            '  if (-not $isImg) { $results += $src; continue }',
+            '  try {',
+            '    $img = [System.Drawing.Image]::FromFile($src)',
+            '    $name = [System.IO.Path]::GetFileNameWithoutExtension($src)',
+            '    $clean = $name -replace "[^A-Za-z0-9_-]", "_"',
+            '    if ($clean.Length -gt 40) { $clean = $clean.Substring(0,40) }',
+            '    if ([string]::IsNullOrWhiteSpace($clean)) { $clean = "img" }',
+            '    $out = Join-Path $dir ("lw-paste-" + $ts + "-" + $idx + "-" + $clean + ".png")',
+            // Re-encoda como PNG limpo (sem profile ICC, metadata, etc)
+            '    $img.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)',
+            '    $img.Dispose()',
+            '    $results += $out',
+            '  } catch {',
+            '    $results += $src',  // fallback: mantém original
+            '  }',
+            '}',
+            'Write-Output ("OK:" + ($results -join "|"))'
+        ].join("\r\n");
+
+        cpExecPS(ps, function(err, stdout){
+            if (err) { callback(paths); return; } // fallback: usa originais
+            var out = String(stdout || '').trim();
+            if (out.indexOf('OK:') === 0) {
+                var newPaths = out.substring(3).split('|').filter(Boolean);
+                if (newPaths.length === paths.length) {
+                    callback(newPaths);
+                } else {
+                    callback(paths); // contagem não bate, fallback
+                }
+            } else {
+                callback(paths);
+            }
+        });
+    }
+
+    function cpSanitizeImagePathsMac(saveDir, paths, callback) {
+        var node = cpGetNode();
+        if (!node) { callback(paths); return; }
+        var fs = node.require('fs');
+        var path = node.require('path');
+        var child_process = node.require('child_process');
+
+        var dir = saveDir || '/tmp';
+        try { fs.mkdirSync(dir, {recursive: true}); } catch(e){ dir = '/tmp'; }
+
+        var imageExts = /\.(png|jpe?g|bmp|tiff?|gif|webp)$/i;
+        var ts = Date.now();
+        var pending = paths.length;
+        var results = paths.slice();
+
+        paths.forEach(function(src, i) {
+            if (!imageExts.test(src)) {
+                if (--pending === 0) callback(results);
+                return;
+            }
+            var name = path.basename(src, path.extname(src)).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40) || 'img';
+            var out = path.join(dir, 'lw-paste-' + ts + '-' + (i+1) + '-' + name + '.png');
+            // sips: re-encoda preservando dimensões, gera PNG limpo
+            var cmd = 'sips -s format png "' + src.replace(/"/g, '\\"') + '" --out "' + out.replace(/"/g, '\\"') + '"';
+            child_process.exec(cmd, { maxBuffer: 4*1024*1024 }, function(err){
+                if (!err) results[i] = out;
+                if (--pending === 0) callback(results);
+            });
+        });
+    }
+
     // ─── Clipboard Read (cross-platform) ───
     function cpReadClipboard(saveDir, callback){
         if (typeof saveDir === 'function') { callback = saveDir; saveDir = ''; }
@@ -3312,8 +3415,12 @@
             var kind = res.type === 'image' ? 'print' : 'arquivo' + (paths.length > 1 ? 's' : '');
             cpShowStatus('Importando ' + paths.length + ' ' + kind + '…', '#f59e0b');
 
+            // Sanitiza imagens antes de importar — re-encoda PNGs com profile ICC esquisito
+            // (Grok/Midjourney/screenshots) que o Premiere às vezes rejeita como "Unsupported format"
+            var sanitizeDir = saveDir || (function(){ try { var _n = cpGetNode(); return _n ? _n.require('os').tmpdir() : ''; } catch(e){ return ''; } })();
+            cpSanitizeImagePaths(sanitizeDir, paths, function(cleanPaths){
             // Passa caminhos como JSON pra ExtendScript via string literal segura
-            var pathsJson = JSON.stringify(paths).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            var pathsJson = JSON.stringify(cleanPaths).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
             var scr = 'cpImportFiles("' + pathsJson + '",'
                     + (cpFlags.insertAtPlayhead?'true':'false') + ','
                     + (cpFlags.useBin?'true':'false') + ','
@@ -3340,6 +3447,7 @@
                 } else {
                     cpShowStatus(r || 'Erro ao importar', '#f43f5e');
                 }
+            });
             });
         });
         });
