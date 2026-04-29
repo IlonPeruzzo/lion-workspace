@@ -1152,32 +1152,91 @@ function _doExtractRange(startTick, endTick, qeSeq, stdTrack) {
     var endStr = String(Math.round(endTick));
     try {
         qeSeq.setInPoint(startStr);
-        $.sleep(50);
+        $.sleep(20);
         qeSeq.setOutPoint(endStr);
-        $.sleep(50);
+        $.sleep(20);
         if (typeof qeSeq.extract === 'function') {
             qeSeq.extract();
-            $.sleep(300);
+            $.sleep(120);
             return stdTrack.clips.numItems !== before;
         }
     } catch(e) {}
     return false;
 }
 
+// ─── Progress writer pra fase execute (cliente polla via Node fs) ───
+function _acExecProgress(msg, pct, done) {
+    try {
+        var f = new File(Folder.temp.fsName + '/lw-autocut-execute.json');
+        f.encoding = 'UTF-8';
+        if (f.open('w')) {
+            f.write(JSON.stringify({
+                ts: (new Date()).getTime(),
+                msg: msg || '',
+                pct: typeof pct === 'number' ? pct : null,
+                done: !!done
+            }));
+            f.close();
+        }
+    } catch(e) {}
+}
+
 // ─── Razor helper: tries multiple methods, returns true if clip count increased ───
+//
+// PERF: Antes esse helper testava os 4 métodos toda vez, com $.sleep(200)
+// entre tentativas. Pra 100 silêncios x 2 razors x 4 métodos = ~3-4min de
+// sleep travando o Premiere (tela preta).
+//
+// Agora: 1) stick to winning method — uma vez detectado qual método funciona
+// pra essa sessão, usa direto pros próximos cortes; 2) sleeps reduzidos de
+// 200→80ms; 3) cap em 1 método quando o "winner" é conhecido.
+var _acRazorWinner = null;  // Reset no início de cada autoCutExecute
+
 function _doRazorAt(tickVal, targetTrack, qeTrack, qeSeq, seq) {
     var nb = targetTrack.clips.numItems;
     var tickStr = String(Math.round(tickVal));
+
+    // ── FAST PATH: já sabemos qual método funciona pra essa sessão ──
+    if (_acRazorWinner) {
+        if (_acRazorWinner === 'A' && qeTrack) {
+            try {
+                seq.setPlayerPosition(tickStr);
+                $.sleep(20);
+                qeTrack.razor(seq.getPlayerPosition().ticks);
+                $.sleep(80);
+                if (targetTrack.clips.numItems > nb) return 'A';
+            } catch (e) {}
+        } else if (_acRazorWinner === 'B' && qeTrack) {
+            try { qeTrack.razor(tickStr); $.sleep(80);
+                if (targetTrack.clips.numItems > nb) return 'B';
+            } catch (e) {}
+        } else if (_acRazorWinner === 'C') {
+            try { targetTrack.razor(createTimeAt(tickVal)); $.sleep(80);
+                if (targetTrack.clips.numItems > nb) return 'C';
+            } catch (e) {}
+        } else if (_acRazorWinner === 'D' && qeSeq) {
+            try {
+                seq.setPlayerPosition(tickStr);
+                $.sleep(20);
+                qeSeq.razor(seq.getPlayerPosition().ticks);
+                $.sleep(80);
+                if (targetTrack.clips.numItems > nb) return 'D';
+            } catch (e) {}
+        }
+        // Winner falhou nesse ponto específico — cai pra full retry abaixo
+    }
+
+    // ── SLOW PATH: tenta os 4 métodos; primeiro sucesso vira o winner ──
 
     // Method A: Set playhead → get native ticks → QE track razor
     if (qeTrack) {
         try {
             seq.setPlayerPosition(tickStr);
-            $.sleep(50);
+            $.sleep(20);
             var nativeTicks = seq.getPlayerPosition().ticks;
             qeTrack.razor(nativeTicks);
-            $.sleep(200);
-            if (targetTrack.clips.numItems > nb) return 'A';
+            $.sleep(80);
+            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'A'; return 'A'; }
         } catch (e) {}
     }
 
@@ -1185,26 +1244,26 @@ function _doRazorAt(tickVal, targetTrack, qeTrack, qeSeq, seq) {
     if (qeTrack) {
         try {
             qeTrack.razor(tickStr);
-            $.sleep(200);
-            if (targetTrack.clips.numItems > nb) return 'B';
+            $.sleep(80);
+            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'B'; return 'B'; }
         } catch (e) {}
     }
 
     // Method C: Standard DOM track.razor with Time object
     try {
         targetTrack.razor(createTimeAt(tickVal));
-        $.sleep(200);
-        if (targetTrack.clips.numItems > nb) return 'C';
+        $.sleep(80);
+        if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'C'; return 'C'; }
     } catch (e) {}
 
     // Method D: QE sequence-level razor (cuts all targeted tracks)
     if (qeSeq) {
         try {
             seq.setPlayerPosition(tickStr);
-            $.sleep(50);
+            $.sleep(20);
             qeSeq.razor(seq.getPlayerPosition().ticks);
-            $.sleep(200);
-            if (targetTrack.clips.numItems > nb) return 'D';
+            $.sleep(80);
+            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'D'; return 'D'; }
         } catch (e) {}
     }
 
@@ -1222,6 +1281,10 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
         if (!app.project) return 'NO_PROJECT';
         var seq = app.project.activeSequence;
         if (!seq) return 'NO_SEQUENCE';
+
+        // Reset razor winner — cada execute redescobre qual método funciona
+        _acRazorWinner = null;
+        _acExecProgress('Iniciando...', 0, false);
 
         var silences;
         try { silences = eval('(' + silencesJson + ')'); } catch (ep) { return 'PARSE_ERR'; }
@@ -1333,9 +1396,22 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
 
         // Detect if extract works on first cut; if yes, use it for all
         var useExtract = null; // null = undetermined, true/false after first test
+        var consecutiveFails = 0; // pra abortar se nada funcionar
+        var totalCuts = cutPoints.length;
+        var lastProgressMs = 0;
+        _acExecProgress('Cortando ' + totalCuts + ' silêncios...', 0, false);
 
         for (var ci = 0; ci < cutPoints.length; ci++) {
             var cp = cutPoints[ci];
+
+            // Heartbeat pro client (a cada ~250ms)
+            var nowMs = (new Date()).getTime();
+            if (nowMs - lastProgressMs > 250) {
+                var pct = Math.floor((ci / totalCuts) * 100);
+                _acExecProgress('Cortando silêncio ' + (ci + 1) + '/' + totalCuts + '...', pct, false);
+                lastProgressMs = nowMs;
+            }
+
             try {
                 var numBefore = targetTrack.clips.numItems;
                 var method = '';
@@ -1366,6 +1442,7 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
                 }
 
                 if (numAfter <= numBefore) {
+                    consecutiveFails++;
                     // Razor didn't create new clips — dump diagnostics for first failure
                     if (ci === 0) {
                         dbg.push('tps=' + tps);
@@ -1375,8 +1452,16 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
                         dbg.push('qeS=' + (qeSeq ? typeof qeSeq.razor : 'null'));
                         dbg.push('qeX=' + (qeSeq ? typeof qeSeq.extract : 'null'));
                     }
+                    // Abort cedo: se 5 cortes seguidos falharem (ou os primeiros 3),
+                    // não adianta continuar gastando segundos por corte. Sai com erro.
+                    if (consecutiveFails >= 5 || (ci < 3 && consecutiveFails === ci + 1)) {
+                        dbg.push('abort@' + ci + ':allfail');
+                        _acExecProgress('Razor falhou — nenhum método compatível', 100, true);
+                        return 'OK:0:0|DBG:' + dbg.join(';');
+                    }
                     continue;
                 }
+                consecutiveFails = 0;
 
                 // ── Razor worked! Find and remove silence clip ──
                 if (mode === 'remove') {
@@ -1399,11 +1484,14 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
                 } else {
                     cutsApplied++;
                 }
-                $.sleep(30);
+                // sleep(30) removido — operações DOM já têm overhead suficiente,
+                // 30ms x N cortes virava 3-5s extras de tela preta sem benefício
             } catch (eCut) {
                 dbg.push('e' + ci + ':' + eCut.toString().substring(0, 30));
             }
         }
+
+        _acExecProgress(cutsApplied + ' cortes aplicados', 100, true);
 
         // Restore original in/out points (extract sets them)
         try { if (origInTicks && seq.setInPoint) seq.setInPoint(origInTicks); } catch(e) {}

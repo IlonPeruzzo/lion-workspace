@@ -3468,6 +3468,19 @@
     var acAiFilterType = 'all';
     var acAiFullText = '';   // full transcript
 
+    // ─── Node fs (CEP --enable-nodejs) — usado pra ler progress file
+    // que o JSX escreve durante autoCutExecute (fase de aplicar cortes) ───
+    var _acNodeFs = null, _acNodeOs = null, _acNodePath = null;
+    try {
+        _acNodeFs = require('fs');
+        _acNodeOs = require('os');
+        _acNodePath = require('path');
+    } catch(e) {}
+    var AC_EXEC_PROGRESS_FILE = (_acNodeFs && _acNodeOs && _acNodePath)
+        ? _acNodePath.join(_acNodeOs.tmpdir(), 'lw-autocut-execute.json')
+        : null;
+    var acExecProgressInterval = null;
+
     function acUpdateThreshold() {
         var v = document.getElementById('acThreshold').value;
         document.getElementById('acThreshVal').textContent = v + ' dB';
@@ -3961,10 +3974,49 @@
         });
     }
 
+    // Polla o arquivo iloncut-execute.json que o JSX escreve durante autoCutExecute.
+    // Atualiza a barra/status sem bloquear o evalScript em andamento.
+    function _acStartExecutePolling() {
+        _acStopExecutePolling();
+        if (!_acNodeFs || !AC_EXEC_PROGRESS_FILE) return;
+        try { if (_acNodeFs.existsSync(AC_EXEC_PROGRESS_FILE)) _acNodeFs.unlinkSync(AC_EXEC_PROGRESS_FILE); } catch(e) {}
+
+        // Mostra a barra de progresso reutilizando o mesmo wrapper da análise
+        var wrap = document.getElementById('acProgressWrap');
+        if (wrap) wrap.style.display = '';
+        document.getElementById('acProgressBar').style.width = '0%';
+        document.getElementById('acProgressPct').textContent = '0%';
+        document.getElementById('acProgressLabel').textContent = 'Iniciando cortes...';
+
+        acExecProgressInterval = setInterval(function() {
+            try {
+                if (!_acNodeFs.existsSync(AC_EXEC_PROGRESS_FILE)) return;
+                var raw = _acNodeFs.readFileSync(AC_EXEC_PROGRESS_FILE, 'utf8');
+                if (!raw) return;
+                var p = JSON.parse(raw);
+                if (typeof p.pct === 'number' && p.pct >= 0) {
+                    var pct = Math.min(100, Math.max(0, p.pct));
+                    document.getElementById('acProgressBar').style.width = pct + '%';
+                    document.getElementById('acProgressPct').textContent = pct + '%';
+                }
+                if (p.msg) document.getElementById('acProgressLabel').textContent = p.msg;
+            } catch(e) {}
+        }, 400);
+    }
+    function _acStopExecutePolling() {
+        if (acExecProgressInterval) { clearInterval(acExecProgressInterval); acExecProgressInterval = null; }
+        setTimeout(function() {
+            var wrap = document.getElementById('acProgressWrap');
+            if (wrap) wrap.style.display = 'none';
+        }, 800);
+    }
+
     function _acRunExecute(script, btn) {
         var padding = parseFloat(document.getElementById('acPadding').value) || 0;
 
+        _acStartExecutePolling();
         csInterface.evalScript(script, function(result) {
+            _acStopExecutePolling();
             btn.disabled = false;
             var r = String(result || '');
             LWLog.info('autocut', 'Result: ' + r);
