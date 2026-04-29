@@ -3957,6 +3957,16 @@
         csInterface.evalScript('autoCutBackupSequence()', function(bkResult) {
             var bk = String(bkResult || '');
             LWLog.info('autocut', 'Backup: ' + bk);
+
+            // Backup roubou foco e não conseguiu voltar — ABORTA antes de cortar.
+            // Sem isso, o autocut roda na sequence backup (clone) ou em vazia.
+            if (bk.indexOf('BACKUP_LOST_FOCUS') === 0) {
+                btn.disabled = false;
+                acShowStatus('Backup criado mas Premiere mudou de sequência. Volte pra sua sequência original e tente de novo.', '#f43f5e');
+                LWLog.error('autocut', 'Backup lost focus — aborting to prevent damage');
+                return;
+            }
+
             var bkMsg = '';
             if (bk.indexOf('CLONED:') === 0) bkMsg = 'Backup: sequência "' + bk.substring(7) + '"';
             else if (bk === 'SAVED') bkMsg = 'Backup: projeto salvo';
@@ -4041,7 +4051,13 @@
                 } else {
                     // Razor reported OK but 0 cuts — something went wrong
                     var dbgInfo = r.indexOf('|DBG:') >= 0 ? r.substring(r.indexOf('|DBG:') + 5) : '';
-                    acShowStatus('Nenhum corte efetivado' + (dbgInfo ? ' — ' + dbgInfo : ''), '#f59e0b');
+                    // Mensagem clara pro safeguard de cobertura
+                    if (dbgInfo.indexOf('abort-cover-') === 0) {
+                        var coverPct = dbgInfo.replace('abort-cover-', '').replace('pct', '');
+                        acShowStatus('Cortes cobririam ' + coverPct + '% do clip — operação abortada. Aumente o threshold (mais negativo) ou min duração.', '#f43f5e');
+                    } else {
+                        acShowStatus('Nenhum corte efetivado' + (dbgInfo ? ' — ' + dbgInfo : ''), '#f59e0b');
+                    }
                     LWLog.warn('autocut', 'Zero cuts: ' + r);
                 }
             } else if (r === 'NO_SELECTION') {

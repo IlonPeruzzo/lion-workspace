@@ -1100,6 +1100,7 @@ function autoCutBackupSequence() {
         var seq = app.project.activeSequence;
         if (!seq) return 'NO_SEQUENCE';
         var origName = seq.name;
+        var origID = seq.sequenceID; // captura ID antes do clone (pra poder voltar)
         var stamp = new Date();
         var tag = stamp.getFullYear() + '-' + (stamp.getMonth()+1) + '-' + stamp.getDate() +
                   '_' + stamp.getHours() + 'h' + stamp.getMinutes();
@@ -1111,8 +1112,27 @@ function autoCutBackupSequence() {
                 var cloned = seq.clone();
                 if (cloned) {
                     try { cloned.name = backupName; } catch(e) {}
-                    // Return focus to original sequence
-                    try { app.project.activeSequence = seq; } catch(e) {}
+
+                    // CRÍTICO: voltar pra sequence ORIGINAL antes de cortar.
+                    // Em algumas versões do Premiere, clone() troca a active sequence
+                    // pra clonada. Se o autocut rodar na clonada, ele corta o backup
+                    // em vez do original — ou pior, opera em sequence vazia se o
+                    // clone() retornou um shell vazio.
+                    var restored = false;
+                    try {
+                        if (typeof app.project.openSequence === 'function') {
+                            app.project.openSequence(origID);
+                            restored = (app.project.activeSequence && app.project.activeSequence.sequenceID === origID);
+                        }
+                    } catch(eOpen) {}
+                    if (!restored) {
+                        try { app.project.activeSequence = seq; restored = true; } catch(eSet) {}
+                    }
+                    if (!restored) {
+                        // Não conseguiu voltar — sinaliza falha pro client cancelar.
+                        return 'BACKUP_LOST_FOCUS:' + backupName;
+                    }
+
                     return 'CLONED:' + backupName;
                 }
             }
@@ -1365,6 +1385,8 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
 
         // ─── Convert silence times to timeline ticks ───
         var cutPoints = [];
+        var totalCutTicks = 0;
+        var clipDurTicks = clipEndTicks - clipStartTicks;
         for (var i = 0; i < silences.length; i++) {
             var s = silences[i];
             var silStartSec = Math.max(0, s.start + padding);
@@ -1379,9 +1401,18 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
             if (tlEnd <= tlStart) continue;
 
             cutPoints.push({ start: tlStart, end: tlEnd });
+            totalCutTicks += (tlEnd - tlStart);
         }
 
         if (cutPoints.length === 0) return 'NO_CUTS';
+
+        // ─── SAFEGUARD: aborta se os cortes cobrem >=95% do clip ───
+        // Threshold mal ajustado pode marcar o clip inteiro como silêncio.
+        // Sem esse guard, autocut removeria o vídeo todo da timeline.
+        if (clipDurTicks > 0 && totalCutTicks / clipDurTicks >= 0.95) {
+            var pct = Math.round((totalCutTicks / clipDurTicks) * 100);
+            return 'OK:0:0|DBG:abort-cover-' + pct + 'pct';
+        }
         cutPoints.sort(function(a, b) { return b.start - a.start; });
 
         var cutsApplied = 0, removedDuration = 0;
