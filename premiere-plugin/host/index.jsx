@@ -1183,13 +1183,15 @@ function _acExecProgress(msg, pct, done) {
 
 // ─── Razor helper: tries multiple methods, returns true if clip count increased ───
 //
-// PERF: Antes esse helper testava os 4 métodos toda vez, com $.sleep(200)
-// entre tentativas. Pra 100 silêncios x 2 razors x 4 métodos = ~3-4min de
-// sleep travando o Premiere (tela preta).
+// PERF + UI: ordem importa. Os métodos B (qeTrack.razor com ticks)
+// e C (track.razor DOM) NÃO mexem no playhead. Os métodos A e D usam
+// setPlayerPosition() que faz a timeline pular e PISCAR a cada corte.
+// Em 100 silêncios = 200 jumps de playhead = flicker insuportável.
 //
-// Agora: 1) stick to winning method — uma vez detectado qual método funciona
-// pra essa sessão, usa direto pros próximos cortes; 2) sleeps reduzidos de
-// 200→80ms; 3) cap em 1 método quando o "winner" é conhecido.
+// Estratégia:
+//   1. Prioriza B → C (sem flicker)
+//   2. A e D só como último recurso (causam flicker mas funcionam)
+//   3. Sticky winner: 1º sucesso vira default pra essa sessão
 var _acRazorWinner = null;  // Reset no início de cada autoCutExecute
 
 function _doRazorAt(tickVal, targetTrack, qeTrack, qeSeq, seq) {
@@ -1198,71 +1200,72 @@ function _doRazorAt(tickVal, targetTrack, qeTrack, qeSeq, seq) {
 
     // ── FAST PATH: já sabemos qual método funciona pra essa sessão ──
     if (_acRazorWinner) {
-        if (_acRazorWinner === 'A' && qeTrack) {
-            try {
-                seq.setPlayerPosition(tickStr);
-                $.sleep(20);
-                qeTrack.razor(seq.getPlayerPosition().ticks);
-                $.sleep(80);
-                if (targetTrack.clips.numItems > nb) return 'A';
-            } catch (e) {}
-        } else if (_acRazorWinner === 'B' && qeTrack) {
-            try { qeTrack.razor(tickStr); $.sleep(80);
+        if (_acRazorWinner === 'B' && qeTrack) {
+            try { qeTrack.razor(tickStr); $.sleep(60);
                 if (targetTrack.clips.numItems > nb) return 'B';
             } catch (e) {}
         } else if (_acRazorWinner === 'C') {
-            try { targetTrack.razor(createTimeAt(tickVal)); $.sleep(80);
+            try { targetTrack.razor(createTimeAt(tickVal)); $.sleep(60);
                 if (targetTrack.clips.numItems > nb) return 'C';
+            } catch (e) {}
+        } else if (_acRazorWinner === 'A' && qeTrack) {
+            try {
+                seq.setPlayerPosition(tickStr);
+                $.sleep(15);
+                qeTrack.razor(seq.getPlayerPosition().ticks);
+                $.sleep(60);
+                if (targetTrack.clips.numItems > nb) return 'A';
             } catch (e) {}
         } else if (_acRazorWinner === 'D' && qeSeq) {
             try {
                 seq.setPlayerPosition(tickStr);
-                $.sleep(20);
+                $.sleep(15);
                 qeSeq.razor(seq.getPlayerPosition().ticks);
-                $.sleep(80);
+                $.sleep(60);
                 if (targetTrack.clips.numItems > nb) return 'D';
             } catch (e) {}
         }
         // Winner falhou nesse ponto específico — cai pra full retry abaixo
     }
 
-    // ── SLOW PATH: tenta os 4 métodos; primeiro sucesso vira o winner ──
+    // ── SLOW PATH: detecta qual método funciona. Ordem otimizada pra UI:
+    //   B (qe ticks) e C (DOM) primeiro — não mexem playhead.
+    //   A e D depois — mexem playhead, causam flicker.
 
-    // Method A: Set playhead → get native ticks → QE track razor
-    if (qeTrack) {
-        try {
-            seq.setPlayerPosition(tickStr);
-            $.sleep(20);
-            var nativeTicks = seq.getPlayerPosition().ticks;
-            qeTrack.razor(nativeTicks);
-            $.sleep(80);
-            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'A'; return 'A'; }
-        } catch (e) {}
-    }
-
-    // Method B: QE track razor with our ticks directly
+    // Method B: QE track razor with our ticks directly (NO playhead movement)
     if (qeTrack) {
         try {
             qeTrack.razor(tickStr);
-            $.sleep(80);
+            $.sleep(60);
             if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'B'; return 'B'; }
         } catch (e) {}
     }
 
-    // Method C: Standard DOM track.razor with Time object
+    // Method C: Standard DOM track.razor with Time object (NO playhead movement)
     try {
         targetTrack.razor(createTimeAt(tickVal));
-        $.sleep(80);
+        $.sleep(60);
         if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'C'; return 'C'; }
     } catch (e) {}
 
-    // Method D: QE sequence-level razor (cuts all targeted tracks)
+    // Method A: Set playhead → QE track razor (causes flicker — fallback only)
+    if (qeTrack) {
+        try {
+            seq.setPlayerPosition(tickStr);
+            $.sleep(15);
+            qeTrack.razor(seq.getPlayerPosition().ticks);
+            $.sleep(60);
+            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'A'; return 'A'; }
+        } catch (e) {}
+    }
+
+    // Method D: QE sequence-level razor (cuts all targeted tracks — causes flicker)
     if (qeSeq) {
         try {
             seq.setPlayerPosition(tickStr);
-            $.sleep(20);
+            $.sleep(15);
             qeSeq.razor(seq.getPlayerPosition().ticks);
-            $.sleep(80);
+            $.sleep(60);
             if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'D'; return 'D'; }
         } catch (e) {}
     }
@@ -1386,16 +1389,9 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
         var tol = Math.round(tps * 0.05);
         var origPlayhead = seq.getPlayerPosition().ticks;
 
-        // Unlock target track so razor/extract can operate on it
+        // Unlock target track so razor can operate on it
         try { if (typeof targetTrack.setLocked === 'function') targetTrack.setLocked(false); } catch(e) {}
 
-        // ── Save current in/out points so we can restore them after extract ──
-        var origInTicks = null, origOutTicks = null;
-        try { origInTicks = seq.getInPoint ? seq.getInPoint().ticks : null; } catch(e) {}
-        try { origOutTicks = seq.getOutPoint ? seq.getOutPoint().ticks : null; } catch(e) {}
-
-        // Detect if extract works on first cut; if yes, use it for all
-        var useExtract = null; // null = undetermined, true/false after first test
         var consecutiveFails = 0; // pra abortar se nada funcionar
         var totalCuts = cutPoints.length;
         var lastProgressMs = 0;
@@ -1416,22 +1412,13 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
                 var numBefore = targetTrack.clips.numItems;
                 var method = '';
 
-                // ── TRY 1: qeSeq.extract() — cleanest, removes range + ripples in one shot ──
-                if (mode === 'remove' && useExtract !== false && qeSeq) {
-                    if (_doExtractRange(cp.start, cp.end, qeSeq, targetTrack)) {
-                        method = 'extract';
-                        useExtract = true;
-                        removedDuration += (cp.end - cp.start) / tps;
-                        cutsApplied++;
-                        if (ci === 0) dbg.push('m=extract');
-                        continue;
-                    } else if (ci === 0) {
-                        useExtract = false; // first try failed, don't attempt again
-                        dbg.push('extract:fail');
-                    }
-                }
-
-                // ── TRY 2: Razor at both points + remove middle clip (fallback) ──
+                // ── Razor at both points + remove middle clip ──
+                //
+                // NOTA: removemos o caminho qeSeq.extract() que era tentado primeiro.
+                // Ele usa qeSeq.setInPoint/setOutPoint que coloca marcadores in/out
+                // na timeline a cada silêncio — em 100 silêncios = 100 marcadores
+                // piscando = flicker insuportável + timeline ilegível durante o corte.
+                // Razor + remove é menos UI churn (só repinta no ponto do corte).
                 var rEnd = _doRazorAt(cp.end, targetTrack, qeTrack, qeSeq, seq);
                 var rStart = _doRazorAt(cp.start, targetTrack, qeTrack, qeSeq, seq);
                 var numAfter = targetTrack.clips.numItems;
@@ -1493,11 +1480,7 @@ function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
 
         _acExecProgress(cutsApplied + ' cortes aplicados', 100, true);
 
-        // Restore original in/out points (extract sets them)
-        try { if (origInTicks && seq.setInPoint) seq.setInPoint(origInTicks); } catch(e) {}
-        try { if (origOutTicks && seq.setOutPoint) seq.setOutPoint(origOutTicks); } catch(e) {}
-
-        // Restore playhead
+        // Restore playhead (não restauramos in/out points pq não usamos extract)
         try { seq.setPlayerPosition(origPlayhead); } catch (e) {}
         forceUIRefresh();
 
