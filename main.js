@@ -1591,26 +1591,38 @@ function startSyncServer() {
                         ];
 
                         const result = await new Promise((resolve) => {
+                            console.log('[autocut/analyze] FFmpeg start:', filePath, '| threshold=' + threshold + 'dB d=' + minDuration + 's');
                             const proc = spawn(ffmpegBin, ffArgs, { windowsHide: true });
                             autoCutProc = proc;
                             let stderrFull = '';
                             let totalDuration = 0;
                             let durationParsed = false;
+                            let lastProgressMs = Date.now();
+                            let resolved = false;
+
+                            const finish = (payload) => {
+                                if (resolved) return;
+                                resolved = true;
+                                clearInterval(idleCheck);
+                                clearTimeout(hardTimeout);
+                                autoCutProc = null;
+                                resolve(payload);
+                            };
 
                             proc.stderr.on('data', d => {
                                 const chunk = d.toString();
                                 stderrFull += chunk;
+                                lastProgressMs = Date.now(); // qualquer output = vivo
 
-                                // Parse Duration on first occurrence
                                 if (!durationParsed) {
                                     const durMatch = stderrFull.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
                                     if (durMatch) {
                                         totalDuration = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3]);
                                         durationParsed = true;
+                                        console.log('[autocut/analyze] Duration:', totalDuration.toFixed(1) + 's');
                                     }
                                 }
 
-                                // Parse time= progress from FFmpeg stderr
                                 const timeMatch = chunk.match(/time=\s*(\d+):(\d+):([\d.]+)/);
                                 if (timeMatch && totalDuration > 0) {
                                     const currentTime = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseFloat(timeMatch[3]);
@@ -1618,11 +1630,10 @@ function startSyncServer() {
                                 }
                             });
 
-                            proc.on('close', () => {
-                                autoCutProc = null;
+                            proc.on('close', (code) => {
+                                console.log('[autocut/analyze] FFmpeg closed with code', code);
                                 autoCutProgress = { active: false, percent: 100, phase: 'done', eta: '' };
 
-                                // Parse silences from full stderr
                                 const silences = [];
                                 const lines = stderrFull.split('\n');
                                 let currentStart = null;
@@ -1643,21 +1654,39 @@ function startSyncServer() {
                                 const durMatch = stderrFull.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
                                 let dur = 0;
                                 if (durMatch) dur = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3]);
-                                resolve({ silences, totalDuration: dur || totalDuration });
+                                console.log('[autocut/analyze] Found', silences.length, 'silences in', (dur || totalDuration).toFixed(1) + 's');
+                                finish({ silences, totalDuration: dur || totalDuration });
                             });
 
                             proc.on('error', e => {
-                                autoCutProc = null;
+                                console.error('[autocut/analyze] FFmpeg error:', e.message);
                                 autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                                resolve({ silences: [], totalDuration: 0, error: e.message });
+                                finish({ silences: [], totalDuration: 0, error: 'FFmpeg falhou: ' + e.message });
                             });
 
-                            setTimeout(() => {
-                                try { proc.kill(); } catch {}
-                                autoCutProc = null;
+                            // ── Idle timeout: se FFmpeg não emite output novo em 60s, mata.
+                            // Antes era hard timeout de 10min cego — usuário esperava 10min
+                            // pra descobrir que FFmpeg travou. Agora detecta em 60s.
+                            const idleCheck = setInterval(() => {
+                                const idle = Date.now() - lastProgressMs;
+                                if (idle > 60000) {
+                                    console.warn('[autocut/analyze] FFmpeg idle ' + Math.round(idle/1000) + 's — killing');
+                                    try { proc.kill('SIGKILL'); } catch {}
+                                    autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
+                                    finish({
+                                        silences: [],
+                                        totalDuration: 0,
+                                        error: 'FFmpeg travou (sem progresso por 60s). Tente um clip menor ou verifique se o arquivo está acessível.'
+                                    });
+                                }
+                            }, 5000);
+
+                            // ── Hard timeout: 10min como fallback caso idle não dispare
+                            const hardTimeout = setTimeout(() => {
+                                try { proc.kill('SIGKILL'); } catch {}
                                 autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                                resolve({ silences: [], totalDuration: 0, error: 'Timeout (10min)' });
-                            }, 600000); // 10 minutes for large files
+                                finish({ silences: [], totalDuration: 0, error: 'Timeout (10min) — arquivo muito grande?' });
+                            }, 600000);
                         });
 
                         res.writeHead(200, { 'Content-Type': 'application/json' });
