@@ -867,16 +867,27 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
                 imported++;
                 $.sleep(500);
 
-                // Insere no playhead (smart track: encontra track vazia ou cria nova)
+                // Insere no playhead (smart track: encontra track LIVRE pelo período
+                // INTEIRO do clip — não só no ponto do playhead. Antes verificava só
+                // o playhead, e o insertClip empurrava clips ao lado pra abrir espaço.
+                // Agora verifica todo o range e usa overwriteClip (não empurra).
                 if (insertAtPlayhead && seq) {
                     var clipItem = _cpFindItemByPath(fp);
                     if (clipItem) {
                         try {
                             var insertTime = seq.getPlayerPosition();
+                            var insertTicks = Number(insertTime.ticks);
                             var mType = _getMediaType(fp);
-                            var smartTrack = findEmptyTrackAtPlayhead(seq, mType);
+                            // Duração do clip a inserir — pega via projectItem
+                            var clipDurTicks = _cpGetItemDurationTicks(clipItem, mType);
+                            var smartTrack = _cpFindFreeTrackForRange(
+                                seq, mType, insertTicks, insertTicks + clipDurTicks
+                            );
                             if (smartTrack) {
-                                smartTrack.insertClip(clipItem, insertTime);
+                                // overwriteClip NÃO empurra clips — se range já é livre,
+                                // não destrói nada. Se nenhuma track estava livre, criamos
+                                // uma nova (smartTrack já vem garantida livre).
+                                smartTrack.overwriteClip(clipItem, insertTime);
                                 inserted++;
                             }
                         } catch (e) {}
@@ -891,43 +902,74 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
 
 // ============================================// ============================================
 
-// Smart track finder: finds an empty video or audio track at playhead, or creates a new one
-// mediaType: 'video' or 'audio'
-// Returns a track object (never null — creates one if needed)
+// Smart track finder (LEGACY — só checa playhead). Mantida pra compat.
 function findEmptyTrackAtPlayhead(seq, mediaType) {
-    var playhead = seq.getPlayerPosition();
-    var playTicks = Number(playhead.ticks);
+    return _cpFindFreeTrackForRange(seq, mediaType,
+        Number(seq.getPlayerPosition().ticks),
+        Number(seq.getPlayerPosition().ticks) + 1);
+}
+
+// Pega duração esperada do clip a inserir (em ticks).
+// Pra vídeos/áudios: usa outPoint - inPoint do projectItem.
+// Pra imagens: usa duração padrão do Premiere (geralmente 5s) ou 5s default.
+function _cpGetItemDurationTicks(item, mediaType) {
+    var TPS = 254016000000;
+    try {
+        if (item.getOutPoint && item.getInPoint) {
+            var inT = Number(item.getInPoint().ticks);
+            var outT = Number(item.getOutPoint().ticks);
+            if (outT > inT) return outT - inT;
+        }
+    } catch(e) {}
+    // Fallback: duração default do Premiere pra still images é configurada nas
+    // preferências (default 5s = 30 frames @ 6fps still). Usamos 5s como margem.
+    return 5 * TPS;
+}
+
+// Acha track LIVRE pra o range [startTicks, endTicks). Se nenhuma livre,
+// cria nova track. NUNCA retorna track com clip no range — protege contra
+// overwrite/insert acidental em mídia existente.
+function _cpFindFreeTrackForRange(seq, mediaType, startTicks, endTicks) {
     var tracks = (mediaType === 'audio') ? seq.audioTracks : seq.videoTracks;
 
-    // Check each existing track for a gap at the playhead
+    // Pra cada track existente, vê se o range [start, end) está LIVRE
     for (var t = 0; t < tracks.numTracks; t++) {
         var track = tracks[t];
-        var hasClipAtPlayhead = false;
+        var occupied = false;
         try {
-            for (var c = 0; c < track.clips.numItems; c++) {
+            // Track travada (lock) também não conta como livre
+            if (track.isLocked && track.isLocked()) { occupied = true; }
+            for (var c = 0; !occupied && c < track.clips.numItems; c++) {
                 var clip = track.clips[c];
                 var clipStart = Number(clip.start.ticks);
                 var clipEnd = Number(clip.end.ticks);
-                if (playTicks >= clipStart && playTicks < clipEnd) {
-                    hasClipAtPlayhead = true;
-                    break;
+                // Overlap se: clipStart < endTicks E clipEnd > startTicks
+                if (clipStart < endTicks && clipEnd > startTicks) {
+                    occupied = true;
                 }
             }
-        } catch (e) {}
-        if (!hasClipAtPlayhead) return track;
+        } catch (e) { occupied = true; }
+        if (!occupied) return track;
     }
 
-    // All tracks occupied — add a new track
+    // Nenhuma track livre — cria uma nova track ACIMA da última
     try {
         if (mediaType === 'audio') {
-            seq.audioTracks.addTrack();
+            // addTrack(numAudioTracks, audioTrackType, position)
+            // Posição -1 = no fim (acima de todas)
+            try { seq.audioTracks.addTrack(1); } catch(e) {
+                try { seq.audioTracks.addTrack(); } catch(e2) {}
+            }
             return seq.audioTracks[seq.audioTracks.numTracks - 1];
         } else {
-            seq.videoTracks.addTrack();
+            try { seq.videoTracks.addTrack(1); } catch(e) {
+                try { seq.videoTracks.addTrack(); } catch(e2) {}
+            }
             return seq.videoTracks[seq.videoTracks.numTracks - 1];
         }
     } catch (e) {
-        // addTrack not available (older Premiere) — fallback to first track
+        // addTrack indisponível — última cartada: a primeira track
+        // (vai usar overwriteClip de qualquer jeito, então só sobrescreve essa região)
         return tracks[0];
     }
 }
@@ -1551,17 +1593,29 @@ function lwBgGetSelected() {
             if (foundClip) {
                 var path = "";
                 try { path = foundClip.projectItem.getMediaPath(); } catch(e) {}
+                var TPS = 254016000000;
+                var startT = Number(foundClip.start.ticks);
+                var endT = Number(foundClip.end.ticks);
+                var inT = 0;
+                try { inT = Number(foundClip.inPoint.ticks); } catch(e) {}
+                // Duração do trecho cortado na timeline (in→out do clip)
+                var clipDurTicks = endT - startT;
+                var outT = inT + clipDurTicks;
                 info = {
                     source: "timeline",
                     path: path,
                     name: foundClip.name,
-                    startTicks: String(foundClip.start.ticks),
-                    endTicks: String(foundClip.end.ticks),
-                    inPointTicks: "0",
+                    startTicks: String(startT),
+                    endTicks: String(endT),
+                    inPointTicks: String(inT),
+                    outPointTicks: String(outT),
+                    // segundos (mais conveniente pro client)
+                    inSec: inT / TPS,
+                    outSec: outT / TPS,
+                    durationSec: clipDurTicks / TPS,
                     trackIdx: foundTrackIdx,
                     trackTyp: foundTrackTyp
                 };
-                try { info.inPointTicks = String(foundClip.inPoint.ticks); } catch(e) {}
             }
         }
 

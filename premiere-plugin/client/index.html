@@ -938,7 +938,7 @@
             <div id="bgRemoveMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
 
             <!-- ────── Remover Fundo de Vídeo ────── -->
-            <div style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,0.07)">
+            <div style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,0.07);min-width:0">
                 <button class="magic-cta" onclick="bgVideoToggleOptions()" id="bgVideoMainBtn" style="background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(190,242,100,.05))">
                     <span class="mc-icon">
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -971,16 +971,16 @@
                     </div>
 
                     <!-- Processamento -->
-                    <div style="margin-bottom:9px">
+                    <div style="margin-bottom:9px;min-width:0">
                         <div style="font-size:.56rem;color:#737373;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:4px">Processamento</div>
-                        <div style="display:flex;gap:5px">
-                            <button class="bgv-del-btn active" data-del="GPU" onclick="bgVideoSetDelegate('GPU')" style="flex:1;padding:6px 4px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.35);border-radius:6px;color:#bef264;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit">
+                        <div style="display:flex;gap:5px;min-width:0">
+                            <button class="bgv-del-btn active" data-del="GPU" onclick="bgVideoSetDelegate('GPU')" style="flex:1 1 0;min-width:0;padding:6px 4px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.35);border-radius:6px;color:#bef264;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;overflow:hidden">
                                 <div>GPU <span style="font-size:.5rem;color:#22c55e">(rápido)</span></div>
-                                <div id="bgvGpuName" style="font-size:.5rem;color:#737373;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">detectando...</div>
+                                <div id="bgvGpuName" style="font-size:.5rem;color:#737373;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">detectando...</div>
                             </button>
-                            <button class="bgv-del-btn" data-del="CPU" onclick="bgVideoSetDelegate('CPU')" style="flex:1;padding:6px 4px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:6px;color:#a3a3a3;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit">
+                            <button class="bgv-del-btn" data-del="CPU" onclick="bgVideoSetDelegate('CPU')" style="flex:1 1 0;min-width:0;padding:6px 4px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:6px;color:#a3a3a3;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;overflow:hidden">
                                 <div>CPU <span style="font-size:.5rem;color:#a3a3a3">(compatível)</span></div>
-                                <div style="font-size:.5rem;color:#737373;margin-top:1px">funciona sem GPU</div>
+                                <div style="font-size:.5rem;color:#737373;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">funciona sem GPU</div>
                             </button>
                         </div>
                     </div>
@@ -999,6 +999,9 @@
                         <span class="mc-text"><span class="mc-title">Iniciar</span></span>
                     </button>
                 </div>
+
+                <!-- Mensagem específica do vídeo (separada do bgRemoveMsg da imagem) -->
+                <div id="bgVideoMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
 
                 <!-- Progresso ao vivo -->
                 <div id="bgVideoProgress" style="display:none;margin-top:8px;padding:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(190,242,100,.18);border-radius:8px">
@@ -3667,6 +3670,12 @@
         polling: null,
     };
 
+    // Mensagem dedicada do vídeo — separada do _bgMsg que é da imagem
+    function _bgVideoMsg(text, color) {
+        var el = document.getElementById('bgVideoMsg');
+        if (el) { el.textContent = text || ''; el.style.color = color || '#555'; }
+    }
+
     function bgVideoToggleOptions() {
         var box = document.getElementById('bgVideoOptions');
         var arrow = document.getElementById('bgVideoArrow');
@@ -3724,33 +3733,37 @@
     }
 
     async function bgVideoStart() {
-        if (!csInterface) { _bgMsg('CEP indisponível', '#f43f5e'); return; }
-        if (!lwConnected) { _bgMsg('Lion Workspace desconectado — abra o app', '#f43f5e'); return; }
+        if (!csInterface) { _bgVideoMsg('CEP indisponível', '#f43f5e'); return; }
+        if (!lwConnected) { _bgVideoMsg('Lion Workspace desconectado — abra o app', '#f43f5e'); return; }
 
         var startBtn = document.getElementById('bgVideoStartBtn');
         startBtn.disabled = true;
-        _bgMsg('');
+        _bgVideoMsg('');
 
-        // 1) Pega clip selecionado (reusa lwBgGetSelected, que retorna info do clip)
+        // 1) Pega clip selecionado (reusa lwBgGetSelected — retorna info + inSec/outSec/durationSec)
         csInterface.evalScript('lwBgGetSelected()', function(rawResult) {
             var raw = String(rawResult || '');
             if (raw.indexOf('OK:') !== 0) {
                 startBtn.disabled = false;
-                if (raw === 'NO_SELECTION') _bgMsg('Selecione um clip de vídeo na timeline', '#f59e0b');
-                else if (raw === 'NO_MEDIA_PATH') _bgMsg('Clip sem caminho de mídia', '#f59e0b');
-                else if (raw === 'NO_PROJECT') _bgMsg('Abra um projeto', '#f59e0b');
-                else _bgMsg(raw || 'Erro', '#f43f5e');
+                if (raw === 'NO_SELECTION') _bgVideoMsg('Selecione um clip de vídeo na timeline', '#f59e0b');
+                else if (raw === 'NO_MEDIA_PATH') _bgVideoMsg('Clip sem caminho de mídia', '#f59e0b');
+                else if (raw === 'NO_PROJECT') _bgVideoMsg('Abra um projeto', '#f59e0b');
+                else _bgVideoMsg(raw || 'Erro', '#f43f5e');
                 return;
             }
             var info;
             try { info = JSON.parse(raw.substring(3)); }
-            catch (e) { startBtn.disabled = false; _bgMsg('Erro parsing clip info', '#f43f5e'); return; }
+            catch (e) { startBtn.disabled = false; _bgVideoMsg('Erro parsing clip info', '#f43f5e'); return; }
 
             var payload = {
                 filePath: info.path,
                 format: bgVideoState.format,
                 quality: bgVideoState.quality,
                 delegate: bgVideoState.delegate,
+                // IMPORTANTE: passa in/out do clip pro backend trimar antes (não processa
+                // o vídeo inteiro — só o trecho cortado IN→OUT da timeline)
+                inSec: typeof info.inSec === 'number' ? info.inSec : 0,
+                durationSec: typeof info.durationSec === 'number' ? info.durationSec : 0,
             };
             window._bgVideoClipInfo = info;
 
@@ -3759,18 +3772,18 @@
                     startBtn.disabled = false;
                     var emsg = 'Falha ao iniciar';
                     try { emsg = JSON.parse(body || '{}').error || emsg; } catch(e) {}
-                    _bgMsg(emsg, '#f43f5e');
+                    _bgVideoMsg(emsg, '#f43f5e');
                     return;
                 }
                 var resp;
                 try { resp = JSON.parse(body); } catch (e) {
                     startBtn.disabled = false;
-                    _bgMsg('Resposta inválida', '#f43f5e');
+                    _bgVideoMsg('Resposta inválida', '#f43f5e');
                     return;
                 }
                 if (!resp.token) {
                     startBtn.disabled = false;
-                    _bgMsg('Token não recebido', '#f43f5e');
+                    _bgVideoMsg('Token não recebido', '#f43f5e');
                     return;
                 }
                 bgVideoState.token = resp.token;
@@ -3802,7 +3815,7 @@
         LWHttp.post(API + '/bg/remove-video/cancel', { token: bgVideoState.token }, { retries: 0 }, function() {});
         if (bgVideoState.polling) { clearInterval(bgVideoState.polling); bgVideoState.polling = null; }
         bgVideoHideProgress();
-        _bgMsg('Cancelado', '#f59e0b');
+        _bgVideoMsg('Cancelado', '#f59e0b');
     }
 
     function bgVideoStartPolling(token) {
@@ -3859,7 +3872,7 @@
                         clearInterval(bgVideoState.polling); bgVideoState.polling = null;
                         bgVideoHideProgress();
                         var msg = data.status === 'cancelled' ? 'Cancelado' : (data.error || 'Erro: ' + data.status);
-                        _bgMsg(msg, '#f43f5e');
+                        _bgVideoMsg(msg, '#f43f5e');
                     }
                 });
         }, 800);
@@ -3877,10 +3890,10 @@
             impR = String(impR || '');
             bgVideoHideProgress();
             if (impR.indexOf('OK:') === 0) {
-                _bgMsg('✓ Vídeo sem fundo importado!', '#22c55e');
+                _bgVideoMsg('✓ Vídeo sem fundo importado!', '#22c55e');
                 showMsg('BG Remove vídeo concluído!');
             } else {
-                _bgMsg('Vídeo salvo em ' + data.outPath + ' (importação manual)', '#f59e0b');
+                _bgVideoMsg('Vídeo salvo em ' + data.outPath + ' (importação manual)', '#f59e0b');
             }
         });
     }

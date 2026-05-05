@@ -1048,6 +1048,10 @@ ipcMain.on('bg-video:done', (event, payload) => {
         sess.status = 'error';
         sess.error = payload?.error || 'erro desconhecido';
     }
+    // Cleanup do arquivo temp do pré-transcode
+    if (sess._tempTranscoded) {
+        try { if (fs.existsSync(sess._tempTranscoded)) fs.unlinkSync(sess._tempTranscoded); } catch(e) {}
+    }
 });
 ipcMain.on('bg-video:ready', (event, payload) => {
     console.log('[bg-video] worker ready:', payload?.token);
@@ -2098,15 +2102,74 @@ function startSyncServer() {
                         const fmt = (data.format === 'mov') ? 'mov' : 'webm';
                         const qual = ['fast','medium','high'].includes(data.quality) ? data.quality : 'medium';
                         const dele = (String(data.delegate || 'GPU').toUpperCase() === 'CPU') ? 'CPU' : 'GPU';
+                        const inSec = Math.max(0, Number(data.inSec) || 0);
+                        const durSec = Math.max(0, Number(data.durationSec) || 0);
 
-                        if (!fs.existsSync(ffmpegBin)) await ensureFfmpeg();
-                        if (!fs.existsSync(ffmpegBin)) {
+                        // Garante ffmpeg/ffprobe (auto-download se faltar)
+                        if (!ffmpegReady() || !ffprobeReady()) {
+                            console.log('[bg-video] baixando ffmpeg/ffprobe...');
+                            await ensureFfmpeg();
+                        }
+                        if (!ffmpegReady() || !ffprobeReady()) {
                             res.writeHead(500, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'FFmpeg não disponível — não foi possível baixar' }));
+                            res.end(JSON.stringify({ error: 'FFmpeg/FFprobe não disponíveis — verifique sua conexão e tente novamente' }));
                             return;
                         }
 
-                        const token = startBgVideoWorker(data.filePath, fmt, qual, dele);
+                        // Pré-transcode: FFmpeg trim do source pra .mp4 H.264 temp.
+                        // Resolve 2 problemas:
+                        //   1) HTML5 <video> só decodifica H.264/VP9/AV1. ProRes/HEVC/etc
+                        //      davam "Falha ao decodificar". Agora sempre vira H.264.
+                        //   2) Respeita o trecho IN→OUT do clip na timeline (não processa
+                        //      vídeo inteiro se user só selecionou um pedaço).
+                        const transcodedPath = path.join(currentUD, 'bg-video-trim-' + Date.now() + '.mp4');
+                        try {
+                            await new Promise((resolve, reject) => {
+                                const ffArgs = ['-y'];
+                                if (durSec > 0) {
+                                    // -ss antes de -i = seek rápido (fast seek). Reencode garante key frame inicial.
+                                    ffArgs.push('-ss', String(inSec));
+                                    ffArgs.push('-t', String(durSec));
+                                }
+                                ffArgs.push('-i', data.filePath);
+                                if (durSec > 0) {
+                                    ffArgs.push('-ss', '0', '-t', String(durSec)); // re-aplica pra garantir trim exato
+                                }
+                                ffArgs.push(
+                                    '-c:v', 'libx264',
+                                    '-preset', 'ultrafast',
+                                    '-crf', '20',
+                                    '-pix_fmt', 'yuv420p',
+                                    '-c:a', 'aac', '-b:a', '128k',
+                                    '-movflags', '+faststart',
+                                    transcodedPath
+                                );
+                                console.log('[bg-video] pre-transcode:', ffArgs.join(' '));
+                                const proc = bgvSpawn(ffmpegBin, ffArgs, { windowsHide: true });
+                                let stderr = '';
+                                proc.stderr.on('data', d => { stderr += d.toString(); if (stderr.length > 4096) stderr = stderr.slice(-4096); });
+                                proc.on('close', (code) => {
+                                    if (code === 0 && fs.existsSync(transcodedPath)) resolve();
+                                    else reject(new Error('FFmpeg trim/transcode falhou (code ' + code + '): ' + stderr.slice(-300)));
+                                });
+                                proc.on('error', e => reject(e));
+                            });
+                        } catch (eTrans) {
+                            // Cleanup tentativa
+                            try { if (fs.existsSync(transcodedPath)) fs.unlinkSync(transcodedPath); } catch(e) {}
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Pré-processamento falhou: ' + eTrans.message }));
+                            return;
+                        }
+
+                        // Worker recebe o arquivo transcodificado (não o original)
+                        const token = startBgVideoWorker(transcodedPath, fmt, qual, dele);
+                        // Anota original + temp na sessão pra cleanup futuro e import correto
+                        const sess = bgVideoSessions.get(token);
+                        if (sess) {
+                            sess._origSrcPath = data.filePath;
+                            sess._tempTranscoded = transcodedPath;
+                        }
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ token: token, status: 'starting' }));
                     } catch (e) {
