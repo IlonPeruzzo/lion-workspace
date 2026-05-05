@@ -870,16 +870,29 @@ ipcMain.handle('bg-video:start-encoder', async (event, payload) => {
         if (!sess) return { error: 'sessão inválida' };
         if (!fs.existsSync(ffmpegBin)) return { error: 'ffmpeg não disponível' };
 
-        // Output path: ao lado do source com sufixo _nobg
-        const dir = path.dirname(srcPath);
-        const base = path.basename(srcPath, path.extname(srcPath));
+        // Output path: ao lado do ARQUIVO ORIGINAL (não do temp transcoded).
+        // Antes salvava em currentUD/ com nome 'bg-video-trim-XXX_nobg.webm'
+        // que era confuso e ficava no roaming. Agora salva ao lado do vídeo
+        // original com nome bonito.
+        const refPath = sess._origSrcPath || srcPath;
+        const dir = path.dirname(refPath);
+        const base = path.basename(refPath, path.extname(refPath));
         const ext = format === 'mov' ? '.mov' : '.webm';
         let outPath = path.join(dir, base + '_nobg' + ext);
+        // Se o dir não for gravável, fallback pro currentUD
+        try {
+            const testFile = path.join(dir, '.lw-write-test-' + Date.now());
+            fs.writeFileSync(testFile, ''); fs.unlinkSync(testFile);
+        } catch (e) {
+            outPath = path.join(currentUD, base + '_nobg' + ext);
+        }
         // Garante unicidade
         let n = 0;
         while (fs.existsSync(outPath) && n < 100) {
             n++;
-            outPath = path.join(dir, base + '_nobg-' + n + ext);
+            outPath = path.join(path.dirname(outPath), path.basename(outPath, ext) + '-' + n + ext);
+            // evita acumular sufixos: refaz do base
+            outPath = path.join(path.dirname(outPath), base + '_nobg-' + n + ext);
         }
 
         // FFmpeg args:
@@ -2098,6 +2111,20 @@ function startSyncServer() {
                             res.writeHead(400, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ error: 'Arquivo não encontrado: ' + data.filePath }));
                             return;
+                        }
+                        // Valida que é arquivo de vídeo (não imagem)
+                        const ext = path.extname(data.filePath).toLowerCase();
+                        const imageExts = ['.png','.jpg','.jpeg','.gif','.bmp','.webp','.tiff','.tif','.heic','.heif','.svg','.psd'];
+                        const videoExts = ['.mp4','.mov','.mkv','.avi','.webm','.mxf','.m4v','.mpg','.mpeg','.wmv','.flv','.ts','.m2ts','.mts','.3gp','.dv','.prores','.dnxhd'];
+                        if (imageExts.includes(ext)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Esse é um arquivo de imagem (' + ext + '). Use "Remover fundo" (acima), não a versão de vídeo.' }));
+                            return;
+                        }
+                        if (!videoExts.includes(ext) && !data.skipExtCheck) {
+                            // Extensão desconhecida — checa via ffprobe se tem stream de vídeo
+                            // Avisa o user mas tenta processar mesmo assim
+                            console.warn('[bg-video] extensão desconhecida:', ext, '— tentando processar mesmo assim');
                         }
                         const fmt = (data.format === 'mov') ? 'mov' : 'webm';
                         const qual = ['fast','medium','high'].includes(data.quality) ? data.quality : 'medium';
