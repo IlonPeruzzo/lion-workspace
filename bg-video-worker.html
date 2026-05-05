@@ -171,54 +171,58 @@ async function run() {
         outCanvas.height = procH;
         const outCtx = outCanvas.getContext('2d', { willReadFrequently: true });
 
-        // Preview canvas
+        // Preview canvas (local, embutido no worker)
         const previewCanvas = document.getElementById('preview');
         previewCanvas.width = procW;
         previewCanvas.height = procH;
         const previewCtx = previewCanvas.getContext('2d');
 
+        // Preview canvas (pra IPC — 360p, criado UMA vez fora do loop)
+        const pvScale = 360 / procH;
+        const pvW = Math.round(procW * pvScale / 2) * 2;
+        const pvH = 360;
+        const pvCanvas = document.createElement('canvas');
+        pvCanvas.width = pvW; pvCanvas.height = pvH;
+        const pvCtx = pvCanvas.getContext('2d');
+
         const startedAt = Date.now();
         let cancelled = false;
+        let frameCount = 0;
         ipc.on('bg-video:cancel', (_, p) => { if (p?.token === TOKEN) cancelled = true; });
 
-        for (let i = 0; i < totalFrames; i++) {
-            if (cancelled) {
-                await ipc.invoke('bg-video:abort-encoder', { token: TOKEN });
-                return fail('Cancelado pelo usuário');
-            }
+        // ─── PIPELINE OTIMIZADO via requestVideoFrameCallback ───
+        // Antes: seek manual frame-a-frame (vid.currentTime + esperar 'seeked')
+        //   → 50-200ms por frame só de seek = 5-20fps de processamento
+        // Agora: decoder nativo via rVFC dispara callback pra cada frame decodado
+        //   conforme o vídeo PLAY → 16-30ms por frame = 30-60fps real-time
+        //
+        // Fallback pra seek manual se rVFC não disponível (não-Chromium 83+)
+        const hasRVFC = typeof vid.requestVideoFrameCallback === 'function';
+        log(hasRVFC ? 'Usando requestVideoFrameCallback (rápido)' : 'rVFC indisponível — fallback seek manual');
 
-            const t = i / meta.fps;
-            await seekVideo(vid, t);
-
+        // Helper: processa 1 frame (vid já posicionado)
+        async function processOneFrame(idx, timestampMs) {
             // Desenha frame em procCanvas
             procCtx.drawImage(vid, 0, 0, procW, procH);
 
             // Roda MediaPipe (síncrono no VIDEO mode)
-            const tsMs = Math.round(t * 1000);
-            const result = segmenter.segmentForVideo(procCanvas, tsMs);
+            const result = segmenter.segmentForVideo(procCanvas, timestampMs);
 
             // Aplica mask como alpha
             applyMaskToCanvas(procCtx, result, procW, procH, outCanvas, outCtx);
 
-            // Update preview local a cada 5 frames
-            if (i % 5 === 0) {
+            // Update preview local a cada 8 frames
+            if (idx % 8 === 0) {
                 previewCtx.clearRect(0, 0, procW, procH);
                 previewCtx.drawImage(outCanvas, 0, 0);
             }
-            // Manda preview pro app principal a cada 3 frames (ou final)
-            // App principal/plugin exibe pra usuário ver realtime
-            if (i % 3 === 0 || i === totalFrames - 1) {
+            // IPC preview — a cada 10 frames (era 3, gerava overhead)
+            if (idx % 10 === 0 || idx === totalFrames - 1) {
                 try {
-                    // Reduz pra 360p pra IPC ser leve
-                    const pvScale = 360 / procH;
-                    const pvW = Math.round(procW * pvScale / 2) * 2;
-                    const pvH = 360;
-                    const pvCanvas = document.createElement('canvas');
-                    pvCanvas.width = pvW; pvCanvas.height = pvH;
-                    const pvCtx = pvCanvas.getContext('2d');
                     pvCtx.drawImage(outCanvas, 0, 0, pvW, pvH);
-                    const dataUrl = pvCanvas.toDataURL('image/png');
-                    ipc.send('bg-video:preview', { token: TOKEN, dataUrl, frame: i });
+                    // JPEG é 5-10x mais rápido que PNG pra encode + smaller payload
+                    const dataUrl = pvCanvas.toDataURL('image/jpeg', 0.75);
+                    ipc.send('bg-video:preview', { token: TOKEN, dataUrl, frame: idx });
                 } catch(e) {}
             }
 
@@ -229,10 +233,76 @@ async function run() {
 
             // Progress + ETA
             const elapsed = (Date.now() - startedAt) / 1000;
-            const fps = (i + 1) / elapsed;
-            const remaining = (totalFrames - i - 1) / fps;
-            setProgress(i + 1, totalFrames, remaining);
+            const procFps = (idx + 1) / elapsed;
+            const remaining = (totalFrames - idx - 1) / Math.max(0.1, procFps);
+            setProgress(idx + 1, totalFrames, remaining);
         }
+
+        if (hasRVFC) {
+            // ─── FAST PATH: requestVideoFrameCallback ───
+            await new Promise((resolve, reject) => {
+                let processing = false;
+                let pendingFrame = null;
+
+                async function onFrame(now, metadata) {
+                    if (cancelled) {
+                        await ipc.invoke('bg-video:abort-encoder', { token: TOKEN });
+                        reject(new Error('Cancelado pelo usuário'));
+                        return;
+                    }
+                    if (frameCount >= totalFrames) {
+                        // Já temos todos os frames — não precisa mais
+                        resolve();
+                        return;
+                    }
+                    // Se ainda processando frame anterior, ignora — rVFC não-bloqueante
+                    if (processing) {
+                        // Mas AINDA agenda próximo callback
+                        if (frameCount < totalFrames) vid.requestVideoFrameCallback(onFrame);
+                        return;
+                    }
+                    processing = true;
+                    try {
+                        const idx = frameCount++;
+                        const tsMs = Math.round((metadata.mediaTime || 0) * 1000);
+                        await processOneFrame(idx, tsMs);
+                    } catch (e) {
+                        reject(e);
+                        return;
+                    } finally {
+                        processing = false;
+                    }
+                    // Agenda próximo
+                    if (frameCount < totalFrames && !cancelled) {
+                        vid.requestVideoFrameCallback(onFrame);
+                    } else {
+                        resolve();
+                    }
+                }
+
+                vid.requestVideoFrameCallback(onFrame);
+                // 'ended' é segurança: se vídeo termina antes de processar todos
+                vid.addEventListener('ended', () => {
+                    if (frameCount > 0) resolve();
+                });
+                // Inicia decode
+                vid.play().catch(e => reject(new Error('Falha ao iniciar play: ' + e.message)));
+            });
+        } else {
+            // ─── SLOW PATH: seek manual (fallback) ───
+            for (let i = 0; i < totalFrames; i++) {
+                if (cancelled) {
+                    await ipc.invoke('bg-video:abort-encoder', { token: TOKEN });
+                    return fail('Cancelado pelo usuário');
+                }
+                const t = i / meta.fps;
+                await seekVideo(vid, t);
+                await processOneFrame(i, Math.round(t * 1000));
+            }
+        }
+
+        // Garante que vídeo parou
+        try { vid.pause(); } catch(e) {}
 
         // 5) Finaliza encoder
         setPhase('Finalizando');
