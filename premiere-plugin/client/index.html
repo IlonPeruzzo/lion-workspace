@@ -2955,7 +2955,10 @@
             'try { Get-ChildItem -Path $dir -Filter "lw-paste-*.png" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddHours(-1) } | Remove-Item -Force -ErrorAction SilentlyContinue } catch {}',
             '$srcs = @(' + pathsList + ')',
             '$results = @()',
-            '$ts = [int][double]::Parse((Get-Date -UFormat %s))',
+            // Timestamp em MILLISSEGUNDOS (não segundos) — evita colisão de nomes
+            // se 2 pastes acontecerem no mesmo segundo. Antes: $ts em seg + idx
+            // gerava mesmo nome → sobrescrevia arquivo → clips offline.
+            '$tsMs = [int64]([System.DateTimeOffset]::Now.ToUnixTimeMilliseconds())',
             '$idx = 0',
             'foreach ($src in $srcs) {',
             '  $idx++',
@@ -2968,7 +2971,16 @@
             '    $clean = $name -replace "[^A-Za-z0-9_-]", "_"',
             '    if ($clean.Length -gt 40) { $clean = $clean.Substring(0,40) }',
             '    if ([string]::IsNullOrWhiteSpace($clean)) { $clean = "img" }',
-            '    $out = Join-Path $dir ("lw-paste-" + $ts + "-" + $idx + "-" + $clean + ".png")',
+            // GUID curto (8 chars) garante unicidade absoluta
+            '    $guid = ([guid]::NewGuid().ToString("N")).Substring(0,8)',
+            '    $out = Join-Path $dir ("lw-paste-" + $tsMs + "-" + $idx + "-" + $guid + "-" + $clean + ".png")',
+            // Safety: se por improbável colisão o arquivo já existir, incrementa contador
+            '    $tryN = 0',
+            '    while (Test-Path $out) {',
+            '      $tryN++',
+            '      $out = Join-Path $dir ("lw-paste-" + $tsMs + "-" + $idx + "-" + $guid + "-" + $tryN + "-" + $clean + ".png")',
+            '      if ($tryN -gt 100) { break }',
+            '    }',
             // Re-encoda como PNG limpo (sem profile ICC, metadata, etc)
             '    $img.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)',
             '    $img.Dispose()',
@@ -3002,14 +3014,27 @@
         var fs = node.require('fs');
         var path = node.require('path');
         var child_process = node.require('child_process');
+        var crypto = node.require('crypto');
 
         var dir = saveDir || '/tmp';
         try { fs.mkdirSync(dir, {recursive: true}); } catch(e){ dir = '/tmp'; }
 
         var imageExts = /\.(png|jpe?g|bmp|tiff?|gif|webp)$/i;
-        var ts = Date.now();
+        var ts = Date.now(); // ms — já era ms, mas adicionamos GUID pra blindar
         var pending = paths.length;
         var results = paths.slice();
+
+        // Helper: garante que o path não existe (incrementa sufixo se preciso)
+        function uniquePath(p) {
+            if (!fs.existsSync(p)) return p;
+            var ext = path.extname(p);
+            var base = p.slice(0, -ext.length);
+            for (var n = 1; n < 1000; n++) {
+                var alt = base + '-' + n + ext;
+                if (!fs.existsSync(alt)) return alt;
+            }
+            return p;
+        }
 
         paths.forEach(function(src, i) {
             if (!imageExts.test(src)) {
@@ -3017,7 +3042,9 @@
                 return;
             }
             var name = path.basename(src, path.extname(src)).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40) || 'img';
-            var out = path.join(dir, 'lw-paste-' + ts + '-' + (i+1) + '-' + name + '.png');
+            // Adiciona GUID curto pra evitar colisão se 2 pastes acontecem no mesmo ms
+            var guid = crypto.randomBytes(4).toString('hex'); // 8 chars
+            var out = uniquePath(path.join(dir, 'lw-paste-' + ts + '-' + (i+1) + '-' + guid + '-' + name + '.png'));
             // sips: re-encoda preservando dimensões, gera PNG limpo
             var cmd = 'sips -s format png "' + src.replace(/"/g, '\\"') + '" --out "' + out.replace(/"/g, '\\"') + '"';
             child_process.exec(cmd, { maxBuffer: 4*1024*1024 }, function(err){
@@ -3071,8 +3098,16 @@
             '  if ($img -ne $null) {',
             saveDirLine,
             '    if (-not (Test-Path $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $dir = $env:TEMP } }',
-            '    $ts = [int][double]::Parse((Get-Date -UFormat %s))',
-            '    $outPath = Join-Path $dir ("lw-clip-" + $ts + ".png")',
+            // ms + GUID — evita 2 prints consecutivos sobrescreverem
+            '    $tsMs = [int64]([System.DateTimeOffset]::Now.ToUnixTimeMilliseconds())',
+            '    $guid = ([guid]::NewGuid().ToString("N")).Substring(0,8)',
+            '    $outPath = Join-Path $dir ("lw-clip-" + $tsMs + "-" + $guid + ".png")',
+            '    $tryN = 0',
+            '    while (Test-Path $outPath) {',
+            '      $tryN++',
+            '      $outPath = Join-Path $dir ("lw-clip-" + $tsMs + "-" + $guid + "-" + $tryN + ".png")',
+            '      if ($tryN -gt 100) { break }',
+            '    }',
             '    $img.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)',
             '    Write-Output ("IMAGE:" + $outPath)',
             '    exit 0',
@@ -3142,8 +3177,10 @@
             '        var wasPng = imgData && imgData.length > 0;',
             '        if (!wasPng) imgData = pb.dataForType("public.tiff");',
             '        if (imgData && imgData.length > 0) {',
-            '            var ts = Math.floor(Date.now()/1000);',
-            '            var outPath = "' + dirEsc + '/lw-clip-" + ts + ".png";',
+            // ms + random — evita 2 prints consecutivos sobrescreverem
+            '            var tsMs = Date.now();',
+            '            var rnd = Math.random().toString(36).substr(2, 8);',
+            '            var outPath = "' + dirEsc + '/lw-clip-" + tsMs + "-" + rnd + ".png";',
             '            var ok = false;',
             '            if (wasPng) {',
             '                // Already PNG — write raw data directly (avoids NSBitmapImageFileTypePNG deprecation on macOS 11+)',
@@ -3160,7 +3197,7 @@
             '            }',
             '            if (ok) return "IMAGE:" + outPath;',
             '            // Write failed — try /tmp as last resort',
-            '            var tmpPath = "/tmp/lw-clip-" + ts + ".png";',
+            '            var tmpPath = "/tmp/lw-clip-" + tsMs + "-" + rnd + ".png";',
             '            if (wasPng) {',
             '                if (imgData.writeToFileAtomically(tmpPath, true)) return "IMAGE:" + tmpPath;',
             '            }',
