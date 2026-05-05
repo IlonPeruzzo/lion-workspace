@@ -630,6 +630,103 @@ let ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', sta
 let autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
 let autoCutProc = null; // current FFmpeg process (so we can cancel)
 
+// ═══════ Mask Editor — Pincel mágico pra ajustar bg-remove ═══════
+// Sessões ativas de edição. Cada bg-remove pode abrir um editor; plugin
+// polla /bg/edit-status?token=X pra saber quando o user salvou/cancelou.
+const maskEditorSessions = new Map();
+// token -> { status: 'editing'|'saved'|'cancelled', processedPath, win }
+
+function openMaskEditor(origPath, processedPath) {
+    const token = crypto.randomBytes(8).toString('hex');
+    const sess = { status: 'editing', processedPath, win: null };
+    maskEditorSessions.set(token, sess);
+
+    // Limpa sessões antigas (>1h) pra não vazar
+    const HOUR = 60 * 60 * 1000;
+    const now = Date.now();
+    for (const [k, v] of maskEditorSessions) {
+        if (v._createdAt && (now - v._createdAt) > HOUR) maskEditorSessions.delete(k);
+    }
+    sess._createdAt = now;
+
+    try {
+        const win = new BrowserWindow({
+            width: 1280,
+            height: 820,
+            minWidth: 920,
+            minHeight: 600,
+            title: 'Editor de Máscara — Lion Workspace',
+            backgroundColor: '#050505',
+            show: true,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+            },
+        });
+        sess.win = win;
+
+        const editorHtml = path.join(__dirname, 'mask-editor.html');
+        const qs = '?orig=' + encodeURIComponent(origPath)
+                 + '&processed=' + encodeURIComponent(processedPath)
+                 + '&token=' + token;
+        win.loadFile(editorHtml, { search: qs.replace(/^\?/, '') });
+        // Remove menu nativo (pra ficar mais clean)
+        try { win.setMenuBarVisibility(false); } catch(e) {}
+
+        win.on('closed', () => {
+            const s = maskEditorSessions.get(token);
+            if (s && s.status === 'editing') {
+                s.status = 'cancelled';
+            }
+            // Mantém a entry por 5min pra plugin poder pollar status final
+            setTimeout(() => maskEditorSessions.delete(token), 5 * 60 * 1000);
+        });
+
+        return token;
+    } catch (e) {
+        sess.status = 'error';
+        sess.error = e.message;
+        console.error('[mask-editor] failed to open:', e);
+        return token;
+    }
+}
+
+// IPC: editor envia o PNG final pra salvar
+ipcMain.on('mask-editor:save', (event, payload) => {
+    try {
+        const { token, dataUrl, processedPath } = payload || {};
+        const sess = maskEditorSessions.get(token);
+        if (!sess) {
+            event.sender.send('mask-editor:save-error', 'Sessão expirada');
+            return;
+        }
+        const targetPath = processedPath || sess.processedPath;
+        const base64 = String(dataUrl || '').replace(/^data:image\/png;base64,/, '');
+        if (!base64) throw new Error('dataUrl vazio');
+        fs.writeFileSync(targetPath, Buffer.from(base64, 'base64'));
+        sess.status = 'saved';
+        sess.processedPath = targetPath;
+        event.sender.send('mask-editor:saved');
+        // Fecha janela após pequeno delay (pro user ver "✓ Salvo")
+        setTimeout(() => {
+            try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
+        }, 500);
+    } catch (e) {
+        event.sender.send('mask-editor:save-error', e.message || String(e));
+    }
+});
+
+ipcMain.on('mask-editor:cancel', (event, payload) => {
+    try {
+        const { token } = payload || {};
+        const sess = maskEditorSessions.get(token);
+        if (sess) {
+            sess.status = 'cancelled';
+            try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
+        }
+    } catch(e) { console.error('[mask-editor:cancel]', e); }
+});
+
 // AI config storage (OpenAI API key)
 const aiConfigPath = path.join(currentUD, 'ai-config.json');
 function getAiConfig() { try { return JSON.parse(fs.readFileSync(aiConfigPath, 'utf8')); } catch(e) { return {}; } }
@@ -1304,6 +1401,20 @@ function startSyncServer() {
             return;
         }
 
+        // Mask editor status — plugin polla pra saber quando user salvou/cancelou
+        if (req.method === 'GET' && req.url.indexOf('/bg/edit-status') === 0) {
+            const u = new URL(req.url, 'http://localhost');
+            const token = u.searchParams.get('token');
+            const sess = token ? maskEditorSessions.get(token) : null;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            if (!sess) {
+                res.end(JSON.stringify({ status: 'expired' }));
+            } else {
+                res.end(JSON.stringify({ status: sess.status, processedPath: sess.processedPath }));
+            }
+            return;
+        }
+
         if (req.method === 'POST') {
             let body = '';
             req.on('data', chunk => body += chunk);
@@ -1552,7 +1663,32 @@ function startSyncServer() {
                         if (tmpConverted) { try { fs.unlinkSync(tmpConverted); } catch(e) {} }
 
                         res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ ok: true, outPath: outPath }));
+                        // origPath retornado pra cliente poder chamar /bg/edit-mask depois
+                        res.end(JSON.stringify({ ok: true, outPath: outPath, origPath: origPath }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+
+                // ═══════ Mask Editor — Pincel mágico pra ajustar bg-remove ═══════
+                if (command === 'bg/edit-mask' && data.origPath && data.processedPath) {
+                    try {
+                        if (!fs.existsSync(data.origPath)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Imagem original não encontrada: ' + data.origPath }));
+                            return;
+                        }
+                        if (!fs.existsSync(data.processedPath)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'PNG processado não encontrado: ' + data.processedPath }));
+                            return;
+                        }
+                        // Abre janela do editor (não bloqueia HTTP — retorna token)
+                        const token = openMaskEditor(data.origPath, data.processedPath);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ token: token, status: 'editing' }));
                     } catch (e) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message || String(e) }));

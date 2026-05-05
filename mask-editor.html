@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Editor de Máscara — Lion Workspace</title>
+<style>
+    :root {
+        --bg: #050505;
+        --bg2: #0a0a0a;
+        --card: #141414;
+        --accent: #bef264;
+        --accent2: #a3e635;
+        --text: #f5f5f5;
+        --text2: #a3a3a3;
+        --text3: #636363;
+        --border: rgba(190,242,100,0.12);
+        --border-h: rgba(190,242,100,0.28);
+        --danger: #ef4444;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'Inter','Segoe UI',sans-serif; -webkit-font-smoothing:antialiased; }
+    body {
+        display:flex; flex-direction:column;
+        background-image:
+            radial-gradient(ellipse at 0% 0%, rgba(190,242,100,0.05), transparent 50%),
+            radial-gradient(ellipse at 100% 100%, rgba(34,211,238,0.04), transparent 50%);
+    }
+
+    /* TOPBAR */
+    .topbar {
+        display:flex; align-items:center; gap:14px;
+        padding:12px 18px;
+        background:rgba(10,10,10,0.7);
+        backdrop-filter:blur(14px);
+        border-bottom:1px solid var(--border);
+        z-index:10;
+    }
+    .topbar h1 { font-size:.95rem; font-weight:700; letter-spacing:-.2px; color:var(--text); }
+    .topbar h1 span { color:var(--accent); }
+    .spacer { flex:1; }
+    .meta {
+        font-size:.72rem; color:var(--text3);
+        font-family:'JetBrains Mono', ui-monospace, monospace;
+        letter-spacing:-.2px;
+    }
+
+    /* MAIN AREA */
+    .main { display:flex; flex:1; overflow:hidden; }
+    .canvas-wrap {
+        flex:1; position:relative; overflow:hidden;
+        background:
+            repeating-conic-gradient(#1a1a1a 0% 25%, #0f0f0f 0% 50%) 50% / 18px 18px;
+        cursor:none;
+    }
+    canvas#stage { display:block; image-rendering:pixelated; }
+    #brushCursor {
+        position:absolute; pointer-events:none;
+        border:1.5px solid #fff;
+        border-radius:50%;
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.4);
+        transform:translate(-50%,-50%);
+        display:none;
+    }
+    #brushCursor.erase { border-color:#ef4444; }
+    #brushCursor.restore { border-color:#bef264; }
+
+    /* SIDEBAR */
+    .sidebar {
+        width:280px; flex-shrink:0;
+        background:var(--bg2);
+        border-left:1px solid var(--border);
+        display:flex; flex-direction:column;
+    }
+    .panel { padding:18px; border-bottom:1px solid var(--border); }
+    .panel-title {
+        font-size:.7rem; font-weight:700;
+        letter-spacing:.6px; text-transform:uppercase;
+        color:var(--text3); margin-bottom:12px;
+    }
+
+    /* TOOL BUTTONS (Apagar/Restaurar) */
+    .tool-row { display:flex; gap:8px; }
+    .tool-btn {
+        flex:1; display:flex; flex-direction:column; align-items:center;
+        gap:6px; padding:14px 6px;
+        background:var(--card); border:1px solid var(--border);
+        border-radius:11px; cursor:pointer;
+        color:var(--text2); font-size:.78rem; font-weight:600;
+        transition: border-color .15s, background .15s, color .15s, transform .12s;
+        font-family:inherit;
+    }
+    .tool-btn:hover { border-color:var(--border-h); background:#181818; transform:translateY(-1px); }
+    .tool-btn.active.erase {
+        border-color:rgba(239,68,68,0.6);
+        background:rgba(239,68,68,0.08);
+        color:#fca5a5;
+    }
+    .tool-btn.active.restore {
+        border-color:var(--accent);
+        background:rgba(190,242,100,0.08);
+        color:var(--accent);
+    }
+    .tool-btn svg { width:22px; height:22px; }
+
+    /* SLIDER */
+    .slider-row { display:flex; align-items:center; gap:10px; }
+    .slider-row label {
+        flex:0 0 72px;
+        font-size:.78rem; color:var(--text2); font-weight:500;
+    }
+    .slider-row input[type=range] {
+        flex:1;
+        -webkit-appearance:none; appearance:none;
+        height:4px; background:#222; border-radius:2px;
+        outline:none;
+    }
+    .slider-row input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance:none; appearance:none;
+        width:14px; height:14px; border-radius:50%;
+        background:var(--accent); cursor:pointer;
+        box-shadow: 0 0 0 3px rgba(190,242,100,0.18);
+    }
+    .slider-row .val {
+        flex:0 0 44px; text-align:right;
+        font-family:'JetBrains Mono', monospace;
+        font-size:.72rem; color:var(--text2);
+    }
+
+    /* TOGGLE */
+    .toggle-row {
+        display:flex; align-items:center; justify-content:space-between;
+        padding:10px 0;
+    }
+    .toggle-row .lbl { font-size:.82rem; color:var(--text2); font-weight:500; }
+    .toggle {
+        width:34px; height:18px; background:#262626; border-radius:10px;
+        position:relative; cursor:pointer; transition:background .2s;
+        border:1px solid var(--border);
+    }
+    .toggle::after {
+        content:''; position:absolute; top:2px; left:2px;
+        width:12px; height:12px; background:var(--text3);
+        border-radius:50%; transition:transform .2s, background .2s;
+    }
+    .toggle.on { background:rgba(190,242,100,0.16); border-color:var(--accent); }
+    .toggle.on::after { transform:translateX(15px); background:var(--accent); }
+
+    /* HOTKEYS panel */
+    .hotkeys { font-size:.72rem; color:var(--text3); line-height:1.7; }
+    .hotkeys kbd {
+        background:#1a1a1a; border:1px solid var(--border);
+        padding:1px 6px; border-radius:4px;
+        font-family:'JetBrains Mono', monospace;
+        font-size:.68rem; color:var(--text2);
+    }
+
+    /* FOOTER buttons */
+    .footer {
+        margin-top:auto; padding:14px;
+        border-top:1px solid var(--border);
+        display:flex; gap:8px;
+    }
+    .btn {
+        flex:1; padding:11px 14px;
+        border-radius:10px; border:1px solid var(--border);
+        background:var(--card); color:var(--text2);
+        font-family:inherit; font-size:.84rem; font-weight:600;
+        cursor:pointer; transition: all .15s;
+    }
+    .btn:hover { border-color:var(--border-h); color:var(--text); background:#181818; }
+    .btn.primary {
+        background:var(--accent); color:#0a0a0a;
+        border-color:var(--accent);
+    }
+    .btn.primary:hover { background:var(--accent2); transform:translateY(-1px); box-shadow:0 4px 14px rgba(190,242,100,0.35); }
+    .btn:disabled { opacity:.5; cursor:not-allowed; transform:none !important; }
+
+    /* SECONDARY actions row */
+    .secondary-row {
+        display:flex; gap:6px; margin-top:10px;
+    }
+    .btn-mini {
+        flex:1; padding:7px 4px;
+        background:transparent; border:1px solid var(--border);
+        border-radius:7px; color:var(--text3);
+        font-family:inherit; font-size:.72rem; cursor:pointer;
+        transition: all .15s;
+    }
+    .btn-mini:hover:not(:disabled) { border-color:var(--border-h); color:var(--text2); }
+    .btn-mini:disabled { opacity:.4; cursor:not-allowed; }
+
+    /* STATUS pill */
+    .status {
+        position:absolute; left:14px; bottom:14px;
+        background:rgba(20,20,20,0.85); backdrop-filter:blur(8px);
+        border:1px solid var(--border);
+        padding:7px 12px; border-radius:8px;
+        font-size:.72rem; color:var(--text2);
+        font-family:'JetBrains Mono', monospace;
+        z-index:5;
+        pointer-events:none;
+        opacity:0; transition:opacity .25s;
+    }
+    .status.show { opacity:1; }
+</style>
+</head>
+<body>
+    <div class="topbar">
+        <h1>Editor de <span>Máscara</span></h1>
+        <span class="meta" id="dims">—</span>
+        <div class="spacer"></div>
+        <span class="meta" id="zoomMeta">100%</span>
+    </div>
+
+    <div class="main">
+        <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="stage"></canvas>
+            <div id="brushCursor" class="erase"></div>
+            <div class="status" id="status">Carregando...</div>
+        </div>
+
+        <aside class="sidebar">
+            <div class="panel">
+                <div class="panel-title">Ferramenta</div>
+                <div class="tool-row">
+                    <button class="tool-btn erase active" id="toolErase" title="Apagar (E)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 20H7L3 16c-1-1-1-3 0-4L13 2l8 8-9 10"/>
+                            <line x1="18" y1="13" x2="9" y2="4"/>
+                        </svg>
+                        Apagar
+                    </button>
+                    <button class="tool-btn restore" id="toolRestore" title="Restaurar (R)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="1 4 1 10 7 10"/>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                        </svg>
+                        Restaurar
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Pincel</div>
+                <div class="slider-row" style="margin-bottom:10px">
+                    <label>Tamanho</label>
+                    <input type="range" id="brushSize" min="2" max="200" value="40">
+                    <span class="val" id="brushSizeVal">40</span>
+                </div>
+                <div class="slider-row" style="margin-bottom:10px">
+                    <label>Suavidade</label>
+                    <input type="range" id="brushSoft" min="0" max="100" value="40">
+                    <span class="val" id="brushSoftVal">40</span>
+                </div>
+                <div class="slider-row">
+                    <label>Força</label>
+                    <input type="range" id="brushFlow" min="10" max="100" value="100">
+                    <span class="val" id="brushFlowVal">100</span>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Visualização</div>
+                <div class="toggle-row">
+                    <span class="lbl">Mostrar máscara</span>
+                    <div class="toggle" id="toggleMask"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="lbl">Comparar com original</span>
+                    <div class="toggle" id="toggleCompare"></div>
+                </div>
+                <div class="secondary-row">
+                    <button class="btn-mini" id="btnUndo" disabled title="Ctrl+Z">↶ Desfazer</button>
+                    <button class="btn-mini" id="btnRedo" disabled title="Ctrl+Shift+Z">↷ Refazer</button>
+                </div>
+                <div class="secondary-row">
+                    <button class="btn-mini" id="btnReset" title="Volta máscara da IA">↺ Reset máscara</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Atalhos</div>
+                <div class="hotkeys">
+                    <kbd>E</kbd> apagar · <kbd>R</kbd> restaurar<br>
+                    <kbd>[</kbd> <kbd>]</kbd> tamanho do pincel<br>
+                    <kbd>Ctrl</kbd>+scroll zoom · <kbd>Espaço</kbd>+drag pan<br>
+                    <kbd>Ctrl+Z</kbd> desfazer · <kbd>Ctrl+S</kbd> salvar
+                </div>
+            </div>
+
+            <div class="footer">
+                <button class="btn" id="btnCancel">Cancelar</button>
+                <button class="btn primary" id="btnSave">Salvar</button>
+            </div>
+        </aside>
+    </div>
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════════════════════════
+// MASK EDITOR — Lion Workspace
+// Recebe caminhos via query string: ?orig=<path>&processed=<path>&token=<id>
+// orig:      imagem original (com fundo) — usada pra restore
+// processed: PNG sem fundo gerado pelo bg-remove — estado inicial
+// token:     id da sessão pra coordenar com o app principal via IPC
+// ════════════════════════════════════════════════════════════════════
+
+const params = new URLSearchParams(location.search);
+const ORIG_PATH = params.get('orig') || '';
+const PROCESSED_PATH = params.get('processed') || '';
+const SESSION_TOKEN = params.get('token') || '';
+
+const ipc = (() => {
+    try {
+        return require('electron').ipcRenderer;
+    } catch(e) { return null; }
+})();
+const fs = (() => { try { return require('fs'); } catch(e) { return null; } })();
+const path = (() => { try { return require('path'); } catch(e) { return null; } })();
+
+// Estado global
+const state = {
+    origImage: null,         // HTMLImageElement
+    processedImage: null,    // HTMLImageElement
+    width: 0, height: 0,     // dimensões da imagem
+    mask: null,              // Uint8Array (1 byte por pixel) — alpha visível 0..255
+    initialMask: null,       // backup do mask inicial pra reset
+    history: [],             // stack de Uint8Array snapshots pra undo
+    historyIdx: -1,          // ponteiro no history
+    HISTORY_MAX: 30,
+
+    tool: 'erase',           // 'erase' | 'restore'
+    brushSize: 40,           // px na imagem (não viewport)
+    brushSoft: 40,           // 0..100
+    brushFlow: 100,          // 0..100
+
+    showMask: false,         // overlay vermelho mostrando o que foi apagado
+    compare: false,          // mostra original (sem alpha)
+
+    // Viewport
+    zoom: 1,
+    panX: 0, panY: 0,
+    isPanning: false,
+    spaceDown: false,
+
+    // Brush
+    isDrawing: false,
+    lastDrawX: 0, lastDrawY: 0,
+
+    saving: false,
+};
+
+const stage = document.getElementById('stage');
+const stageCtx = stage.getContext('2d', { willReadFrequently: true });
+const wrap = document.getElementById('canvasWrap');
+const brushCursor = document.getElementById('brushCursor');
+const statusEl = document.getElementById('status');
+
+// Buffers de trabalho (off-screen)
+const workCanvas = document.createElement('canvas');
+const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+let origImageData = null;     // ImageData da imagem original
+let processedImageData = null; // ImageData da processada (com alpha)
+
+// ─────────────────────────────────────────────────────────────────
+// LOAD IMAGES
+// ─────────────────────────────────────────────────────────────────
+function setStatus(msg, hold) {
+    statusEl.textContent = msg;
+    statusEl.classList.add('show');
+    if (!hold) {
+        clearTimeout(setStatus._t);
+        setStatus._t = setTimeout(() => statusEl.classList.remove('show'), 2200);
+    }
+}
+
+function loadImage(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = e => reject(new Error('Falha ao carregar: ' + src));
+        // file:// URI pra Electron
+        if (src.startsWith('http') || src.startsWith('file:') || src.startsWith('data:')) {
+            img.src = src;
+        } else {
+            img.src = 'file:///' + src.replace(/\\/g, '/').replace(/^\//, '');
+        }
+    });
+}
+
+async function init() {
+    if (!ORIG_PATH || !PROCESSED_PATH) {
+        setStatus('ERRO: faltam parâmetros orig= e processed=', true);
+        return;
+    }
+
+    setStatus('Carregando imagens...', true);
+
+    try {
+        const [orig, proc] = await Promise.all([
+            loadImage(ORIG_PATH),
+            loadImage(PROCESSED_PATH),
+        ]);
+        state.origImage = orig;
+        state.processedImage = proc;
+        state.width = proc.naturalWidth;
+        state.height = proc.naturalHeight;
+
+        document.getElementById('dims').textContent = state.width + ' × ' + state.height;
+
+        // Off-screen: extrai ImageData de ambas
+        workCanvas.width = state.width;
+        workCanvas.height = state.height;
+
+        // Original (RGBA — alpha será 255 mesmo)
+        workCtx.clearRect(0, 0, state.width, state.height);
+        workCtx.drawImage(orig, 0, 0, state.width, state.height);
+        origImageData = workCtx.getImageData(0, 0, state.width, state.height);
+
+        // Processada (com alpha do bg-remove)
+        workCtx.clearRect(0, 0, state.width, state.height);
+        workCtx.drawImage(proc, 0, 0, state.width, state.height);
+        processedImageData = workCtx.getImageData(0, 0, state.width, state.height);
+
+        // Mask = alpha channel da processada
+        const total = state.width * state.height;
+        state.mask = new Uint8Array(total);
+        for (let i = 0; i < total; i++) {
+            state.mask[i] = processedImageData.data[i * 4 + 3];
+        }
+        state.initialMask = new Uint8Array(state.mask);
+
+        pushHistory();
+        fitToView();
+        render();
+        setStatus('✓ Pronto. Ferramentas à direita.', false);
+    } catch (e) {
+        setStatus('Erro ao carregar imagens: ' + e.message, true);
+        console.error(e);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────
+function fitToView() {
+    const wrapRect = wrap.getBoundingClientRect();
+    const margin = 40;
+    const availW = wrapRect.width - margin * 2;
+    const availH = wrapRect.height - margin * 2;
+    const scale = Math.min(availW / state.width, availH / state.height, 1);
+    state.zoom = scale;
+    state.panX = (wrapRect.width - state.width * scale) / 2;
+    state.panY = (wrapRect.height - state.height * scale) / 2;
+}
+
+function resizeStage() {
+    const r = wrap.getBoundingClientRect();
+    stage.width = r.width;
+    stage.height = r.height;
+}
+
+let renderRequested = false;
+function render() {
+    if (renderRequested) return;
+    renderRequested = true;
+    requestAnimationFrame(_renderNow);
+}
+
+function _renderNow() {
+    renderRequested = false;
+    if (!origImageData) return;
+
+    resizeStage();
+
+    // Limpa
+    stageCtx.fillStyle = 'transparent';
+    stageCtx.clearRect(0, 0, stage.width, stage.height);
+
+    // Compõe a imagem final em workCanvas
+    const out = workCtx.createImageData(state.width, state.height);
+    const od = origImageData.data;
+    const m = state.mask;
+    const total = state.width * state.height;
+
+    if (state.compare) {
+        // Mostra original (sem alpha)
+        for (let i = 0; i < total; i++) {
+            out.data[i*4]   = od[i*4];
+            out.data[i*4+1] = od[i*4+1];
+            out.data[i*4+2] = od[i*4+2];
+            out.data[i*4+3] = 255;
+        }
+    } else {
+        // Aplica mask como alpha
+        for (let i = 0; i < total; i++) {
+            out.data[i*4]   = od[i*4];
+            out.data[i*4+1] = od[i*4+1];
+            out.data[i*4+2] = od[i*4+2];
+            out.data[i*4+3] = m[i];
+        }
+    }
+
+    workCanvas.width = state.width;
+    workCanvas.height = state.height;
+    workCtx.putImageData(out, 0, 0);
+
+    // Desenha em stage com transform
+    stageCtx.imageSmoothingEnabled = state.zoom < 2;
+    stageCtx.drawImage(workCanvas, state.panX, state.panY, state.width * state.zoom, state.height * state.zoom);
+
+    // Overlay máscara (vermelho transparente onde foi apagado)
+    if (state.showMask) {
+        const overlay = workCtx.createImageData(state.width, state.height);
+        for (let i = 0; i < total; i++) {
+            const apagado = 255 - m[i];
+            overlay.data[i*4]   = 239;
+            overlay.data[i*4+1] = 68;
+            overlay.data[i*4+2] = 68;
+            overlay.data[i*4+3] = Math.round(apagado * 0.55);
+        }
+        workCtx.putImageData(overlay, 0, 0);
+        stageCtx.drawImage(workCanvas, state.panX, state.panY, state.width * state.zoom, state.height * state.zoom);
+    }
+
+    document.getElementById('zoomMeta').textContent = Math.round(state.zoom * 100) + '%';
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BRUSH
+// ─────────────────────────────────────────────────────────────────
+function viewportToImage(vx, vy) {
+    return {
+        x: (vx - state.panX) / state.zoom,
+        y: (vy - state.panY) / state.zoom,
+    };
+}
+
+function paintAt(imgX, imgY, lastImgX, lastImgY) {
+    const r = state.brushSize / 2;
+    const r2 = r * r;
+    const softness = state.brushSoft / 100;       // 0..1
+    const flow = state.brushFlow / 100;            // 0..1
+    const target = state.tool === 'erase' ? 0 : 255;
+
+    // Interpola pontos entre last e current pra brush contínuo
+    const dx = imgX - lastImgX;
+    const dy = imgY - lastImgY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const steps = Math.max(1, Math.ceil(dist / Math.max(2, r * 0.4)));
+
+    const w = state.width, h = state.height;
+    const m = state.mask;
+
+    let dirty = false;
+    for (let s = 0; s <= steps; s++) {
+        const t = steps === 0 ? 0 : s / steps;
+        const cx = lastImgX + dx * t;
+        const cy = lastImgY + dy * t;
+        const minX = Math.max(0, Math.floor(cx - r));
+        const maxX = Math.min(w - 1, Math.ceil(cx + r));
+        const minY = Math.max(0, Math.floor(cy - r));
+        const maxY = Math.min(h - 1, Math.ceil(cy + r));
+
+        for (let py = minY; py <= maxY; py++) {
+            for (let px = minX; px <= maxX; px++) {
+                const ddx = px - cx;
+                const ddy = py - cy;
+                const dd = ddx*ddx + ddy*ddy;
+                if (dd > r2) continue;
+                // Falloff radial:
+                // dentro de (1-softness)*r → força máxima
+                // fora → desce linearmente até r
+                const dRatio = Math.sqrt(dd) / r; // 0..1
+                let alpha;
+                if (softness <= 0) {
+                    alpha = 1;
+                } else {
+                    const inner = 1 - softness;
+                    if (dRatio <= inner) alpha = 1;
+                    else alpha = 1 - (dRatio - inner) / softness;
+                }
+                if (alpha <= 0) continue;
+                const idx = py * w + px;
+                const cur = m[idx];
+                const want = target;
+                const k = alpha * flow;
+                const next = cur + (want - cur) * k;
+                const nextRound = Math.round(next);
+                if (nextRound !== cur) {
+                    m[idx] = nextRound;
+                    dirty = true;
+                }
+            }
+        }
+    }
+    if (dirty) render();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HISTORY (undo/redo)
+// ─────────────────────────────────────────────────────────────────
+function pushHistory() {
+    // Trunca redo
+    if (state.historyIdx < state.history.length - 1) {
+        state.history.length = state.historyIdx + 1;
+    }
+    state.history.push(new Uint8Array(state.mask));
+    if (state.history.length > state.HISTORY_MAX) {
+        state.history.shift();
+    } else {
+        state.historyIdx = state.history.length - 1;
+    }
+    state.historyIdx = state.history.length - 1;
+    updateHistoryButtons();
+}
+
+function undo() {
+    if (state.historyIdx <= 0) return;
+    state.historyIdx--;
+    state.mask.set(state.history[state.historyIdx]);
+    render();
+    updateHistoryButtons();
+    setStatus('Desfeito');
+}
+function redo() {
+    if (state.historyIdx >= state.history.length - 1) return;
+    state.historyIdx++;
+    state.mask.set(state.history[state.historyIdx]);
+    render();
+    updateHistoryButtons();
+    setStatus('Refeito');
+}
+function updateHistoryButtons() {
+    document.getElementById('btnUndo').disabled = state.historyIdx <= 0;
+    document.getElementById('btnRedo').disabled = state.historyIdx >= state.history.length - 1;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// EVENTS
+// ─────────────────────────────────────────────────────────────────
+function setTool(t) {
+    state.tool = t;
+    document.getElementById('toolErase').classList.toggle('active', t === 'erase');
+    document.getElementById('toolRestore').classList.toggle('active', t === 'restore');
+    brushCursor.classList.toggle('erase', t === 'erase');
+    brushCursor.classList.toggle('restore', t === 'restore');
+}
+
+document.getElementById('toolErase').onclick = () => setTool('erase');
+document.getElementById('toolRestore').onclick = () => setTool('restore');
+
+const brushSize = document.getElementById('brushSize');
+const brushSizeVal = document.getElementById('brushSizeVal');
+brushSize.oninput = () => { state.brushSize = +brushSize.value; brushSizeVal.textContent = brushSize.value; updateBrushCursor(); };
+const brushSoft = document.getElementById('brushSoft');
+const brushSoftVal = document.getElementById('brushSoftVal');
+brushSoft.oninput = () => { state.brushSoft = +brushSoft.value; brushSoftVal.textContent = brushSoft.value; };
+const brushFlow = document.getElementById('brushFlow');
+const brushFlowVal = document.getElementById('brushFlowVal');
+brushFlow.oninput = () => { state.brushFlow = +brushFlow.value; brushFlowVal.textContent = brushFlow.value; };
+
+const toggleMask = document.getElementById('toggleMask');
+toggleMask.onclick = () => { state.showMask = !state.showMask; toggleMask.classList.toggle('on', state.showMask); render(); };
+const toggleCompare = document.getElementById('toggleCompare');
+toggleCompare.onclick = () => { state.compare = !state.compare; toggleCompare.classList.toggle('on', state.compare); render(); };
+
+document.getElementById('btnUndo').onclick = undo;
+document.getElementById('btnRedo').onclick = redo;
+document.getElementById('btnReset').onclick = () => {
+    if (!state.initialMask) return;
+    state.mask.set(state.initialMask);
+    pushHistory();
+    render();
+    setStatus('Máscara restaurada ao estado inicial');
+};
+
+// MOUSE
+function getViewportPos(e) {
+    const r = wrap.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+wrap.addEventListener('mousemove', (e) => {
+    const v = getViewportPos(e);
+    brushCursor.style.display = 'block';
+    brushCursor.style.left = e.clientX + 'px';
+    brushCursor.style.top = e.clientY + 'px';
+    updateBrushCursor();
+
+    if (state.isPanning) {
+        state.panX += e.movementX;
+        state.panY += e.movementY;
+        render();
+        return;
+    }
+
+    if (state.isDrawing) {
+        const im = viewportToImage(v.x, v.y);
+        const lastIm = viewportToImage(state.lastDrawX, state.lastDrawY);
+        paintAt(im.x, im.y, lastIm.x, lastIm.y);
+        state.lastDrawX = v.x;
+        state.lastDrawY = v.y;
+    }
+});
+
+function updateBrushCursor() {
+    const px = state.brushSize * state.zoom;
+    brushCursor.style.width = px + 'px';
+    brushCursor.style.height = px + 'px';
+}
+
+wrap.addEventListener('mouseleave', () => { brushCursor.style.display = 'none'; });
+
+wrap.addEventListener('mousedown', (e) => {
+    if (e.button === 1 || state.spaceDown) {
+        state.isPanning = true;
+        e.preventDefault();
+        return;
+    }
+    if (e.button !== 0) return;
+    const v = getViewportPos(e);
+    state.isDrawing = true;
+    state.lastDrawX = v.x;
+    state.lastDrawY = v.y;
+    const im = viewportToImage(v.x, v.y);
+    paintAt(im.x, im.y, im.x, im.y);
+});
+
+window.addEventListener('mouseup', () => {
+    if (state.isDrawing) {
+        state.isDrawing = false;
+        pushHistory();
+    }
+    state.isPanning = false;
+});
+
+// ZOOM (Ctrl+Scroll ou trackpad pinch)
+wrap.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const v = getViewportPos(e);
+    const beforeImg = viewportToImage(v.x, v.y);
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    state.zoom = Math.max(0.05, Math.min(16, state.zoom * factor));
+    // Ajusta pan pra zoom centralizado no cursor
+    state.panX = v.x - beforeImg.x * state.zoom;
+    state.panY = v.y - beforeImg.y * state.zoom;
+    updateBrushCursor();
+    render();
+}, { passive: false });
+
+// KEYBOARD
+window.addEventListener('keydown', (e) => {
+    if (e.key === ' ' && !state.spaceDown && !e.repeat) {
+        state.spaceDown = true;
+        wrap.style.cursor = 'grab';
+        return;
+    }
+    if (e.target.tagName === 'INPUT') return;
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        save();
+        return;
+    }
+    if (e.key === 'e' || e.key === 'E') setTool('erase');
+    if (e.key === 'r' || e.key === 'R') setTool('restore');
+    if (e.key === '[') { brushSize.value = Math.max(2, +brushSize.value - 4); brushSize.oninput(); }
+    if (e.key === ']') { brushSize.value = Math.min(200, +brushSize.value + 4); brushSize.oninput(); }
+    if (e.key === 'Escape') {
+        if (confirm('Cancelar edição? Mudanças serão perdidas.')) cancel();
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    if (e.key === ' ') {
+        state.spaceDown = false;
+        wrap.style.cursor = '';
+    }
+});
+
+window.addEventListener('resize', () => render());
+
+// ─────────────────────────────────────────────────────────────────
+// SAVE / CANCEL
+// ─────────────────────────────────────────────────────────────────
+function buildFinalPng() {
+    // Compõe imagem final = origImage.rgb com state.mask como alpha
+    const out = workCtx.createImageData(state.width, state.height);
+    const od = origImageData.data;
+    const m = state.mask;
+    const total = state.width * state.height;
+    for (let i = 0; i < total; i++) {
+        out.data[i*4]   = od[i*4];
+        out.data[i*4+1] = od[i*4+1];
+        out.data[i*4+2] = od[i*4+2];
+        out.data[i*4+3] = m[i];
+    }
+    const tmp = document.createElement('canvas');
+    tmp.width = state.width; tmp.height = state.height;
+    tmp.getContext('2d').putImageData(out, 0, 0);
+    return tmp.toDataURL('image/png');
+}
+
+async function save() {
+    if (state.saving) return;
+    state.saving = true;
+    document.getElementById('btnSave').disabled = true;
+    setStatus('Salvando...', true);
+
+    try {
+        const dataUrl = buildFinalPng();
+        if (ipc) {
+            // Via Electron IPC — main process salva e fecha janela
+            ipc.send('mask-editor:save', { token: SESSION_TOKEN, dataUrl, processedPath: PROCESSED_PATH });
+        } else if (fs && path) {
+            // Fallback: escreve direto via fs
+            const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+            fs.writeFileSync(PROCESSED_PATH, Buffer.from(base64, 'base64'));
+            setStatus('✓ Salvo. Pode fechar.', true);
+        } else {
+            setStatus('Erro: sem acesso ao filesystem', true);
+        }
+    } catch (e) {
+        setStatus('Erro ao salvar: ' + e.message, true);
+        console.error(e);
+        state.saving = false;
+        document.getElementById('btnSave').disabled = false;
+    }
+}
+
+function cancel() {
+    if (ipc) ipc.send('mask-editor:cancel', { token: SESSION_TOKEN });
+    else window.close();
+}
+
+document.getElementById('btnSave').onclick = save;
+document.getElementById('btnCancel').onclick = cancel;
+
+// ─────────────────────────────────────────────────────────────────
+// IPC listener pra confirmação de save
+// ─────────────────────────────────────────────────────────────────
+if (ipc) {
+    ipc.on('mask-editor:saved', () => {
+        setStatus('✓ Salvo', true);
+        // Janela é fechada pelo main process
+    });
+    ipc.on('mask-editor:save-error', (_, msg) => {
+        setStatus('Erro: ' + msg, true);
+        state.saving = false;
+        document.getElementById('btnSave').disabled = false;
+    });
+}
+
+// Boot
+init();
+</script>
+</body>
+</html>

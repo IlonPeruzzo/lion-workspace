@@ -1652,3 +1652,72 @@ function lwBgImportAndPlace(filePath, srcInfoJson) {
         return "ERROR:" + e.toString();
     }
 }
+
+// ─── Recarrega o PNG no Premiere após edição da máscara ────────────
+// Quando o user edita a máscara no app desktop e salva, o conteúdo do
+// arquivo no disco mudou (mesmo path). Premiere mantém cache da media
+// do projectItem — chamamos changeMediaPath pra forçar reler do disco.
+function lwBgRefreshFootage(filePath) {
+    try {
+        if (!app.project) return "NO_PROJECT";
+        var f = new File(filePath);
+        if (!f.exists) return "FILE_NOT_FOUND";
+        var fsTarget = f.fsName;
+
+        // Procura todos os projectItems que apontam pra esse path
+        var matches = [];
+        function search(bin) {
+            try {
+                for (var i = 0; i < bin.children.numItems; i++) {
+                    var ch = bin.children[i];
+                    if (ch.type === 2) { // bin
+                        search(ch);
+                    } else {
+                        try {
+                            var p = ch.getMediaPath ? ch.getMediaPath() : '';
+                            if (p) {
+                                var cf = new File(p);
+                                if (cf.fsName === fsTarget) matches.push(ch);
+                            }
+                        } catch(e) {}
+                    }
+                }
+            } catch(e) {}
+        }
+        search(app.project.rootItem);
+
+        if (matches.length === 0) return "NOT_IN_PROJECT";
+
+        // Força refresh em cada match
+        var refreshed = 0;
+        for (var k = 0; k < matches.length; k++) {
+            var item = matches[k];
+            try {
+                if (typeof item.refreshMedia === 'function') {
+                    item.refreshMedia();
+                    refreshed++;
+                } else if (typeof item.changeMediaPath === 'function') {
+                    // Truque: re-aponta pro mesmo path → Premiere relê do disco
+                    item.changeMediaPath(filePath);
+                    refreshed++;
+                }
+            } catch(e) {}
+        }
+
+        // Nudge playhead — força timeline repintar com a media nova
+        try {
+            var seq = app.project.activeSequence;
+            if (seq) {
+                var pos = seq.getPlayerPosition();
+                var pT = Number(pos.ticks);
+                seq.setPlayerPosition(String(pT + 1));
+                $.sleep(40);
+                seq.setPlayerPosition(String(pT));
+            }
+        } catch(e) {}
+
+        return "OK:" + refreshed;
+    } catch (e) {
+        return "ERR:" + e.toString();
+    }
+}

@@ -91,6 +91,7 @@
       "main.js",
       "preload.js",
       "index.html",
+      "mask-editor.html",
       "build/icon.png",
       "node_modules/**/*",
       "!node_modules/**/*.{md,markdown,ts,tsx,map,d.ts,gypi}",

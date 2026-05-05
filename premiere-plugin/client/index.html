@@ -200,6 +200,73 @@
         .login-overlay .login-submit{background:#bef264;color:#0a0a0a;border:none;padding:11px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
         .login-overlay .login-submit:hover{opacity:.9}
         .login-overlay .login-submit:disabled{opacity:.4;cursor:not-allowed}
+
+        /* Auto-login button — entrar com sessão do app desktop */
+        .auto-login-btn{
+            position:relative;width:100%;margin-top:10px;padding:11px 13px;
+            display:flex;align-items:center;gap:11px;
+            background:linear-gradient(135deg,rgba(190,242,100,0.07),rgba(34,211,238,0.04));
+            border:1px solid rgba(190,242,100,0.22);
+            border-radius:11px;
+            color:#d9f99d;
+            font-family:inherit;font-size:.74rem;
+            cursor:pointer;overflow:hidden;
+            transition:border-color .25s,transform .15s,box-shadow .3s,background .25s;
+            box-shadow:0 0 0 0 rgba(190,242,100,0.0);
+        }
+        .auto-login-btn::before{
+            content:'';position:absolute;top:0;left:-120%;width:60%;height:100%;
+            background:linear-gradient(90deg,transparent,rgba(190,242,100,0.18),transparent);
+            transform:skewX(-20deg);
+            transition:left .65s ease;
+            pointer-events:none;
+        }
+        .auto-login-btn:hover:not(:disabled){
+            border-color:rgba(190,242,100,0.55);
+            background:linear-gradient(135deg,rgba(190,242,100,0.11),rgba(34,211,238,0.06));
+            transform:translateY(-1px);
+            box-shadow:0 8px 22px -8px rgba(190,242,100,0.45);
+        }
+        .auto-login-btn:hover::before{ left:120%; }
+        .auto-login-btn:active:not(:disabled){ transform:translateY(0); }
+        .auto-login-btn:disabled{ opacity:.5;cursor:not-allowed; }
+        .auto-login-icon{
+            flex-shrink:0;width:34px;height:34px;
+            display:inline-flex;align-items:center;justify-content:center;
+            background:linear-gradient(135deg,rgba(190,242,100,0.22),rgba(190,242,100,0.06));
+            border:1px solid rgba(190,242,100,0.4);
+            border-radius:9px;color:#bef264;
+            transition:transform .25s,box-shadow .25s;
+        }
+        .auto-login-btn:hover .auto-login-icon{
+            transform:scale(1.06);
+            box-shadow:0 0 14px rgba(190,242,100,0.35);
+        }
+        .auto-login-text{
+            flex:1;display:flex;flex-direction:column;align-items:flex-start;
+            gap:2px;text-align:left;min-width:0;
+        }
+        .auto-login-title{
+            font-weight:700;color:#d9f99d;font-size:.78rem;letter-spacing:-.1px;
+            line-height:1.1;
+        }
+        .auto-login-sub{
+            font-size:.6rem;color:#737373;font-weight:500;letter-spacing:.1px;
+        }
+        .auto-login-arrow{
+            flex-shrink:0;opacity:.55;color:#bef264;
+            transition:transform .25s,opacity .15s;
+        }
+        .auto-login-btn:hover .auto-login-arrow{
+            transform:translateX(3px);opacity:1;
+        }
+        @keyframes autoLoginPulse{
+            0%,100%{ box-shadow:0 0 0 0 rgba(190,242,100,0.4); }
+            50%{ box-shadow:0 0 0 6px rgba(190,242,100,0); }
+        }
+        .auto-login-btn.pulse .auto-login-icon{
+            animation:autoLoginPulse 1.6s ease-in-out infinite;
+        }
         .login-overlay .login-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;padding:8px 10px;border-radius:6px;font-size:.7rem;display:none;text-align:center}
         .login-overlay .login-error.show{display:block}
         .login-user-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;margin-bottom:6px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.08);border-radius:6px}
@@ -244,13 +311,24 @@
                 </button>
             </div>
             <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
-            <button type="button" id="pluginAutoLoginBtn" onclick="pluginManualAutoLogin()" style="width:100%;margin-top:8px;padding:10px;background:transparent;border:1px solid rgba(190,242,100,.25);color:#bef264;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .2s" onmouseover="this.style.background='rgba(190,242,100,.08)'" onmouseout="this.style.background='transparent'">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 12l2 2 4-4"/></svg>
-                Entrar com sessão do Lion Workspace
-            </button>
-            <div id="pluginAutoLoginHint" style="text-align:center;font-size:.62rem;color:#525252;margin-top:8px">
-                Se o Lion Workspace estiver aberto e logado, o plugin entra sozinho.
+            <div style="display:flex;align-items:center;gap:8px;margin:11px 0 1px;color:#404040;font-size:.58rem;font-weight:600;letter-spacing:.6px">
+                <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
+                <span>OU</span>
+                <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
             </div>
+            <button type="button" id="pluginAutoLoginBtn" class="auto-login-btn pulse" onclick="pluginManualAutoLogin()">
+                <span class="auto-login-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                </span>
+                <span class="auto-login-text">
+                    <span class="auto-login-title">Entrar com o app</span>
+                    <span class="auto-login-sub">Usa a sessão já aberta no Lion Workspace</span>
+                </span>
+                <svg class="auto-login-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
             <div style="text-align:center;font-size:.62rem;color:#525252;margin-top:4px">
                 Não tem conta? Crie pelo app ou pelo site.
             </div>
@@ -846,6 +924,17 @@
                 </div>
             </div>
 
+            <!-- Botão "Ajustar Máscara" — aparece após bg-remove com sucesso -->
+            <button id="bgRemoveEditBtn" onclick="bgRemoveOpenEditor()" style="display:none;margin-top:6px;width:100%;padding:7px 10px;background:rgba(190,242,100,.06);border:1px solid rgba(190,242,100,.25);border-radius:6px;color:#bef264;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;display:none;align-items:center;justify-content:center;gap:5px;transition:all .15s">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                    <path d="M2 2l7.586 7.586"/>
+                    <circle cx="11" cy="11" r="2"/>
+                </svg>
+                Ajustar Máscara (Pincel)
+            </button>
+
             <div id="bgRemoveMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
         </div>
     </div>
@@ -1332,18 +1421,23 @@
     function pluginManualAutoLogin() {
         var btn = document.getElementById('pluginAutoLoginBtn');
         var errEl = document.getElementById('pluginLoginError');
-        var hint = document.getElementById('pluginAutoLoginHint');
         if (!btn) return;
-        var origHTML = btn.innerHTML;
+        var titleEl = btn.querySelector('.auto-login-title');
+        var subEl = btn.querySelector('.auto-login-sub');
+        var origTitle = titleEl ? titleEl.textContent : '';
+        var origSub = subEl ? subEl.textContent : '';
         btn.disabled = true;
-        btn.innerHTML = 'Conectando…';
+        btn.classList.remove('pulse');
+        if (titleEl) titleEl.textContent = 'Conectando…';
+        if (subEl) subEl.textContent = 'Buscando sessão do Lion Workspace';
         errEl.classList.remove('show');
         pluginTryAutoLogin(function() {
             btn.disabled = false;
-            btn.innerHTML = origHTML;
+            btn.classList.add('pulse');
+            if (titleEl) titleEl.textContent = origTitle;
+            if (subEl) subEl.textContent = origSub;
             errEl.textContent = 'Lion Workspace não está aberto ou você não está logado nele.';
             errEl.classList.add('show');
-            if (hint) hint.style.display = 'none';
         });
     }
 
@@ -3364,6 +3458,13 @@
                     document.getElementById('bgRemovePreview').style.display = 'block';
                 } catch (e) { /* preview opcional */ }
 
+                // Salva paths pro botão "Ajustar Máscara" reutilizar
+                window._bgLastResult = {
+                    origPath: resp.origPath || info.path,
+                    processedPath: resp.outPath,
+                    clipInfo: info
+                };
+
                 // 4) Importa no Premiere e insere na track acima do original
                 _bgShowLoading(true, 'Importando no Premiere...');
                 _bgSetProgress(96);
@@ -3380,11 +3481,122 @@
                         if (what === 'placed') _bgMsg('✓ Pronto! PNG sem fundo na track de cima', '#22c55e');
                         else _bgMsg('✓ Importado no projeto', '#22c55e');
                         showMsg('Background removido!');
+                        // Mostra botão "Ajustar Máscara" pro user refinar se quiser
+                        var editBtn = document.getElementById('bgRemoveEditBtn');
+                        if (editBtn) { editBtn.style.display = 'flex'; }
                     } else {
                         _bgMsg('Erro ao importar: ' + impR, '#f43f5e');
                     }
                 });
             });
+        });
+    }
+
+    // ─── Ajustar Máscara: abre editor no app desktop ───
+    var _bgEditPolling = null;
+    function bgRemoveOpenEditor() {
+        if (!window._bgLastResult) {
+            _bgMsg('Faça "Remover fundo" primeiro', '#f59e0b');
+            return;
+        }
+        if (!lwConnected) {
+            _bgMsg('Lion Workspace desconectado — abra o app', '#f43f5e');
+            return;
+        }
+        var editBtn = document.getElementById('bgRemoveEditBtn');
+        editBtn.disabled = true;
+        _bgMsg('Abrindo editor no app...', '#a78bfa');
+
+        var payload = {
+            origPath: window._bgLastResult.origPath,
+            processedPath: window._bgLastResult.processedPath
+        };
+
+        LWHttp.post(API + '/bg/edit-mask', payload, { timeout: 10000, retries: 0 }, function(err, status, body) {
+            if (err || status !== 200) {
+                editBtn.disabled = false;
+                var emsg = 'Falha ao abrir editor';
+                try { emsg = JSON.parse(body || '{}').error || emsg; } catch(e) {}
+                _bgMsg(emsg, '#f43f5e');
+                return;
+            }
+            var resp;
+            try { resp = JSON.parse(body); } catch (e) {
+                editBtn.disabled = false;
+                _bgMsg('Resposta inválida', '#f43f5e');
+                return;
+            }
+            if (!resp.token) {
+                editBtn.disabled = false;
+                _bgMsg('Token não recebido', '#f43f5e');
+                return;
+            }
+            _bgMsg('Editor aberto. Edite e clique Salvar...', '#a78bfa');
+            // Polla status até saved/cancelled/expired
+            _bgPollEditStatus(resp.token, editBtn);
+        });
+    }
+
+    function _bgPollEditStatus(token, editBtn) {
+        if (_bgEditPolling) clearInterval(_bgEditPolling);
+        var pollCount = 0;
+        var MAX_POLLS = 60 * 30; // 30min @ 1s = 1800 polls
+        _bgEditPolling = setInterval(function() {
+            pollCount++;
+            if (pollCount > MAX_POLLS) {
+                clearInterval(_bgEditPolling); _bgEditPolling = null;
+                editBtn.disabled = false;
+                _bgMsg('Editor expirou (30min)', '#f59e0b');
+                return;
+            }
+            LWHttp.get(API + '/bg/edit-status?token=' + encodeURIComponent(token),
+                { timeout: 3000, retries: 0 },
+                function(err, status, body) {
+                    if (err) return; // continua tentando
+                    var data;
+                    try { data = JSON.parse(body); } catch(e) { return; }
+                    if (data.status === 'saved') {
+                        clearInterval(_bgEditPolling); _bgEditPolling = null;
+                        editBtn.disabled = false;
+                        _bgMsg('✓ Máscara ajustada — atualizando no Premiere...', '#22c55e');
+                        // Re-importa o PNG (mesmo path, mas conteúdo novo) — Premiere atualiza
+                        _bgReimportAfterEdit(data.processedPath || window._bgLastResult.processedPath);
+                    } else if (data.status === 'cancelled' || data.status === 'expired') {
+                        clearInterval(_bgEditPolling); _bgEditPolling = null;
+                        editBtn.disabled = false;
+                        _bgMsg(data.status === 'cancelled' ? 'Edição cancelada' : 'Editor expirou', '#f59e0b');
+                    } else if (data.status === 'error') {
+                        clearInterval(_bgEditPolling); _bgEditPolling = null;
+                        editBtn.disabled = false;
+                        _bgMsg('Erro no editor', '#f43f5e');
+                    }
+                    // 'editing' → continua pollando
+                });
+        }, 1000);
+    }
+
+    function _bgReimportAfterEdit(processedPath) {
+        // Atualiza preview lendo arquivo novo do disco
+        try {
+            var node = (typeof window.cep_node !== 'undefined' && window.cep_node.require) ? window.cep_node : { require: require };
+            var fs = node.require('fs');
+            var imgBuf = fs.readFileSync(processedPath);
+            var u8 = new Uint8Array(imgBuf);
+            var pngBlob = new Blob([u8], { type: 'image/png' });
+            document.getElementById('bgRemovePreviewImg').src = URL.createObjectURL(pngBlob);
+        } catch (e) {}
+
+        // Pede pro Premiere recarregar a footage do project item
+        // (PNG na timeline já aponta pro mesmo path — basta refresh)
+        var pathEsc = processedPath.replace(/\\/g, '/').replace(/"/g, '\\"');
+        csInterface.evalScript('lwBgRefreshFootage("' + pathEsc + '")', function(r) {
+            r = String(r || '');
+            if (r.indexOf('OK') === 0) {
+                _bgMsg('✓ Atualizado na timeline', '#22c55e');
+                showMsg('Máscara ajustada!');
+            } else {
+                _bgMsg('Reimporte manualmente: ' + r, '#f59e0b');
+            }
         });
     }
 
@@ -3421,6 +3633,29 @@
         });
     }
 
+    // Fallback persistente — NUNCA usar os.tmpdir() porque Windows
+    // Storage Sense limpa C:\Users\X\AppData\Local\Temp automaticamente,
+    // o que faz os PNGs sumirem e clips ficarem offline no Premiere.
+    function _cpFallbackDir() {
+        var node = cpGetNode();
+        if (!node) return '';
+        try {
+            var os = node.require('os');
+            var path = node.require('path');
+            var fs = node.require('fs');
+            // ~/Documents/Lion Workspace/Pastes/  (não é limpa pelo Windows)
+            var dir = path.join(os.homedir(), 'Documents', 'Lion Workspace', 'Pastes');
+            try { fs.mkdirSync(dir, { recursive: true }); } catch(e) {}
+            // Verifica writability
+            var test = path.join(dir, '.lw-write-test-' + Date.now());
+            fs.writeFileSync(test, ''); fs.unlinkSync(test);
+            return dir;
+        } catch(e) {
+            // Última escolha: tmpdir (com aviso de risco)
+            try { return node.require('os').tmpdir(); } catch(e2) { return ''; }
+        }
+    }
+
     function cpDoPaste(){
         if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
         if (!cpGetNode()) { cpShowStatus('Node.js nao disponivel no CEP', '#f43f5e'); return; }
@@ -3428,9 +3663,9 @@
         if (btn) btn.disabled = true;
         cpShowStatus('Lendo clipboard…', '#f59e0b');
         cpResolveSaveDir(function(saveDir){
-        // If still no save dir, use system TEMP as last resort
+        // Fallback persistente (nunca tmpdir)
         if (!saveDir) {
-            try { var _n = cpGetNode(); saveDir = _n ? _n.require('os').tmpdir() : ''; } catch(e){}
+            saveDir = _cpFallbackDir();
         }
         cpReadClipboard(saveDir, function(res){
             if (res.type === 'error') {
@@ -3454,7 +3689,7 @@
 
             // Sanitiza imagens antes de importar — re-encoda PNGs com profile ICC esquisito
             // (Grok/Midjourney/screenshots) que o Premiere às vezes rejeita como "Unsupported format"
-            var sanitizeDir = saveDir || (function(){ try { var _n = cpGetNode(); return _n ? _n.require('os').tmpdir() : ''; } catch(e){ return ''; } })();
+            var sanitizeDir = saveDir || _cpFallbackDir();
             cpSanitizeImagePaths(sanitizeDir, paths, function(cleanPaths){
             // Passa caminhos como JSON pra ExtendScript via string literal segura
             var pathsJson = JSON.stringify(cleanPaths).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
