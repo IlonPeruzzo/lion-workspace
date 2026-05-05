@@ -727,6 +727,374 @@ ipcMain.on('mask-editor:cancel', (event, payload) => {
     } catch(e) { console.error('[mask-editor:cancel]', e); }
 });
 
+// ════════════════════════════════════════════════════════════════════
+// BG REMOVE — VÍDEO (MediaPipe via worker hidden + FFmpeg encoder)
+// Pipeline: worker abre vídeo → MediaPipe segmenta cada frame com WebGL →
+//           pixels RGBA enviados via IPC → main escreve no stdin do ffmpeg
+//           → ffmpeg encoda em WebM (VP9 alpha) ou MOV (ProRes 4444)
+// ════════════════════════════════════════════════════════════════════
+const { spawn: bgvSpawn } = require('child_process');
+
+const bgVideoSessions = new Map();
+// token -> { status, progress, encoderProc, outPath, win, srcPath, format, error, startedAt }
+
+function makeBgVideoSession() {
+    const token = crypto.randomBytes(8).toString('hex');
+    const sess = {
+        status: 'starting',          // starting|encoding|done|cancelled|error
+        progress: { current: 0, total: 0, pct: 0, etaSec: 0, phase: 'init' },
+        encoderProc: null,
+        outPath: null,
+        win: null,
+        startedAt: Date.now(),
+        error: null,
+    };
+    bgVideoSessions.set(token, sess);
+    // Limpa sessions antigas (>2h)
+    const now = Date.now();
+    for (const [k, v] of bgVideoSessions) {
+        if (v.startedAt && (now - v.startedAt) > 2 * 60 * 60 * 1000) {
+            bgVideoSessions.delete(k);
+        }
+    }
+    return token;
+}
+
+function startBgVideoWorker(srcPath, format, quality, delegate) {
+    const token = makeBgVideoSession();
+    const sess = bgVideoSessions.get(token);
+    sess.srcPath = srcPath;
+    sess.format = format;
+    sess.quality = quality;
+    sess.delegate = (delegate || 'GPU').toUpperCase();
+    sess.lastPreview = null; // dataUrl da última preview pro plugin/app pollar
+
+    try {
+        const win = new BrowserWindow({
+            width: 720,
+            height: 520,
+            show: false,                  // hidden — worker não tem UI pro user
+            backgroundColor: '#050505',
+            title: 'Lion BG Video Worker',
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+                webgl: true,
+                offscreen: false,
+            },
+        });
+        sess.win = win;
+
+        const workerHtml = path.join(__dirname, 'bg-video-worker.html');
+        const qs = '?token=' + encodeURIComponent(token)
+                 + '&src=' + encodeURIComponent(srcPath)
+                 + '&format=' + encodeURIComponent(format || 'webm')
+                 + '&quality=' + encodeURIComponent(quality || 'medium')
+                 + '&delegate=' + encodeURIComponent(sess.delegate);
+        win.loadFile(workerHtml, { search: qs.replace(/^\?/, '') });
+
+        // Pra debug — descomenta pra ver o worker
+        // win.webContents.openDevTools({ mode: 'detach' });
+        // win.show();
+
+        win.on('closed', () => {
+            const s = bgVideoSessions.get(token);
+            if (s && (s.status === 'starting' || s.status === 'encoding')) {
+                s.status = 'cancelled';
+                try { if (s.encoderProc) s.encoderProc.kill('SIGKILL'); } catch(e) {}
+            }
+        });
+
+        return token;
+    } catch (e) {
+        sess.status = 'error';
+        sess.error = e.message;
+        return token;
+    }
+}
+
+// ─── IPC: probe via ffprobe (dimensões, fps, duração) ─────────────
+ipcMain.handle('bg-video:probe', async (event, payload) => {
+    try {
+        const src = payload?.src;
+        if (!src || !fs.existsSync(src)) return { error: 'arquivo não encontrado' };
+        if (!fs.existsSync(ffprobeBin)) return { error: 'ffprobe não disponível' };
+
+        return await new Promise((resolve) => {
+            const proc = bgvSpawn(ffprobeBin, [
+                '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height,r_frame_rate,duration,nb_frames',
+                '-show_entries', 'format=duration',
+                '-of', 'json',
+                src
+            ], { windowsHide: true });
+            let out = '';
+            proc.stdout.on('data', d => out += d.toString());
+            proc.on('close', () => {
+                try {
+                    const j = JSON.parse(out);
+                    const stream = j.streams?.[0] || {};
+                    const fmt = j.format || {};
+                    const fpsStr = stream.r_frame_rate || '30/1';
+                    const [num, den] = fpsStr.split('/').map(Number);
+                    const fps = (num && den) ? num / den : 30;
+                    const dur = parseFloat(stream.duration || fmt.duration || '0') || 0;
+                    resolve({
+                        width: parseInt(stream.width) || 0,
+                        height: parseInt(stream.height) || 0,
+                        fps: Math.round(fps * 1000) / 1000,
+                        duration: dur,
+                        nbFrames: parseInt(stream.nb_frames) || 0,
+                    });
+                } catch(e) { resolve({ error: 'parse falhou: ' + e.message }); }
+            });
+            proc.on('error', e => resolve({ error: e.message }));
+        });
+    } catch (e) { return { error: e.message }; }
+});
+
+// ─── IPC: get userData path (worker não tem acesso direto) ──────
+ipcMain.handle('bg-video:get-userdata', () => app.getPath('userData'));
+
+// ─── IPC: inicia FFmpeg encoder com stdin pipe ─────────────────
+ipcMain.handle('bg-video:start-encoder', async (event, payload) => {
+    try {
+        const { token, width, height, fps, format, srcPath } = payload || {};
+        const sess = bgVideoSessions.get(token);
+        if (!sess) return { error: 'sessão inválida' };
+        if (!fs.existsSync(ffmpegBin)) return { error: 'ffmpeg não disponível' };
+
+        // Output path: ao lado do source com sufixo _nobg
+        const dir = path.dirname(srcPath);
+        const base = path.basename(srcPath, path.extname(srcPath));
+        const ext = format === 'mov' ? '.mov' : '.webm';
+        let outPath = path.join(dir, base + '_nobg' + ext);
+        // Garante unicidade
+        let n = 0;
+        while (fs.existsSync(outPath) && n < 100) {
+            n++;
+            outPath = path.join(dir, base + '_nobg-' + n + ext);
+        }
+
+        // FFmpeg args:
+        //   stdin: rawvideo RGBA WxH @ fps
+        //   audio: pega do source original (não toca)
+        //   output: WebM VP9 alpha OU MOV ProRes 4444
+        const inputArgs = [
+            '-y',
+            '-f', 'rawvideo',
+            '-pix_fmt', 'rgba',
+            '-s', `${width}x${height}`,
+            '-r', String(fps),
+            '-i', 'pipe:0',
+            // áudio do original (se houver)
+            '-i', srcPath,
+            '-map', '0:v:0',
+            '-map', '1:a:0?',
+        ];
+
+        let outputArgs;
+        if (format === 'mov') {
+            // ProRes 4444 com alpha (yuva444p10le) — qualidade máxima
+            outputArgs = [
+                '-c:v', 'prores_ks',
+                '-profile:v', '4',
+                '-pix_fmt', 'yuva444p10le',
+                '-c:a', 'aac', '-b:a', '192k',
+                '-shortest',
+                outPath
+            ];
+        } else {
+            // WebM VP9 com alpha (yuva420p)
+            outputArgs = [
+                '-c:v', 'libvpx-vp9',
+                '-pix_fmt', 'yuva420p',
+                '-b:v', '0',
+                '-crf', '30',
+                '-deadline', 'realtime',
+                '-cpu-used', '4',
+                '-row-mt', '1',
+                '-c:a', 'libopus', '-b:a', '128k',
+                '-shortest',
+                outPath
+            ];
+        }
+
+        const args = inputArgs.concat(outputArgs);
+        console.log('[bg-video] ffmpeg', args.join(' '));
+
+        const proc = bgvSpawn(ffmpegBin, args, { windowsHide: true });
+        sess.encoderProc = proc;
+        sess.outPath = outPath;
+        sess.status = 'encoding';
+
+        let stderrBuf = '';
+        proc.stderr.on('data', d => {
+            stderrBuf += d.toString();
+            // Mantém só últimos 4KB pra não estourar memória
+            if (stderrBuf.length > 4096) stderrBuf = stderrBuf.slice(-4096);
+        });
+        proc.on('error', e => {
+            sess.status = 'error';
+            sess.error = 'ffmpeg error: ' + e.message;
+        });
+        proc.on('close', code => {
+            sess._exitCode = code;
+            sess._stderrTail = stderrBuf;
+        });
+
+        // Backpressure: stdin pode encher. Promisify writes.
+        proc.stdin.on('error', (e) => {
+            // EPIPE comum se ffmpeg morre — captura
+            console.warn('[bg-video] stdin error:', e.message);
+        });
+
+        return outPath;
+    } catch (e) { return { error: e.message }; }
+});
+
+// ─── IPC: escreve frame RGBA no stdin do ffmpeg ────────────────
+ipcMain.handle('bg-video:write-frame', async (event, payload) => {
+    try {
+        const { token, buffer } = payload || {};
+        const sess = bgVideoSessions.get(token);
+        if (!sess || !sess.encoderProc) return { error: 'encoder não iniciado' };
+
+        const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+        return await new Promise((resolve) => {
+            const ok = sess.encoderProc.stdin.write(buf, (err) => {
+                if (err) resolve({ error: err.message });
+                else resolve({ ok: true });
+            });
+            if (!ok) {
+                // Backpressure: aguarda drain
+                sess.encoderProc.stdin.once('drain', () => resolve({ ok: true }));
+            }
+        });
+    } catch (e) { return { error: e.message }; }
+});
+
+// ─── IPC: fecha stdin e espera ffmpeg terminar ─────────────────
+ipcMain.handle('bg-video:close-encoder', async (event, payload) => {
+    try {
+        const { token } = payload || {};
+        const sess = bgVideoSessions.get(token);
+        if (!sess || !sess.encoderProc) return { error: 'encoder não iniciado' };
+
+        return await new Promise((resolve) => {
+            const proc = sess.encoderProc;
+            proc.on('close', code => {
+                sess.status = code === 0 ? 'done' : 'error';
+                if (code !== 0) {
+                    sess.error = 'ffmpeg saiu com code ' + code + ': ' + (sess._stderrTail || '').slice(-500);
+                    resolve({ error: sess.error });
+                } else {
+                    resolve({ ok: true, outPath: sess.outPath });
+                }
+                // Fecha worker window depois de pequeno delay
+                setTimeout(() => {
+                    try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
+                }, 1000);
+            });
+            try { proc.stdin.end(); } catch(e) {}
+        });
+    } catch (e) { return { error: e.message }; }
+});
+
+// ─── IPC: aborta encoder (cancel) ──────────────────────────────
+ipcMain.handle('bg-video:abort-encoder', async (event, payload) => {
+    try {
+        const { token } = payload || {};
+        const sess = bgVideoSessions.get(token);
+        if (!sess) return { error: 'sessão inválida' };
+        sess.status = 'cancelled';
+        try { if (sess.encoderProc) sess.encoderProc.kill('SIGKILL'); } catch(e) {}
+        try { if (sess.outPath && fs.existsSync(sess.outPath)) fs.unlinkSync(sess.outPath); } catch(e) {}
+        try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
+        return { ok: true };
+    } catch (e) { return { error: e.message }; }
+});
+
+// ─── IPC: progress / phase / log do worker pra rastreamento ─────
+ipcMain.on('bg-video:progress', (event, payload) => {
+    const sess = bgVideoSessions.get(payload?.token);
+    if (sess) {
+        sess.progress.current = payload.current || 0;
+        sess.progress.total = payload.total || 0;
+        sess.progress.pct = payload.pct || 0;
+        sess.progress.etaSec = payload.etaSec || 0;
+    }
+});
+ipcMain.on('bg-video:phase', (event, payload) => {
+    const sess = bgVideoSessions.get(payload?.token);
+    if (sess) sess.progress.phase = payload.phase || '';
+});
+ipcMain.on('bg-video:log', (event, payload) => {
+    console.log('[bg-video][' + (payload?.token || '?').slice(0,4) + '] ' + payload?.msg);
+});
+ipcMain.on('bg-video:done', (event, payload) => {
+    const sess = bgVideoSessions.get(payload?.token);
+    if (!sess) return;
+    if (payload?.ok) {
+        sess.status = 'done';
+        sess.outPath = payload.outPath || sess.outPath;
+    } else {
+        sess.status = 'error';
+        sess.error = payload?.error || 'erro desconhecido';
+    }
+});
+ipcMain.on('bg-video:ready', (event, payload) => {
+    console.log('[bg-video] worker ready:', payload?.token);
+});
+
+// Preview frames vindo do worker — guarda pra cliente pollar via HTTP
+ipcMain.on('bg-video:preview', (event, payload) => {
+    const sess = bgVideoSessions.get(payload?.token);
+    if (sess) {
+        sess.lastPreview = payload.dataUrl;
+        sess.lastPreviewFrame = payload.frame || 0;
+    }
+    // Repassa pra mainWindow se existir (UI do app principal)
+    try {
+        if (mainWin && !mainWin.isDestroyed()) {
+            mainWin.webContents.send('bg-video:preview', payload);
+        }
+    } catch(e) {}
+});
+
+// ─── HTTP: detecta GPUs disponíveis ───────────────────────────
+async function detectGpus() {
+    const result = { hasGpu: false, vendor: 'unknown', renderer: '', platform: process.platform };
+    try {
+        // Cria um BrowserWindow hidden temporário pra fazer query WebGL
+        const tmpWin = new BrowserWindow({
+            width: 100, height: 100, show: false,
+            webPreferences: { nodeIntegration: true, contextIsolation: false, webgl: true }
+        });
+        await tmpWin.loadURL('data:text/html,<canvas id="c"></canvas><script>' +
+            'const c=document.getElementById("c");' +
+            'const gl=c.getContext("webgl2")||c.getContext("webgl");' +
+            'if(gl){' +
+            '  const ext=gl.getExtension("WEBGL_debug_renderer_info");' +
+            '  const r=ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):"";' +
+            '  const v=ext?gl.getParameter(ext.UNMASKED_VENDOR_WEBGL):"";' +
+            '  document.title="GPU::"+v+"::"+r;' +
+            '} else { document.title="GPU::none::"; }' +
+            '</script>');
+        await new Promise(r => setTimeout(r, 200));
+        const title = tmpWin.getTitle();
+        if (title.indexOf('GPU::') === 0) {
+            const parts = title.substring(5).split('::');
+            result.vendor = parts[0] || '';
+            result.renderer = parts[1] || '';
+            result.hasGpu = !!(result.renderer && result.vendor !== 'none');
+        }
+        try { tmpWin.close(); } catch(e) {}
+    } catch (e) { console.error('[bg-video] gpu detect:', e); }
+    return result;
+}
+
 // AI config storage (OpenAI API key)
 const aiConfigPath = path.join(currentUD, 'ai-config.json');
 function getAiConfig() { try { return JSON.parse(fs.readFileSync(aiConfigPath, 'utf8')); } catch(e) { return {}; } }
@@ -1401,6 +1769,44 @@ function startSyncServer() {
             return;
         }
 
+        // BG Remove Vídeo — status + progress polling (plugin/UI usa)
+        if (req.method === 'GET' && req.url.indexOf('/bg/remove-video/status') === 0) {
+            const u = new URL(req.url, 'http://localhost');
+            const token = u.searchParams.get('token');
+            const includePreview = u.searchParams.get('preview') === '1';
+            const sess = token ? bgVideoSessions.get(token) : null;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            if (!sess) {
+                res.end(JSON.stringify({ status: 'expired' }));
+            } else {
+                const out = {
+                    status: sess.status,
+                    progress: sess.progress,
+                    outPath: sess.outPath,
+                    error: sess.error || null,
+                    delegate: sess.delegate,
+                };
+                if (includePreview && sess.lastPreview) {
+                    out.preview = sess.lastPreview;
+                    out.previewFrame = sess.lastPreviewFrame || 0;
+                }
+                res.end(JSON.stringify(out));
+            }
+            return;
+        }
+
+        // BG Remove Vídeo — detecta GPU disponível (cliente usa pra mostrar opções)
+        if (req.method === 'GET' && req.url === '/bg/remove-video/gpu-info') {
+            detectGpus().then((info) => {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(info));
+            }).catch((e) => {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            });
+            return;
+        }
+
         // Mask editor status — plugin polla pra saber quando user salvou/cancelou
         if (req.method === 'GET' && req.url.indexOf('/bg/edit-status') === 0) {
             const u = new URL(req.url, 'http://localhost');
@@ -1669,6 +2075,49 @@ function startSyncServer() {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message || String(e) }));
                     }
+                    return;
+                }
+
+                // ═══════ BG Remove Vídeo — inicia processamento ═══════
+                if (command === 'bg/remove-video' && data.filePath) {
+                    try {
+                        if (!fs.existsSync(data.filePath)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Arquivo não encontrado: ' + data.filePath }));
+                            return;
+                        }
+                        const fmt = (data.format === 'mov') ? 'mov' : 'webm';
+                        const qual = ['fast','medium','high'].includes(data.quality) ? data.quality : 'medium';
+                        const dele = (String(data.delegate || 'GPU').toUpperCase() === 'CPU') ? 'CPU' : 'GPU';
+
+                        if (!fs.existsSync(ffmpegBin)) await ensureFfmpeg();
+                        if (!fs.existsSync(ffmpegBin)) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'FFmpeg não disponível — não foi possível baixar' }));
+                            return;
+                        }
+
+                        const token = startBgVideoWorker(data.filePath, fmt, qual, dele);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ token: token, status: 'starting' }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+
+                // ═══════ BG Remove Vídeo — cancel ═══════
+                if (command === 'bg/remove-video/cancel' && data.token) {
+                    const sess = bgVideoSessions.get(data.token);
+                    if (sess) {
+                        sess.status = 'cancelled';
+                        try { if (sess.encoderProc) sess.encoderProc.kill('SIGKILL'); } catch(e) {}
+                        try { if (sess.outPath && fs.existsSync(sess.outPath)) fs.unlinkSync(sess.outPath); } catch(e) {}
+                        try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
                     return;
                 }
 

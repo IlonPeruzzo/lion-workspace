@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>BG Video Worker</title>
+<style>
+    body{margin:0;padding:18px;background:#050505;color:#a3a3a3;font-family:system-ui,sans-serif;font-size:13px}
+    pre{background:#0a0a0a;padding:8px;border-radius:6px;color:#d9f99d;font-size:11px;overflow:auto;max-height:200px;white-space:pre-wrap}
+    .row{margin:6px 0}
+    .ok{color:#bef264}
+    .err{color:#fca5a5}
+    .preview{margin-top:14px;border:1px solid rgba(190,242,100,0.18);border-radius:8px;display:inline-block;background-image:repeating-conic-gradient(#1a1a1a 0% 25%,#0f0f0f 0% 50%) 50%/14px 14px}
+    canvas{display:block;max-width:480px;max-height:270px}
+</style>
+</head>
+<body>
+    <div class="row">BG Video Worker · <span id="phase">iniciando</span></div>
+    <div class="row" id="info">—</div>
+    <div class="row" id="progress">—</div>
+    <div class="preview"><canvas id="preview"></canvas></div>
+    <video id="vid" style="display:none" muted playsinline preload="auto"></video>
+    <pre id="log"></pre>
+
+<script type="module">
+'use strict';
+
+import { ImageSegmenter, FilesetResolver } from './node_modules/@mediapipe/tasks-vision/vision_bundle.mjs';
+
+const ipc = require('electron').ipcRenderer;
+const fs = require('fs');
+const pathLib = require('path');
+
+const params = new URLSearchParams(location.search);
+const TOKEN = params.get('token') || '';
+const SRC_PATH = decodeURIComponent(params.get('src') || '');
+const QUALITY = params.get('quality') || 'medium';  // 'fast' | 'medium' | 'high'
+const FORMAT = params.get('format') || 'webm';      // 'webm' | 'mov'
+const DELEGATE = (params.get('delegate') || 'GPU').toUpperCase();  // 'GPU' | 'CPU'
+
+// ─── Logging ─────────────────────────────────────────────
+const logEl = document.getElementById('log');
+const phaseEl = document.getElementById('phase');
+const infoEl = document.getElementById('info');
+const progressEl = document.getElementById('progress');
+
+function log(msg, kind) {
+    const ts = new Date().toLocaleTimeString();
+    const line = `[${ts}] ${msg}\n`;
+    logEl.textContent += line;
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(msg);
+    ipc.send('bg-video:log', { token: TOKEN, msg, kind });
+}
+function setPhase(p) { phaseEl.textContent = p; ipc.send('bg-video:phase', { token: TOKEN, phase: p }); }
+function setProgress(current, total, etaSec) {
+    const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+    progressEl.textContent = `Frame ${current}/${total} (${pct}%) · ETA ${Math.ceil(etaSec || 0)}s`;
+    ipc.send('bg-video:progress', { token: TOKEN, current, total, pct, etaSec: Math.ceil(etaSec || 0) });
+}
+function fail(msg) {
+    log('FAIL: ' + msg, 'err');
+    ipc.send('bg-video:done', { token: TOKEN, ok: false, error: msg });
+}
+
+// ─── Resolução por qualidade ────────────────────────────
+const QUALITY_MAX_HEIGHT = {
+    fast:   540,
+    medium: 720,
+    high:   1080,
+};
+
+// ─── Pipeline ───────────────────────────────────────────
+async function run() {
+    try {
+        if (!SRC_PATH) return fail('SRC_PATH ausente');
+        if (!fs.existsSync(SRC_PATH)) return fail('Arquivo não encontrado: ' + SRC_PATH);
+
+        log('Source: ' + SRC_PATH);
+        log('Format: ' + FORMAT + ' · Quality: ' + QUALITY);
+
+        // 1) Carrega MediaPipe
+        setPhase('Carregando IA');
+        log('Carregando MediaPipe Selfie Segmenter...');
+
+        // FilesetResolver aponta pra pasta com .wasm
+        const wasmDir = pathLib.join(__dirname, 'node_modules', '@mediapipe', 'tasks-vision', 'wasm');
+        const wasmDirUrl = 'file:///' + wasmDir.replace(/\\/g, '/').replace(/^\//, '');
+        const fileset = await FilesetResolver.forVisionTasks(wasmDirUrl);
+
+        // Modelo MediaPipe Selfie Segmenter (general — boa qualidade pra retratos)
+        // Usar modelo local se já baixado; caso contrário baixa pra cache
+        const modelDir = pathLib.join(require('electron').remote
+            ? require('electron').remote.app.getPath('userData')
+            : (await ipc.invoke('bg-video:get-userdata')), 'mediapipe-models');
+        try { fs.mkdirSync(modelDir, { recursive: true }); } catch(e) {}
+
+        const modelLocalPath = pathLib.join(modelDir, 'selfie_segmenter.tflite');
+        let modelUrl;
+        if (fs.existsSync(modelLocalPath)) {
+            modelUrl = 'file:///' + modelLocalPath.replace(/\\/g, '/').replace(/^\//, '');
+            log('Modelo em cache: ' + modelLocalPath);
+        } else {
+            log('Baixando modelo (~3MB) na primeira vez...');
+            const remoteUrl = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
+            const resp = await fetch(remoteUrl);
+            if (!resp.ok) throw new Error('Falha ao baixar modelo: HTTP ' + resp.status);
+            const buf = Buffer.from(await resp.arrayBuffer());
+            fs.writeFileSync(modelLocalPath, buf);
+            log('Modelo salvo: ' + modelLocalPath + ' (' + Math.round(buf.length/1024) + ' KB)');
+            modelUrl = 'file:///' + modelLocalPath.replace(/\\/g, '/').replace(/^\//, '');
+        }
+
+        const segmenter = await ImageSegmenter.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: modelUrl, delegate: DELEGATE },
+            runningMode: 'VIDEO',
+            outputCategoryMask: false,
+            outputConfidenceMasks: true,
+        });
+        log('IA pronta (delegate: ' + DELEGATE + ')');
+
+        // 2) Abre vídeo via probe (pega dimensões/duração/fps)
+        setPhase('Lendo vídeo');
+        const meta = await ipc.invoke('bg-video:probe', { src: SRC_PATH });
+        if (!meta || meta.error) return fail('Probe falhou: ' + (meta?.error || 'desconhecido'));
+        log(`Vídeo: ${meta.width}×${meta.height} · ${meta.fps}fps · ${meta.duration.toFixed(2)}s`);
+
+        // Resolução de processamento (mantém aspect ratio)
+        const maxH = QUALITY_MAX_HEIGHT[QUALITY] || 720;
+        let procW = meta.width;
+        let procH = meta.height;
+        if (procH > maxH) {
+            const scale = maxH / procH;
+            procH = maxH;
+            procW = Math.round(meta.width * scale / 2) * 2; // par
+        }
+        log(`Processando em ${procW}×${procH}`);
+        infoEl.textContent = `${meta.width}×${meta.height} · ${meta.fps}fps · ${meta.duration.toFixed(1)}s · → processo a ${procW}×${procH}`;
+
+        // 3) Inicia FFmpeg encoder via main process
+        const outPath = await ipc.invoke('bg-video:start-encoder', {
+            token: TOKEN,
+            width: procW,
+            height: procH,
+            fps: meta.fps,
+            format: FORMAT,
+            srcPath: SRC_PATH,
+        });
+        if (!outPath || outPath.error) return fail('Encoder falhou: ' + (outPath?.error || 'desconhecido'));
+        log('Encoder iniciado: ' + outPath);
+
+        // 4) Loop de frames
+        setPhase('Processando frames');
+        const totalFrames = Math.ceil(meta.duration * meta.fps);
+        const vid = document.getElementById('vid');
+        vid.src = 'file:///' + SRC_PATH.replace(/\\/g, '/').replace(/^\//, '');
+
+        await new Promise((resolve, reject) => {
+            vid.onloadeddata = resolve;
+            vid.onerror = () => reject(new Error('Falha ao decodificar vídeo'));
+        });
+
+        // Canvas pra processar
+        const procCanvas = document.createElement('canvas');
+        procCanvas.width = procW;
+        procCanvas.height = procH;
+        const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
+
+        // Canvas final com alpha (RGBA)
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = procW;
+        outCanvas.height = procH;
+        const outCtx = outCanvas.getContext('2d', { willReadFrequently: true });
+
+        // Preview canvas
+        const previewCanvas = document.getElementById('preview');
+        previewCanvas.width = procW;
+        previewCanvas.height = procH;
+        const previewCtx = previewCanvas.getContext('2d');
+
+        const startedAt = Date.now();
+        let cancelled = false;
+        ipc.on('bg-video:cancel', (_, p) => { if (p?.token === TOKEN) cancelled = true; });
+
+        for (let i = 0; i < totalFrames; i++) {
+            if (cancelled) {
+                await ipc.invoke('bg-video:abort-encoder', { token: TOKEN });
+                return fail('Cancelado pelo usuário');
+            }
+
+            const t = i / meta.fps;
+            await seekVideo(vid, t);
+
+            // Desenha frame em procCanvas
+            procCtx.drawImage(vid, 0, 0, procW, procH);
+
+            // Roda MediaPipe (síncrono no VIDEO mode)
+            const tsMs = Math.round(t * 1000);
+            const result = segmenter.segmentForVideo(procCanvas, tsMs);
+
+            // Aplica mask como alpha
+            applyMaskToCanvas(procCtx, result, procW, procH, outCanvas, outCtx);
+
+            // Update preview local a cada 5 frames
+            if (i % 5 === 0) {
+                previewCtx.clearRect(0, 0, procW, procH);
+                previewCtx.drawImage(outCanvas, 0, 0);
+            }
+            // Manda preview pro app principal a cada 3 frames (ou final)
+            // App principal/plugin exibe pra usuário ver realtime
+            if (i % 3 === 0 || i === totalFrames - 1) {
+                try {
+                    // Reduz pra 360p pra IPC ser leve
+                    const pvScale = 360 / procH;
+                    const pvW = Math.round(procW * pvScale / 2) * 2;
+                    const pvH = 360;
+                    const pvCanvas = document.createElement('canvas');
+                    pvCanvas.width = pvW; pvCanvas.height = pvH;
+                    const pvCtx = pvCanvas.getContext('2d');
+                    pvCtx.drawImage(outCanvas, 0, 0, pvW, pvH);
+                    const dataUrl = pvCanvas.toDataURL('image/png');
+                    ipc.send('bg-video:preview', { token: TOKEN, dataUrl, frame: i });
+                } catch(e) {}
+            }
+
+            // Extrai pixels RGBA e manda pro encoder
+            const imgData = outCtx.getImageData(0, 0, procW, procH);
+            const buf = Buffer.from(imgData.data.buffer);
+            await ipc.invoke('bg-video:write-frame', { token: TOKEN, buffer: buf });
+
+            // Progress + ETA
+            const elapsed = (Date.now() - startedAt) / 1000;
+            const fps = (i + 1) / elapsed;
+            const remaining = (totalFrames - i - 1) / fps;
+            setProgress(i + 1, totalFrames, remaining);
+        }
+
+        // 5) Finaliza encoder
+        setPhase('Finalizando');
+        log('Fechando encoder FFmpeg...');
+        const finalRes = await ipc.invoke('bg-video:close-encoder', { token: TOKEN });
+        if (!finalRes || finalRes.error) return fail('Close falhou: ' + (finalRes?.error || ''));
+
+        const totalTime = (Date.now() - startedAt) / 1000;
+        log(`✓ Concluído em ${totalTime.toFixed(1)}s · output: ${finalRes.outPath}`, 'ok');
+        setPhase('Concluído');
+        ipc.send('bg-video:done', {
+            token: TOKEN,
+            ok: true,
+            outPath: finalRes.outPath,
+            duration: totalTime,
+            frames: totalFrames,
+        });
+    } catch (e) {
+        fail(e.message || String(e));
+        console.error(e);
+    }
+}
+
+// Helpers ─────────────────────────────────────────────────
+function seekVideo(vid, t) {
+    return new Promise((resolve) => {
+        const onSeeked = () => { vid.removeEventListener('seeked', onSeeked); resolve(); };
+        vid.addEventListener('seeked', onSeeked);
+        vid.currentTime = t;
+    });
+}
+
+function applyMaskToCanvas(srcCtx, segResult, w, h, outCanvas, outCtx) {
+    // segmentForVideo retorna { confidenceMasks: [MPMask] }
+    const masks = segResult.confidenceMasks;
+    if (!masks || masks.length === 0) {
+        outCtx.drawImage(srcCtx.canvas, 0, 0);
+        return;
+    }
+    const maskFloat = masks[0].getAsFloat32Array(); // 0..1, length = w*h
+
+    const srcImg = srcCtx.getImageData(0, 0, w, h);
+    const out = outCtx.createImageData(w, h);
+    const total = w * h;
+    for (let i = 0; i < total; i++) {
+        const conf = maskFloat[i]; // 0=fundo, 1=pessoa
+        out.data[i*4]   = srcImg.data[i*4];
+        out.data[i*4+1] = srcImg.data[i*4+1];
+        out.data[i*4+2] = srcImg.data[i*4+2];
+        out.data[i*4+3] = Math.round(conf * 255);
+    }
+    outCtx.putImageData(out, 0, 0);
+
+    // Libera memória do mask
+    try { masks[0].close(); } catch(e) {}
+}
+
+// Boot
+ipc.send('bg-video:ready', { token: TOKEN });
+run();
+</script>
+</body>
+</html>
