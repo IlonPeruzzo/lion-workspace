@@ -818,7 +818,12 @@ ipcMain.handle('bg-video:probe', async (event, payload) => {
     try {
         const src = payload?.src;
         if (!src || !fs.existsSync(src)) return { error: 'arquivo não encontrado' };
-        if (!fs.existsSync(ffprobeBin)) return { error: 'ffprobe não disponível' };
+        // Auto-download ffmpeg/ffprobe se não estiver disponível
+        if (!ffprobeReady() || !ffmpegReady()) {
+            console.log('[bg-video:probe] baixando ffmpeg/ffprobe (1ª vez)...');
+            await ensureFfmpeg();
+        }
+        if (!ffprobeReady()) return { error: 'ffprobe não disponível (download falhou — verifique conexão)' };
 
         return await new Promise((resolve) => {
             const proc = bgvSpawn(ffprobeBin, [
@@ -1152,8 +1157,12 @@ async function ensureYtDlp() {
     } catch (e) { console.error('yt-dlp download failed:', e.message); return false; }
 }
 
+function ffprobeReady() { return fs.existsSync(ffprobeBin); }
+
 async function ensureFfmpeg() {
-    if (ffmpegReady()) return true;
+    // Antes só checava ffmpeg — agora exige BOTH ffmpeg E ffprobe.
+    // bg-remove de vídeo precisa do ffprobe pra detectar dimensões/fps.
+    if (ffmpegReady() && ffprobeReady()) return true;
 
     // Try to find system ffmpeg/ffprobe first
     const findBin = (name) => new Promise(resolve => {
@@ -1179,7 +1188,7 @@ async function ensureFfmpeg() {
     if (sysFF) {
         linkBin(sysFF, ffmpegBin);
         linkBin(sysProbe, ffprobeBin);
-        if (fs.existsSync(ffmpegBin)) return true;
+        if (ffmpegReady() && ffprobeReady()) return true;
     }
 
     // 2) macOS: check common Homebrew / MacPorts paths
@@ -1195,7 +1204,7 @@ async function ensureFfmpeg() {
             if (fs.existsSync(ff)) {
                 linkBin(ff, ffmpegBin);
                 linkBin(fp, ffprobeBin);
-                if (fs.existsSync(ffmpegBin)) return true;
+                if (ffmpegReady() && ffprobeReady()) return true;
             }
         }
 
@@ -1223,7 +1232,7 @@ async function ensureFfmpeg() {
             }
             // Cleanup
             try { fs.rmSync(dlDir, { recursive: true, force: true }); } catch {}
-            return fs.existsSync(ffmpegBin);
+            return ffmpegReady() && ffprobeReady();
         } catch (e) { console.error('macOS ffmpeg download failed:', e.message); return false; }
     }
 
@@ -1245,7 +1254,7 @@ async function ensureFfmpeg() {
         });
         safeRm(zipPath);
         try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
-        return fs.existsSync(ffmpegBin);
+        return ffmpegReady() && ffprobeReady();
     } catch (e) { console.error('ffmpeg download failed:', e.message); return false; }
 }
 
