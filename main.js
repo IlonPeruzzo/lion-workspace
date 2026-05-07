@@ -658,6 +658,10 @@ function openMaskEditor(origPath, processedPath) {
             title: 'Editor de Máscara — Lion Workspace',
             backgroundColor: '#050505',
             show: true,
+            // Frameless: o titlebar nativo do Windows era redundante com a
+            // topbar custom do editor (.topbar). Agora a topbar é drag region.
+            frame: false,
+            titleBarStyle: 'hidden',
             webPreferences: {
                 nodeIntegration: true,
                 contextIsolation: false,
@@ -725,6 +729,24 @@ ipcMain.on('mask-editor:cancel', (event, payload) => {
             try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
         }
     } catch(e) { console.error('[mask-editor:cancel]', e); }
+});
+
+// Window controls da janela frameless do editor
+ipcMain.on('mask-editor:win-action', (event, payload) => {
+    try {
+        const { token, action } = payload || {};
+        const sess = maskEditorSessions.get(token);
+        if (!sess || !sess.win || sess.win.isDestroyed()) return;
+        const w = sess.win;
+        if (action === 'minimize') w.minimize();
+        else if (action === 'maximize') {
+            if (w.isMaximized()) w.unmaximize();
+            else w.maximize();
+        } else if (action === 'close') {
+            sess.status = sess.status === 'editing' ? 'cancelled' : sess.status;
+            w.close();
+        }
+    } catch(e) { console.error('[mask-editor:win-action]', e); }
 });
 
 // ════════════════════════════════════════════════════════════════════

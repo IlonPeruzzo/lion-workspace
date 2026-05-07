@@ -26,23 +26,42 @@
             radial-gradient(ellipse at 100% 100%, rgba(34,211,238,0.04), transparent 50%);
     }
 
-    /* TOPBAR */
+    /* TOPBAR — drag region da janela frameless */
     .topbar {
         display:flex; align-items:center; gap:14px;
-        padding:12px 18px;
-        background:rgba(10,10,10,0.7);
+        padding:0 0 0 18px;
+        background:rgba(10,10,10,0.85);
         backdrop-filter:blur(14px);
         border-bottom:1px solid var(--border);
         z-index:10;
+        height:38px;
+        -webkit-app-region: drag;     /* faz a topbar ser arrastável */
+        user-select:none;
     }
-    .topbar h1 { font-size:.95rem; font-weight:700; letter-spacing:-.2px; color:var(--text); }
+    .topbar h1 { font-size:.88rem; font-weight:700; letter-spacing:-.2px; color:var(--text); }
     .topbar h1 span { color:var(--accent); }
     .spacer { flex:1; }
     .meta {
-        font-size:.72rem; color:var(--text3);
+        font-size:.7rem; color:var(--text3);
         font-family:'JetBrains Mono', ui-monospace, monospace;
         letter-spacing:-.2px;
     }
+    /* Window controls (minimizar/maximizar/fechar) */
+    .win-controls {
+        display:flex;
+        -webkit-app-region: no-drag;  /* botões não arrastam */
+        margin-left:8px;
+    }
+    .win-btn {
+        width:46px; height:38px;
+        display:inline-flex; align-items:center; justify-content:center;
+        background:transparent; border:none;
+        color:var(--text2); cursor:pointer;
+        transition:background .15s, color .15s;
+    }
+    .win-btn:hover { background:rgba(255,255,255,.08); color:var(--text); }
+    .win-btn.close:hover { background:#e81123; color:#fff; }
+    .win-btn svg { width:11px; height:11px; }
 
     /* MAIN AREA */
     .main { display:flex; flex:1; overflow:hidden; }
@@ -121,9 +140,10 @@
         box-shadow: 0 0 0 3px rgba(190,242,100,0.18);
     }
     .slider-row .val {
-        flex:0 0 44px; text-align:right;
+        flex:0 0 56px; text-align:right;
         font-family:'JetBrains Mono', monospace;
         font-size:.72rem; color:var(--text2);
+        padding-right:2px;
     }
 
     /* TOGGLE */
@@ -209,7 +229,18 @@
         <h1>Editor de <span>Máscara</span></h1>
         <span class="meta" id="dims">—</span>
         <div class="spacer"></div>
-        <span class="meta" id="zoomMeta">100%</span>
+        <span class="meta" id="zoomMeta" style="margin-right:6px">100%</span>
+        <div class="win-controls">
+            <button class="win-btn" id="winMinimize" title="Minimizar">
+                <svg viewBox="0 0 12 12"><line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" stroke-width="1.2"/></svg>
+            </button>
+            <button class="win-btn" id="winMaximize" title="Maximizar">
+                <svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+            </button>
+            <button class="win-btn close" id="winClose" title="Fechar">
+                <svg viewBox="0 0 12 12"><line x1="2.5" y1="2.5" x2="9.5" y2="9.5" stroke="currentColor" stroke-width="1.2"/><line x1="9.5" y1="2.5" x2="2.5" y2="9.5" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+        </div>
     </div>
 
     <div class="main">
@@ -858,6 +889,17 @@ if (ipc) {
         document.getElementById('btnSave').disabled = false;
     });
 }
+
+// Window controls (minimize / maximize / close) — via IPC pra main
+document.getElementById('winMinimize').onclick = () => {
+    try { if (ipc) ipc.send('mask-editor:win-action', { token: SESSION_TOKEN, action: 'minimize' }); } catch(e) {}
+};
+document.getElementById('winMaximize').onclick = () => {
+    try { if (ipc) ipc.send('mask-editor:win-action', { token: SESSION_TOKEN, action: 'maximize' }); } catch(e) {}
+};
+document.getElementById('winClose').onclick = () => {
+    try { if (ipc) ipc.send('mask-editor:win-action', { token: SESSION_TOKEN, action: 'close' }); } catch(e) {}
+};
 
 // Boot
 init();
