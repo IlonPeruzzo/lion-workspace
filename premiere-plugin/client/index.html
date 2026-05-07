@@ -1005,6 +1005,22 @@
                 <!-- Mensagem específica do vídeo (separada do bgRemoveMsg da imagem) -->
                 <div id="bgVideoMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
 
+                <!-- ────── Rotoscope (SAM 2) ────── -->
+                <button class="magic-cta" onclick="rotoscopeOpen()" id="rotoscopeBtn" style="margin-top:8px;background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(34,211,238,.05))" title="Roto manual com IA SAM 2 — clica no sujeito e propaga">
+                    <span class="mc-icon">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/>
+                            <path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/>
+                        </svg>
+                    </span>
+                    <span class="mc-text">
+                        <span class="mc-title">Rotoscope (SAM 2)</span>
+                        <span class="mc-sub">Click + propaga · controle manual</span>
+                    </span>
+                    <svg class="mc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <div id="rotoscopeMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
+
                 <!-- Progresso ao vivo -->
                 <div id="bgVideoProgress" style="display:none;margin-top:8px;padding:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(190,242,100,.18);border-radius:8px">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -3659,6 +3675,45 @@
                     // 'editing' → continua pollando
                 });
         }, 1000);
+    }
+
+    // ════════════════════════════════════════════════════
+    // ROTOSCOPE (SAM 2)
+    // ════════════════════════════════════════════════════
+    function _rotoMsg(text, color) {
+        var el = document.getElementById('rotoscopeMsg');
+        if (el) { el.textContent = text || ''; el.style.color = color || '#555'; }
+    }
+    function rotoscopeOpen() {
+        if (!csInterface) { _rotoMsg('CEP indisponível', '#f43f5e'); return; }
+        if (!lwConnected) { _rotoMsg('Lion Workspace desconectado', '#f43f5e'); return; }
+        var btn = document.getElementById('rotoscopeBtn');
+        btn.disabled = true;
+        _rotoMsg('Abrindo editor...', '#a78bfa');
+
+        csInterface.evalScript('lwBgGetSelected()', function(rawResult) {
+            var raw = String(rawResult || '');
+            if (raw.indexOf('OK:') !== 0) {
+                btn.disabled = false;
+                if (raw === 'NO_SELECTION') _rotoMsg('Selecione um clip de vídeo na timeline', '#f59e0b');
+                else _rotoMsg(raw || 'Erro', '#f43f5e');
+                return;
+            }
+            var info;
+            try { info = JSON.parse(raw.substring(3)); }
+            catch (e) { btn.disabled = false; _rotoMsg('Erro parsing', '#f43f5e'); return; }
+
+            LWHttp.post(API + '/rotoscope/start', { filePath: info.path }, { timeout: 10000, retries: 0 }, function(err, status, body) {
+                btn.disabled = false;
+                if (err || status !== 200) {
+                    var emsg = 'Falha ao abrir editor';
+                    try { emsg = JSON.parse(body || '{}').error || emsg; } catch(e) {}
+                    _rotoMsg(emsg, '#f43f5e');
+                    return;
+                }
+                _rotoMsg('Editor aberto no app — edite e salve', '#22c55e');
+            });
+        });
     }
 
     // ════════════════════════════════════════════════════

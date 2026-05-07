@@ -731,6 +731,143 @@ ipcMain.on('mask-editor:cancel', (event, payload) => {
     } catch(e) { console.error('[mask-editor:cancel]', e); }
 });
 
+// ════════════════════════════════════════════════════════════════════
+// ROTOSCOPE EDITOR — SAM 2 video segmentation
+// Fase 1 (atual): setup, UI base, abre janela, IPC infra
+// Fase 2+: integração do modelo SAM 2 ONNX no worker
+// ════════════════════════════════════════════════════════════════════
+const rotoscopeSessions = new Map();
+// token -> { status, win, srcPath, outPath, masks }
+
+function openRotoscopeEditor(srcPath, outPath) {
+    const token = crypto.randomBytes(8).toString('hex');
+    const sess = { status: 'editing', srcPath, outPath, masks: null, _createdAt: Date.now() };
+    rotoscopeSessions.set(token, sess);
+
+    // Cleanup sessões antigas
+    const now = Date.now();
+    for (const [k, v] of rotoscopeSessions) {
+        if (v._createdAt && (now - v._createdAt) > 2 * 60 * 60 * 1000) rotoscopeSessions.delete(k);
+    }
+
+    try {
+        const win = new BrowserWindow({
+            width: 1400, height: 900,
+            minWidth: 1000, minHeight: 640,
+            title: 'Rotoscope — Lion Workspace',
+            backgroundColor: '#050505',
+            show: true,
+            frame: false,
+            titleBarStyle: 'hidden',
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+                webgl: true,
+            },
+        });
+        sess.win = win;
+
+        const editorHtml = path.join(__dirname, 'rotoscope-editor.html');
+        const qs = '?token=' + encodeURIComponent(token)
+                 + '&src=' + encodeURIComponent(srcPath)
+                 + '&out=' + encodeURIComponent(outPath || '');
+        win.loadFile(editorHtml, { search: qs.replace(/^\?/, '') });
+        try { win.setMenuBarVisibility(false); } catch(e) {}
+
+        win.on('closed', () => {
+            const s = rotoscopeSessions.get(token);
+            if (s && s.status === 'editing') s.status = 'cancelled';
+            setTimeout(() => rotoscopeSessions.delete(token), 5 * 60 * 1000);
+        });
+
+        return token;
+    } catch (e) {
+        sess.status = 'error';
+        sess.error = e.message;
+        return token;
+    }
+}
+
+// Probe via ffprobe — reusa lógica do bg-video
+ipcMain.handle('rotoscope:probe', async (event, payload) => {
+    try {
+        const src = payload?.src;
+        if (!src || !fs.existsSync(src)) return { error: 'arquivo não encontrado' };
+        if (!ffprobeReady() || !ffmpegReady()) await ensureFfmpeg();
+        if (!ffprobeReady()) return { error: 'ffprobe não disponível' };
+
+        return await new Promise((resolve) => {
+            const proc = bgvSpawn(ffprobeBin, [
+                '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height,r_frame_rate,duration,nb_frames',
+                '-show_entries', 'format=duration',
+                '-of', 'json',
+                src
+            ], { windowsHide: true });
+            let out = '';
+            proc.stdout.on('data', d => out += d.toString());
+            proc.on('close', () => {
+                try {
+                    const j = JSON.parse(out);
+                    const stream = j.streams?.[0] || {};
+                    const fmt = j.format || {};
+                    const fpsStr = stream.r_frame_rate || '30/1';
+                    const [num, den] = fpsStr.split('/').map(Number);
+                    const fps = (num && den) ? num / den : 30;
+                    resolve({
+                        width: parseInt(stream.width) || 0,
+                        height: parseInt(stream.height) || 0,
+                        fps: Math.round(fps * 1000) / 1000,
+                        duration: parseFloat(stream.duration || fmt.duration || '0') || 0,
+                    });
+                } catch(e) { resolve({ error: 'parse falhou: ' + e.message }); }
+            });
+            proc.on('error', e => resolve({ error: e.message }));
+        });
+    } catch (e) { return { error: e.message }; }
+});
+
+// Window controls da janela frameless do rotoscope
+ipcMain.on('rotoscope:win-action', (event, payload) => {
+    try {
+        const { token, action } = payload || {};
+        const sess = rotoscopeSessions.get(token);
+        if (!sess || !sess.win || sess.win.isDestroyed()) return;
+        const w = sess.win;
+        if (action === 'minimize') w.minimize();
+        else if (action === 'maximize') {
+            if (w.isMaximized()) w.unmaximize();
+            else w.maximize();
+        } else if (action === 'close') {
+            sess.status = sess.status === 'editing' ? 'cancelled' : sess.status;
+            w.close();
+        }
+    } catch(e) {}
+});
+
+ipcMain.on('rotoscope:ready', (event, payload) => {
+    console.log('[rotoscope] worker ready:', payload?.token);
+});
+
+ipcMain.on('rotoscope:cancel', (event, payload) => {
+    const sess = rotoscopeSessions.get(payload?.token);
+    if (sess) {
+        sess.status = 'cancelled';
+        try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
+    }
+});
+
+ipcMain.on('rotoscope:save', (event, payload) => {
+    const sess = rotoscopeSessions.get(payload?.token);
+    if (sess) {
+        // FASE 5: aplicar masks + gerar vídeo com alpha via ffmpeg
+        sess.masks = payload?.masks || {};
+        sess.status = 'saved';
+        console.log('[rotoscope] save:', Object.keys(sess.masks).length, 'masks');
+    }
+});
+
 // Window controls da janela frameless do editor
 ipcMain.on('mask-editor:win-action', (event, payload) => {
     try {
@@ -2247,6 +2384,28 @@ function startSyncServer() {
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
+
+                // ═══════ Rotoscope SAM 2 — abre editor pra clip de vídeo ═══════
+                if (command === 'rotoscope/start' && data.filePath) {
+                    try {
+                        if (!fs.existsSync(data.filePath)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Arquivo não encontrado' }));
+                            return;
+                        }
+                        // Output padrão ao lado do source
+                        const dir = path.dirname(data.filePath);
+                        const base = path.basename(data.filePath, path.extname(data.filePath));
+                        const outPath = path.join(dir, base + '_rotoscope.mov');
+                        const token = openRotoscopeEditor(data.filePath, outPath);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ token, status: 'editing' }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message }));
+                    }
                     return;
                 }
 
