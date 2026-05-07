@@ -739,16 +739,50 @@ ipcMain.on('mask-editor:cancel', (event, payload) => {
 const rotoscopeSessions = new Map();
 // token -> { status, win, srcPath, outPath, masks }
 
-function openRotoscopeEditor(srcPath, outPath) {
+async function openRotoscopeEditor(origSrcPath, outPath) {
     const token = crypto.randomBytes(8).toString('hex');
-    const sess = { status: 'editing', srcPath, outPath, masks: null, _createdAt: Date.now() };
+    const sess = { status: 'preparing', srcPath: origSrcPath, outPath, masks: null, _createdAt: Date.now() };
     rotoscopeSessions.set(token, sess);
 
-    // Cleanup sessões antigas
     const now = Date.now();
     for (const [k, v] of rotoscopeSessions) {
         if (v._createdAt && (now - v._createdAt) > 2 * 60 * 60 * 1000) rotoscopeSessions.delete(k);
     }
+
+    // PRÉ-TRANSCODE: garante H.264 pra HTML5 <video> decodar.
+    // Sem isso, ProRes/HEVC/DNxHD davam canvas vazio — vid.onerror silencioso.
+    let workingSrc = origSrcPath;
+    if (ffmpegReady() || (await ensureFfmpeg())) {
+        try {
+            const tmp = path.join(currentUD, 'roto-trim-' + Date.now() + '.mp4');
+            console.log('[rotoscope] pré-transcode H.264:', origSrcPath, '→', tmp);
+            await new Promise((resolve, reject) => {
+                const proc = bgvSpawn(ffmpegBin, [
+                    '-y', '-i', origSrcPath,
+                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '20',
+                    '-pix_fmt', 'yuv420p',
+                    '-g', '1', '-keyint_min', '1', '-sc_threshold', '0',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    tmp,
+                ], { windowsHide: true });
+                let err = '';
+                proc.stderr.on('data', d => { err += d.toString(); if (err.length > 4096) err = err.slice(-4096); });
+                proc.on('close', code => {
+                    if (code === 0 && fs.existsSync(tmp)) resolve();
+                    else reject(new Error('ffmpeg trim falhou: ' + err.slice(-300)));
+                });
+                proc.on('error', e => reject(e));
+            });
+            workingSrc = tmp;
+            sess._tempTranscoded = tmp;
+        } catch (e) {
+            console.error('[rotoscope] pre-transcode failed, usando source original:', e.message);
+        }
+    }
+
+    sess.workingSrc = workingSrc;
+    sess.status = 'editing';
 
     try {
         const win = new BrowserWindow({
@@ -763,13 +797,15 @@ function openRotoscopeEditor(srcPath, outPath) {
                 nodeIntegration: true,
                 contextIsolation: false,
                 webgl: true,
+                webSecurity: false,    // permite file:// pro <video> e fetch local
             },
         });
         sess.win = win;
 
         const editorHtml = path.join(__dirname, 'rotoscope-editor.html');
         const qs = '?token=' + encodeURIComponent(token)
-                 + '&src=' + encodeURIComponent(srcPath)
+                 + '&src=' + encodeURIComponent(workingSrc)
+                 + '&origSrc=' + encodeURIComponent(origSrcPath)
                  + '&out=' + encodeURIComponent(outPath || '');
         win.loadFile(editorHtml, { search: qs.replace(/^\?/, '') });
         try { win.setMenuBarVisibility(false); } catch(e) {}
@@ -777,6 +813,10 @@ function openRotoscopeEditor(srcPath, outPath) {
         win.on('closed', () => {
             const s = rotoscopeSessions.get(token);
             if (s && s.status === 'editing') s.status = 'cancelled';
+            // Cleanup do temp transcoded
+            if (s && s._tempTranscoded) {
+                try { if (fs.existsSync(s._tempTranscoded)) fs.unlinkSync(s._tempTranscoded); } catch(e) {}
+            }
             setTimeout(() => rotoscopeSessions.delete(token), 5 * 60 * 1000);
         });
 
@@ -2485,13 +2525,29 @@ function startSyncServer() {
                             res.end(JSON.stringify({ error: 'Arquivo não encontrado' }));
                             return;
                         }
+                        // Validar que é vídeo (não imagem)
+                        const ext = path.extname(data.filePath).toLowerCase();
+                        const imgExts = ['.png','.jpg','.jpeg','.gif','.bmp','.webp','.tiff','.tif'];
+                        if (imgExts.includes(ext)) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'Selecione um clip de vídeo (não imagem)' }));
+                            return;
+                        }
                         // Output padrão ao lado do source
                         const dir = path.dirname(data.filePath);
                         const base = path.basename(data.filePath, path.extname(data.filePath));
                         const outPath = path.join(dir, base + '_rotoscope.mov');
-                        const token = openRotoscopeEditor(data.filePath, outPath);
+
+                        // Responde IMEDIATAMENTE com 200 — pré-transcode pode demorar
+                        // alguns segundos pra vídeos grandes; cliente já pode mostrar
+                        // mensagem "abrindo".
                         res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ token, status: 'editing' }));
+                        const tokenPromise = openRotoscopeEditor(data.filePath, outPath);
+                        tokenPromise.then(token => {
+                            res.end(JSON.stringify({ token, status: 'editing' }));
+                        }).catch(err => {
+                            res.end(JSON.stringify({ error: err.message || String(err) }));
+                        });
                     } catch (e) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message }));
