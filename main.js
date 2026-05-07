@@ -861,10 +861,100 @@ ipcMain.on('rotoscope:cancel', (event, payload) => {
 ipcMain.on('rotoscope:save', (event, payload) => {
     const sess = rotoscopeSessions.get(payload?.token);
     if (sess) {
-        // FASE 5: aplicar masks + gerar vídeo com alpha via ffmpeg
         sess.masks = payload?.masks || {};
         sess.status = 'saved';
-        console.log('[rotoscope] save:', Object.keys(sess.masks).length, 'masks');
+    }
+});
+
+ipcMain.on('rotoscope:save-done', (event, payload) => {
+    const sess = rotoscopeSessions.get(payload?.token);
+    if (sess) {
+        sess.status = 'saved';
+        sess.outPath = payload?.outPath || sess.outPath;
+        // Fecha janela após save
+        setTimeout(() => {
+            try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
+        }, 800);
+    }
+});
+
+// EXPORT — aplica masks + gera .mov ProRes 4444 com alpha
+ipcMain.handle('rotoscope:export', async (event, payload) => {
+    try {
+        const { token, masks, srcPath, outPath, fps, totalFrames, width, height } = payload || {};
+        if (!srcPath || !fs.existsSync(srcPath)) return { error: 'src não existe' };
+        if (!ffmpegReady() || !ffprobeReady()) await ensureFfmpeg();
+        if (!ffmpegReady()) return { error: 'ffmpeg não disponível' };
+
+        const finalOut = outPath || path.join(path.dirname(srcPath),
+            path.basename(srcPath, path.extname(srcPath)) + '_rotoscope.mov');
+
+        // Cria pasta temp pra masks PNG
+        const tmpDir = path.join(currentUD, 'rotoscope-' + Date.now());
+        fs.mkdirSync(tmpDir, { recursive: true });
+
+        // Salva cada mask como PNG na pasta temp (interpola pra frames sem mask)
+        const maskKeys = Object.keys(masks).map(Number).sort((a,b)=>a-b);
+        if (maskKeys.length === 0) return { error: 'sem máscaras' };
+
+        for (let i = 0; i < totalFrames; i++) {
+            // Acha mask mais próxima (frame anterior ou igual)
+            let useFrame = maskKeys[0];
+            for (const k of maskKeys) {
+                if (k <= i) useFrame = k; else break;
+            }
+            const m = masks[useFrame];
+            if (!m) continue;
+            const base64 = m.dataUrl.replace(/^data:image\/png;base64,/, '');
+            const fname = path.join(tmpDir, 'mask-' + String(i).padStart(6,'0') + '.png');
+            fs.writeFileSync(fname, Buffer.from(base64, 'base64'));
+        }
+
+        // FFmpeg: aplica masks como alpha frame-a-frame
+        // 2 inputs: source video + masks PNG sequence
+        // filter: alphamerge usa luminância da mask como alpha
+        const args = [
+            '-y',
+            '-i', srcPath,
+            '-framerate', String(fps),
+            '-i', path.join(tmpDir, 'mask-%06d.png'),
+            '-filter_complex',
+            // [1:v] = masks · scale pra match do video · usa luma como alpha
+            '[1:v]scale=' + width + ':' + height + ',format=gray[mask];[0:v][mask]alphamerge[out]',
+            '-map', '[out]',
+            '-map', '0:a?',
+            '-c:v', 'prores_ks',
+            '-profile:v', '4',
+            '-pix_fmt', 'yuva444p10le',
+            '-c:a', 'aac', '-b:a', '192k',
+            '-shortest',
+            finalOut,
+        ];
+        console.log('[rotoscope/export] ffmpeg', args.join(' '));
+
+        await new Promise((resolve, reject) => {
+            const proc = bgvSpawn(ffmpegBin, args, { windowsHide: true });
+            let stderr = '';
+            proc.stderr.on('data', d => { stderr += d.toString(); if (stderr.length > 8192) stderr = stderr.slice(-8192); });
+            proc.on('close', code => {
+                if (code === 0 && fs.existsSync(finalOut)) resolve();
+                else reject(new Error('ffmpeg code ' + code + ': ' + stderr.slice(-400)));
+            });
+            proc.on('error', e => reject(e));
+        });
+
+        // Cleanup PNGs temp
+        try {
+            for (const f of fs.readdirSync(tmpDir)) fs.unlinkSync(path.join(tmpDir, f));
+            fs.rmdirSync(tmpDir);
+        } catch(e) {}
+
+        const sess = rotoscopeSessions.get(token);
+        if (sess) sess.outPath = finalOut;
+
+        return { ok: true, outPath: finalOut };
+    } catch (e) {
+        return { error: e.message || String(e) };
     }
 });
 

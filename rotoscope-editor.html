@@ -22,7 +22,6 @@
     html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'Inter','Segoe UI',sans-serif; -webkit-font-smoothing:antialiased; }
     body { display:flex; flex-direction:column; }
 
-    /* TOPBAR — drag region */
     .topbar {
         display:flex; align-items:center; gap:14px;
         padding:0 0 0 18px;
@@ -42,18 +41,13 @@
     .win-btn.close:hover { background:#e81123; color:#fff; }
     .win-btn svg { width:11px; height:11px; }
 
-    /* MAIN */
     .main { display:flex; flex:1; overflow:hidden; }
-
-    /* CANVAS */
     .canvas-wrap {
         flex:1; position:relative; overflow:hidden;
         background:repeating-conic-gradient(#1a1a1a 0% 25%, #0f0f0f 0% 50%) 50%/18px 18px;
         cursor:crosshair;
     }
-    canvas#stage { display:block; image-rendering:pixelated; }
-
-    /* SIDEBAR */
+    canvas#stage { display:block; }
     .sidebar { width:300px; flex-shrink:0; background:var(--bg2); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
     .panel { padding:16px; border-bottom:1px solid var(--border); }
     .panel-title { font-size:.7rem; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--text3); margin-bottom:10px; }
@@ -71,21 +65,16 @@
     .tool-btn.active.negative { border-color:rgba(239,68,68,0.6); background:rgba(239,68,68,0.08); color:#fca5a5; }
     .tool-btn.active.brush { border-color:var(--accent); background:rgba(190,242,100,0.08); color:var(--accent); }
 
-    .ai-status {
-        background: rgba(0,0,0,0.4); border:1px solid var(--border);
-        border-radius:8px; padding:10px 12px;
-        font-size:.72rem;
-    }
-    .ai-status.ready { border-color: rgba(34,197,94,0.4); color: #86efac; }
-    .ai-status.loading { border-color: rgba(245,158,11,0.4); color: #fcd34d; }
-    .ai-status.error { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
-    .ai-status.idle { color: var(--text3); }
+    .ai-status { background:rgba(0,0,0,0.4); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:.72rem; }
+    .ai-status.ready { border-color:rgba(34,197,94,0.4); color:#86efac; }
+    .ai-status.loading { border-color:rgba(245,158,11,0.4); color:#fcd34d; }
+    .ai-status.error { border-color:rgba(239,68,68,0.4); color:#fca5a5; }
+    .ai-status.idle { color:var(--text3); }
     .ai-progress { height:3px; background:#222; border-radius:2px; margin-top:6px; overflow:hidden; }
     .ai-progress-bar { height:100%; background:var(--accent); width:0%; transition:width .3s; }
 
     .btn {
-        width:100%; padding:10px 14px;
-        background:var(--card); border:1px solid var(--border);
+        width:100%; padding:10px 14px; background:var(--card); border:1px solid var(--border);
         border-radius:9px; color:var(--text); font-family:inherit; font-size:.78rem;
         font-weight:600; cursor:pointer; transition:all .15s;
         display:flex; align-items:center; justify-content:center; gap:6px;
@@ -94,67 +83,38 @@
     .btn:disabled { opacity:.4; cursor:not-allowed; }
     .btn.primary { background:var(--accent); color:#0a0a0a; border-color:var(--accent); font-weight:700; }
     .btn.primary:hover:not(:disabled) { background:var(--accent2); }
-    .btn.warn { background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.3); color:#fca5a5; }
     .btn + .btn { margin-top:6px; }
 
-    /* TIMELINE — bottom */
-    .timeline {
-        flex-shrink:0; height:90px;
-        background:var(--bg2); border-top:1px solid var(--border);
-        display:flex; flex-direction:column;
-    }
-    .timeline-header {
-        display:flex; align-items:center; gap:14px;
-        padding:6px 14px;
-        font-size:.7rem; color:var(--text3);
-        border-bottom:1px solid var(--border);
-        flex-shrink:0;
-    }
+    .timeline { flex-shrink:0; height:90px; background:var(--bg2); border-top:1px solid var(--border); display:flex; flex-direction:column; }
+    .timeline-header { display:flex; align-items:center; gap:14px; padding:6px 14px; font-size:.7rem; color:var(--text3); border-bottom:1px solid var(--border); flex-shrink:0; }
     .timeline-header .frame-info { font-family:'JetBrains Mono', monospace; color:var(--text2); }
-    .timeline-track {
-        flex:1; position:relative; overflow-x:auto; overflow-y:hidden;
-        display:flex; gap:1px; padding:4px;
-        background:#0a0a0a;
-    }
-    .frame-thumb {
-        flex:0 0 auto;
-        height:54px;
-        background:#1a1a1a;
-        border:1px solid transparent;
-        cursor:pointer;
-        position:relative;
-        overflow:hidden;
-    }
+    .timeline-track { flex:1; position:relative; overflow-x:auto; overflow-y:hidden; display:flex; gap:1px; padding:4px; background:#0a0a0a; }
+    .frame-thumb { flex:0 0 auto; width:60px; height:54px; background:#1a1a1a; border:1px solid transparent; cursor:pointer; position:relative; overflow:hidden; }
     .frame-thumb.active { border-color:var(--accent); }
-    .frame-thumb.has-mask::after {
-        content:''; position:absolute; right:2px; top:2px;
-        width:6px; height:6px; border-radius:50%;
-        background:var(--accent); box-shadow:0 0 4px var(--accent);
-    }
-    .frame-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+    .frame-thumb.has-mask::after { content:''; position:absolute; right:2px; top:2px; width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 4px var(--accent); }
+    .frame-thumb-num { position:absolute; bottom:2px; left:3px; font-size:.55rem; color:#888; font-family:monospace; text-shadow:0 0 4px rgba(0,0,0,0.8); }
 
-    /* CLICK INDICATORS no canvas (sobreposto) */
-    .click-marker {
-        position:absolute; width:14px; height:14px;
-        border-radius:50%; pointer-events:none;
-        transform:translate(-50%,-50%);
-        box-shadow:0 0 0 2px rgba(0,0,0,0.5);
-    }
-    .click-marker.positive { background:var(--positive); }
-    .click-marker.negative { background:var(--negative); }
-
-    /* FOOTER */
-    .footer {
-        margin-top:auto; padding:14px;
-        border-top:1px solid var(--border);
-        display:flex; gap:8px;
-    }
+    .footer { margin-top:auto; padding:14px; border-top:1px solid var(--border); display:flex; gap:8px; }
     .footer .btn { flex:1; }
+
+    .progress-overlay {
+        position:fixed; bottom:24px; left:24px; right:340px;
+        background:rgba(10,10,10,0.95); backdrop-filter:blur(8px);
+        border:1px solid var(--accent);
+        border-radius:8px; padding:10px 14px;
+        display:none;
+        z-index:100;
+    }
+    .progress-overlay.show { display:block; }
+    .progress-overlay-title { font-size:.74rem; font-weight:700; color:var(--accent); margin-bottom:5px; }
+    .progress-overlay-bar { background:rgba(255,255,255,0.05); border-radius:3px; height:4px; overflow:hidden; }
+    .progress-overlay-fill { height:100%; background:linear-gradient(90deg, #22d3ee, var(--accent)); width:0%; transition:width .25s; }
+    .progress-overlay-msg { font-size:.65rem; color:var(--text3); margin-top:4px; font-family:'JetBrains Mono', monospace; }
 </style>
 </head>
 <body>
     <div class="topbar">
-        <h1>Rotoscope <span>SAM 2</span></h1>
+        <h1>Rotoscope <span>SAM</span></h1>
         <span class="meta" id="dimsMeta">—</span>
         <div class="spacer"></div>
         <span class="meta" id="zoomMeta">100%</span>
@@ -175,32 +135,28 @@
 
         <aside class="sidebar">
             <div class="panel">
-                <div class="panel-title">SAM 2 (IA)</div>
+                <div class="panel-title">SAM (IA)</div>
                 <div class="ai-status idle" id="aiStatus">IA não carregada</div>
                 <div class="ai-progress" id="aiProgressWrap" style="display:none">
                     <div class="ai-progress-bar" id="aiProgressBar"></div>
                 </div>
-                <button class="btn" id="btnLoadAI" style="margin-top:10px">Carregar IA (~150 MB)</button>
+                <button class="btn" id="btnLoadAI" style="margin-top:10px">Carregar IA (~35 MB)</button>
             </div>
 
             <div class="panel">
                 <div class="panel-title">Ferramenta</div>
                 <div class="tool-row">
-                    <button class="tool-btn positive active" id="toolPositive" title="Positive (clica no sujeito) [P]">
+                    <button class="tool-btn positive active" id="toolPositive" title="Sujeito (P)">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                         Sujeito
                     </button>
-                    <button class="tool-btn negative" id="toolNegative" title="Negative (fundo) [N]">
+                    <button class="tool-btn negative" id="toolNegative" title="Fundo (N)">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                         Fundo
                     </button>
-                    <button class="tool-btn brush" id="toolBrush" title="Pincel manual [B]">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></svg>
-                        Pincel
-                    </button>
                 </div>
                 <button class="btn" id="btnSegmentFrame" style="margin-top:10px" disabled>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 13l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z"/><path d="M5 3l1.2 3.6L10 8l-3.8 1.4L5 13l-1.2-3.6L0 8l3.8-1.4L5 3z"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 13l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z"/></svg>
                     Segmentar este frame
                 </button>
                 <button class="btn" id="btnClearClicks" style="margin-top:6px">Limpar pontos</button>
@@ -213,30 +169,29 @@
                     Propagar pra todos os frames
                 </button>
                 <div style="font-size:.62rem;color:var(--text3);margin-top:6px;line-height:1.4">
-                    Define a máscara no primeiro frame com clicks/pincel,<br>depois clica aqui pra IA propagar pros próximos.
+                    Define os pontos no primeiro frame, depois clica aqui pra IA propagar pros próximos.
                 </div>
             </div>
 
             <div class="panel">
                 <div class="panel-title">Atalhos</div>
                 <div style="font-size:.7rem;color:var(--text3);line-height:1.7">
-                    <kbd>P</kbd> sujeito · <kbd>N</kbd> fundo · <kbd>B</kbd> pincel<br>
+                    <kbd>P</kbd> sujeito · <kbd>N</kbd> fundo<br>
                     <kbd>←</kbd> <kbd>→</kbd> navegar frames<br>
-                    <kbd>Espaço</kbd> play/pause<br>
-                    <kbd>Ctrl+Z</kbd> desfazer · <kbd>Ctrl+S</kbd> salvar
+                    <kbd>Ctrl+S</kbd> salvar
                 </div>
             </div>
 
             <div class="footer">
                 <button class="btn" id="btnCancel">Cancelar</button>
-                <button class="btn primary" id="btnSave">Aplicar e Salvar</button>
+                <button class="btn primary" id="btnSave" disabled>Aplicar e Salvar</button>
             </div>
         </aside>
     </div>
 
     <div class="timeline">
         <div class="timeline-header">
-            <span>Timeline de frames</span>
+            <span>Timeline</span>
             <span class="frame-info" id="frameInfo">—</span>
             <span style="flex:1"></span>
             <span style="color:var(--text3)">Frames com máscara: <span id="masksCount" style="color:var(--accent)">0</span></span>
@@ -244,12 +199,24 @@
         <div class="timeline-track" id="timelineTrack"></div>
     </div>
 
-<script>
+    <div class="progress-overlay" id="progressOverlay">
+        <div class="progress-overlay-title" id="progressTitle">Processando...</div>
+        <div class="progress-overlay-bar"><div class="progress-overlay-fill" id="progressFill"></div></div>
+        <div class="progress-overlay-msg" id="progressMsg">—</div>
+    </div>
+
+<script type="module">
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════
-// ROTOSCOPE EDITOR — SAM 2 (Fase 1: setup + UI base)
+// ROTOSCOPE — SAM (SlimSAM via transformers.js + WebGPU)
 // ════════════════════════════════════════════════════════════════════
+import { env, SamModel, AutoProcessor, RawImage } from './node_modules/@huggingface/transformers/dist/transformers.web.min.js';
+
+// Aponta wasm/onnx pra node_modules local (offline-first)
+env.allowRemoteModels = true;
+env.allowLocalModels = false;
+env.useBrowserCache = true;
 
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get('token') || '';
@@ -261,14 +228,16 @@ const fs = (() => { try { return require('fs'); } catch(e) { return null; } })()
 const pathLib = (() => { try { return require('path'); } catch(e) { return null; } })();
 
 const state = {
-    width: 0, height: 0,
-    fps: 30, totalFrames: 0, duration: 0,
+    width: 0, height: 0, fps: 30, totalFrames: 0, duration: 0,
     currentFrame: 0,
-    tool: 'positive',          // positive | negative | brush
-    clicks: {},                // {frameIdx: [{x,y,kind,frame}]}
-    masks: {},                 // {frameIdx: Uint8Array com alpha}
-    aiLoaded: false,
-    aiLoading: false,
+    tool: 'positive',
+    clicks: {},                // {frameIdx: [{x,y,kind}]}
+    masks: {},                 // {frameIdx: ImageData binary mask (1=visible, 0=transparent)}
+    aiLoaded: false, aiLoading: false,
+    samModel: null, samProcessor: null,
+    frameEmbeddings: null,     // cache do encoder do frame atual
+    cancelled: false,
+    busy: false,
 };
 
 const stage = document.getElementById('stage');
@@ -276,56 +245,242 @@ const stageCtx = stage.getContext('2d', { willReadFrequently: true });
 const wrap = document.getElementById('canvasWrap');
 const vid = document.getElementById('vid');
 
-// ─── Window controls ──────────────────────────────────────
+let zoom = 1, panX = 0, panY = 0;
+
+// ─── Helpers UI ──────────────────────────────
+function setAiStatus(text, kind, pct) {
+    const el = document.getElementById('aiStatus');
+    el.textContent = text;
+    el.className = 'ai-status ' + (kind || 'idle');
+    if (typeof pct === 'number') {
+        document.getElementById('aiProgressWrap').style.display = 'block';
+        document.getElementById('aiProgressBar').style.width = pct + '%';
+    } else {
+        document.getElementById('aiProgressWrap').style.display = 'none';
+    }
+}
+
+function setProgress(title, msg, pct) {
+    const ov = document.getElementById('progressOverlay');
+    if (title === null) { ov.classList.remove('show'); return; }
+    ov.classList.add('show');
+    document.getElementById('progressTitle').textContent = title;
+    document.getElementById('progressMsg').textContent = msg || '';
+    if (typeof pct === 'number') {
+        document.getElementById('progressFill').style.width = Math.max(2, pct) + '%';
+    }
+}
+
+// ─── Window controls ──────────────────────────────
 document.getElementById('winMinimize').onclick = () => ipc?.send('rotoscope:win-action', { token: TOKEN, action: 'minimize' });
 document.getElementById('winMaximize').onclick = () => ipc?.send('rotoscope:win-action', { token: TOKEN, action: 'maximize' });
 document.getElementById('winClose').onclick = () => ipc?.send('rotoscope:win-action', { token: TOKEN, action: 'close' });
 
-// ─── Tool selection ──────────────────────────────────────
+// ─── Tool selection ──────────────────────────────
 function setTool(t) {
     state.tool = t;
-    ['positive','negative','brush'].forEach(k => {
+    ['positive','negative'].forEach(k => {
         const btn = document.getElementById('tool' + k.charAt(0).toUpperCase() + k.slice(1));
         if (btn) btn.classList.toggle('active', k === t);
     });
 }
 document.getElementById('toolPositive').onclick = () => setTool('positive');
 document.getElementById('toolNegative').onclick = () => setTool('negative');
-document.getElementById('toolBrush').onclick = () => setTool('brush');
 
-// ─── AI status ──────────────────────────────────────
-function setAiStatus(text, kind, pct) {
-    const el = document.getElementById('aiStatus');
-    el.textContent = text;
-    el.className = 'ai-status ' + (kind || 'idle');
-    if (typeof pct === 'number') {
-        const wrap = document.getElementById('aiProgressWrap');
-        wrap.style.display = pct < 100 ? 'block' : 'none';
-        document.getElementById('aiProgressBar').style.width = pct + '%';
-    }
-}
-
+// ─── LOAD SAM MODEL ──────────────────────────────
 document.getElementById('btnLoadAI').onclick = async () => {
     if (state.aiLoading || state.aiLoaded) return;
     state.aiLoading = true;
-    setAiStatus('Baixando modelo SAM 2 tiny...', 'loading', 5);
+    const btn = document.getElementById('btnLoadAI');
+    btn.disabled = true;
+    setAiStatus('Baixando modelo SlimSAM (~35MB)...', 'loading', 5);
+
     try {
-        // FASE 1: stub. FASE 2 vai chamar IPC pra baixar e carregar.
-        await new Promise(r => setTimeout(r, 800));
-        setAiStatus('IA pronta · clique no sujeito pra começar', 'ready');
+        const modelId = 'Xenova/slimsam-77-uniform';
+
+        // Detecta WebGPU
+        const hasWebGPU = !!navigator.gpu;
+        const device = hasWebGPU ? 'webgpu' : 'wasm';
+        setAiStatus(`Carregando IA (${device})...`, 'loading', 20);
+
+        // Carrega processor primeiro (texts/configs ~1MB)
+        state.samProcessor = await AutoProcessor.from_pretrained(modelId);
+        setAiStatus(`Carregando encoder...`, 'loading', 40);
+
+        // Carrega modelo SAM
+        state.samModel = await SamModel.from_pretrained(modelId, {
+            device,
+            dtype: 'fp32',
+            progress_callback: (data) => {
+                if (data.status === 'progress' && data.progress) {
+                    const pct = 40 + Math.min(50, Math.floor(data.progress * 0.5));
+                    setAiStatus(`Baixando ${data.file || ''}: ${Math.round(data.progress)}%`, 'loading', pct);
+                }
+            },
+        });
+
+        setAiStatus(`✓ IA pronta (${device.toUpperCase()})`, 'ready');
         state.aiLoaded = true;
         document.getElementById('btnSegmentFrame').disabled = false;
         document.getElementById('btnTrackForward').disabled = false;
-        document.getElementById('btnLoadAI').textContent = '✓ IA carregada';
-        document.getElementById('btnLoadAI').disabled = true;
+        btn.textContent = '✓ IA carregada';
+        // Pré-encoda frame atual
+        await encodeCurrentFrame();
     } catch (e) {
-        setAiStatus('Erro: ' + e.message, 'error');
+        console.error(e);
+        setAiStatus('Erro: ' + (e.message || e), 'error');
+        btn.disabled = false;
     } finally {
         state.aiLoading = false;
     }
 };
 
-// ─── Vídeo / frames ──────────────────────────────────────
+// ─── ENCODE FRAME (gera embeddings — cacheado pra reusar) ────
+async function encodeCurrentFrame() {
+    if (!state.aiLoaded) return;
+    setAiStatus('Encodando frame...', 'loading');
+    try {
+        // Captura frame atual em canvas off-screen
+        const off = document.createElement('canvas');
+        off.width = state.width;
+        off.height = state.height;
+        const ctx = off.getContext('2d');
+        ctx.drawImage(vid, 0, 0, state.width, state.height);
+        // Converte pra RawImage
+        const imgData = ctx.getImageData(0, 0, state.width, state.height);
+        const rawImage = new RawImage(imgData.data, state.width, state.height, 4);
+
+        // Process imagem → tensors
+        const inputs = await state.samProcessor(rawImage);
+        // Encode (vision encoder roda 1x; mask decoder roda toda vez que clica)
+        state.frameEmbeddings = await state.samModel.get_image_embeddings(inputs);
+        state._lastInputs = inputs;
+        setAiStatus(`✓ Frame encodado · clique no sujeito`, 'ready');
+    } catch (e) {
+        console.error(e);
+        setAiStatus('Erro encode: ' + (e.message || e), 'error');
+    }
+}
+
+// ─── SEGMENTAR FRAME (com prompts atuais) ────────────
+async function segmentCurrentFrame() {
+    if (!state.aiLoaded || !state.frameEmbeddings) {
+        setAiStatus('Carregue a IA e aguarde encode do frame', 'error');
+        return;
+    }
+    const clicks = state.clicks[state.currentFrame] || [];
+    if (clicks.length === 0) {
+        setAiStatus('Adicione pontos primeiro (clique no sujeito)', 'error');
+        return;
+    }
+
+    state.busy = true;
+    setAiStatus('Segmentando...', 'loading');
+    try {
+        // Formata prompts
+        const points = clicks.map(c => [c.x, c.y]);
+        const labels = clicks.map(c => c.kind === 'positive' ? 1 : 0);
+
+        const inputs = await state.samProcessor(
+            null,
+            [[points]],   // batch=1, 1 ponto-set, N points
+            [[labels]],
+        );
+        // Reusa embeddings cacheados
+        const outputs = await state.samModel({
+            ...inputs,
+            ...state.frameEmbeddings,
+        });
+
+        // Pega a melhor mask (maior IoU score)
+        const masks = await state.samProcessor.post_process_masks(
+            outputs.pred_masks,
+            inputs.original_sizes,
+            inputs.reshaped_input_sizes,
+        );
+
+        // masks[0]: tensor [n_predictions, H, W] booleano
+        const maskTensor = masks[0];
+        const dims = maskTensor.dims;
+        // Pega a 1ª predição (geralmente a melhor com SlimSAM)
+        const H = dims[dims.length - 2];
+        const W = dims[dims.length - 1];
+        const data = maskTensor.data;
+
+        // Cria ImageData binário (1 byte por pixel: 0 ou 255)
+        const binMask = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) {
+            binMask[i] = data[i] ? 255 : 0;
+        }
+        state.masks[state.currentFrame] = { width: W, height: H, data: binMask };
+
+        setAiStatus('✓ Máscara gerada · clique mais pra refinar ou navegue', 'ready');
+        updateMasksCount();
+        markThumbHasMask(state.currentFrame);
+        document.getElementById('btnSave').disabled = false;
+        redraw();
+    } catch (e) {
+        console.error(e);
+        setAiStatus('Erro segmentando: ' + (e.message || e), 'error');
+    } finally {
+        state.busy = false;
+    }
+}
+
+document.getElementById('btnSegmentFrame').onclick = segmentCurrentFrame;
+
+document.getElementById('btnClearClicks').onclick = () => {
+    delete state.clicks[state.currentFrame];
+    delete state.masks[state.currentFrame];
+    unmarkThumbHasMask(state.currentFrame);
+    updateMasksCount();
+    redraw();
+    document.getElementById('btnSave').disabled = Object.keys(state.masks).length === 0;
+};
+
+// ─── PROPAGATE — re-segment cada frame com mesmos clicks ──
+document.getElementById('btnTrackForward').onclick = async () => {
+    if (!state.aiLoaded) return;
+    const baseClicks = state.clicks[state.currentFrame] || [];
+    if (baseClicks.length === 0) {
+        setAiStatus('Adicione pontos no frame atual primeiro', 'error');
+        return;
+    }
+    if (!confirm(`Propagar máscara em ${state.totalFrames} frames? Pode demorar (1-3s por frame).`)) return;
+
+    state.cancelled = false;
+    const startedAt = Date.now();
+    const startFrame = state.currentFrame;
+
+    setProgress('Propagando máscara', '', 0);
+    for (let i = 0; i < state.totalFrames; i++) {
+        if (state.cancelled) { setProgress(null); return; }
+        // Pula frames que já têm máscara manual? Não — sobrescreve pra consistência
+        try {
+            await drawFrame(i, true); // skipUI=true
+            await encodeCurrentFrame();
+            // Aplica os mesmos clicks (assume objeto não se moveu muito)
+            state.clicks[i] = baseClicks.map(c => ({ ...c }));
+            await segmentCurrentFrame();
+        } catch (e) {
+            console.error('Frame', i, e);
+        }
+        const elapsed = (Date.now() - startedAt) / 1000;
+        const fps = (i + 1) / elapsed;
+        const eta = (state.totalFrames - i - 1) / Math.max(0.1, fps);
+        setProgress(
+            'Propagando máscara',
+            `Frame ${i + 1}/${state.totalFrames} · ${Math.ceil(eta)}s restantes`,
+            ((i + 1) / state.totalFrames) * 100
+        );
+    }
+    setProgress(null);
+    await drawFrame(startFrame);
+    setAiStatus(`✓ Concluído ${state.totalFrames} frames · clique Aplicar e Salvar`, 'ready');
+    document.getElementById('btnSave').disabled = false;
+};
+
+// ─── VÍDEO / FRAMES ──────────────────────────────
 async function loadVideo() {
     if (!SRC_PATH) { setAiStatus('SRC_PATH ausente', 'error'); return; }
     vid.src = 'file:///' + SRC_PATH.replace(/\\/g, '/').replace(/^\//, '');
@@ -337,7 +492,6 @@ async function loadVideo() {
     state.height = vid.videoHeight;
     state.duration = vid.duration;
 
-    // Pega FPS via IPC (probe)
     if (ipc) {
         try {
             const meta = await ipc.invoke('rotoscope:probe', { src: SRC_PATH });
@@ -357,8 +511,6 @@ async function loadVideo() {
     buildTimeline();
 }
 
-let zoom = 1, panX = 0, panY = 0;
-
 function fitCanvas() {
     const r = wrap.getBoundingClientRect();
     stage.width = r.width;
@@ -372,7 +524,7 @@ function fitCanvas() {
     panY = (r.height - state.height * scale) / 2;
 }
 
-async function drawFrame(idx) {
+async function drawFrame(idx, skipUI) {
     state.currentFrame = idx;
     const t = idx / state.fps;
     await new Promise((res) => {
@@ -381,21 +533,37 @@ async function drawFrame(idx) {
         vid.currentTime = t;
     });
     redraw();
-    document.getElementById('frameMeta').textContent = idx + ' / ' + state.totalFrames;
-    // Atualiza thumbnails
-    document.querySelectorAll('.frame-thumb').forEach((el, i) => el.classList.toggle('active', i === idx));
+    if (!skipUI) {
+        document.getElementById('frameMeta').textContent = idx + ' / ' + state.totalFrames;
+        document.querySelectorAll('.frame-thumb').forEach((el, i) => el.classList.toggle('active', el.dataset.frame == idx));
+        // Re-encode pra novo frame se IA carregada
+        if (state.aiLoaded) await encodeCurrentFrame();
+    }
 }
 
 function redraw() {
-    stageCtx.fillStyle = 'transparent';
     stageCtx.clearRect(0, 0, stage.width, stage.height);
-    // Frame
     stageCtx.imageSmoothingEnabled = zoom < 2;
     stageCtx.drawImage(vid, panX, panY, state.width * zoom, state.height * zoom);
 
-    // Mask atual (se existir)
-    if (state.masks[state.currentFrame]) {
-        // FASE 2: aplicar overlay vermelho semi-transparente onde mask=1
+    // Mask atual — overlay vermelho onde apaga (alpha=0)
+    const m = state.masks[state.currentFrame];
+    if (m) {
+        // Constrói canvas auxiliar com mask
+        const off = document.createElement('canvas');
+        off.width = m.width; off.height = m.height;
+        const octx = off.getContext('2d');
+        const imgData = octx.createImageData(m.width, m.height);
+        for (let i = 0; i < m.width * m.height; i++) {
+            // Não-mask = vermelho semi-transp; mask = nada (transparente)
+            const inMask = m.data[i] > 0;
+            imgData.data[i*4]   = 239;
+            imgData.data[i*4+1] = 68;
+            imgData.data[i*4+2] = 68;
+            imgData.data[i*4+3] = inMask ? 0 : 110;
+        }
+        octx.putImageData(imgData, 0, 0);
+        stageCtx.drawImage(off, panX, panY, state.width * zoom, state.height * zoom);
     }
 
     // Markers de clicks
@@ -405,7 +573,7 @@ function redraw() {
         const vy = c.y * zoom + panY;
         stageCtx.beginPath();
         stageCtx.arc(vx, vy, 7, 0, Math.PI * 2);
-        stageCtx.fillStyle = c.kind === 'positive' ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)';
+        stageCtx.fillStyle = c.kind === 'positive' ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
         stageCtx.fill();
         stageCtx.lineWidth = 2;
         stageCtx.strokeStyle = '#000';
@@ -415,9 +583,10 @@ function redraw() {
     document.getElementById('zoomMeta').textContent = Math.round(zoom * 100) + '%';
 }
 
-// ─── Click prompts ──────────────────────────────────────
-wrap.addEventListener('click', (e) => {
-    if (!state.aiLoaded && state.tool !== 'brush') {
+// ─── Click handler ──────────────────────────────
+wrap.addEventListener('click', async (e) => {
+    if (state.busy) return;
+    if (!state.aiLoaded) {
         setAiStatus('Carregue a IA primeiro', 'error');
         return;
     }
@@ -428,52 +597,29 @@ wrap.addEventListener('click', (e) => {
     const imgY = (vy - panY) / zoom;
     if (imgX < 0 || imgY < 0 || imgX >= state.width || imgY >= state.height) return;
 
-    if (state.tool === 'positive' || state.tool === 'negative') {
-        const idx = state.currentFrame;
-        if (!state.clicks[idx]) state.clicks[idx] = [];
-        state.clicks[idx].push({ x: imgX, y: imgY, kind: state.tool, frame: idx });
-        redraw();
-    }
-    // brush: implementar em fase posterior
+    const idx = state.currentFrame;
+    if (!state.clicks[idx]) state.clicks[idx] = [];
+    state.clicks[idx].push({ x: imgX, y: imgY, kind: state.tool });
+    redraw();
+    // Auto-segmenta após click — UX mais fluido
+    await segmentCurrentFrame();
 });
 
-document.getElementById('btnClearClicks').onclick = () => {
-    delete state.clicks[state.currentFrame];
-    redraw();
-};
-
-document.getElementById('btnSegmentFrame').onclick = async () => {
-    const clicks = state.clicks[state.currentFrame] || [];
-    if (clicks.length === 0) {
-        setAiStatus('Adicione clicks no sujeito (verde) e fundo (vermelho) primeiro', 'error');
-        return;
-    }
-    setAiStatus('Segmentando... (Fase 2 vai implementar)', 'loading', 50);
-    // FASE 2: chamar SAM 2 via worker pra inferir
-    setTimeout(() => setAiStatus('Stub — implementar Fase 2', 'idle'), 1200);
-};
-
-document.getElementById('btnTrackForward').onclick = () => {
-    setAiStatus('Track forward — implementar Fase 3 (memory attention)', 'idle');
-};
-
-// ─── Timeline ──────────────────────────────────────
+// ─── Timeline ──────────────────────────────
 function buildTimeline() {
     const track = document.getElementById('timelineTrack');
     track.innerHTML = '';
-    // Sample 60 frames evenly distribuidos
-    const sampleCount = Math.min(60, state.totalFrames);
+    const sampleCount = Math.min(80, state.totalFrames);
     const step = state.totalFrames / sampleCount;
     for (let i = 0; i < sampleCount; i++) {
         const frameIdx = Math.floor(i * step);
         const div = document.createElement('div');
         div.className = 'frame-thumb';
-        div.style.width = '60px';
         div.dataset.frame = frameIdx;
         if (frameIdx === state.currentFrame) div.classList.add('active');
         if (state.masks[frameIdx]) div.classList.add('has-mask');
         const lbl = document.createElement('div');
-        lbl.style.cssText = 'position:absolute;bottom:2px;left:3px;font-size:.55rem;color:#888;font-family:monospace;text-shadow:0 0 4px rgba(0,0,0,0.8)';
+        lbl.className = 'frame-thumb-num';
         lbl.textContent = frameIdx;
         div.appendChild(lbl);
         div.onclick = () => drawFrame(frameIdx);
@@ -482,16 +628,24 @@ function buildTimeline() {
     updateMasksCount();
 }
 
+function markThumbHasMask(frame) {
+    const el = document.querySelector(`.frame-thumb[data-frame="${frame}"]`);
+    if (el) el.classList.add('has-mask');
+}
+function unmarkThumbHasMask(frame) {
+    const el = document.querySelector(`.frame-thumb[data-frame="${frame}"]`);
+    if (el) el.classList.remove('has-mask');
+}
+
 function updateMasksCount() {
     document.getElementById('masksCount').textContent = Object.keys(state.masks).length;
 }
 
-// ─── Keyboard ──────────────────────────────────────
+// ─── Keyboard ──────────────────────────────
 window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === 'p' || e.key === 'P') setTool('positive');
     else if (e.key === 'n' || e.key === 'N') setTool('negative');
-    else if (e.key === 'b' || e.key === 'B') setTool('brush');
     else if (e.key === 'ArrowLeft') drawFrame(Math.max(0, state.currentFrame - 1));
     else if (e.key === 'ArrowRight') drawFrame(Math.min(state.totalFrames - 1, state.currentFrame + 1));
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -502,12 +656,62 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('resize', () => { fitCanvas(); redraw(); });
 
-// ─── Save / Cancel ──────────────────────────────────────
+// ─── SAVE — exporta vídeo final via main process ──
 document.getElementById('btnCancel').onclick = () => ipc?.send('rotoscope:cancel', { token: TOKEN });
-document.getElementById('btnSave').onclick = () => {
-    setAiStatus('Salvando... (Fase 5 — apply masks + ffmpeg encode)', 'loading');
-    // FASE 5: enviar masks pro main, main gera vídeo final
-    ipc?.send('rotoscope:save', { token: TOKEN, masks: state.masks });
+
+document.getElementById('btnSave').onclick = async () => {
+    const numMasks = Object.keys(state.masks).length;
+    if (numMasks === 0) {
+        setAiStatus('Nenhuma máscara — segmente algum frame primeiro', 'error');
+        return;
+    }
+    setProgress('Salvando', `Aplicando ${numMasks} máscaras...`, 5);
+    document.getElementById('btnSave').disabled = true;
+
+    try {
+        // Serializa masks pra enviar ao main: { frameIdx: { width, height, base64 } }
+        const masksOut = {};
+        for (const [k, m] of Object.entries(state.masks)) {
+            // Codifica como PNG b64 pra IPC mais leve
+            const off = document.createElement('canvas');
+            off.width = m.width; off.height = m.height;
+            const octx = off.getContext('2d');
+            const id = octx.createImageData(m.width, m.height);
+            for (let i = 0; i < m.width * m.height; i++) {
+                const v = m.data[i];
+                id.data[i*4] = v;
+                id.data[i*4+1] = v;
+                id.data[i*4+2] = v;
+                id.data[i*4+3] = 255;
+            }
+            octx.putImageData(id, 0, 0);
+            masksOut[k] = { width: m.width, height: m.height, dataUrl: off.toDataURL('image/png') };
+        }
+
+        setProgress('Salvando', 'Encodando vídeo final...', 30);
+        const result = await ipc.invoke('rotoscope:export', {
+            token: TOKEN,
+            masks: masksOut,
+            srcPath: SRC_PATH,
+            outPath: OUT_PATH,
+            fps: state.fps,
+            totalFrames: state.totalFrames,
+            width: state.width,
+            height: state.height,
+        });
+
+        if (result?.error) throw new Error(result.error);
+        setProgress('Salvo', '✓ ' + (result.outPath || 'concluído'), 100);
+        setTimeout(() => {
+            setProgress(null);
+            ipc?.send('rotoscope:save-done', { token: TOKEN, outPath: result.outPath });
+        }, 1200);
+    } catch (e) {
+        console.error(e);
+        setProgress(null);
+        setAiStatus('Erro salvando: ' + e.message, 'error');
+        document.getElementById('btnSave').disabled = false;
+    }
 };
 
 // Boot
