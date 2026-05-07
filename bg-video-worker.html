@@ -190,15 +190,15 @@ async function run() {
         let frameCount = 0;
         ipc.on('bg-video:cancel', (_, p) => { if (p?.token === TOKEN) cancelled = true; });
 
-        // ─── PIPELINE OTIMIZADO via requestVideoFrameCallback ───
-        // Antes: seek manual frame-a-frame (vid.currentTime + esperar 'seeked')
-        //   → 50-200ms por frame só de seek = 5-20fps de processamento
-        // Agora: decoder nativo via rVFC dispara callback pra cada frame decodado
-        //   conforme o vídeo PLAY → 16-30ms por frame = 30-60fps real-time
+        // ─── PIPELINE: seek manual frame-a-frame ───
+        // Antes tentei usar requestVideoFrameCallback pra ser mais rápido, mas ele
+        // PULA frames quando o processamento (MediaPipe + IPC) é mais lento que
+        // a velocidade de decode. Resultado: encoder a 30fps recebe só ~15fps,
+        // vídeo final fica metade da duração e ACELERADO.
         //
-        // Fallback pra seek manual se rVFC não disponível (não-Chromium 83+)
-        const hasRVFC = typeof vid.requestVideoFrameCallback === 'function';
-        log(hasRVFC ? 'Usando requestVideoFrameCallback (rápido)' : 'rVFC indisponível — fallback seek manual');
+        // Solução robusta: seek manual com pré-transcode H.264 -g 1 (todo frame
+        // é keyframe = seek instantâneo). Garante 1:1 com source.
+        log('Pipeline: seek manual com keyframes densos');
 
         // Helper: processa 1 frame (vid já posicionado)
         async function processOneFrame(idx, timestampMs) {
@@ -238,71 +238,19 @@ async function run() {
             setProgress(idx + 1, totalFrames, remaining);
         }
 
-        if (hasRVFC) {
-            // ─── FAST PATH: requestVideoFrameCallback ───
-            await new Promise((resolve, reject) => {
-                let processing = false;
-                let pendingFrame = null;
-
-                async function onFrame(now, metadata) {
-                    if (cancelled) {
-                        await ipc.invoke('bg-video:abort-encoder', { token: TOKEN });
-                        reject(new Error('Cancelado pelo usuário'));
-                        return;
-                    }
-                    if (frameCount >= totalFrames) {
-                        // Já temos todos os frames — não precisa mais
-                        resolve();
-                        return;
-                    }
-                    // Se ainda processando frame anterior, ignora — rVFC não-bloqueante
-                    if (processing) {
-                        // Mas AINDA agenda próximo callback
-                        if (frameCount < totalFrames) vid.requestVideoFrameCallback(onFrame);
-                        return;
-                    }
-                    processing = true;
-                    try {
-                        const idx = frameCount++;
-                        const tsMs = Math.round((metadata.mediaTime || 0) * 1000);
-                        await processOneFrame(idx, tsMs);
-                    } catch (e) {
-                        reject(e);
-                        return;
-                    } finally {
-                        processing = false;
-                    }
-                    // Agenda próximo
-                    if (frameCount < totalFrames && !cancelled) {
-                        vid.requestVideoFrameCallback(onFrame);
-                    } else {
-                        resolve();
-                    }
-                }
-
-                vid.requestVideoFrameCallback(onFrame);
-                // 'ended' é segurança: se vídeo termina antes de processar todos
-                vid.addEventListener('ended', () => {
-                    if (frameCount > 0) resolve();
-                });
-                // Inicia decode
-                vid.play().catch(e => reject(new Error('Falha ao iniciar play: ' + e.message)));
-            });
-        } else {
-            // ─── SLOW PATH: seek manual (fallback) ───
-            for (let i = 0; i < totalFrames; i++) {
-                if (cancelled) {
-                    await ipc.invoke('bg-video:abort-encoder', { token: TOKEN });
-                    return fail('Cancelado pelo usuário');
-                }
-                const t = i / meta.fps;
-                await seekVideo(vid, t);
-                await processOneFrame(i, Math.round(t * 1000));
+        // Loop frame-a-frame com seek manual.
+        // Com pré-transcode -g 1 (todo frame keyframe), seek é ~5-10ms.
+        // Total: 5-10ms seek + 15-30ms MediaPipe + 5ms IPC = ~30-50ms/frame
+        // = 20-30fps de processamento. Pra vídeo de 30s, 30-45s pra processar.
+        for (let i = 0; i < totalFrames; i++) {
+            if (cancelled) {
+                await ipc.invoke('bg-video:abort-encoder', { token: TOKEN });
+                return fail('Cancelado pelo usuário');
             }
+            const t = i / meta.fps;
+            await seekVideo(vid, t);
+            await processOneFrame(i, Math.round(t * 1000));
         }
-
-        // Garante que vídeo parou
-        try { vid.pause(); } catch(e) {}
 
         // 5) Finaliza encoder
         setPhase('Finalizando');

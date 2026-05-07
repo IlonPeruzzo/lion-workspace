@@ -2167,6 +2167,14 @@ function startSyncServer() {
                                     '-preset', 'ultrafast',
                                     '-crf', '20',
                                     '-pix_fmt', 'yuv420p',
+                                    // -g 1 = todo frame é keyframe (intra-only).
+                                    // Arquivo fica grande mas SEEK é instantâneo.
+                                    // Worker faz seek frame-a-frame, então isso é
+                                    // crítico pra performance + garantir TODOS os
+                                    // frames processados (rVFC pulava frames).
+                                    '-g', '1',
+                                    '-keyint_min', '1',
+                                    '-sc_threshold', '0',
                                     '-c:a', 'aac', '-b:a', '128k',
                                     '-movflags', '+faststart',
                                     transcodedPath
