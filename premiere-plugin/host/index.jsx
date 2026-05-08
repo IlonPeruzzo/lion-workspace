@@ -1681,29 +1681,80 @@ function lwBgImportAndPlace(filePath, srcInfoJson) {
             return "OK:imported";
         }
 
-        // Insere no timeline na MESMA posicao do clip original, em uma track ACIMA
+        // Insere no timeline na MESMA posicao do clip original.
+        // ANTES: sempre na track imediatamente acima (info.trackIdx + 1) — se
+        // ela tinha algo, dava overwrite/insert que destruía/empurrava clips.
+        // AGORA: usa _cpFindFreeTrackForRange que verifica o range INTEIRO do
+        // clip e procura a 1ª track LIVRE acima do original. Se nenhuma livre,
+        // CRIA nova track no topo. Sempre overwriteClip (que não empurra).
         var seq = app.project.activeSequence;
         if (!seq) return "OK:imported";
 
-        var targetTrackIdx = (info.trackIdx >= 0 ? info.trackIdx + 1 : 0);
-        // Cria track de video extra se nao existe a track acima
-        while (seq.videoTracks.numTracks <= targetTrackIdx) {
-            try { seq.addTracks(1, 0); } catch(e) { break; }
+        var startTicksNum = Number(info.startTicks);
+        var endTicksNum = Number(info.endTicks);
+        // Fallback de duração se endTicks inválido
+        if (!endTicksNum || endTicksNum <= startTicksNum) {
+            var TPS = 254016000000;
+            endTicksNum = startTicksNum + 5 * TPS; // 5s default pra imagens
         }
-        var dstTrack = seq.videoTracks[targetTrackIdx];
+
+        var startTrackIdx = (info.trackIdx >= 0 ? info.trackIdx + 1 : 0);
+        var dstTrack = _findFreeVideoTrackFromIndex(
+            seq, startTrackIdx, startTicksNum, endTicksNum
+        );
+
+        if (!dstTrack) return "OK:imported";
 
         // Cria Time pro start
         var startTime = new Time();
         startTime.ticks = info.startTicks;
         try {
-            dstTrack.insertClip(newItem, startTime);
-        } catch (eIns) {
-            // fallback: overwrite
-            try { dstTrack.overwriteClip(newItem, startTime); } catch(e2) {}
+            // overwriteClip: range já garantidamente livre, não destrói nada
+            dstTrack.overwriteClip(newItem, startTime);
+        } catch (eOv) {
+            // Fallback raro: insertClip
+            try { dstTrack.insertClip(newItem, startTime); } catch(e2) {}
         }
         return "OK:placed";
     } catch (e) {
         return "ERROR:" + e.toString();
+    }
+}
+
+// Procura primeira track de VÍDEO livre no range [startTicks, endTicks)
+// começando do índice fromIdx. Se nenhuma livre, CRIA uma nova track no topo.
+// Mesma lógica do _cpFindFreeTrackForRange mas começando de um índice especificado
+// (pra preferir track logo acima do original).
+function _findFreeVideoTrackFromIndex(seq, fromIdx, startTicks, endTicks) {
+    var tracks = seq.videoTracks;
+
+    // Tenta cada track existente A PARTIR de fromIdx
+    for (var t = fromIdx; t < tracks.numTracks; t++) {
+        var track = tracks[t];
+        var occupied = false;
+        try {
+            if (track.isLocked && track.isLocked()) { occupied = true; }
+            for (var c = 0; !occupied && c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                var clipStart = Number(clip.start.ticks);
+                var clipEnd = Number(clip.end.ticks);
+                // Overlap: clipStart < endTicks E clipEnd > startTicks
+                if (clipStart < endTicks && clipEnd > startTicks) {
+                    occupied = true;
+                }
+            }
+        } catch (e) { occupied = true; }
+        if (!occupied) return track;
+    }
+
+    // Nenhuma track existente livre — cria nova no topo
+    try {
+        try { seq.videoTracks.addTrack(1); } catch(e) {
+            try { seq.addTracks(1, 0); } catch(e2) {}
+        }
+        return seq.videoTracks[seq.videoTracks.numTracks - 1];
+    } catch (e) {
+        return tracks[fromIdx] || tracks[0];
     }
 }
 
