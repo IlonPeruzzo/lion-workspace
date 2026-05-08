@@ -206,6 +206,24 @@
     </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
+     IMPORT MAP — resolve bare specifiers que o transformers.js usa
+     internamente (onnxruntime-web/webgpu, onnxruntime-common).
+     Sem isso, o browser ESM nativo não consegue resolver via
+     package.json exports (só bundlers fazem isso).
+═══════════════════════════════════════════════════════════════════ -->
+<script type="importmap">
+{
+    "imports": {
+        "onnxruntime-common": "./node_modules/onnxruntime-common/dist/esm/index.js",
+        "onnxruntime-web": "./node_modules/onnxruntime-web/dist/ort.bundle.min.mjs",
+        "onnxruntime-web/webgpu": "./node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs",
+        "onnxruntime-web/wasm": "./node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs",
+        "onnxruntime-web/webgl": "./node_modules/onnxruntime-web/dist/ort.webgl.bundle.min.mjs"
+    }
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
      SCRIPT 1: CLASSIC — sempre roda. Window controls + cancel + error.
      Mesmo se o módulo (import transformers) falhar, esses funcionam.
 ═══════════════════════════════════════════════════════════════════ -->
