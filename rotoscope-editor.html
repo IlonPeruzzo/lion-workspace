@@ -205,13 +205,80 @@
         <div class="progress-overlay-msg" id="progressMsg">—</div>
     </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════
+     SCRIPT 1: CLASSIC — sempre roda. Window controls + cancel + error.
+     Mesmo se o módulo (import transformers) falhar, esses funcionam.
+═══════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+(function(){
+    const TOKEN_FALLBACK = new URLSearchParams(location.search).get('token') || '';
+    let ipcFb = null;
+    try { ipcFb = require('electron').ipcRenderer; } catch(e) {}
+
+    // Window controls + Cancel — REGISTRADOS PRIMEIRO, antes de qualquer
+    // possível erro do módulo abaixo. Garante que X / Cancelar SEMPRE fecham.
+    function safeOn(id, fn) { const el = document.getElementById(id); if (el) el.onclick = fn; }
+    safeOn('winMinimize', () => ipcFb && ipcFb.send('rotoscope:win-action', { token: TOKEN_FALLBACK, action: 'minimize' }));
+    safeOn('winMaximize', () => ipcFb && ipcFb.send('rotoscope:win-action', { token: TOKEN_FALLBACK, action: 'maximize' }));
+    safeOn('winClose',    () => ipcFb && ipcFb.send('rotoscope:win-action', { token: TOKEN_FALLBACK, action: 'close' }));
+    safeOn('btnCancel',   () => ipcFb && ipcFb.send('rotoscope:cancel', { token: TOKEN_FALLBACK }));
+
+    // Mostra erro grande no canvas se algo crítico falhar
+    window.__rotoShowError = function(title, detail) {
+        const wrap = document.getElementById('canvasWrap');
+        if (!wrap) { alert(title + '\n\n' + detail); return; }
+        // Remove overlay anterior se houver
+        const existing = wrap.querySelector('.error-overlay');
+        if (existing) existing.remove();
+        const div = document.createElement('div');
+        div.className = 'error-overlay';
+        div.style.cssText = 'position:absolute;inset:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fca5a5;font-family:monospace;font-size:13px;text-align:center;background:rgba(20,5,5,0.92);border:1px solid #ef4444;border-radius:10px;padding:24px;overflow:auto;z-index:50;';
+        const t = document.createElement('div');
+        t.style.cssText = 'font-size:16px;font-weight:700;color:#ef4444;margin-bottom:14px';
+        t.textContent = '⚠ ' + title;
+        const d = document.createElement('pre');
+        d.style.cssText = 'white-space:pre-wrap;max-width:680px;line-height:1.5;font-size:12px;color:#fca5a5;margin:0';
+        d.textContent = detail || '';
+        div.appendChild(t); div.appendChild(d);
+        wrap.appendChild(div);
+    };
+
+    window.addEventListener('error', (e) => {
+        console.error(e);
+        window.__rotoShowError('JS error', (e.message || e.error?.message || '') + '\n\n' + (e.error?.stack || ''));
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        console.error(e);
+        const msg = e.reason?.message || e.reason || 'unknown';
+        const stack = e.reason?.stack || '';
+        window.__rotoShowError('Promise rejected', msg + '\n\n' + stack);
+    });
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SCRIPT 2: MODULE — lógica do editor + SAM via transformers.js
+═══════════════════════════════════════════════════════════════════ -->
 <script type="module">
 'use strict';
 
-// ════════════════════════════════════════════════════════════════════
-// ROTOSCOPE — SAM (SlimSAM via transformers.js + WebGPU)
-// ════════════════════════════════════════════════════════════════════
-import { env, SamModel, AutoProcessor, RawImage } from './node_modules/@huggingface/transformers/dist/transformers.web.min.js';
+// Import dinâmico com try/catch — se falhar, error overlay aparece
+let env, SamModel, AutoProcessor, RawImage;
+try {
+    const tx = await import('./node_modules/@huggingface/transformers/dist/transformers.web.min.js');
+    ({ env, SamModel, AutoProcessor, RawImage } = tx);
+} catch (e) {
+    console.error('Falha import transformers.js:', e);
+    if (window.__rotoShowError) window.__rotoShowError(
+        'Falha ao carregar IA',
+        'transformers.js não pôde ser carregado:\n' + (e.message || e) +
+        '\n\nA UI básica ainda funciona (Cancelar / X). ' +
+        'A segmentação SAM está indisponível.'
+    );
+    // Para a execução do módulo aqui — UI classic continua funcionando
+    throw e;
+}
 
 // Aponta wasm/onnx pra node_modules local (offline-first)
 env.allowRemoteModels = true;
