@@ -140,7 +140,10 @@
                 <div class="ai-progress" id="aiProgressWrap" style="display:none">
                     <div class="ai-progress-bar" id="aiProgressBar"></div>
                 </div>
-                <button class="btn" id="btnLoadAI" style="margin-top:10px">Carregar IA (~35 MB)</button>
+                <button class="btn" id="btnLoadAI" style="margin-top:10px">Carregar IA (~150 MB)</button>
+                <div style="font-size:.62rem;color:var(--text3);margin-top:4px;line-height:1.4">
+                    Tenta SAM 2 (qualidade premium) primeiro. Se transformers.js não suportar SAM 2, faz fallback automático pra SlimSAM (mais leve).
+                </div>
             </div>
 
             <div class="panel">
@@ -381,30 +384,63 @@ document.getElementById('btnLoadAI').onclick = async () => {
     setAiStatus('Baixando modelo SlimSAM (~35MB)...', 'loading', 5);
 
     try {
-        const modelId = 'Xenova/slimsam-77-uniform';
-
-        // Detecta WebGPU
+        // Tenta SAM 2 primeiro (qualidade premium ~150MB).
+        // Se transformers.js não suportar (versão antiga ou export incompatível),
+        // fallback automático pro SlimSAM (~35MB).
+        const SAM2_CANDIDATES = [
+            'onnx-community/sam2.1-hiera-tiny',
+            'onnx-community/sam2-hiera-tiny',
+        ];
+        const SAM_FALLBACK = 'Xenova/slimsam-77-uniform';
         const hasWebGPU = !!navigator.gpu;
         const device = hasWebGPU ? 'webgpu' : 'wasm';
-        setAiStatus(`Carregando IA (${device})...`, 'loading', 20);
 
-        // Carrega processor primeiro (texts/configs ~1MB)
-        state.samProcessor = await AutoProcessor.from_pretrained(modelId);
-        setAiStatus(`Carregando encoder...`, 'loading', 40);
+        let loaded = false;
+        let usedModelId = null;
 
-        // Carrega modelo SAM
-        state.samModel = await SamModel.from_pretrained(modelId, {
-            device,
-            dtype: 'fp32',
-            progress_callback: (data) => {
-                if (data.status === 'progress' && data.progress) {
-                    const pct = 40 + Math.min(50, Math.floor(data.progress * 0.5));
-                    setAiStatus(`Baixando ${data.file || ''}: ${Math.round(data.progress)}%`, 'loading', pct);
-                }
-            },
-        });
+        for (const modelId of SAM2_CANDIDATES) {
+            setAiStatus(`Tentando SAM 2 (${modelId.split('/')[1]})...`, 'loading', 10);
+            try {
+                state.samProcessor = await AutoProcessor.from_pretrained(modelId);
+                state.samModel = await SamModel.from_pretrained(modelId, {
+                    device,
+                    dtype: 'fp32',
+                    progress_callback: (data) => {
+                        if (data.status === 'progress' && data.progress) {
+                            const pct = 10 + Math.min(75, Math.floor(data.progress * 0.75));
+                            setAiStatus(`SAM 2: ${data.file || ''} ${Math.round(data.progress)}%`, 'loading', pct);
+                        }
+                    },
+                });
+                loaded = true;
+                usedModelId = modelId;
+                break;
+            } catch (e) {
+                console.warn('SAM 2 falhou (' + modelId + '):', e.message);
+                state.samProcessor = null;
+                state.samModel = null;
+            }
+        }
 
-        setAiStatus(`✓ IA pronta (${device.toUpperCase()})`, 'ready');
+        // Fallback pro SlimSAM se SAM 2 não rodar
+        if (!loaded) {
+            setAiStatus('SAM 2 indisponível — usando SlimSAM (35MB)...', 'loading', 20);
+            state.samProcessor = await AutoProcessor.from_pretrained(SAM_FALLBACK);
+            state.samModel = await SamModel.from_pretrained(SAM_FALLBACK, {
+                device,
+                dtype: 'fp32',
+                progress_callback: (data) => {
+                    if (data.status === 'progress' && data.progress) {
+                        const pct = 20 + Math.min(70, Math.floor(data.progress * 0.7));
+                        setAiStatus(`SlimSAM: ${data.file || ''} ${Math.round(data.progress)}%`, 'loading', pct);
+                    }
+                },
+            });
+            usedModelId = SAM_FALLBACK;
+        }
+
+        const modelLabel = usedModelId.indexOf('sam2') >= 0 ? 'SAM 2' : 'SlimSAM';
+        setAiStatus(`✓ ${modelLabel} pronto (${device.toUpperCase()})`, 'ready');
         state.aiLoaded = true;
         document.getElementById('btnSegmentFrame').disabled = false;
         document.getElementById('btnTrackForward').disabled = false;

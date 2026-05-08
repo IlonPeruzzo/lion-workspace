@@ -937,9 +937,9 @@
 
             <div id="bgRemoveMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
 
-            <!-- ────── Remover Fundo de Vídeo ────── -->
+            <!-- ────── Rotoscope (SAM) — novo removedor de fundo de vídeo ────── -->
             <div style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,0.07);min-width:0">
-                <button class="magic-cta" onclick="bgVideoToggleOptions()" id="bgVideoMainBtn" style="background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(190,242,100,.05))">
+                <button class="magic-cta" onclick="rotoscopeOpen()" id="rotoscopeBtn" style="background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(34,211,238,.05))" title="Remover fundo de vídeo com SAM — clica no sujeito e propaga">
                     <span class="mc-icon">
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="23 7 16 12 23 17 23 7"/>
@@ -948,95 +948,11 @@
                     </span>
                     <span class="mc-text">
                         <span class="mc-title">Remover fundo (vídeo)</span>
-                        <span class="mc-sub">IA via WebGL · clip de vídeo selecionado</span>
-                    </span>
-                    <svg class="mc-arrow" id="bgVideoArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="transition:transform .25s"><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-
-                <!-- Opções (escondidas por padrão) -->
-                <div id="bgVideoOptions" style="display:none;margin-top:8px;padding:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
-                    <!-- Formato -->
-                    <div style="margin-bottom:9px">
-                        <div style="font-size:.56rem;color:#737373;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:4px">Formato</div>
-                        <div style="display:flex;gap:5px">
-                            <button class="bgv-fmt-btn" data-fmt="webm" onclick="bgVideoSetFormat('webm')" style="flex:1;padding:7px 4px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:6px;color:#a3a3a3;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s">
-                                <div style="font-weight:700">WebM</div>
-                                <div style="font-size:.52rem;color:#a3a3a3;margin-top:1px">~150 MB/min · leve</div>
-                                <div style="font-size:.46rem;color:#f59e0b;margin-top:1px">Premiere 2023+</div>
-                            </button>
-                            <button class="bgv-fmt-btn active" data-fmt="mov" onclick="bgVideoSetFormat('mov')" style="flex:1;padding:7px 4px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.35);border-radius:6px;color:#bef264;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s">
-                                <div style="font-weight:700">MOV ProRes</div>
-                                <div style="font-size:.52rem;color:#a3a3a3;margin-top:1px">~1.5 GB/min · pesado</div>
-                                <div style="font-size:.46rem;color:#22c55e;margin-top:1px">100% compatível</div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Processamento -->
-                    <div style="margin-bottom:9px;min-width:0">
-                        <div style="font-size:.56rem;color:#737373;text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:4px">Processamento</div>
-                        <div style="display:flex;gap:5px;min-width:0">
-                            <button class="bgv-del-btn active" data-del="GPU" onclick="bgVideoSetDelegate('GPU')" style="flex:1 1 0;min-width:0;padding:6px 4px;background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.35);border-radius:6px;color:#bef264;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;overflow:hidden">
-                                <div>GPU <span style="font-size:.5rem;color:#22c55e">(rápido)</span></div>
-                                <div id="bgvGpuName" style="font-size:.5rem;color:#737373;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">detectando...</div>
-                            </button>
-                            <button class="bgv-del-btn" data-del="CPU" onclick="bgVideoSetDelegate('CPU')" style="flex:1 1 0;min-width:0;padding:6px 4px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:6px;color:#a3a3a3;font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;overflow:hidden">
-                                <div>CPU <span style="font-size:.5rem;color:#a3a3a3">(compatível)</span></div>
-                                <div style="font-size:.5rem;color:#737373;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">funciona sem GPU</div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Qualidade (afeta resolução de processamento) -->
-                    <div style="margin-bottom:9px">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                            <div style="font-size:.56rem;color:#737373;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Qualidade</div>
-                            <div id="bgvQualLabel" style="font-size:.56rem;color:#bef264;font-weight:600">Média (720p)</div>
-                        </div>
-                        <input type="range" id="bgvQuality" min="0" max="2" step="1" value="1" oninput="bgVideoUpdateQuality(this.value)" style="width:100%">
-                    </div>
-
-                    <button class="magic-cta" onclick="bgVideoStart()" id="bgVideoStartBtn" style="width:100%;padding:8px 10px">
-                        <span class="mc-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
-                        <span class="mc-text"><span class="mc-title">Iniciar</span></span>
-                    </button>
-                </div>
-
-                <!-- Mensagem específica do vídeo (separada do bgRemoveMsg da imagem) -->
-                <div id="bgVideoMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
-
-                <!-- ────── Rotoscope (SAM 2) ────── -->
-                <button class="magic-cta" onclick="rotoscopeOpen()" id="rotoscopeBtn" style="margin-top:8px;background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(34,211,238,.05))" title="Roto manual com IA SAM 2 — clica no sujeito e propaga">
-                    <span class="mc-icon">
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/>
-                            <path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/>
-                        </svg>
-                    </span>
-                    <span class="mc-text">
-                        <span class="mc-title">Rotoscope (SAM 2)</span>
-                        <span class="mc-sub">Click + propaga · controle manual</span>
+                        <span class="mc-sub">SAM · click no sujeito + propaga</span>
                     </span>
                     <svg class="mc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
                 <div id="rotoscopeMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
-
-                <!-- Progresso ao vivo -->
-                <div id="bgVideoProgress" style="display:none;margin-top:8px;padding:10px;background:rgba(0,0,0,0.35);border:1px solid rgba(190,242,100,.18);border-radius:8px">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-                        <span id="bgVideoPhase" style="font-size:.62rem;color:#bef264;font-weight:700">Iniciando...</span>
-                        <button onclick="bgVideoCancel()" id="bgVideoCancelBtn" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;font-size:.55rem;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">Cancelar</button>
-                    </div>
-                    <div style="background:rgba(255,255,255,.05);border-radius:3px;height:4px;overflow:hidden;margin-bottom:5px">
-                        <div id="bgVideoProgressBar" style="height:100%;background:linear-gradient(90deg,#22d3ee,#bef264);width:0%;transition:width .25s"></div>
-                    </div>
-                    <div id="bgVideoStats" style="font-size:.55rem;color:#737373;font-family:'JetBrains Mono',monospace;text-align:center">—</div>
-                    <!-- Preview ao vivo -->
-                    <div style="margin-top:8px;border-radius:5px;overflow:hidden;background-image:repeating-conic-gradient(#1a1a1a 0% 25%,#0f0f0f 0% 50%);background-size:10px 10px;display:flex;align-items:center;justify-content:center;min-height:90px">
-                        <img id="bgVideoPreviewImg" style="max-width:100%;max-height:160px;display:none">
-                        <span id="bgVideoPreviewWait" style="font-size:.55rem;color:#525252">aguardando primeiro frame...</span>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
