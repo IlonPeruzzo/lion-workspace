@@ -290,6 +290,14 @@ let env, SamModel, AutoProcessor, RawImage;
 try {
     const tx = await import('@huggingface/transformers');
     ({ env, SamModel, AutoProcessor, RawImage } = tx);
+
+    // CRÍTICO: configura onde carregar os WASMs do onnxruntime-web.
+    // Sem isso, ort.InferenceSession.create() falha com 'undefined.create'
+    // pq o backend não inicializa.
+    if (env && env.backends && env.backends.onnx && env.backends.onnx.wasm) {
+        env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/';
+        env.backends.onnx.wasm.numThreads = 1; // estável em Electron
+    }
 } catch (e) {
     console.error('Falha import transformers.js:', e);
     if (window.__rotoShowError) window.__rotoShowError(
