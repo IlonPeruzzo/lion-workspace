@@ -209,19 +209,20 @@
     </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     IMPORT MAP — resolve bare specifiers que o transformers.js usa
-     internamente (onnxruntime-web/webgpu, onnxruntime-common).
-     Sem isso, o browser ESM nativo não consegue resolver via
-     package.json exports (só bundlers fazem isso).
+     IMPORT MAP — usa CDN do JSDelivr.
+     Local node_modules + bundle minificado dava erro "undefined.create"
+     pq os bundles têm wrapping diferente do que transformers.js v4 espera.
+     CDN serve os arquivos com MIME types corretos e resolution coerente.
+     Cache do Chromium garante offline depois do 1º load.
 ═══════════════════════════════════════════════════════════════════ -->
 <script type="importmap">
 {
     "imports": {
-        "onnxruntime-common": "./node_modules/onnxruntime-common/dist/esm/index.js",
-        "onnxruntime-web": "./node_modules/onnxruntime-web/dist/ort.bundle.min.mjs",
-        "onnxruntime-web/webgpu": "./node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs",
-        "onnxruntime-web/wasm": "./node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs",
-        "onnxruntime-web/webgl": "./node_modules/onnxruntime-web/dist/ort.webgl.bundle.min.mjs"
+        "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.min.js",
+        "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.25.1/dist/esm/index.js",
+        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.bundle.min.mjs",
+        "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.webgpu.bundle.min.mjs",
+        "onnxruntime-web/wasm": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.wasm.bundle.min.mjs"
     }
 }
 </script>
@@ -284,10 +285,10 @@
 <script type="module">
 'use strict';
 
-// Import dinâmico com try/catch — se falhar, error overlay aparece
+// Import via CDN — bare specifier resolvido pelo importmap acima
 let env, SamModel, AutoProcessor, RawImage;
 try {
-    const tx = await import('./node_modules/@huggingface/transformers/dist/transformers.web.min.js');
+    const tx = await import('@huggingface/transformers');
     ({ env, SamModel, AutoProcessor, RawImage } = tx);
 } catch (e) {
     console.error('Falha import transformers.js:', e);
@@ -295,9 +296,9 @@ try {
         'Falha ao carregar IA',
         'transformers.js não pôde ser carregado:\n' + (e.message || e) +
         '\n\nA UI básica ainda funciona (Cancelar / X). ' +
-        'A segmentação SAM está indisponível.'
+        'A segmentação SAM está indisponível.\n\n' +
+        'Verifique sua conexão de internet — o modelo é baixado da Hugging Face.'
     );
-    // Para a execução do módulo aqui — UI classic continua funcionando
     throw e;
 }
 
