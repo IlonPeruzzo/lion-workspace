@@ -209,23 +209,12 @@
     </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     IMPORT MAP — usa CDN do JSDelivr.
-     Local node_modules + bundle minificado dava erro "undefined.create"
-     pq os bundles têm wrapping diferente do que transformers.js v4 espera.
-     CDN serve os arquivos com MIME types corretos e resolution coerente.
-     Cache do Chromium garante offline depois do 1º load.
+     Xenova/transformers v2 (UMD via CDN) — mais estável em Electron
+     que @huggingface/transformers v4. v4 dava 'undefined.create' por
+     incompatibilidade com onnxruntime-web em renderer Electron.
+     Xenova v2 expõe global window.Transformers (sem ESM/import maps).
 ═══════════════════════════════════════════════════════════════════ -->
-<script type="importmap">
-{
-    "imports": {
-        "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.min.js",
-        "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.25.1/dist/esm/index.js",
-        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.bundle.min.mjs",
-        "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.webgpu.bundle.min.mjs",
-        "onnxruntime-web/wasm": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.wasm.bundle.min.mjs"
-    }
-}
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════════════
      SCRIPT 1: CLASSIC — sempre roda. Window controls + cancel + error.
@@ -280,35 +269,61 @@
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     SCRIPT 2: MODULE — lógica do editor + SAM via transformers.js
+     SCRIPT 2: lógica do editor + SAM via Xenova/transformers v2
 ═══════════════════════════════════════════════════════════════════ -->
-<script type="module">
+<script>
 'use strict';
 
-// Import via CDN — bare specifier resolvido pelo importmap acima
+// Aguarda carregamento do script CDN do Xenova/transformers v2.
+// Se a CDN não carregar (sem internet), aborta com erro visível.
 let env, SamModel, AutoProcessor, RawImage;
-try {
-    const tx = await import('@huggingface/transformers');
-    ({ env, SamModel, AutoProcessor, RawImage } = tx);
 
-    // CRÍTICO: configura onde carregar os WASMs do onnxruntime-web.
-    // Sem isso, ort.InferenceSession.create() falha com 'undefined.create'
-    // pq o backend não inicializa.
-    if (env && env.backends && env.backends.onnx && env.backends.onnx.wasm) {
-        env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/';
-        env.backends.onnx.wasm.numThreads = 1; // estável em Electron
-    }
-} catch (e) {
-    console.error('Falha import transformers.js:', e);
-    if (window.__rotoShowError) window.__rotoShowError(
-        'Falha ao carregar IA',
-        'transformers.js não pôde ser carregado:\n' + (e.message || e) +
-        '\n\nA UI básica ainda funciona (Cancelar / X). ' +
-        'A segmentação SAM está indisponível.\n\n' +
-        'Verifique sua conexão de internet — o modelo é baixado da Hugging Face.'
-    );
-    throw e;
+function waitForTransformers(timeoutMs) {
+    return new Promise((resolve, reject) => {
+        const t0 = Date.now();
+        const check = () => {
+            if (window.Transformers || window.transformers) {
+                resolve(window.Transformers || window.transformers);
+                return;
+            }
+            if (Date.now() - t0 > timeoutMs) {
+                reject(new Error('Timeout aguardando transformers.js (verifique internet)'));
+                return;
+            }
+            setTimeout(check, 200);
+        };
+        check();
+    });
 }
+
+(async () => {
+    try {
+        const tx = await waitForTransformers(15000);
+        env = tx.env;
+        SamModel = tx.SamModel;
+        AutoProcessor = tx.AutoProcessor;
+        RawImage = tx.RawImage;
+
+        // Aponta wasmPaths pro mesmo CDN (Xenova v2 usa onnxruntime 1.14)
+        if (env && env.backends && env.backends.onnx && env.backends.onnx.wasm) {
+            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/';
+            env.backends.onnx.wasm.numThreads = 1;
+        }
+        console.log('[rotoscope] transformers.js v2 (Xenova) carregado OK');
+    } catch (e) {
+        console.error('Falha transformers:', e);
+        if (window.__rotoShowError) window.__rotoShowError(
+            'Falha ao carregar IA',
+            'transformers.js não pôde ser carregado da CDN.\n\n' +
+            (e.message || e) + '\n\n' +
+            'A UI básica ainda funciona (Cancelar / X).\n' +
+            'Verifique sua conexão de internet.'
+        );
+        return;
+    }
+    // Notifica que IA tá disponível
+    window.__rotoTransformersReady = true;
+})();
 
 // Aponta wasm/onnx pra node_modules local (offline-first)
 env.allowRemoteModels = true;
@@ -390,66 +405,34 @@ document.getElementById('btnLoadAI').onclick = async () => {
     state.aiLoading = true;
     const btn = document.getElementById('btnLoadAI');
     btn.disabled = true;
-    setAiStatus('Baixando modelo SlimSAM (~35MB)...', 'loading', 5);
+    setAiStatus('Aguardando transformers.js carregar...', 'loading', 5);
 
     try {
-        // Tenta SAM 2 primeiro (qualidade premium ~150MB).
-        // Se transformers.js não suportar (versão antiga ou export incompatível),
-        // fallback automático pro SlimSAM (~35MB).
-        const SAM2_CANDIDATES = [
-            'onnx-community/sam2.1-hiera-tiny',
-            'onnx-community/sam2-hiera-tiny',
-        ];
-        const SAM_FALLBACK = 'Xenova/slimsam-77-uniform';
-        const hasWebGPU = !!navigator.gpu;
-        const device = hasWebGPU ? 'webgpu' : 'wasm';
-
-        let loaded = false;
-        let usedModelId = null;
-
-        for (const modelId of SAM2_CANDIDATES) {
-            setAiStatus(`Tentando SAM 2 (${modelId.split('/')[1]})...`, 'loading', 10);
-            try {
-                state.samProcessor = await AutoProcessor.from_pretrained(modelId);
-                state.samModel = await SamModel.from_pretrained(modelId, {
-                    device,
-                    dtype: 'fp32',
-                    progress_callback: (data) => {
-                        if (data.status === 'progress' && data.progress) {
-                            const pct = 10 + Math.min(75, Math.floor(data.progress * 0.75));
-                            setAiStatus(`SAM 2: ${data.file || ''} ${Math.round(data.progress)}%`, 'loading', pct);
-                        }
-                    },
-                });
-                loaded = true;
-                usedModelId = modelId;
-                break;
-            } catch (e) {
-                console.warn('SAM 2 falhou (' + modelId + '):', e.message);
-                state.samProcessor = null;
-                state.samModel = null;
-            }
+        // Aguarda transformers.js (carregado via <script src=cdn>) ficar pronto
+        let waitMs = 0;
+        while (!window.__rotoTransformersReady && waitMs < 15000) {
+            await new Promise(r => setTimeout(r, 200));
+            waitMs += 200;
         }
+        if (!window.__rotoTransformersReady) throw new Error('transformers.js não carregou (timeout)');
 
-        // Fallback pro SlimSAM se SAM 2 não rodar
-        if (!loaded) {
-            setAiStatus('SAM 2 indisponível — usando SlimSAM (35MB)...', 'loading', 20);
-            state.samProcessor = await AutoProcessor.from_pretrained(SAM_FALLBACK);
-            state.samModel = await SamModel.from_pretrained(SAM_FALLBACK, {
-                device,
-                dtype: 'fp32',
-                progress_callback: (data) => {
-                    if (data.status === 'progress' && data.progress) {
-                        const pct = 20 + Math.min(70, Math.floor(data.progress * 0.7));
-                        setAiStatus(`SlimSAM: ${data.file || ''} ${Math.round(data.progress)}%`, 'loading', pct);
-                    }
-                },
-            });
-            usedModelId = SAM_FALLBACK;
-        }
+        // SlimSAM v1 — Xenova v2 não suporta SAM 2 (que é v3+). Mas SlimSAM
+        // tem qualidade boa o suficiente pra prompt-based segmentation e é
+        // o mais estável aqui. ~35MB total (encoder + decoder).
+        const modelId = 'Xenova/slimsam-77-uniform';
+        setAiStatus(`Baixando SlimSAM (~35MB)...`, 'loading', 10);
 
-        const modelLabel = usedModelId.indexOf('sam2') >= 0 ? 'SAM 2' : 'SlimSAM';
-        setAiStatus(`✓ ${modelLabel} pronto (${device.toUpperCase()})`, 'ready');
+        state.samProcessor = await AutoProcessor.from_pretrained(modelId);
+        state.samModel = await SamModel.from_pretrained(modelId, {
+            progress_callback: (data) => {
+                if (data.status === 'progress' && data.progress) {
+                    const pct = 10 + Math.min(80, Math.floor(data.progress * 0.8));
+                    setAiStatus(`Baixando ${data.file || 'model'}: ${Math.round(data.progress)}%`, 'loading', pct);
+                }
+            },
+        });
+
+        setAiStatus(`✓ SlimSAM pronto · clique no sujeito`, 'ready');
         state.aiLoaded = true;
         document.getElementById('btnSegmentFrame').disabled = false;
         document.getElementById('btnTrackForward').disabled = false;
