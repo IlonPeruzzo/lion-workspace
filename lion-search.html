@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>LION SEARCH</title>
+<style>
+    :root {
+        --bg: rgba(22,22,24,0.97);
+        --bg-results: #0d0d0e;
+        --text: #e8e8e8;
+        --text2: #888;
+        --text3: #555;
+        --border: rgba(255,255,255,0.08);
+        --selected: rgba(255,255,255,0.12);
+        --hover: rgba(255,255,255,0.05);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body {
+        background:transparent;
+        color:var(--text);
+        font-family:'Inter','Segoe UI',sans-serif;
+        font-size:14px;
+        -webkit-font-smoothing:antialiased;
+        overflow:hidden;
+        height:100%;
+        user-select:none;
+    }
+    body { -webkit-app-region: drag; }
+
+    .palette {
+        background:var(--bg);
+        backdrop-filter:blur(18px);
+        -webkit-backdrop-filter:blur(18px);
+        border-radius:6px;
+        margin:4px;
+        height:calc(100% - 8px);
+        display:flex;
+        flex-direction:column;
+        overflow:hidden;
+        box-shadow:0 30px 70px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+
+    /* Topbar */
+    .topbar {
+        height:24px;
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        padding:0 4px;
+        background:rgba(255,255,255,0.04);
+        border-bottom:1px solid var(--border);
+        flex-shrink:0;
+    }
+    .close-btn {
+        width:22px; height:18px;
+        display:flex; align-items:center; justify-content:center;
+        background:transparent; border:none;
+        color:var(--text2); cursor:pointer;
+        border-radius:3px;
+        -webkit-app-region: no-drag;
+        transition:all .12s;
+    }
+    .close-btn:hover { background:rgba(255,255,255,0.08); color:var(--text); }
+    .close-btn svg { width:10px; height:10px; }
+
+    /* Search area */
+    .search-area {
+        position:relative;
+        padding:18px 22px;
+        flex-shrink:0;
+        -webkit-app-region: no-drag;
+        min-height:54px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+    /* Hero — só visível quando não tá digitando */
+    .hero {
+        font-size:1.0rem;
+        font-weight:300;
+        letter-spacing:.45em;
+        color:var(--text);
+        text-align:center;
+        text-transform:uppercase;
+        font-family:'Inter','Helvetica Neue',sans-serif;
+        padding-right:.45em; /* compensa letter-spacing final pra centrar */
+        white-space:nowrap;
+        opacity:.95;
+    }
+    .palette.typing .hero { display:none; }
+    .typed-text {
+        display:none;
+        font-size:1.05rem;
+        font-weight:400;
+        color:var(--text);
+        font-family:inherit;
+        width:100%;
+        line-height:1.4;
+    }
+    .palette.typing .typed-text { display:block; }
+    .typed-text .caret {
+        display:inline-block;
+        width:1.5px;
+        height:1em;
+        background:var(--text);
+        margin-left:1px;
+        vertical-align:-2px;
+        animation:blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity:0; } }
+
+    input.hidden-search {
+        position:absolute; opacity:0; pointer-events:none;
+        width:1px; height:1px;
+    }
+
+    /* Results */
+    .results-wrap {
+        flex:1;
+        overflow-y:auto;
+        background:var(--bg-results);
+        border-top:1px solid var(--border);
+        -webkit-app-region: no-drag;  /* CRÍTICO: senão clicks viram drag */
+    }
+    .results-wrap * { -webkit-app-region: no-drag; }
+    .palette:not(.typing) .results-wrap { display:none; }
+    .results-wrap::-webkit-scrollbar { width:5px; }
+    .results-wrap::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:3px; }
+
+    .cat-header {
+        font-size:.6rem;
+        font-weight:600;
+        letter-spacing:1.4px;
+        text-transform:uppercase;
+        color:var(--text2);
+        background:#18181a;
+        padding:5px 22px;
+        border-top:1px solid rgba(255,255,255,0.04);
+    }
+    .cat-header:first-child { border-top:none; }
+
+    .item {
+        display:flex; align-items:center;
+        padding:8px 22px;
+        cursor:pointer;
+        font-size:.88rem;
+        color:var(--text);
+        transition:background .06s;
+        position:relative;
+    }
+    .item:hover { background:var(--hover); }
+    .item.selected { background:var(--selected); }
+    .item.selected::after {
+        content:'';
+        position:absolute;
+        right:18px; top:50%;
+        width:5px; height:5px;
+        border-right:1.5px solid var(--text2);
+        border-top:1.5px solid var(--text2);
+        transform:translateY(-50%) rotate(45deg);
+    }
+    .item-name {
+        flex:1; min-width:0;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .item-cat {
+        font-size:.66rem;
+        color:var(--text3);
+        margin-left:14px;
+        white-space:nowrap;
+    }
+
+    .empty {
+        text-align:center;
+        padding:24px 18px;
+        font-size:.74rem;
+        color:var(--text3);
+        line-height:1.6;
+    }
+    .empty.loading { color:var(--text2); }
+    .empty.error { color:#fca5a5; }
+    .empty kbd {
+        display:inline-block; padding:1px 5px;
+        background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.06);
+        border-radius:3px; font-family:ui-monospace,monospace;
+        font-size:.66rem; color:var(--text2);
+    }
+    .spinner {
+        display:inline-block; width:12px; height:12px;
+        border:2px solid rgba(255,255,255,0.1);
+        border-top-color:var(--text);
+        border-radius:50%;
+        animation:spin .7s linear infinite;
+        margin-right:6px;
+        vertical-align:-2px;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Catalog status badge — bottom corner when not typing */
+    .catalog-badge {
+        position:absolute; bottom:6px; left:50%;
+        transform:translateX(-50%);
+        font-size:.55rem; color:var(--text3);
+        letter-spacing:.5px; text-transform:uppercase;
+        white-space:nowrap;
+        opacity:.7;
+        pointer-events:none;
+    }
+    .catalog-badge.loading { color:var(--text2); }
+    .catalog-badge.error { color:#fca5a5; opacity:1; }
+    .catalog-badge.ready { color:#86efac; }
+    .palette.typing .catalog-badge { display:none; }
+
+    .toast {
+        position:fixed; bottom:14px; left:50%;
+        transform:translateX(-50%) translateY(8px);
+        background:rgba(20,20,20,0.96); border:1px solid var(--border);
+        border-radius:5px; padding:6px 12px; font-size:.7rem;
+        color:var(--text); opacity:0; pointer-events:none;
+        transition:all .25s;
+        max-width:80%; text-align:center;
+        z-index:10;
+    }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .toast.success { color:#86efac; }
+    .toast.error { color:#fca5a5; border-color:rgba(239,68,68,0.4); }
+</style>
+</head>
+<body>
+<div class="palette" id="palette">
+    <div class="topbar">
+        <button class="close-btn" id="closeBtn" title="Fechar (Esc)">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                <line x1="2.5" y1="2.5" x2="9.5" y2="9.5"/>
+                <line x1="9.5" y1="2.5" x2="2.5" y2="9.5"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="search-area">
+        <div class="hero">LION SEARCH</div>
+        <div class="typed-text" id="typedText"><span class="caret"></span></div>
+        <input type="text" class="hidden-search" id="searchInput" autofocus spellcheck="false">
+        <div class="catalog-badge loading" id="catalogBadge"></div>
+    </div>
+
+    <div class="results-wrap" id="results">
+        <div class="empty">Digite pra buscar</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+</div>
+
+<script>
+'use strict';
+
+const { ipcRenderer } = require('electron');
+
+const $palette = document.getElementById('palette');
+const $input = document.getElementById('searchInput');
+const $typed = document.getElementById('typedText');
+const $results = document.getElementById('results');
+const $toast = document.getElementById('toast');
+const $closeBtn = document.getElementById('closeBtn');
+const $badge = document.getElementById('catalogBadge');
+
+// Alturas — empty=compacto (estilo Excalibur), typing=expande pra mostrar lista
+const SIZE_EMPTY = { w: 440, h: 88 };
+const SIZE_TYPING = { w: 440, h: 440 };
+
+let allItems = [];
+let filtered = [];
+let flatList = [];
+let selectedIdx = 0;
+let busy = false;
+let booted = false;
+let bootError = null;
+
+function close() { ipcRenderer.send('lion-search:close'); }
+$closeBtn.onclick = close;
+
+function ensureFocus() {
+    setTimeout(() => { try { $input.focus(); } catch(e) {} }, 0);
+}
+ensureFocus();
+document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.close-btn')) ensureFocus();
+});
+
+function showToast(msg, kind) {
+    $toast.textContent = msg;
+    $toast.className = 'toast show' + (kind ? ' ' + kind : '');
+    setTimeout(() => $toast.classList.remove('show'), 2200);
+}
+
+function updateBadge() {
+    if (!booted && !bootError) {
+        $badge.textContent = '⟳ carregando catálogo...';
+        $badge.className = 'catalog-badge loading';
+    } else if (bootError) {
+        const short = bootError.length > 90 ? bootError.slice(0, 90) + '…' : bootError;
+        $badge.textContent = '⚠ ' + short;
+        $badge.className = 'catalog-badge error';
+        $badge.title = bootError + (lastDebug ? ' · debug=' + lastDebug : '');
+    } else if (allItems.length === 0) {
+        $badge.textContent = '⚠ catálogo vazio';
+        $badge.className = 'catalog-badge error';
+    } else {
+        $badge.textContent = allItems.length + ' itens';
+        $badge.className = 'catalog-badge ready';
+        $badge.title = lastDebug || '';
+    }
+}
+
+function resizeTo(typing) {
+    const s = typing ? SIZE_TYPING : SIZE_EMPTY;
+    ipcRenderer.send('lion-search:resize', s);
+}
+
+const CAT_LABEL = {
+    'video-fx':     'Video Effects',
+    'audio-fx':     'Audio Effects',
+    'video-tx':     'Video Transitions',
+    'audio-tx':     'Audio Transitions',
+    'preset':       'Presets',
+    'audio-source': 'Sound Effects (Project)',
+};
+const CAT_ORDER = ['audio-source', 'video-fx', 'audio-fx', 'preset', 'video-tx', 'audio-tx'];
+
+// Selection context — quando há clip selecionado, prioriza items compatíveis
+let selCtx = { selectionType: 'none', videoSelected: 0, audioSelected: 0, hasSequence: false };
+
+function isCompatibleWithSelection(item) {
+    if (selCtx.selectionType === 'none' || selCtx.selectionType === 'mixed') return true;
+    // Audio source: sempre compat (independente de seleção, vai pro playhead)
+    if (item.kind === 'audio-source') return true;
+    if (selCtx.selectionType === 'video') {
+        if (item.kind === 'video-fx' || item.kind === 'video-tx') return true;
+        if (item.kind === 'preset') return !item.audioOnly;
+        return false;
+    }
+    if (selCtx.selectionType === 'audio') {
+        if (item.kind === 'audio-fx' || item.kind === 'audio-tx') return true;
+        if (item.kind === 'preset') return !item.videoOnly;
+        return false;
+    }
+    return true;
+}
+
+function score(item, query) {
+    if (!query) return 1;
+    const q = query.toLowerCase();
+    const name = (item.name || '').toLowerCase();
+    const cat = (item.category || '').toLowerCase();
+    if (name === q) return 1000;
+    if (name.startsWith(q)) return 500 - (name.length - q.length);
+    if (name.includes(q)) return 200;
+    if (cat.includes(q)) return 50;
+    let pos = 0;
+    for (let c of q) { pos = name.indexOf(c, pos); if (pos < 0) return 0; pos++; }
+    return 10;
+}
+
+let _lastTyping = null;
+function filter() {
+    const q = $input.value.trim();
+    $typed.innerHTML = escHtml(q) + '<span class="caret"></span>';
+    const willType = q.length > 0;
+    $palette.classList.toggle('typing', willType);
+    // Força resize sempre que o estado muda (não confia no classList check)
+    if (willType !== _lastTyping) {
+        _lastTyping = willType;
+        resizeTo(willType);
+    }
+
+    if (!q) { return; }
+
+    const byCat = {};
+    for (const it of allItems) {
+        if (!isCompatibleWithSelection(it)) continue;
+        const s = score(it, q);
+        if (s > 0) {
+            const k = it.kind || 'preset';
+            if (!byCat[k]) byCat[k] = [];
+            byCat[k].push({ it, s });
+        }
+    }
+    filtered = [];
+    flatList = [];
+    for (const k of CAT_ORDER) {
+        if (!byCat[k]) continue;
+        byCat[k].sort((a, b) => b.s - a.s);
+        const items = byCat[k].slice(0, 50).map(x => x.it);
+        filtered.push({ catKey: k, catLabel: CAT_LABEL[k] || k, items });
+        for (const it of items) flatList.push(it);
+    }
+    selectedIdx = 0;
+    render();
+}
+
+function render() {
+    const q = $input.value.trim();
+    if (!q) { return; } // estado vazio é só hero
+
+    function debugBlock() {
+        let html = '';
+        if (lastJsxError) html += '<br><br><span style="color:#fca5a5;font-family:monospace;font-size:.6rem;word-break:break-all">JSX: ' + escHtml(lastJsxError) + '</span>';
+        if (lastDebug) html += '<br><br><span style="opacity:.6;font-family:monospace;font-size:.6rem;word-break:break-all">debug: ' + escHtml(lastDebug) + '</span>';
+        if (!lastJsxError && !lastDebug) html += '<br><br><span style="opacity:.5;font-size:.6rem">Sem debug — plugin pode estar usando código antigo. Reinicie o Premiere completamente.</span>';
+        return html;
+    }
+
+    if (!booted && !bootError) {
+        $results.innerHTML = '<div class="empty loading"><span class="spinner"></span>Carregando catálogo do Premiere...</div>';
+        return;
+    }
+    if (bootError) {
+        $results.innerHTML = '<div class="empty error">⚠ ' + escHtml(bootError) + '<br><br>Verifique se o <strong>plugin Lion Workspace</strong> está aberto no Premiere e logado.' + debugBlock() + '</div>';
+        return;
+    }
+    if (allItems.length === 0) {
+        $results.innerHTML = '<div class="empty error">Catálogo vazio.<br><br>Abra o <strong>plugin Lion Workspace</strong> no Premiere (Window → Extensions), faça login, e tenha um <strong>projeto com sequência aberta</strong>.' + debugBlock() + '</div>';
+        return;
+    }
+    if (!flatList.length) {
+        $results.innerHTML = '<div class="empty">Nada encontrado pra "' + escHtml(q) + '"</div>';
+        return;
+    }
+    let html = '';
+    let idxCounter = 0;
+    for (const grp of filtered) {
+        html += '<div class="cat-header">' + escHtml(grp.catLabel) + '</div>';
+        for (const it of grp.items) {
+            const isSel = idxCounter === selectedIdx;
+            html += '<div class="item' + (isSel ? ' selected' : '') + '" data-idx="' + idxCounter + '">';
+            html += '<span class="item-name">' + escHtml(it.name) + '</span>';
+            if (it.category) html += '<span class="item-cat">' + escHtml(it.category) + '</span>';
+            html += '</div>';
+            idxCounter++;
+        }
+    }
+    $results.innerHTML = html;
+    const sel = $results.querySelector('.item.selected');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+
+function escHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
+    }[c]));
+}
+
+$results.addEventListener('click', (e) => {
+    const item = e.target.closest('.item');
+    if (!item) return;
+    selectedIdx = parseInt(item.dataset.idx);
+    apply();
+});
+$results.addEventListener('mousemove', (e) => {
+    const item = e.target.closest('.item');
+    if (!item) return;
+    const idx = parseInt(item.dataset.idx);
+    if (idx !== selectedIdx) {
+        selectedIdx = idx;
+        const prev = $results.querySelector('.item.selected');
+        if (prev) prev.classList.remove('selected');
+        item.classList.add('selected');
+    }
+});
+
+// UI OTIMISTA — fecha janela IMEDIATAMENTE, aplica em background.
+// Se der erro, mostra notificação retroativa via IPC.
+async function apply() {
+    if (busy) return;
+    const it = flatList[selectedIdx];
+    if (!it) return;
+    busy = true;
+
+    // Pre-validation rápida: clip selecionado pra effects
+    const needsClip = it.kind === 'video-fx' || it.kind === 'audio-fx' || it.kind === 'preset';
+    if (needsClip && selCtx && selCtx.selectionType === 'none') {
+        showToast('Selecione um clip na timeline primeiro', 'error');
+        busy = false;
+        return;
+    }
+
+    // Fire-and-forget: dispara o apply, fecha imediatamente
+    ipcRenderer.invoke('lion-search:apply', {
+        kind: it.kind, matchName: it.matchName, name: it.name,
+    }).then(r => {
+        // Se deu erro, mostra notificação via IPC pra Lion Workspace mostrar
+        const result = String(r?.result || '');
+        if (r?.error || (result && !result.startsWith('OK:'))) {
+            let msg = '';
+            if (r?.error) msg = r.error;
+            else if (result === 'NO_CLIP_SELECTED') msg = 'Selecione um clip na timeline primeiro';
+            else if (result === 'NO_SEQUENCE') msg = 'Abra uma sequência no Premiere primeiro';
+            else if (result.startsWith('ERR:transitions_not_implemented')) msg = 'Transições ainda não — arraste no plugin';
+            else if (result.startsWith('ERR:preset_apply_failed')) msg = 'Preset não pôde ser aplicado';
+            else if (result.startsWith('ERR:audio_source_not_found')) msg = 'Áudio não encontrado no projeto';
+            else if (result.startsWith('ERR:could_not_create_audio_track')) msg = 'Não consegui criar nova audio track';
+            else if (result === 'ERR:duplicate_project_id') msg = 'Premiere tem o mesmo projeto aberto duas vezes — feche o duplicado';
+            else msg = result || 'Erro ao aplicar';
+            // Envia notificação pro Lion Workspace (toast nativo)
+            try { ipcRenderer.send('lion-search:show-error', { title: 'LION SEARCH — ' + it.name, body: msg }); } catch(e) {}
+        }
+    }).catch(e => {
+        try { ipcRenderer.send('lion-search:show-error', { title: 'LION SEARCH — ' + it.name, body: e.message || String(e) }); } catch(eS) {}
+    });
+
+    // Fecha imediatamente — UI otimista
+    close();
+}
+
+$input.addEventListener('input', filter);
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (selectedIdx < flatList.length - 1) { selectedIdx++; render(); }
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (selectedIdx > 0) { selectedIdx--; render(); }
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        apply();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        if ($input.value) {
+            $input.value = '';
+            filter();
+        } else {
+            close();
+        }
+    }
+});
+
+window.addEventListener('blur', () => {
+    setTimeout(() => { if (!document.hasFocus()) close(); }, 100);
+});
+
+// Boot — stale-while-revalidate:
+//  1) Mostra cache instantaneamente (se houver)
+//  2) Força refresh em background — quando vier fresh, atualiza
+let lastJsxError = '';
+let lastDebug = '';
+let bootAttempts = 0;
+async function fetchContext() {
+    try {
+        const ctx = await ipcRenderer.invoke('lion-search:get-context');
+        if (ctx && !ctx.error) {
+            selCtx = ctx;
+            updateSelectionBadge();
+        }
+    } catch (e) {}
+}
+function updateSelectionBadge() {
+    if (selCtx.selectionType === 'video') {
+        $badge.title = (allItems.length + ' itens · ' + selCtx.videoSelected + ' clip vídeo selecionado');
+    } else if (selCtx.selectionType === 'audio') {
+        $badge.title = (allItems.length + ' itens · ' + selCtx.audioSelected + ' clip áudio selecionado');
+    } else if (selCtx.selectionType === 'mixed') {
+        $badge.title = (allItems.length + ' itens · ' + (selCtx.videoSelected + selCtx.audioSelected) + ' clips selecionados (mixed)');
+    }
+}
+
+async function _applyResult(r, isFresh) {
+    if (r?.error) {
+        if (bootAttempts >= 3) bootError = r.error;
+        updateBadge();
+        return false;
+    }
+    allItems = r.items || [];
+    lastJsxError = r.jsxError || '';
+    lastDebug = r.debug || '';
+    booted = true;
+    if (allItems.length === 0 && lastJsxError) {
+        bootError = 'Premiere: ' + lastJsxError;
+    } else if (allItems.length === 0 && bootAttempts >= 3) {
+        bootError = 'Plugin retornou catálogo vazio. Plugin tá logado? Tem projeto aberto?';
+    } else if (allItems.length > 0) {
+        bootError = null;
+    }
+    updateBadge();
+    if ($input.value.trim()) filter();
+    ensureFocus();
+    return true;
+}
+
+async function boot() {
+    bootAttempts++;
+    updateBadge();
+    fetchContext();
+    // 1) Pega cache imediato (rápido)
+    try {
+        const cached = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: false });
+        await _applyResult(cached, false);
+    } catch (e) {
+        if (bootAttempts >= 3) bootError = e.message || String(e);
+        updateBadge();
+    }
+    // 2) Força refresh em background (re-scan do Premiere — capta sfx novos, project changes, etc)
+    try {
+        const fresh = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true });
+        await _applyResult(fresh, true);
+    } catch (e) {
+        // Cached já foi aplicado, ignore fresh err
+    }
+}
+boot();
+
+// Re-fetch periódico — capta sfx novos adicionados ao projeto enquanto LION SEARCH está aberto
+// 30s pq parsing é caro; cache do plugin client já dedupa rápido subsequent calls
+let _refreshTimer = setInterval(async () => {
+    if (busy) return;
+    try {
+        const r = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true });
+        if (r?.items) await _applyResult(r, true);
+    } catch (e) {}
+}, 30000);
+window.addEventListener('beforeunload', () => { try { clearInterval(_refreshTimer); } catch(e) {} });
+</script>
+</body>
+</html>

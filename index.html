@@ -845,6 +845,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Remover Fundo
         </button>
+        <button data-tab="atalhos" onclick="showTab('atalhos',this)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8M6 18h12"/></svg>
+            Atalhos
+        </button>
     </div>
 
     <!-- ====== DASHBOARD ====== -->
@@ -1430,6 +1434,72 @@
             @keyframes rmbg-spin{to{transform:rotate(360deg)}}
             #rmbgDropZone:hover{background:rgba(190,242,100,.06);border-color:rgba(190,242,100,.45)}
             #rmbgDropZone.dragover{background:rgba(190,242,100,.12);border-color:#bef264;border-style:solid}
+        </style>
+    </div>
+
+    <!-- ====== ATALHOS ====== -->
+    <div class="tab-content" id="tab-atalhos">
+        <div class="card">
+            <div class="card-title">Atalhos · LION SEARCH</div>
+            <div style="font-size:.78rem;color:var(--text3);margin-bottom:14px;line-height:1.55">
+                Aperte o atalho <strong>dentro do Premiere Pro</strong> pra abrir uma busca rápida estilo Excalibur.
+                Pesquise efeitos, presets, transições — tudo do Premiere — e aplique no clip selecionado sem usar mouse.
+                <em>Só dispara quando o Premiere está em foco — não atrapalha outros apps.</em>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;background:rgba(190,242,100,.03);border:1px solid rgba(190,242,100,.10);border-radius:10px">
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:.86rem;font-weight:600;color:var(--text1);margin-bottom:3px">Ativar LION SEARCH</div>
+                        <div style="font-size:.7rem;color:var(--text3)">Liga o atalho global. Desliga se você prefere usar só pelo plugin.</div>
+                    </div>
+                    <label class="switch" style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0">
+                        <input type="checkbox" id="lsEnabled" onchange="lsSettingsSave()" style="opacity:0;width:0;height:0">
+                        <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#2a2a2a;border-radius:24px;transition:.2s" id="lsEnabledSlider"></span>
+                    </label>
+                </div>
+
+                <div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
+                    <div style="font-size:.86rem;font-weight:600;color:var(--text1);margin-bottom:6px">Atalho do Premiere Pro</div>
+                    <div style="font-size:.7rem;color:var(--text3);margin-bottom:10px">Clique no campo e aperte qualquer combinação (ou tecla solta). <strong>Só dispara quando o Premiere Pro está em foco</strong> — não interfere em outros programas.</div>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="text" id="lsHotkey" readonly placeholder="Clique e aperte..." onclick="lsHotkeyCapture()" style="flex:1;padding:10px 14px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86rem;text-align:center;background:rgba(0,0,0,.4);border:1px solid rgba(190,242,100,.2);border-radius:8px;color:#bef264;cursor:pointer;font-weight:700;letter-spacing:1.2px">
+                        <button class="btn btn-o" onclick="lsResetHotkey()" style="font-size:.74rem;padding:8px 12px">Padrão</button>
+                    </div>
+                    <div id="lsHotkeyStatus" style="font-size:.7rem;color:var(--text3);margin-top:8px;min-height:14px"></div>
+
+                    <div style="font-size:.66rem;color:var(--text3);margin-top:14px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Sugestões (cliques rápidos)</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px">
+                        <button class="btn btn-o" onclick="lsApplySuggestion('Control+Shift+L')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Ctrl+Shift+L</button>
+                        <button class="btn btn-o" onclick="lsApplySuggestion('Control+Alt+Space')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Ctrl+Alt+Space</button>
+                        <button class="btn btn-o" onclick="lsApplySuggestion('Control+Shift+Space')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Ctrl+Shift+Space</button>
+                        <button class="btn btn-o" onclick="lsApplySuggestion('Control+Shift+P')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Ctrl+Shift+P</button>
+                        <button class="btn btn-o" onclick="lsApplySuggestion('F2')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">F2</button>
+                        <button class="btn btn-o" onclick="lsApplySuggestion('Alt+Q')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Alt+Q</button>
+                        <button class="btn btn-o" onclick="lsApplySuggestion('F13')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace" title="Tecla solta — vai disparar global">F13</button>
+                    </div>
+                    <div style="font-size:.62rem;color:var(--text3);margin-top:8px;line-height:1.5">
+                        💡 <strong>Pode ser tecla solta:</strong> aperte só uma letra/F-key sem Ctrl/Alt/Shift.
+                        Como o atalho só dispara quando o <strong>Premiere Pro está em foco</strong>,
+                        usar tecla solta como `Q` ou `M` é seguro (não interfere quando você usa outros programas).
+                    </div>
+                </div>
+
+                <div style="padding:12px 14px;background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.12);border-radius:10px;font-size:.74rem;color:#22d3ee;line-height:1.55">
+                    <strong>Dica:</strong> abra o Premiere com o plugin Lion Workspace ativo, selecione um clip na timeline, aperte o atalho e digite o nome do efeito. Use <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">↑</kbd> <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">↓</kbd> pra navegar e <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">Enter</kbd> pra aplicar.
+                </div>
+                <div style="padding:10px 14px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.15);border-radius:10px;font-size:.7rem;color:#fbbf24;line-height:1.55">
+                    <strong>⚠ Tem Excalibur instalado?</strong> Excalibur usa <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">Alt+Space</kbd> por padrão. Use uma combinação diferente pra LION SEARCH (sugestões abaixo).
+                </div>
+
+                <button class="btn btn-a" onclick="lsTestOpen()" style="align-self:flex-start;font-size:.78rem;padding:9px 16px">Testar agora (abrir LION SEARCH)</button>
+            </div>
+        </div>
+
+        <style>
+            #lsEnabled:checked + #lsEnabledSlider { background:#bef264; }
+            #lsEnabled:checked + #lsEnabledSlider::before { transform:translateX(20px); }
+            #lsEnabledSlider::before { position:absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.2s; }
         </style>
     </div>
 
@@ -2478,8 +2548,158 @@ function showTab(id,btn){
     if(id==='dashboard'){refreshDashboard();renderTaxas();}
     if(id==='produtividade') {renderVidsAndamento();updProjTimerSelect();renderProdHist();}
     if(id==='ytdownload') ytCheckDeps();
+    if(id==='atalhos') lsLoadSettings();
 }
 function fecharConfig(){document.getElementById('configPanel').classList.remove('active')}
+
+// ═══════ LION SEARCH — Atalhos tab ═══════
+let _lsHotkeyCapturing = false;
+async function lsLoadSettings() {
+    try {
+        const { ipcRenderer } = require('electron');
+        const s = await ipcRenderer.invoke('lion-search:get-settings');
+        document.getElementById('lsEnabled').checked = s.enabled !== false;
+        document.getElementById('lsHotkey').value = s.hotkey || 'Control+Shift+L';
+        document.getElementById('lsHotkeyStatus').textContent = '';
+        const sfxInp = document.getElementById('lsSfxFolder');
+        const sfxStatus = document.getElementById('lsSfxFolderStatus');
+        if (sfxInp) {
+            sfxInp.value = s.sfxFolder || '';
+            if (sfxStatus) {
+                sfxStatus.textContent = s.sfxFolder ? '✓ Pasta configurada — vai escanear na próxima abertura do LION SEARCH' : '';
+                sfxStatus.style.color = s.sfxFolder ? '#bef264' : 'var(--text3)';
+            }
+        }
+    } catch(e) { console.error('lsLoadSettings:', e); }
+}
+async function lsSettingsSave() {
+    try {
+        const { ipcRenderer } = require('electron');
+        const enabled = document.getElementById('lsEnabled').checked;
+        const hotkey = document.getElementById('lsHotkey').value || 'Control+Shift+L';
+        const sfxFolder = document.getElementById('lsSfxFolder')?.value || '';
+        const r = await ipcRenderer.invoke('lion-search:set-settings', { enabled, hotkey, sfxFolder });
+        const status = document.getElementById('lsHotkeyStatus');
+        if (r.error) {
+            status.textContent = '✗ ' + r.error;
+            status.style.color = '#f87171';
+        } else if (enabled) {
+            status.textContent = '✓ Atalho registrado: ' + hotkey;
+            status.style.color = '#bef264';
+        } else {
+            status.textContent = 'Desativado';
+            status.style.color = 'var(--text3)';
+        }
+    } catch(e) {
+        document.getElementById('lsHotkeyStatus').textContent = '✗ ' + e.message;
+        document.getElementById('lsHotkeyStatus').style.color = '#f87171';
+    }
+}
+async function lsPickSfxFolder() {
+    try {
+        const { ipcRenderer } = require('electron');
+        const r = await ipcRenderer.invoke('lion-search:pick-sfx-folder');
+        if (r.canceled) return;
+        if (r.error) { alert('Erro: ' + r.error); return; }
+        if (r.folder) {
+            document.getElementById('lsSfxFolder').value = r.folder;
+            await lsSettingsSave();
+            const status = document.getElementById('lsSfxFolderStatus');
+            if (status) {
+                status.textContent = '✓ Pasta salva: ' + r.folder;
+                status.style.color = '#bef264';
+            }
+        }
+    } catch(e) { alert('Erro: ' + e.message); }
+}
+async function lsClearSfxFolder() {
+    document.getElementById('lsSfxFolder').value = '';
+    await lsSettingsSave();
+    const status = document.getElementById('lsSfxFolderStatus');
+    if (status) {
+        status.textContent = 'Pasta removida';
+        status.style.color = 'var(--text3)';
+    }
+}
+function lsHotkeyCapture() {
+    const inp = document.getElementById('lsHotkey');
+    inp._previousValue = inp.value;
+    inp.value = 'Aperte a combinação...';
+    inp.style.color = '#a78bfa';
+    _lsHotkeyCapturing = true;
+    document.getElementById('lsHotkeyStatus').textContent = 'Aguardando combinação... (Esc cancela)';
+    document.getElementById('lsHotkeyStatus').style.color = '#a78bfa';
+}
+document.addEventListener('keydown', (e) => {
+    if (!_lsHotkeyCapturing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const k = e.key;
+    // Esc cancela
+    if (k === 'Escape') {
+        _lsHotkeyCapturing = false;
+        document.getElementById('lsHotkey').value = document.getElementById('lsHotkey')._previousValue || 'Control+Shift+L';
+        document.getElementById('lsHotkey').style.color = '#bef264';
+        document.getElementById('lsHotkeyStatus').textContent = 'Captura cancelada';
+        document.getElementById('lsHotkeyStatus').style.color = 'var(--text3)';
+        return;
+    }
+    // Precisa de pelo menos 1 modifier (senão risco de capturar tecla normal)
+    const mods = [];
+    if (e.ctrlKey) mods.push('Control');
+    if (e.metaKey) mods.push('Super'); // Win/Cmd
+    if (e.altKey) mods.push('Alt');
+    if (e.shiftKey) mods.push('Shift');
+    // Ignora se só foi pressionado modifier
+    if (k === 'Control' || k === 'Meta' || k === 'Alt' || k === 'Shift') return;
+
+    // Mapeia teclas Electron Accelerator
+    let mainKey = k;
+    if (k === ' ') mainKey = 'Space';
+    else if (k.length === 1) mainKey = k.toUpperCase();
+    else if (/^F\d+$/.test(k)) mainKey = k;
+    else if (k === 'ArrowUp') mainKey = 'Up';
+    else if (k === 'ArrowDown') mainKey = 'Down';
+    else if (k === 'ArrowLeft') mainKey = 'Left';
+    else if (k === 'ArrowRight') mainKey = 'Right';
+
+    // Permite qualquer tecla — sem modifier também (user pode escolher só "F" se quiser)
+    const accel = (mods.length ? mods.join('+') + '+' : '') + mainKey;
+    document.getElementById('lsHotkey').value = accel;
+    document.getElementById('lsHotkey').style.color = '#bef264';
+    _lsHotkeyCapturing = false;
+    lsSettingsSave();
+    // Aviso só se for tecla solta SUPER comum (letra/número)
+    if (mods.length === 0 && /^[A-Z0-9]$/.test(mainKey)) {
+        setTimeout(() => {
+            const status = document.getElementById('lsHotkeyStatus');
+            const cur = status.textContent;
+            if (cur && cur.indexOf('✓') === 0) {
+                status.innerHTML = cur + ' <span style="color:#fbbf24">— ⚠ tecla "' + mainKey + '" no Premiere vai disparar mesmo durante digitação de nome de clip/sequência</span>';
+            }
+        }, 100);
+    }
+}, true);
+function lsResetHotkey() {
+    document.getElementById('lsHotkey').value = 'Control+Shift+L';
+    document.getElementById('lsEnabled').checked = true;
+    lsSettingsSave();
+}
+
+// Sugestões rápidas de atalho (evita conflitos comuns)
+function lsApplySuggestion(accel) {
+    document.getElementById('lsHotkey').value = accel;
+    document.getElementById('lsEnabled').checked = true;
+    lsSettingsSave();
+}
+async function lsTestOpen() {
+    try {
+        const { ipcRenderer } = require('electron');
+        await ipcRenderer.invoke('lion-search:open');
+    } catch(e) {
+        alert('Erro: ' + e.message);
+    }
+}
 
 // ===== IMPOSTOS =====
 function calcImp(bruto,cliNome){

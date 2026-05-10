@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -729,152 +729,6 @@
         </div>
     </div>
 
-    <!-- AutoCut — Silence Remover -->
-    <div class="section" id="sectionAutoCut">
-        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('autoCutBody')">
-            <span style="display:flex;align-items:center;gap:5px">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
-                    <line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>
-                </svg>
-                AutoCut
-            </span>
-            <svg id="autoCutChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div id="autoCutBody">
-            <div style="font-size:.58rem;color:#666;margin-bottom:8px;text-align:center;line-height:1.4">
-                Detecta silêncios e corta automaticamente o clip selecionado
-            </div>
-
-            <!-- Threshold -->
-            <div style="margin-bottom:6px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Sensibilidade</span>
-                    <span id="acThreshVal" style="font-size:.56rem;color:#bef264;font-weight:600">-30 dB</span>
-                </div>
-                <input type="range" id="acThreshold" min="-60" max="-10" value="-30" step="1" style="width:100%;accent-color:#bef264;height:4px" oninput="acUpdateThreshold()">
-                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#444">
-                    <span>Mais silêncio</span><span>Menos silêncio</span>
-                </div>
-            </div>
-
-            <!-- Min duration -->
-            <div style="margin-bottom:6px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Duração mínima</span>
-                    <span id="acMinDurVal" style="font-size:.56rem;color:#bef264;font-weight:600">0.5s</span>
-                </div>
-                <input type="range" id="acMinDuration" min="0.1" max="3" value="0.5" step="0.1" style="width:100%;accent-color:#bef264;height:4px" oninput="acUpdateMinDur()">
-                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#444">
-                    <span>0.1s</span><span>3.0s</span>
-                </div>
-            </div>
-
-            <!-- Padding -->
-            <div style="margin-bottom:8px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Padding</span>
-                    <span id="acPaddingVal" style="font-size:.56rem;color:#bef264;font-weight:600">0.1s</span>
-                </div>
-                <input type="range" id="acPadding" min="0" max="1" value="0.1" step="0.05" style="width:100%;accent-color:#bef264;height:4px" oninput="acUpdatePadding()">
-                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#444">
-                    <span>Sem padding</span><span>1.0s</span>
-                </div>
-            </div>
-
-            <!-- Mode -->
-            <div style="display:flex;gap:3px;margin-bottom:8px">
-                <button class="yt-q active" id="acModeRemove" onclick="acSetMode('remove')">Remover silêncios</button>
-                <button class="yt-q" id="acModeCut" onclick="acSetMode('cut')">Só marcar cortes</button>
-            </div>
-
-            <!-- Preview results (hidden until analyzed) -->
-            <div id="acResults" style="display:none;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px;padding:8px;margin-bottom:8px">
-                <div style="display:flex;justify-content:space-between;font-size:.58rem;color:#aaa;margin-bottom:4px">
-                    <span>Silêncios: <strong id="acSilCount" style="color:#bef264">0</strong></span>
-                    <span>Remover: <strong id="acRemoveTime" style="color:#f43f5e">0s</strong></span>
-                </div>
-                <!-- Visual timeline bar -->
-                <div id="acTimeline" style="height:20px;background:#1a1a1a;border-radius:4px;overflow:hidden;position:relative;margin-bottom:4px;border:1px solid rgba(255,255,255,.06)"></div>
-                <div style="display:flex;justify-content:space-between;font-size:.42rem;color:#555">
-                    <span id="acTimeStart">0:00</span>
-                    <span id="acTimeEnd">0:00</span>
-                </div>
-            </div>
-
-            <!-- Analysis Buttons -->
-            <div style="display:flex;gap:4px">
-                <button class="btn btn-pause" onclick="acAnalyze()" id="acAnalyzeBtn" style="flex:1;padding:8px;font-size:.65rem;display:flex;align-items:center;justify-content:center;gap:4px">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    Silêncios
-                </button>
-                <button class="btn btn-pause" onclick="acAiAnalyze()" id="acAiBtn" style="flex:1;padding:8px;font-size:.65rem;display:flex;align-items:center;justify-content:center;gap:4px;border-color:rgba(167,139,250,.15)">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v3a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                    AI Words
-                </button>
-            </div>
-
-            <!-- Progress Bar (shared — hidden until analysis starts) -->
-            <div id="acProgressWrap" style="display:none;margin-top:6px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-                    <span id="acProgressLabel" style="font-size:.5rem;color:#888">Analisando...</span>
-                    <span id="acProgressPct" style="font-size:.56rem;color:#bef264;font-weight:600">0%</span>
-                </div>
-                <div style="height:6px;background:#1a1a1a;border-radius:3px;overflow:hidden;border:1px solid rgba(255,255,255,.06)">
-                    <div id="acProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#bef264,#22c55e);border-radius:3px;transition:width .3s ease"></div>
-                </div>
-                <div style="text-align:right;margin-top:2px">
-                    <span style="font-size:.42rem;color:#555;cursor:pointer;text-decoration:underline" onclick="acCancelAnalysis()">Cancelar</span>
-                </div>
-            </div>
-
-            <!-- AI Results Panel (hidden until AI analysis) -->
-            <div id="acAiResults" style="display:none;background:rgba(167,139,250,.03);border:1px solid rgba(167,139,250,.1);border-radius:8px;padding:8px;margin-top:6px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#a78bfa;font-weight:600">AI Detectou</span>
-                    <span style="font-size:.56rem;color:#a78bfa"><strong id="acAiCount">0</strong> problemas</span>
-                </div>
-                <!-- Filter chips -->
-                <div style="display:flex;gap:3px;margin-bottom:4px;flex-wrap:wrap">
-                    <span class="yt-q active" id="acAiFilterAll" onclick="acAiFilter('all')" style="font-size:.45rem;padding:2px 6px;cursor:pointer">Todos</span>
-                    <span class="yt-q" id="acAiFilterFiller" onclick="acAiFilter('filler')" style="font-size:.45rem;padding:2px 6px;cursor:pointer;border-color:rgba(245,158,11,.2)">Fillers <strong id="acAiFillerN">0</strong></span>
-                    <span class="yt-q" id="acAiFilterRepeat" onclick="acAiFilter('repeat')" style="font-size:.45rem;padding:2px 6px;cursor:pointer;border-color:rgba(244,63,94,.2)">Repetidos <strong id="acAiRepeatN">0</strong></span>
-                    <span class="yt-q" id="acAiFilterStutter" onclick="acAiFilter('stutter')" style="font-size:.45rem;padding:2px 6px;cursor:pointer;border-color:rgba(167,139,250,.2)">Gaguejos <strong id="acAiStutterN">0</strong></span>
-                </div>
-                <div id="acAiIssuesList" style="max-height:120px;overflow-y:auto;font-size:.52rem"></div>
-                <div style="font-size:.42rem;color:#555;margin-top:3px;text-align:center" id="acAiTranscript" title="Clique pra ver transcrição completa" onclick="acToggleTranscript()"></div>
-            </div>
-            <div id="acFullTranscript" style="display:none;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:6px;margin-top:4px;max-height:100px;overflow-y:auto;font-size:.5rem;color:#888;line-height:1.5;word-wrap:break-word"></div>
-
-            <!-- Apply button -->
-            <div style="display:flex;gap:4px;margin-top:6px">
-                <button class="btn btn-go" onclick="acApply()" id="acApplyBtn" style="flex:1;padding:8px;font-size:.7rem;display:flex;align-items:center;justify-content:center;gap:4px" disabled>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/></svg>
-                    Cortar
-                </button>
-            </div>
-
-            <div id="acStatus" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px"></div>
-
-            <!-- API Key Config -->
-            <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:6px">
-                <span id="acAiKeyStatus" style="font-size:.52rem;color:#a78bfa;font-weight:600"></span>
-                <button class="yt-q" onclick="acToggleAiConfig()" style="font-size:.56rem;padding:3px 8px;border-color:rgba(167,139,250,.3);color:#a78bfa;cursor:pointer;display:flex;align-items:center;gap:4px">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    <span id="acAiKeyBtnTxt">Configurar chave OpenAI</span>
-                </button>
-            </div>
-            <div id="acAiConfig" style="display:none;margin-top:6px;padding:8px;background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.2);border-radius:6px">
-                <div style="font-size:.58rem;color:#d4d4d4;margin-bottom:6px;font-weight:600">🔑 Chave da API OpenAI</div>
-                <div style="font-size:.5rem;color:#888;margin-bottom:5px;line-height:1.4">Pegue a sua em <span style="color:#a78bfa">platform.openai.com/api-keys</span> · usada só pra transcrever áudio via Whisper</div>
-                <div style="display:flex;gap:4px">
-                    <input type="password" id="acAiKeyInput" placeholder="Cole aqui: sk-proj-..." onkeydown="if(event.key==='Enter')acSaveAiKey()" style="flex:1;padding:6px 8px;border-radius:5px;border:1px solid rgba(167,139,250,.3);background:rgba(255,255,255,.05);color:#f5f5f5;font-size:.62rem;font-family:monospace;outline:none">
-                    <button class="yt-q" onclick="acSaveAiKey()" style="padding:6px 12px;font-size:.6rem;border-color:rgba(167,139,250,.4);color:#a78bfa;font-weight:600">Salvar</button>
-                </div>
-                <div style="font-size:.48rem;color:#555;margin-top:5px">A chave fica salva localmente. Não é enviada pra lugar nenhum além da OpenAI.</div>
-            </div>
-        </div>
-    </div>
 
     <!-- Background Remover -->
     <div class="section" id="sectionBgRemove">
@@ -959,6 +813,58 @@
     <style>@keyframes bgr-spin{to{transform:rotate(360deg)}}</style>
 
     <!-- Copy / Paste -->
+    <!-- LION SEARCH — atalho global pra busca rápida (estilo Excalibur) -->
+    <div class="section" id="sectionLionSearch">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('lionSearchBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                Lion Search
+            </span>
+            <svg id="lionSearchChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="lionSearchBody">
+            <div style="font-size:.58rem;color:#666;margin-bottom:8px;text-align:center;line-height:1.4">
+                Busca rápida de efeitos, presets e transições · funciona em qualquer programa
+            </div>
+
+            <!-- Toggle ativo -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.05);border-radius:6px;margin-bottom:6px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:.66rem;color:#ddd;font-weight:600">Atalho ativo</span>
+                    <span style="font-size:.5rem;color:#666">Liga/desliga o atalho global</span>
+                </div>
+                <label style="position:relative;display:inline-block;width:32px;height:18px;flex-shrink:0;cursor:pointer">
+                    <input type="checkbox" id="lsPlEnabled" onchange="lsPlSave()" style="opacity:0;width:0;height:0">
+                    <span id="lsPlEnabledSlider" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#2a2a2a;border-radius:18px;transition:.2s"></span>
+                </label>
+            </div>
+
+            <!-- Hotkey display + edit -->
+            <div style="margin-bottom:6px">
+                <div style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600;margin-bottom:3px">Atalho</div>
+                <div style="display:flex;gap:4px;align-items:center">
+                    <input type="text" id="lsPlHotkey" readonly placeholder="Clique e aperte..." onclick="lsPlCapture()"
+                        style="flex:1;padding:7px 10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.7rem;text-align:center;background:rgba(0,0,0,.4);border:1px solid rgba(190,242,100,.2);border-radius:5px;color:#bef264;cursor:pointer;font-weight:700;letter-spacing:1px">
+                    <button class="yt-q" onclick="lsPlReset()" style="font-size:.58rem;padding:6px 8px" title="Restaurar padrão">↺</button>
+                </div>
+                <div id="lsPlStatus" style="font-size:.5rem;color:#555;margin-top:3px;min-height:10px;text-align:center"></div>
+            </div>
+
+            <!-- Quick suggestions -->
+            <div style="font-size:.52rem;color:#444;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px">Sugestões</div>
+            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">
+                <button class="yt-q" onclick="lsPlApplySuggestion('Control+Shift+L')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">Ctrl+Shift+L</button>
+                <button class="yt-q" onclick="lsPlApplySuggestion('Control+Alt+Space')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">Ctrl+Alt+Space</button>
+                <button class="yt-q" onclick="lsPlApplySuggestion('Control+Shift+P')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">Ctrl+Shift+P</button>
+                <button class="yt-q" onclick="lsPlApplySuggestion('F2')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">F2</button>
+                <button class="yt-q" onclick="lsPlApplySuggestion('Alt+Q')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">Alt+Q</button>
+            </div>
+        </div>
+    </div>
+
     <div class="section" id="sectionCopyPaste">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('cpBody')">
             <span style="display:flex;align-items:center;gap:5px">
@@ -1173,7 +1079,7 @@
         { key: 'download', id: 'sectionDownload',  label: 'Downloader' },
         { key: 'easing',   id: 'sectionEasing',    label: 'Easing / Curvas' },
         { key: 'anchor',   id: 'sectionAnchor',    label: 'Anchor Point Pro' },
-        { key: 'autocut',  id: 'sectionAutoCut',   label: 'AutoCut' },
+        { key: 'lionSearch', id: 'sectionLionSearch', label: 'Lion Search' },
         { key: 'cp',       id: 'sectionCopyPaste', label: 'Copy / Paste' },
         { key: 'bgRemove', id: 'sectionBgRemove',  label: 'Remover Fundo' }
     ];
@@ -1522,7 +1428,7 @@
             'pomoBody':'pomoChev',
             'easingBody':'easingChev',
             'anchorBody':'anchorChev',
-            'autoCutBody':'autoCutChev'
+            'lionSearchBody':'lionSearchChev'
         };
         var chevId=chevMap[id]||id.replace('Body','Chev');
         var chev=document.getElementById(chevId);
@@ -1740,7 +1646,7 @@
 
     function lwSetSectionsDisabled(disabled) {
         // Sections that need the app to work
-        var ids = ['sectionTimer', 'sectionPomo', 'sectionDownload', 'sectionAutoCut', 'sectionCopyPaste', 'sectionBgRemove'];
+        var ids = ['sectionTimer', 'sectionPomo', 'sectionDownload', 'sectionLionSearch', 'sectionCopyPaste', 'sectionBgRemove'];
         for (var i = 0; i < ids.length; i++) {
             var el = document.getElementById(ids[i]);
             if (el) {
@@ -2278,6 +2184,448 @@
         });
     }
     setInterval(ytPluginPollProgress,1200);
+
+    /* ═══════ LION SEARCH — poll for pending commands from Lion Workspace ═══════ */
+    var _lsBusy = false;
+    function lsPollPendingCommands() {
+        if (_lsBusy) return;
+        _lsBusy = true;
+        LWHttp.get(API + '/lion-search/pop-pending', { timeout: 4000, retries: 0 }, function(err, st, body) {
+            _lsBusy = false;
+            if (err || !body) return;
+            try {
+                var data = JSON.parse(body);
+                if (!data.commands || !data.commands.length) return;
+                for (var i = 0; i < data.commands.length; i++) {
+                    lsExecuteCommand(data.commands[i]);
+                }
+            } catch(e) {}
+        });
+    }
+
+    // Pega SFX folder da config + chama lwSearchListAllExtended com ela
+    function _lsCallExtended(callback) {
+        LWHttp.get(API + '/lion-search/settings', { timeout: 3000, retries: 0 }, function(err, st, body) {
+            var sfxFolder = '';
+            try { sfxFolder = (JSON.parse(body || '{}').sfxFolder || ''); } catch(e) {}
+            // Escapa pra string ExtendScript safe
+            var sfxArg = sfxFolder.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            var script = 'lwSearchListAllExtended("' + sfxArg + '")';
+            csInterface.evalScript(script, callback);
+        });
+    }
+
+    // Parse de .prfpset containers — extrai presets individuais
+    var _lsZlib = null, _lsFs = null, _lsOs = null, _lsPathL = null;
+    var _lsZlibErr = '', _lsFsErr = '';
+    try { _lsZlib = require('zlib'); } catch(e) { _lsZlibErr = e.message; }
+    try { _lsFs = require('fs'); } catch(e) { _lsFsErr = e.message; }
+    try { _lsOs = require('os'); _lsPathL = require('path'); } catch(e) {}
+    var _presetParsedCache = {};
+
+    // Beacon: escreve no Desktop e %TEMP% pra verificar se plugin carregou
+    var _lsDebugFile = null;
+    try {
+        if (_lsOs && _lsPathL) _lsDebugFile = _lsPathL.join(_lsOs.tmpdir(), 'lion-search-plugin-parse.txt');
+    } catch(e) {}
+    var _lsDesktopDebug = null;
+    try {
+        if (_lsPathL && process.env && process.env.USERPROFILE) {
+            _lsDesktopDebug = _lsPathL.join(process.env.USERPROFILE, 'Desktop', 'lion-plugin-parse.txt');
+        }
+    } catch(e) {}
+    var _lsParseDebugLines = [];
+    function _lsParseDebug(msg) {
+        _lsParseDebugLines.push('[' + (new Date()).toISOString().substr(11, 12) + '] ' + msg);
+        // Escreve sincronamente em CADA mensagem (sem flush de 5 em 5)
+        try {
+            if (_lsFs && _lsDebugFile) _lsFs.writeFileSync(_lsDebugFile, _lsParseDebugLines.join('\n'), 'utf8');
+            if (_lsFs && _lsDesktopDebug) _lsFs.writeFileSync(_lsDesktopDebug, _lsParseDebugLines.join('\n'), 'utf8');
+        } catch(e) {}
+    }
+    function _lsFlushDebug() {
+        try {
+            if (_lsFs && _lsDebugFile) _lsFs.writeFileSync(_lsDebugFile, _lsParseDebugLines.join('\n'), 'utf8');
+            if (_lsFs && _lsDesktopDebug) _lsFs.writeFileSync(_lsDesktopDebug, _lsParseDebugLines.join('\n'), 'utf8');
+        } catch(e) {}
+    }
+
+    // BEACON imediato — se aparecer no arquivo, plugin tá com código novo
+    _lsParseDebug('=== PLUGIN LOADED ' + (new Date()).toString() + ' ===');
+    _lsParseDebug('zlib=' + (_lsZlib ? 'OK' : 'FAIL: ' + _lsZlibErr));
+    _lsParseDebug('fs=' + (_lsFs ? 'OK' : 'FAIL: ' + _lsFsErr));
+    _lsParseDebug('debugFile=' + _lsDebugFile);
+    _lsParseDebug('desktopDebug=' + _lsDesktopDebug);
+
+    function lsParsePrfpset(path, callback) {
+        if (_presetParsedCache[path]) { callback(_presetParsedCache[path]); return; }
+        if (!_lsZlib || !_lsFs) {
+            _lsParseDebug('NO_NODE_ZLIB');
+            callback([]);
+            return;
+        }
+        try {
+            _lsFs.readFile(path, function(err, data) {
+                if (err || !data) {
+                    _lsParseDebug('READ_ERR @ ' + path + ' = ' + err);
+                    callback([]);
+                    return;
+                }
+                var firstBytes = '';
+                try {
+                    for (var fb = 0; fb < Math.min(8, data.length); fb++) {
+                        firstBytes += '0x' + data[fb].toString(16) + ' ';
+                    }
+                } catch(eFb) {}
+                _lsParseDebug('FILE: ' + path + ' size=' + data.length + ' first=' + firstBytes);
+
+                var xml = '';
+                var srcType = 'plain';
+                // Tenta decompressão gzip primeiro (magic 0x1f 0x8b)
+                if (data.length > 2 && data[0] === 0x1f && data[1] === 0x8b) {
+                    try {
+                        var dec = _lsZlib.gunzipSync(data);
+                        xml = dec.toString('utf8');
+                        srcType = 'gzip';
+                    } catch(eGz) {
+                        _lsParseDebug('  GZIP-ERR: ' + eGz.message);
+                    }
+                } else {
+                    try { xml = data.toString('utf8'); } catch(e) { xml = ''; }
+                }
+                _lsParseDebug('  type=' + srcType + ' xml.length=' + xml.length);
+
+                if (!xml) { callback([]); return; }
+
+                // Sample dos primeiros 300 chars do XML
+                _lsParseDebug('  sample: ' + xml.substr(0, 300).replace(/[\r\n]+/g, ' '));
+
+                // Skip MaskPresets — só tem shapes (Anchor Point, Mask Path, etc), não presets reais
+                var pathLower = path.toLowerCase();
+                if (pathLower.indexOf('maskpresets') >= 0) {
+                    _lsParseDebug('  SKIP: MaskPresets (só mask shapes)');
+                    _presetParsedCache[path] = [];
+                    callback([]);
+                    return;
+                }
+
+                // Blacklist de nomes-categoria + property names internos do XML
+                var noiseNames = {
+                    // Categorias / headers
+                    'root': 1, 'presets': 1, 'preset': 1,
+                    'predefinições': 1, 'predefinicoes': 1, 'predefiniçoes': 1,
+                    'vorgaben': 1, 'paramètres prédéfinis': 1, 'parametres predefinis': 1,
+                    '事前設定': 1, '預設': 1, '预设': 1, '사전 설정': 1,
+                    'pré-réglages': 1, 'preimpostazioni': 1, 'предустановки': 1,
+                    'preajustes': 1, 'predefinidos': 1,
+                    'effect presets': 1, 'effect presets and custom items': 1, 'custom items': 1,
+                    'lumetri presets': 1, 'lumetri-vorgaben': 1, 'predefinições lumetri': 1,
+                    'factory presets': 1, 'lumetri color presets': 1,
+                    // Property names (Motion / Transform)
+                    'anchor point': 1, 'position': 1, 'scale': 1, 'rotation': 1,
+                    'opacity': 1, 'scale height': 1, 'scale width': 1,
+                    'uniform scale': 1, 'skew': 1, 'skew axis': 1,
+                    // Mask properties
+                    'mask path': 1, 'track': 1, 'track:': 1, 'mask feather': 1,
+                    'mask opacity': 1, 'mask expansion': 1, 'inverted': 1,
+                    // Generic
+                    'name': 1, 'value': 1, 'time': 1, 'amount': 1, 'level': 1,
+                    'enabled': 1, 'disabled': 1, 'default': 1, 'custom': 1,
+                    // Lumetri internal
+                    'basic correction': 1, 'creative': 1, 'curves': 1, 'color wheels': 1,
+                    'hsl secondary': 1, 'vignette': 1,
+                };
+
+                var presets = [];
+                var seen = {};
+                var nameRegex = /<Name[^>]*>([^<]+)<\/Name>/g;
+                var m;
+                while ((m = nameRegex.exec(xml)) !== null) {
+                    var nm = m[1].trim();
+                    if (nm.length === 0 || nm.length > 200) continue;
+                    var nmLower = nm.toLowerCase();
+                    if (noiseNames[nmLower]) continue;
+                    if (seen[nm]) continue;
+                    seen[nm] = 1;
+                    presets.push(nm);
+                }
+                _lsParseDebug('  parsed ' + presets.length + ' names (após filtro)');
+                if (presets.length > 0) {
+                    _lsParseDebug('  first 5: ' + presets.slice(0, 5).join(', '));
+                }
+
+                _presetParsedCache[path] = presets;
+                callback(presets);
+            });
+        } catch(eR) {
+            _lsParseDebug('OUTER ERR @ ' + path + ' = ' + eR);
+            callback([]);
+        }
+    }
+
+    // (debug helpers já definidos no topo do parser block)
+
+    // Expande containers — extrai presets individuais de .prfpset gzip files
+    function lsExpandContainers(items, callback) {
+        _lsParseDebug('lsExpandContainers called: total items=' + items.length);
+        var containers = [];
+        var firstFewKinds = '';
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].kind === 'preset' && items[i].isContainer) containers.push(items[i]);
+            if (i < 10) firstFewKinds += items[i].kind + '/' + (items[i].isContainer ? 'CONT' : '_') + ',';
+        }
+        _lsParseDebug('  containers found: ' + containers.length + ' | first10: ' + firstFewKinds);
+        if (containers.length === 0) {
+            _lsParseDebug('  no containers — returning unchanged');
+            _lsFlushDebug();
+            callback(items);
+            return;
+        }
+
+        var done = 0;
+        var expanded = [];
+        var nonContainers = [];
+        for (var ni = 0; ni < items.length; ni++) {
+            if (items[ni].kind !== 'preset' || !items[ni].isContainer) nonContainers.push(items[ni]);
+        }
+
+        function checkDone() {
+            done++;
+            if (done >= containers.length) {
+                _lsParseDebug('=== TOTAL EXPANDED: ' + expanded.length + ' from ' + containers.length + ' containers ===');
+                _lsFlushDebug();
+                callback(nonContainers.concat(expanded));
+            }
+        }
+
+        for (var ci = 0; ci < containers.length; ci++) {
+            (function(c) {
+                lsParsePrfpset(c.matchName, function(presetNames) {
+                    for (var pi = 0; pi < presetNames.length; pi++) {
+                        // Filtra nomes que são folder-stubs ou bate com o container
+                        var pn = presetNames[pi];
+                        if (pn.toLowerCase() === c.name.toLowerCase()) continue;
+                        expanded.push({
+                            kind: 'preset',
+                            name: pn,
+                            matchName: c.matchName + '#' + pn, // path do container + nome
+                            category: c.category + ' / ' + c.name,
+                            audioOnly: c.audioOnly,
+                            videoOnly: c.videoOnly,
+                        });
+                    }
+                    checkDone();
+                });
+            })(containers[ci]);
+        }
+    }
+
+    function lsExecuteCommand(cmd) {
+        if (!cmd || !cmd.id || !cmd.type) return;
+        var commandId = cmd.id;
+        if (cmd.type === 'list-effects') {
+            _lsCallExtended(function(result) {
+                var items = [];
+                var dbg = '', err = '';
+                try {
+                    var parsed = JSON.parse(result || '{}');
+                    if (Array.isArray(parsed)) { items = parsed; }
+                    else { items = parsed.items || []; dbg = parsed.debug || ''; err = parsed.error || ''; }
+                } catch(e) { err = 'parse:' + e.message; }
+
+                // Expande containers de presets via Node.js (gzip+XML)
+                lsExpandContainers(items, function(finalItems) {
+                    LWLog.info('lion-search', 'Catalog: ' + finalItems.length + ' items (raw=' + items.length + ') debug=' + dbg);
+                    LWHttp.post(API + '/lion-search/command-result', {
+                        commandId: commandId, items: finalItems, debug: dbg, error: err, type: cmd.type,
+                    }, { retries: 0 }, function(){});
+                    LWHttp.post(API + '/lion-search/effects-update', { items: finalItems, debug: dbg, error: err },
+                        { retries: 0 }, function(){});
+                });
+            });
+        } else if (cmd.type === 'get-context') {
+            csInterface.evalScript('lwSearchGetContext()', function(result) {
+                var ctx = { selectionType: 'none' };
+                try { ctx = JSON.parse(result || '{}'); } catch(e) {}
+                LWHttp.post(API + '/lion-search/command-result', {
+                    commandId: commandId, context: ctx, type: cmd.type,
+                }, { retries: 0 }, function(){});
+            });
+        } else if (cmd.type === 'apply-effect') {
+            var p = cmd.payload || {};
+            var jsxKind = (p.kind || '').replace(/"/g, '');
+            var jsxMatch = (p.matchName || '').replace(/"/g, '');
+            var script = 'lwSearchApply("' + jsxKind + '", "' + jsxMatch + '")';
+            csInterface.evalScript(script, function(result) {
+                LWHttp.post(API + '/lion-search/command-result', {
+                    commandId: commandId, type: cmd.type, result: String(result || ''),
+                }, { retries: 0 }, function(){});
+            });
+        }
+    }
+
+    setInterval(lsPollPendingCommands, 200);
+
+    // Após login + premiere ready, envia catálogo de efeitos uma vez (popula cache do LW)
+    var _lsCatalogRetries = 0;
+    function lsSendCatalogOnce() {
+        if (typeof csInterface === 'undefined') return;
+        _lsCallExtended(function(result) {
+            var items = [], dbg = '', err = '';
+            try {
+                var parsed = JSON.parse(result || '{}');
+                if (Array.isArray(parsed)) items = parsed;
+                else { items = parsed.items || []; dbg = parsed.debug || ''; err = parsed.error || ''; }
+            } catch(e) { err = 'parse:' + e.message; }
+            if (items.length === 0) {
+                _lsCatalogRetries++;
+                LWLog.warn('lion-search', 'Catálogo vazio (try ' + _lsCatalogRetries + ') · debug=' + dbg + ' · err=' + err);
+                if (_lsCatalogRetries < 6) setTimeout(lsSendCatalogOnce, 5000);
+                LWHttp.post(API + '/lion-search/effects-update', { items: [], debug: dbg, error: err },
+                    { retries: 0, timeout: 4000 }, function(){});
+                return;
+            }
+            // Expande containers de presets
+            lsExpandContainers(items, function(finalItems) {
+                LWHttp.post(API + '/lion-search/effects-update', { items: finalItems, debug: dbg, error: err },
+                    { retries: 1, timeout: 5000 }, function(e){
+                        if (e) LWLog.warn('lion-search', 'Falha ao enviar catálogo: ' + e);
+                        else LWLog.info('lion-search', 'Catálogo enviado: ' + finalItems.length + ' itens (raw=' + items.length + ')');
+                    });
+            });
+        });
+    }
+    // Espera 4s após bootstrap pra QE ter tempo de carregar
+    setTimeout(lsSendCatalogOnce, 4000);
+
+    /* ═══════ LION SEARCH — hotkey config UI no plugin ═══════ */
+    var _lsPlCapturing = false;
+    var _lsPlCurrent = null;
+
+    function lsPlLoad() {
+        LWHttp.get(API + '/lion-search/settings', { timeout: 4000, retries: 0 }, function(err, st, body) {
+            if (err || !body) {
+                _lsPlSetStatus('App offline — abra o Lion Workspace', '#f87171');
+                return;
+            }
+            try {
+                var s = JSON.parse(body);
+                _lsPlCurrent = s;
+                document.getElementById('lsPlEnabled').checked = s.enabled !== false;
+                _lsPlUpdateSlider();
+                document.getElementById('lsPlHotkey').value = s.hotkey || 'Control+Shift+L';
+                document.getElementById('lsPlHotkey').style.color = '#bef264';
+                if (s.registered) {
+                    _lsPlSetStatus('✓ Ativo: ' + s.registered, '#bef264');
+                } else if (s.enabled === false) {
+                    _lsPlSetStatus('Desativado', '#666');
+                } else {
+                    _lsPlSetStatus('⚠ Falhou ao registrar (atalho em uso?)', '#fbbf24');
+                }
+            } catch(e) { _lsPlSetStatus('Erro: ' + e.message, '#f87171'); }
+        });
+    }
+
+    function _lsPlSetStatus(msg, color) {
+        var el = document.getElementById('lsPlStatus');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.color = color || '#666';
+    }
+
+    function _lsPlUpdateSlider() {
+        var checked = document.getElementById('lsPlEnabled').checked;
+        var slider = document.getElementById('lsPlEnabledSlider');
+        slider.style.background = checked ? '#bef264' : '#2a2a2a';
+        slider.innerHTML = '<span style="position:absolute;height:14px;width:14px;left:' + (checked ? '15px' : '2px') + ';top:2px;background:#fff;border-radius:50%;transition:.2s"></span>';
+    }
+
+    function lsPlSave() {
+        _lsPlUpdateSlider();
+        var enabled = document.getElementById('lsPlEnabled').checked;
+        var hotkey = document.getElementById('lsPlHotkey').value || 'Control+Shift+L';
+        _lsPlSetStatus('Salvando...', '#a78bfa');
+        LWHttp.post(API + '/lion-search/set-hotkey', {
+            hotkey: hotkey, enabled: enabled,
+        }, { retries: 0, timeout: 4000 }, function(err, st, body) {
+            if (err) { _lsPlSetStatus('Erro: ' + err, '#f87171'); return; }
+            try {
+                var r = JSON.parse(body || '{}');
+                if (r.error) {
+                    _lsPlSetStatus('✗ ' + r.error, '#f87171');
+                } else if (r.enabled === false) {
+                    _lsPlSetStatus('Desativado', '#666');
+                } else if (r.registered) {
+                    _lsPlSetStatus('✓ Registrado: ' + r.registered, '#bef264');
+                } else {
+                    _lsPlSetStatus('⚠ Não conseguiu registrar (em uso?)', '#fbbf24');
+                }
+            } catch(e) { _lsPlSetStatus('Resposta inválida', '#f87171'); }
+        });
+    }
+
+    function lsPlCapture() {
+        var inp = document.getElementById('lsPlHotkey');
+        inp._previousValue = inp.value;
+        inp.value = 'Aperte a combinação...';
+        inp.style.color = '#a78bfa';
+        _lsPlCapturing = true;
+        _lsPlSetStatus('Aguardando combinação... (Esc cancela)', '#a78bfa');
+    }
+
+    function lsPlReset() {
+        document.getElementById('lsPlHotkey').value = 'Control+Shift+L';
+        document.getElementById('lsPlEnabled').checked = true;
+        lsPlSave();
+    }
+
+    function lsPlApplySuggestion(accel) {
+        document.getElementById('lsPlHotkey').value = accel;
+        document.getElementById('lsPlHotkey').style.color = '#bef264';
+        document.getElementById('lsPlEnabled').checked = true;
+        lsPlSave();
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (!_lsPlCapturing) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var k = e.key;
+        var inp = document.getElementById('lsPlHotkey');
+        if (k === 'Escape') {
+            _lsPlCapturing = false;
+            inp.value = inp._previousValue || 'Control+Shift+L';
+            inp.style.color = '#bef264';
+            _lsPlSetStatus('Captura cancelada', '#666');
+            return;
+        }
+        var mods = [];
+        if (e.ctrlKey) mods.push('Control');
+        if (e.metaKey) mods.push('Super');
+        if (e.altKey) mods.push('Alt');
+        if (e.shiftKey) mods.push('Shift');
+        if (k === 'Control' || k === 'Meta' || k === 'Alt' || k === 'Shift') return;
+
+        var mainKey = k;
+        if (k === ' ') mainKey = 'Space';
+        else if (k.length === 1) mainKey = k.toUpperCase();
+        else if (/^F\d+$/.test(k)) mainKey = k;
+        else if (k === 'ArrowUp') mainKey = 'Up';
+        else if (k === 'ArrowDown') mainKey = 'Down';
+        else if (k === 'ArrowLeft') mainKey = 'Left';
+        else if (k === 'ArrowRight') mainKey = 'Right';
+
+        // Aceita qualquer tecla — modifier não é mais obrigatório
+        var accel = (mods.length ? mods.join('+') + '+' : '') + mainKey;
+        inp.value = accel;
+        inp.style.color = '#bef264';
+        _lsPlCapturing = false;
+        lsPlSave();
+    }, true);
+
+    // Carrega settings na boot + a cada 8s pra refletir mudanças no app
+    setTimeout(lsPlLoad, 1500);
+    setInterval(function() { if (!_lsPlCapturing) lsPlLoad(); }, 8000);
 
     /* ═══════ Start adaptive polling (like AutoCut) ═══════ */
     LWInit.complete('plugin-bootstrap');
@@ -4021,628 +4369,6 @@
         });
     }
 
-    // ============================================
-    // AUTOCUT — Silence Detection + Auto-Cutting
-    // Uses FFmpeg silencedetect via Lion Workspace app
-    // then ExtendScript to razor/remove in Premiere
-    // ============================================
-    var acMode = 'remove'; // 'remove' or 'cut'
-    var acSilences = [];   // detected silences [{start, end, duration}]
-    var acClipInfo = null;  // clip info from ExtendScript
-    var acTotalDuration = 0;
-    var acAnalyzing = false;
-    var acProgressInterval = null;
-    var acAiIssues = [];     // AI-detected word issues
-    var acAiFilterType = 'all';
-    var acAiFullText = '';   // full transcript
-
-    // ─── Node fs (CEP --enable-nodejs) — usado pra ler progress file
-    // que o JSX escreve durante autoCutExecute (fase de aplicar cortes) ───
-    var _acNodeFs = null, _acNodeOs = null, _acNodePath = null;
-    try {
-        _acNodeFs = require('fs');
-        _acNodeOs = require('os');
-        _acNodePath = require('path');
-    } catch(e) {}
-    var AC_EXEC_PROGRESS_FILE = (_acNodeFs && _acNodeOs && _acNodePath)
-        ? _acNodePath.join(_acNodeOs.tmpdir(), 'lw-autocut-execute.json')
-        : null;
-    var acExecProgressInterval = null;
-
-    function acUpdateThreshold() {
-        var v = document.getElementById('acThreshold').value;
-        document.getElementById('acThreshVal').textContent = v + ' dB';
-    }
-    function acUpdateMinDur() {
-        var v = document.getElementById('acMinDuration').value;
-        document.getElementById('acMinDurVal').textContent = parseFloat(v).toFixed(1) + 's';
-    }
-    function acUpdatePadding() {
-        var v = document.getElementById('acPadding').value;
-        document.getElementById('acPaddingVal').textContent = parseFloat(v).toFixed(2) + 's';
-    }
-    function acSetMode(m) {
-        acMode = m;
-        document.getElementById('acModeRemove').classList.toggle('active', m === 'remove');
-        document.getElementById('acModeCut').classList.toggle('active', m === 'cut');
-    }
-    function acShowStatus(msg, color) {
-        var el = document.getElementById('acStatus');
-        if (el) { el.textContent = msg; el.style.color = color || '#555'; }
-    }
-
-    function acSecsToTime(s) {
-        s = Math.round(s);
-        var m = Math.floor(s / 60), ss = s % 60;
-        return m + ':' + (ss < 10 ? '0' : '') + ss;
-    }
-
-    // Draw visual timeline showing silences
-    function acDrawTimeline() {
-        var el = document.getElementById('acTimeline');
-        if (!el || !acTotalDuration) return;
-        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
-        var html = '';
-        // Draw speaking parts (green) on top of silent bg (red)
-        el.style.background = '#1a1a1a';
-
-        // First, draw the full bar as green (speech)
-        html += '<div style="position:absolute;inset:0;background:rgba(190,242,100,.15);border-radius:4px"></div>';
-
-        // Then overlay red bars for each silence
-        for (var i = 0; i < acSilences.length; i++) {
-            var s = acSilences[i];
-            var silStart = Math.max(0, s.start + padding);
-            var silEnd = Math.max(silStart, s.end - padding);
-            if (silEnd <= silStart) continue;
-            var leftPct = (silStart / acTotalDuration) * 100;
-            var widthPct = ((silEnd - silStart) / acTotalDuration) * 100;
-            html += '<div style="position:absolute;top:0;bottom:0;left:' + leftPct.toFixed(2) + '%;width:' + widthPct.toFixed(2) + '%;background:rgba(244,63,94,.3);border-left:1px solid rgba(244,63,94,.5);border-right:1px solid rgba(244,63,94,.5)" title="Silêncio: ' + acSecsToTime(silStart) + ' - ' + acSecsToTime(silEnd) + '"></div>';
-        }
-        el.innerHTML = html;
-
-        // Update time labels
-        document.getElementById('acTimeStart').textContent = '0:00';
-        document.getElementById('acTimeEnd').textContent = acSecsToTime(acTotalDuration);
-
-        // Update stats
-        var totalRemove = 0;
-        var effectiveCount = 0;
-        for (var j = 0; j < acSilences.length; j++) {
-            var sil = acSilences[j];
-            var effStart = Math.max(0, sil.start + padding);
-            var effEnd = Math.max(effStart, sil.end - padding);
-            if (effEnd > effStart) { totalRemove += (effEnd - effStart); effectiveCount++; }
-        }
-        document.getElementById('acSilCount').textContent = effectiveCount;
-        document.getElementById('acRemoveTime').textContent = acSecsToTime(totalRemove);
-    }
-
-    // ─── Progress bar polling ───
-    function acStartProgressPoll() {
-        acAnalyzing = true;
-        var wrap = document.getElementById('acProgressWrap');
-        if (wrap) wrap.style.display = '';
-        document.getElementById('acProgressBar').style.width = '0%';
-        document.getElementById('acProgressPct').textContent = '0%';
-        document.getElementById('acProgressLabel').textContent = 'Iniciando...';
-
-        acProgressInterval = setInterval(function() {
-            LWHttp.get(API + '/autocut/progress', { timeout: 3000, retries: 0 }, function(err, status, body) {
-                if (err) return;
-                try {
-                    var p = JSON.parse(body);
-                    var pct = Math.min(p.percent || 0, 100);
-                    document.getElementById('acProgressBar').style.width = pct + '%';
-                    document.getElementById('acProgressPct').textContent = pct + '%';
-
-                    var labels = {
-                        'silence': 'Detectando silêncios...',
-                        'transcribe-extract': 'Extraindo áudio...',
-                        'transcribe-api': 'Transcrevendo com IA...',
-                        'transcribe-analyze': 'Analisando palavras...',
-                        'done': 'Concluído!',
-                        'cancelled': 'Cancelado'
-                    };
-                    document.getElementById('acProgressLabel').textContent = labels[p.phase] || 'Processando...';
-
-                    if (!p.active && pct >= 100) acStopProgressPoll();
-                } catch (e) {}
-            });
-        }, 600);
-    }
-
-    function acStopProgressPoll() {
-        acAnalyzing = false;
-        if (acProgressInterval) { clearInterval(acProgressInterval); acProgressInterval = null; }
-        setTimeout(function() {
-            var wrap = document.getElementById('acProgressWrap');
-            if (wrap) wrap.style.display = 'none';
-        }, 1200);
-    }
-
-    function acCancelAnalysis() {
-        LWHttp.post(API + '/autocut/cancel', {}, { retries: 0 }, function() {});
-        acStopProgressPoll();
-        document.getElementById('acAnalyzeBtn').disabled = false;
-        document.getElementById('acAiBtn').disabled = false;
-        acShowStatus('Análise cancelada', '#f59e0b');
-    }
-
-    // ─── Silence analysis (with progress bar) ───
-    function acAnalyze() {
-        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
-        var btn = document.getElementById('acAnalyzeBtn');
-        btn.disabled = true;
-        document.getElementById('acAiBtn').disabled = true;
-        acShowStatus('Obtendo info do clip...', '#f59e0b');
-        document.getElementById('acResults').style.display = 'none';
-        document.getElementById('acAiResults').style.display = 'none';
-        document.getElementById('acApplyBtn').disabled = true;
-
-        csInterface.evalScript('autoCutGetClipInfo()', function(result) {
-            var r = String(result || '');
-            if (r.indexOf('OK:') !== 0) {
-                btn.disabled = false;
-                document.getElementById('acAiBtn').disabled = false;
-                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
-                else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
-                else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
-                else acShowStatus(r || 'Erro', '#f43f5e');
-                return;
-            }
-
-            try {
-                acClipInfo = JSON.parse(r.substring(3));
-            } catch (e) {
-                btn.disabled = false;
-                document.getElementById('acAiBtn').disabled = false;
-                acShowStatus('Erro ao parsear info: ' + e.message, '#f43f5e');
-                return;
-            }
-
-            LWLog.info('autocut', 'Clip: ' + acClipInfo.mediaPath);
-            acShowStatus('Analisando áudio com FFmpeg...', '#f59e0b');
-            acStartProgressPoll(); // Start progress bar
-
-            var threshold = parseInt(document.getElementById('acThreshold').value) || -30;
-            var minDuration = parseFloat(document.getElementById('acMinDuration').value) || 0.5;
-
-            LWHttp.post(API + '/autocut/analyze', {
-                filePath: acClipInfo.mediaPath,
-                threshold: threshold,
-                minDuration: minDuration
-            }, { timeout: 620000, retries: 1 }, function(err, status, body) {
-                btn.disabled = false;
-                document.getElementById('acAiBtn').disabled = false;
-                acStopProgressPoll();
-                if (err) {
-                    LWLog.error('autocut', 'Analysis failed: ' + err);
-                    acShowStatus('Erro: ' + (err === 'TIMEOUT' ? 'Timeout — arquivo muito grande?' : 'App desconectado'), '#f43f5e');
-                    return;
-                }
-                try {
-                    var data = JSON.parse(body);
-                    if (data.error) {
-                        acShowStatus('Erro FFmpeg: ' + data.error, '#f43f5e');
-                        return;
-                    }
-                    acSilences = data.silences || [];
-                    acTotalDuration = data.totalDuration || 0;
-
-                    if (acSilences.length === 0) {
-                        acShowStatus('Nenhum silêncio detectado. Ajuste a sensibilidade.', '#f59e0b');
-                        document.getElementById('acResults').style.display = 'none';
-                        return;
-                    }
-
-                    document.getElementById('acResults').style.display = '';
-                    acDrawTimeline();
-                    document.getElementById('acApplyBtn').disabled = false;
-
-                    var totalSilence = 0;
-                    for (var i = 0; i < acSilences.length; i++) totalSilence += acSilences[i].duration;
-                    var pct = acTotalDuration > 0 ? Math.round((totalSilence / acTotalDuration) * 100) : 0;
-                    acShowStatus(acSilences.length + ' silêncios (' + pct + '% do clip)', '#22c55e');
-                    LWLog.info('autocut', 'Found ' + acSilences.length + ' silences, ' + pct + '% of clip');
-                } catch (e) {
-                    acShowStatus('Erro ao processar resultado', '#f43f5e');
-                    LWLog.error('autocut', 'Parse error: ' + e.message);
-                }
-            });
-        });
-    }
-
-    // ─── AI Word Analysis (Whisper transcription + filler/repeat detection) ───
-    function acAiAnalyze() {
-        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
-
-        // Check if API key is configured first — if not, expand config inline and focus input
-        var savedKey = localStorage.getItem('lw_openai_key') || '';
-        if (!savedKey) {
-            // Also check server-side config (in case key is stored in app)
-            LWHttp.post(API + '/autocut/ai-key', {}, { retries: 0, timeout: 3000 }, function(err, st, body) {
-                var hasKey = false;
-                try { var r = JSON.parse(body || '{}'); hasKey = !!r.configured; } catch(e) {}
-                if (!hasKey) {
-                    var cfg = document.getElementById('acAiConfig');
-                    cfg.style.display = '';
-                    var input = document.getElementById('acAiKeyInput');
-                    if (input) { input.focus(); input.placeholder = 'Cole sua chave OpenAI aqui (sk-proj-...)'; }
-                    acShowStatus('Configure a chave da OpenAI abaixo pra usar IA', '#a78bfa');
-                    // Scroll into view
-                    try { cfg.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
-                    return;
-                }
-                // Key is on server — continue normally
-                _acAiAnalyzeProceed();
-            });
-            return;
-        }
-        _acAiAnalyzeProceed();
-    }
-
-    function _acAiAnalyzeProceed() {
-        var btn = document.getElementById('acAiBtn');
-        btn.disabled = true;
-        document.getElementById('acAnalyzeBtn').disabled = true;
-        acShowStatus('Obtendo info do clip...', '#a78bfa');
-        document.getElementById('acAiResults').style.display = 'none';
-        document.getElementById('acResults').style.display = 'none';
-        document.getElementById('acFullTranscript').style.display = 'none';
-        document.getElementById('acApplyBtn').disabled = true;
-
-        csInterface.evalScript('autoCutGetClipInfo()', function(result) {
-            var r = String(result || '');
-            if (r.indexOf('OK:') !== 0) {
-                btn.disabled = false;
-                document.getElementById('acAnalyzeBtn').disabled = false;
-                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
-                else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
-                else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
-                else acShowStatus(r || 'Erro', '#f43f5e');
-                return;
-            }
-
-            try {
-                acClipInfo = JSON.parse(r.substring(3));
-            } catch (e) {
-                btn.disabled = false;
-                document.getElementById('acAnalyzeBtn').disabled = false;
-                acShowStatus('Erro ao parsear info: ' + e.message, '#f43f5e');
-                return;
-            }
-
-            LWLog.info('autocut', 'AI: Clip = ' + acClipInfo.mediaPath);
-            acShowStatus('Transcrevendo com IA...', '#a78bfa');
-            acStartProgressPoll();
-
-            var apiKey = localStorage.getItem('lw_openai_key') || '';
-            LWHttp.post(API + '/autocut/transcribe', {
-                filePath: acClipInfo.mediaPath,
-                apiKey: apiKey
-            }, { timeout: 320000, retries: 0 }, function(err, status, body) {
-                btn.disabled = false;
-                document.getElementById('acAnalyzeBtn').disabled = false;
-                acStopProgressPoll();
-
-                if (err) {
-                    LWLog.error('autocut', 'AI analysis failed: ' + err);
-                    acShowStatus('Erro: ' + (err === 'TIMEOUT' ? 'Timeout — tente clip menor' : 'Falha na transcrição'), '#f43f5e');
-                    return;
-                }
-
-                try {
-                    var data = JSON.parse(body);
-                    if (data.error) {
-                        acShowStatus('Erro: ' + data.error, '#f43f5e');
-                        // If API key issue, show config
-                        if (data.error.indexOf('API') >= 0 || data.error.indexOf('key') >= 0 || data.error.indexOf('Chave') >= 0) {
-                            document.getElementById('acAiConfig').style.display = '';
-                        }
-                        return;
-                    }
-
-                    acAiIssues = data.issues || [];
-                    acAiFullText = data.text || '';
-                    acTotalDuration = data.totalDuration || 0;
-
-                    LWLog.info('autocut', 'AI: ' + acAiIssues.length + ' issues, lang=' + (data.language || '?'));
-
-                    if (acAiIssues.length === 0) {
-                        acShowStatus('Nenhum problema detectado! Áudio limpo.', '#22c55e');
-                        if (acAiFullText) {
-                            document.getElementById('acAiTranscript').textContent = 'Transcrição ok — clique pra ver';
-                            document.getElementById('acFullTranscript').textContent = acAiFullText;
-                        }
-                        document.getElementById('acAiResults').style.display = '';
-                        document.getElementById('acAiCount').textContent = '0';
-                        return;
-                    }
-
-                    // Convert AI issues to silences format for the Cortar button
-                    acSilences = [];
-                    for (var i = 0; i < acAiIssues.length; i++) {
-                        var iss = acAiIssues[i];
-                        acSilences.push({ start: iss.start, end: iss.end, duration: iss.end - iss.start });
-                    }
-
-                    // Show timeline + results
-                    document.getElementById('acResults').style.display = '';
-                    document.getElementById('acAiResults').style.display = '';
-                    acAiFilterType = 'all';
-                    acDrawAiResults();
-                    acDrawTimeline();
-                    document.getElementById('acApplyBtn').disabled = false;
-
-                    if (acAiFullText) {
-                        document.getElementById('acAiTranscript').textContent = 'Ver transcrição completa';
-                        document.getElementById('acFullTranscript').textContent = acAiFullText;
-                    }
-
-                    // Summary
-                    var fillers = 0, repeats = 0, stutters = 0;
-                    for (var j = 0; j < acAiIssues.length; j++) {
-                        if (acAiIssues[j].type === 'filler') fillers++;
-                        else if (acAiIssues[j].type === 'repeat') repeats++;
-                        else if (acAiIssues[j].type === 'stutter') stutters++;
-                    }
-                    acShowStatus(acAiIssues.length + ' problemas detectados', '#a78bfa');
-                    LWLog.info('autocut', 'AI done: ' + fillers + ' fillers, ' + repeats + ' repeats, ' + stutters + ' stutters');
-
-                } catch (e) {
-                    acShowStatus('Erro ao processar: ' + e.message, '#f43f5e');
-                    LWLog.error('autocut', 'AI parse error: ' + e.message);
-                }
-            });
-        });
-    }
-
-    // ─── AI Results rendering ───
-    function acDrawAiResults() {
-        var el = document.getElementById('acAiIssuesList');
-        if (!el) return;
-        var html = '';
-        var fillers = 0, repeats = 0, stutters = 0;
-        var filtered = [];
-
-        for (var i = 0; i < acAiIssues.length; i++) {
-            var iss = acAiIssues[i];
-            if (iss.type === 'filler') fillers++;
-            else if (iss.type === 'repeat') repeats++;
-            else if (iss.type === 'stutter') stutters++;
-            if (acAiFilterType === 'all' || acAiFilterType === iss.type) filtered.push(iss);
-        }
-
-        document.getElementById('acAiCount').textContent = acAiIssues.length;
-        document.getElementById('acAiFillerN').textContent = fillers;
-        document.getElementById('acAiRepeatN').textContent = repeats;
-        document.getElementById('acAiStutterN').textContent = stutters;
-
-        for (var j = 0; j < filtered.length; j++) {
-            var issue = filtered[j];
-            var colors = { filler: '#f59e0b', repeat: '#f43f5e', stutter: '#a78bfa' };
-            var icons = { filler: '\u25CF', repeat: '\u25C6', stutter: '\u25B2' };
-            var c = colors[issue.type] || '#888';
-            var ic = icons[issue.type] || '\u25CF';
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:3px;margin-bottom:2px;background:rgba(255,255,255,.02);border-left:2px solid ' + c + '">';
-            html += '<span style="color:' + c + ';flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + ic + ' ' + issue.label + '</span>';
-            html += '<span style="color:#555;flex-shrink:0;margin-left:6px">' + acSecsToTime(issue.start) + '</span>';
-            html += '</div>';
-        }
-
-        if (filtered.length === 0) html = '<div style="text-align:center;color:#555;padding:8px">Nenhum nesta categoria</div>';
-        el.innerHTML = html;
-
-        // Update filter chip active states
-        var chips = ['All', 'Filler', 'Repeat', 'Stutter'];
-        for (var k = 0; k < chips.length; k++) {
-            var chipEl = document.getElementById('acAiFilter' + chips[k]);
-            if (chipEl) chipEl.classList.toggle('active', acAiFilterType === chips[k].toLowerCase() || (acAiFilterType === 'all' && chips[k] === 'All'));
-        }
-    }
-
-    function acAiFilter(type) {
-        acAiFilterType = type;
-        acDrawAiResults();
-
-        // Also update the silences array to match the filter (for timeline + cutting)
-        acSilences = [];
-        for (var i = 0; i < acAiIssues.length; i++) {
-            var iss = acAiIssues[i];
-            if (type === 'all' || iss.type === type) {
-                acSilences.push({ start: iss.start, end: iss.end, duration: iss.end - iss.start });
-            }
-        }
-        if (acTotalDuration > 0) acDrawTimeline();
-        document.getElementById('acApplyBtn').disabled = (acSilences.length === 0);
-    }
-
-    function acToggleTranscript() {
-        var el = document.getElementById('acFullTranscript');
-        el.style.display = el.style.display === 'none' ? '' : 'none';
-    }
-
-    // ─── API Key management ───
-    function acToggleAiConfig() {
-        var el = document.getElementById('acAiConfig');
-        el.style.display = el.style.display === 'none' ? '' : 'none';
-    }
-
-    function _acUpdateKeyUI(hasKey, masked) {
-        var statusEl = document.getElementById('acAiKeyStatus');
-        var btnTxt = document.getElementById('acAiKeyBtnTxt');
-        if (hasKey) {
-            if (statusEl) statusEl.textContent = '✓ ' + (masked || 'API configurada');
-            if (btnTxt) btnTxt.textContent = 'Trocar chave';
-        } else {
-            if (statusEl) statusEl.textContent = '';
-            if (btnTxt) btnTxt.textContent = 'Configurar chave OpenAI';
-        }
-    }
-
-    function acSaveAiKey() {
-        var key = document.getElementById('acAiKeyInput').value.trim();
-        if (!key) { acShowStatus('Cole a chave da API primeiro', '#f59e0b'); return; }
-        if (key.indexOf('sk-') !== 0) { acShowStatus('Chave OpenAI inválida (começa com sk-)', '#f43f5e'); return; }
-        localStorage.setItem('lw_openai_key', key);
-        // Also save on the server side
-        LWHttp.post(API + '/autocut/ai-key', { key: key }, { retries: 1 }, function(err, status, body) {
-            if (err) { acShowStatus('Erro ao salvar chave', '#f43f5e'); return; }
-            try {
-                var r = JSON.parse(body);
-                acShowStatus('✓ Chave salva! Pode usar IA agora', '#22c55e');
-                _acUpdateKeyUI(true, r.masked);
-                document.getElementById('acAiConfig').style.display = 'none';
-                document.getElementById('acAiKeyInput').value = '';
-            } catch (e) { acShowStatus('Chave salva!', '#22c55e'); _acUpdateKeyUI(true); }
-        });
-    }
-
-    // Load AI key status on init
-    function acCheckAiKey() {
-        LWHttp.post(API + '/autocut/ai-key', {}, { retries: 0, timeout: 3000 }, function(err, status, body) {
-            if (err) return;
-            try {
-                var r = JSON.parse(body);
-                _acUpdateKeyUI(!!r.hasKey, r.masked);
-            } catch (e) {}
-        });
-    }
-    setTimeout(acCheckAiKey, 3000);
-
-    function acApply() {
-        if (!csInterface || !acSilences.length || !acClipInfo) {
-            acShowStatus('Analise um clip primeiro', '#f43f5e');
-            return;
-        }
-        var btn = document.getElementById('acApplyBtn');
-        btn.disabled = true;
-        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
-
-        acShowStatus('Criando backup da sequência...', '#a78bfa');
-        // Step 1: create backup sequence before any destructive action
-        csInterface.evalScript('autoCutBackupSequence()', function(bkResult) {
-            var bk = String(bkResult || '');
-            LWLog.info('autocut', 'Backup: ' + bk);
-
-            // Backup roubou foco e não conseguiu voltar — ABORTA antes de cortar.
-            // Sem isso, o autocut roda na sequence backup (clone) ou em vazia.
-            if (bk.indexOf('BACKUP_LOST_FOCUS') === 0) {
-                btn.disabled = false;
-                acShowStatus('Backup criado mas Premiere mudou de sequência. Volte pra sua sequência original e tente de novo.', '#f43f5e');
-                LWLog.error('autocut', 'Backup lost focus — aborting to prevent damage');
-                return;
-            }
-
-            var bkMsg = '';
-            if (bk.indexOf('CLONED:') === 0) bkMsg = 'Backup: sequência "' + bk.substring(7) + '"';
-            else if (bk === 'SAVED') bkMsg = 'Backup: projeto salvo';
-            else if (bk === 'MARKER') bkMsg = 'Marker adicionado (Ctrl+Z pra desfazer)';
-
-            acShowStatus('Cortando ' + acSilences.length + ' silêncios...', '#f59e0b');
-            LWLog.info('autocut', 'Applying ' + acSilences.length + ' cuts, mode=' + acMode + ', padding=' + padding);
-
-            var silJson = JSON.stringify(acSilences).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            var tIdx = (acClipInfo && acClipInfo.trackIndex >= 0) ? acClipInfo.trackIndex : -1;
-            var tTyp = (acClipInfo && acClipInfo.trackType) ? acClipInfo.trackType : 'video';
-            var script = 'autoCutExecute("' + silJson + '",' + padding + ',"' + acMode + '",' + tIdx + ',"' + tTyp + '")';
-            window._acBackupMsg = bkMsg;
-            _acRunExecute(script, btn);
-        });
-    }
-
-    // Polla o arquivo iloncut-execute.json que o JSX escreve durante autoCutExecute.
-    // Atualiza a barra/status sem bloquear o evalScript em andamento.
-    function _acStartExecutePolling() {
-        _acStopExecutePolling();
-        if (!_acNodeFs || !AC_EXEC_PROGRESS_FILE) return;
-        try { if (_acNodeFs.existsSync(AC_EXEC_PROGRESS_FILE)) _acNodeFs.unlinkSync(AC_EXEC_PROGRESS_FILE); } catch(e) {}
-
-        // Mostra a barra de progresso reutilizando o mesmo wrapper da análise
-        var wrap = document.getElementById('acProgressWrap');
-        if (wrap) wrap.style.display = '';
-        document.getElementById('acProgressBar').style.width = '0%';
-        document.getElementById('acProgressPct').textContent = '0%';
-        document.getElementById('acProgressLabel').textContent = 'Iniciando cortes...';
-
-        acExecProgressInterval = setInterval(function() {
-            try {
-                if (!_acNodeFs.existsSync(AC_EXEC_PROGRESS_FILE)) return;
-                var raw = _acNodeFs.readFileSync(AC_EXEC_PROGRESS_FILE, 'utf8');
-                if (!raw) return;
-                var p = JSON.parse(raw);
-                if (typeof p.pct === 'number' && p.pct >= 0) {
-                    var pct = Math.min(100, Math.max(0, p.pct));
-                    document.getElementById('acProgressBar').style.width = pct + '%';
-                    document.getElementById('acProgressPct').textContent = pct + '%';
-                }
-                if (p.msg) document.getElementById('acProgressLabel').textContent = p.msg;
-            } catch(e) {}
-        }, 400);
-    }
-    function _acStopExecutePolling() {
-        if (acExecProgressInterval) { clearInterval(acExecProgressInterval); acExecProgressInterval = null; }
-        setTimeout(function() {
-            var wrap = document.getElementById('acProgressWrap');
-            if (wrap) wrap.style.display = 'none';
-        }, 800);
-    }
-
-    function _acRunExecute(script, btn) {
-        var padding = parseFloat(document.getElementById('acPadding').value) || 0;
-
-        _acStartExecutePolling();
-        csInterface.evalScript(script, function(result) {
-            _acStopExecutePolling();
-            btn.disabled = false;
-            var r = String(result || '');
-            LWLog.info('autocut', 'Result: ' + r);
-            var bkInfo = window._acBackupMsg || '';
-            if (r.indexOf('OK:') === 0) {
-                // Parse result — format: OK:cuts:removedSec  or  OK:cuts:removedSec|DBG:...
-                var mainPart = r.substring(3).split('|')[0]; // before any |DBG:
-                var parts = mainPart.split(':');
-                var cuts = parseInt(parts[0]) || 0;
-                var removed = parts[1] || '0';
-                if (cuts > 0) {
-                    var msg = cuts + ' cortes' + (acMode === 'remove' && removed !== '0' ? ' — ' + removed + 's removidos' : '');
-                    if (bkInfo) msg += ' · ' + bkInfo;
-                    acShowStatus(msg, '#22c55e');
-                    showMsg('AutoCut: ' + cuts + ' cortes' + (bkInfo ? ' (' + bkInfo + ')' : ''));
-                    LWLog.info('autocut', 'Done: ' + msg);
-                    // Reset state
-                    acSilences = [];
-                    acClipInfo = null;
-                    document.getElementById('acResults').style.display = 'none';
-                    document.getElementById('acAiResults').style.display = 'none';
-                } else {
-                    // Razor reported OK but 0 cuts — something went wrong
-                    var dbgInfo = r.indexOf('|DBG:') >= 0 ? r.substring(r.indexOf('|DBG:') + 5) : '';
-                    // Mensagem clara pro safeguard de cobertura
-                    if (dbgInfo.indexOf('abort-cover-') === 0) {
-                        var coverPct = dbgInfo.replace('abort-cover-', '').replace('pct', '');
-                        acShowStatus('Cortes cobririam ' + coverPct + '% do clip — operação abortada. Aumente o threshold (mais negativo) ou min duração.', '#f43f5e');
-                    } else {
-                        acShowStatus('Nenhum corte efetivado' + (dbgInfo ? ' — ' + dbgInfo : ''), '#f59e0b');
-                    }
-                    LWLog.warn('autocut', 'Zero cuts: ' + r);
-                }
-            } else if (r === 'NO_SELECTION') {
-                acShowStatus('Clip não encontrado — selecione novamente', '#f43f5e');
-            } else if (r === 'NO_SILENCES') {
-                acShowStatus('Nenhum silêncio pra cortar', '#f59e0b');
-            } else {
-                acShowStatus(r || 'Erro ao cortar', '#f43f5e');
-                LWLog.error('autocut', 'Cut failed: ' + r);
-            }
-        }, { retries: 1 });
-    }
-
-    // Re-draw timeline when padding changes
-    document.getElementById('acPadding').addEventListener('input', function() {
-        if (acSilences.length > 0) acDrawTimeline();
-    });
 
     </script>
 </body>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, powerMonitor, Menu } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, screen, powerMonitor, Menu, globalShortcut } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -626,10 +626,6 @@ const ffprobeBin = isWin ? path.join(ytDlpDir, 'ffprobe.exe') : path.join(ytDlpD
 let ytDownloadProc = null;
 let ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', status: 'idle', error: '' };
 
-// AutoCut progress tracking (polled by plugin)
-let autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-let autoCutProc = null; // current FFmpeg process (so we can cancel)
-
 // ═══════ Mask Editor — Pincel mágico pra ajustar bg-remove ═══════
 // Sessões ativas de edição. Cada bg-remove pode abrir um editor; plugin
 // polla /bg/edit-status?token=X pra saber quando o user salvou/cancelou.
@@ -916,6 +912,248 @@ ipcMain.on('rotoscope:save-done', (event, payload) => {
             try { if (sess.win && !sess.win.isDestroyed()) sess.win.close(); } catch(e) {}
         }, 800);
     }
+});
+
+// ════════════════════════════════════════════════════════════════════
+// SAM (Segment Anything Model) — RODA NO MAIN PROCESS via Node.js
+// ────────────────────────────────────────────────────────────────────
+// Movido pra cá pq Electron renderer com transformers.js tinha problemas
+// recorrentes de loading (ESM/asar/onnxruntime-web). Node.js Main rodando
+// onnxruntime-node binding nativo é MUITO mais robusto.
+// ────────────────────────────────────────────────────────────────────
+// Estado global (1 modelo carregado, compartilhado entre sessões):
+//   samState.tx = referência pro módulo @huggingface/transformers
+//   samState.model = SamModel carregado (SlimSAM-77 quantized)
+//   samState.processor = AutoProcessor casado
+//   samState.loading = Promise (se em curso)
+//   samState.loaded = boolean
+//   samState.embeddings = Map<token, { embeddings, originalSizes, reshapedSizes }>
+// ════════════════════════════════════════════════════════════════════
+const samState = {
+    tx: null,
+    model: null,
+    processor: null,
+    loading: null,
+    loaded: false,
+    embeddings: new Map(), // token -> embedding cache
+};
+
+function broadcastSamProgress(eventSender, payload) {
+    try { if (eventSender && !eventSender.isDestroyed()) eventSender.send('roto:sam-progress', payload); } catch(e) {}
+}
+
+async function loadSamModel(eventSender) {
+    if (samState.loaded) return { ok: true };
+    if (samState.loading) return await samState.loading;
+
+    samState.loading = (async () => {
+        try {
+            broadcastSamProgress(eventSender, { phase: 'init', msg: 'Inicializando transformers.js...', pct: 5 });
+
+            // Lazy require — só carrega quando o user pede SAM
+            const tx = require('@huggingface/transformers');
+            samState.tx = tx;
+
+            // Configura cacheDir pra um lugar gravável (não dentro do asar!)
+            const cacheRoot = path.join(currentUD, 'sam-cache');
+            try { fs.mkdirSync(cacheRoot, { recursive: true }); } catch(e) {}
+            tx.env.cacheDir = cacheRoot;
+            tx.env.useFSCache = true;
+            tx.env.allowRemoteModels = true;
+            tx.env.allowLocalModels = true;
+            console.log('[sam] cacheDir =', cacheRoot);
+
+            // SAM-Base (Meta original) — qualidade muito superior à SlimSAM.
+            // Quantizado q8 fica ~24MB. Com thread-limit + encode lazy não trava o PC.
+            const modelId = 'Xenova/sam-vit-base';
+            broadcastSamProgress(eventSender, { phase: 'download', msg: 'Carregando SAM-Base q8 (~24MB primeira vez)...', pct: 10 });
+
+            // Limita threads pra metade dos cores (deixa OS respirando, não trava PC).
+            // executionMode 'sequential' (default) — 'parallel' usa todos cores em ops paralelas
+            // e foi o que travou tudo. Sequential com poucas threads = bem mais responsivo.
+            const cpuCount = os.cpus().length;
+            const numThreads = Math.max(1, Math.min(4, Math.floor(cpuCount / 2)));
+            console.log('[sam] CPU threads:', numThreads, 'de', cpuCount);
+            const sessionOpts = {
+                graphOptimizationLevel: 'all',
+                executionMode: 'sequential',
+                intraOpNumThreads: numThreads,
+                interOpNumThreads: 1,
+                enableCpuMemArena: true,
+                enableMemPattern: true,
+            };
+
+            // Processor (configs JSON, leve)
+            samState.processor = await tx.AutoProcessor.from_pretrained(modelId, {
+                progress_callback: (data) => {
+                    console.log('[sam] processor:', data.status, data.file, data.progress);
+                    if (data.status === 'progress' && data.progress != null) {
+                        broadcastSamProgress(eventSender, {
+                            phase: 'download', msg: `Baixando ${data.file || 'config'}...`,
+                            pct: 10 + Math.min(20, Math.floor((data.progress || 0) * 0.2))
+                        });
+                    }
+                },
+            });
+            broadcastSamProgress(eventSender, { phase: 'download', msg: 'Processor OK · baixando modelo .onnx...', pct: 30 });
+
+            // Model — q8 quantizado + thread limits (não trava PC)
+            samState.model = await tx.SamModel.from_pretrained(modelId, {
+                dtype: 'q8',
+                session_options: sessionOpts,
+                progress_callback: (data) => {
+                    console.log('[sam] model:', data.status, data.file, data.progress);
+                    if (data.status === 'progress' && data.progress != null) {
+                        broadcastSamProgress(eventSender, {
+                            phase: 'download', msg: `Baixando ${data.file || 'model.onnx'}: ${Math.round(data.progress)}%`,
+                            pct: 30 + Math.min(60, Math.floor((data.progress || 0) * 0.6))
+                        });
+                    } else if (data.status === 'done' && data.file) {
+                        broadcastSamProgress(eventSender, {
+                            phase: 'download', msg: `Carregando ${data.file}...`, pct: 92
+                        });
+                    } else if (data.status === 'ready') {
+                        broadcastSamProgress(eventSender, { phase: 'ready', msg: 'Iniciando inferência...', pct: 95 });
+                    }
+                },
+            });
+
+            samState.loaded = true;
+            broadcastSamProgress(eventSender, { phase: 'ready', msg: 'SAM pronto', pct: 100 });
+            console.log('[sam] modelo carregado ✓');
+            return { ok: true };
+        } catch (e) {
+            console.error('[sam] load failed:', e);
+            samState.loaded = false;
+            samState.model = null;
+            samState.processor = null;
+            samState.loading = null;
+            broadcastSamProgress(eventSender, { phase: 'error', msg: e.message || String(e), pct: 0 });
+            return { error: e.message || String(e), stack: (e.stack || '').slice(0, 600) };
+        }
+    })();
+
+    const result = await samState.loading;
+    if (!result.error) samState.loading = null; // reset on success too (so re-call after error retries)
+    return result;
+}
+
+// Carrega o modelo SAM
+ipcMain.handle('roto:sam-load', async (event) => {
+    return await loadSamModel(event.sender);
+});
+
+// Encoda um frame e cacheia embeddings na main process pelo token
+ipcMain.handle('roto:sam-encode', async (event, payload) => {
+    try {
+        if (!samState.loaded) return { error: 'SAM não carregado — chame roto:sam-load primeiro' };
+        const { token, width, height, rgba } = payload || {};
+        if (!token) return { error: 'token ausente' };
+        if (!width || !height || !rgba) return { error: 'dados de imagem ausentes' };
+
+        // rgba vem como Uint8Array (estructure clone via IPC)
+        const u8 = rgba instanceof Uint8Array ? rgba :
+                   (rgba.buffer ? new Uint8Array(rgba.buffer, rgba.byteOffset || 0, rgba.byteLength) :
+                                  new Uint8Array(rgba));
+        const tx = samState.tx;
+        const rawImage = new tx.RawImage(u8, width, height, 4);
+        const inputs = await samState.processor(rawImage);
+        const embeddings = await samState.model.get_image_embeddings(inputs);
+
+        samState.embeddings.set(token, {
+            embeddings,
+            inputs,        // mantém pra original_sizes / reshaped_input_sizes
+            width, height,
+            t: Date.now(),
+        });
+
+        // Limpa embeddings antigos (>30min)
+        const cutoff = Date.now() - 30 * 60 * 1000;
+        for (const [k, v] of samState.embeddings) {
+            if (v.t < cutoff) samState.embeddings.delete(k);
+        }
+
+        return { ok: true };
+    } catch (e) {
+        console.error('[sam-encode]', e);
+        return { error: e.message || String(e) };
+    }
+});
+
+// Segmenta com lista de clicks e retorna binary mask
+ipcMain.handle('roto:sam-segment', async (event, payload) => {
+    try {
+        if (!samState.loaded) return { error: 'SAM não carregado' };
+        const { token, clicks } = payload || {};
+        const cache = samState.embeddings.get(token);
+        if (!cache) return { error: 'embeddings não encontrado — encode o frame primeiro' };
+        if (!Array.isArray(clicks) || clicks.length === 0) return { error: 'sem pontos' };
+
+        const points = clicks.map(c => [c.x, c.y]);
+        const labels = clicks.map(c => c.kind === 'positive' ? 1 : 0);
+
+        // v4 API: usa reshape_input_points + add_input_labels diretamente
+        // (em v4 o processor() exige uma imagem, mas como já temos embeddings,
+        // criamos os tensors de prompt direto via image_processor)
+        const imgProc = samState.processor.image_processor;
+        const inputPointsTensor = imgProc.reshape_input_points(
+            [[points]],
+            cache.inputs.original_sizes,
+            cache.inputs.reshaped_input_sizes,
+        );
+        const inputLabelsTensor = imgProc.add_input_labels(
+            [[labels]],
+            inputPointsTensor,
+        );
+
+        // Reusa embeddings cacheados — model.forward aceita image_embeddings + input_points
+        const outputs = await samState.model({
+            input_points: inputPointsTensor,
+            input_labels: inputLabelsTensor,
+            image_embeddings: cache.embeddings.image_embeddings,
+            image_positional_embeddings: cache.embeddings.image_positional_embeddings,
+        });
+
+        const masks = await samState.processor.post_process_masks(
+            outputs.pred_masks,
+            cache.inputs.original_sizes,
+            cache.inputs.reshaped_input_sizes,
+        );
+
+        const maskTensor = masks[0];
+        const dims = maskTensor.dims;
+        const H = dims[dims.length - 2];
+        const W = dims[dims.length - 1];
+        const data = maskTensor.data;
+
+        // Pega scores pra escolher melhor predição
+        const iouScores = outputs.iou_scores?.data;
+        const numPreds = dims.length === 4 ? dims[1] : 1;
+        let bestIdx = 0;
+        if (iouScores && numPreds > 1) {
+            let bestScore = -1;
+            for (let i = 0; i < numPreds; i++) {
+                if (iouScores[i] > bestScore) { bestScore = iouScores[i]; bestIdx = i; }
+            }
+        }
+        const offset = bestIdx * (W * H);
+
+        // Empacota em Uint8Array (1 byte por pixel: 0 ou 255)
+        const out = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) {
+            out[i] = data[offset + i] ? 255 : 0;
+        }
+
+        return { ok: true, width: W, height: H, mask: out };
+    } catch (e) {
+        console.error('[sam-segment]', e);
+        return { error: e.message || String(e), stack: (e.stack || '').slice(0, 400) };
+    }
+});
+
+// Limpa embedding cache de um token (chamado quando renderer fecha)
+ipcMain.on('roto:sam-clear', (event, payload) => {
+    try { samState.embeddings.delete(payload?.token); } catch(e) {}
 });
 
 // EXPORT — aplica masks + gera .mov ProRes 4444 com alpha
@@ -1575,6 +1813,120 @@ function cleanYtUrl(raw) {
     return raw;
 }
 
+// ────────────────────────────────────────────────────────────────────
+// YouTube bot-detection bypass helpers
+// YouTube vem requerendo cookies/auth pra muitos vídeos desde 2024.
+// Estratégia: usar `tv` player client (que dispensa PO token) e tentar
+// cookies do browser do user em ordem de prioridade.
+// ────────────────────────────────────────────────────────────────────
+
+// Browsers detectados na ordem de tentativa
+function detectInstalledBrowsers() {
+    const browsers = [];
+    if (isWin) {
+        const candidates = [
+            ['chrome',  path.join(process.env.LOCALAPPDATA || '', 'Google/Chrome/User Data')],
+            ['edge',    path.join(process.env.LOCALAPPDATA || '', 'Microsoft/Edge/User Data')],
+            ['brave',   path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware/Brave-Browser/User Data')],
+            ['firefox', path.join(process.env.APPDATA || '', 'Mozilla/Firefox/Profiles')],
+            ['opera',   path.join(process.env.APPDATA || '', 'Opera Software/Opera Stable')],
+        ];
+        for (const [name, p] of candidates) {
+            try { if (fs.existsSync(p)) browsers.push(name); } catch(e) {}
+        }
+    } else if (isMac) {
+        const home = os.homedir();
+        const candidates = [
+            ['chrome',  path.join(home, 'Library/Application Support/Google/Chrome')],
+            ['safari',  path.join(home, 'Library/Cookies/Cookies.binarycookies')],
+            ['firefox', path.join(home, 'Library/Application Support/Firefox/Profiles')],
+            ['brave',   path.join(home, 'Library/Application Support/BraveSoftware/Brave-Browser')],
+            ['edge',    path.join(home, 'Library/Application Support/Microsoft Edge')],
+        ];
+        for (const [name, p] of candidates) {
+            try { if (fs.existsSync(p)) browsers.push(name); } catch(e) {}
+        }
+    }
+    return browsers;
+}
+
+// Args base pra bypass de bot — sem cookies (rápido/leve)
+function ytBypassArgs() {
+    return [
+        // tv_simply é o client mais permissivo do YT; default é fallback.
+        '--extractor-args', 'youtube:player_client=default,tv_simply,tv,web_safari,mweb',
+    ];
+}
+
+// Detecta se o stderr de yt-dlp indica bot detection (precisa de cookies)
+function ytIsBotError(stderr) {
+    if (!stderr) return false;
+    return /Sign in to confirm|not a bot|cookies-from-browser|Use --cookies/i.test(stderr);
+}
+
+// Roda yt-dlp com bypass + retry com cookies se cair em bot error.
+// onProc(proc, attemptIdx) chamado quando spawn → opção pra hooked progress parsing
+// ou para registrar em ytDownloadProc, etc.
+async function runYtDlpRobust(userArgs, opts = {}) {
+    const { onProc, onStdoutLine, onStderrLine, timeout } = opts;
+    const browsersToTry = detectInstalledBrowsers();
+    // 1ª tentativa: sem cookies, com bypass clients
+    // 2ª+ tentativas: com cada browser cookies em ordem
+    const attempts = [
+        { args: [...ytBypassArgs()], label: 'bypass-only' },
+        ...browsersToTry.map(b => ({ args: ['--cookies-from-browser', b, ...ytBypassArgs()], label: 'cookies-' + b })),
+    ];
+
+    let lastResult = null;
+    for (let i = 0; i < attempts.length; i++) {
+        const att = attempts[i];
+        const fullArgs = [...att.args, ...userArgs];
+        console.log('[yt-dlp]', att.label, fullArgs.join(' '));
+        const result = await new Promise((resolve) => {
+            const proc = spawn(ytDlpBin, fullArgs, { windowsHide: true });
+            if (onProc) onProc(proc, i);
+            let stdout = '', stderr = '';
+            const stdoutBuf = [];
+            const stderrBuf = [];
+            proc.stdout.on('data', d => {
+                const s = d.toString();
+                stdout += s;
+                if (onStdoutLine) {
+                    const lines = s.split('\n');
+                    if (stdoutBuf.length) { stdoutBuf[stdoutBuf.length-1] += lines.shift(); }
+                    stdoutBuf.push(...lines);
+                    while (stdoutBuf.length > 1) onStdoutLine(stdoutBuf.shift());
+                }
+            });
+            proc.stderr.on('data', d => {
+                const s = d.toString();
+                stderr += s;
+                if (onStderrLine) {
+                    const lines = s.split('\n');
+                    if (stderrBuf.length) { stderrBuf[stderrBuf.length-1] += lines.shift(); }
+                    stderrBuf.push(...lines);
+                    while (stderrBuf.length > 1) onStderrLine(stderrBuf.shift());
+                }
+            });
+            proc.on('close', code => {
+                if (onStdoutLine && stdoutBuf.length) onStdoutLine(stdoutBuf.shift());
+                if (onStderrLine && stderrBuf.length) onStderrLine(stderrBuf.shift());
+                resolve({ code, stdout, stderr, attempt: att.label });
+            });
+            proc.on('error', e => resolve({ code: -1, stdout: '', stderr: e.message, attempt: att.label }));
+            if (timeout) setTimeout(() => { try { proc.kill(); } catch {} }, timeout);
+        });
+        lastResult = result;
+        if (result.code === 0) return result;
+
+        // Se NÃO é bot error, não adianta tentar outro browser — retorna o erro
+        if (!ytIsBotError(result.stderr)) return result;
+        // Se chegou aqui, é bot error — tenta próxima estratégia (browser)
+        console.log('[yt-dlp] bot error detected, trying next strategy...');
+    }
+    return lastResult;
+}
+
 ipcMain.handle('yt-ensure-deps', async () => {
     const yt = await ensureYtDlp();
     const ff = ffmpegReady() || await ensureFfmpeg();
@@ -1584,43 +1936,34 @@ ipcMain.handle('yt-ensure-deps', async () => {
 ipcMain.handle('yt-get-info', async (event, url) => {
     url = cleanYtUrl(url);
     if (!ytDlpReady()) { const ok = await ensureYtDlp(); if (!ok) return { error: 'yt-dlp não disponível' }; }
-    return new Promise(resolve => {
-        const args = ['--no-download', '--print-json', '--no-warnings', '--no-playlist'];
-        if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
-        args.push(url);
-        const proc = spawn(ytDlpBin, args, { windowsHide: true });
-        let out = '', errOut = '';
-        proc.stdout.on('data', d => out += d);
-        proc.stderr.on('data', d => errOut += d);
-        proc.on('close', code => {
-            if (code !== 0) { resolve({ error: errOut || 'Erro ao obter info' }); return; }
-            try {
-                const info = JSON.parse(out);
-                const formats = (info.formats || [])
-                    .filter(f => f.vcodec !== 'none' || f.acodec !== 'none')
-                    .map(f => ({
-                        id: f.format_id,
-                        ext: f.ext,
-                        quality: f.format_note || f.resolution || '',
-                        fps: f.fps || 0,
-                        vcodec: f.vcodec,
-                        acodec: f.acodec,
-                        filesize: f.filesize || f.filesize_approx || 0,
-                        hasVideo: f.vcodec !== 'none',
-                        hasAudio: f.acodec !== 'none'
-                    }));
-                resolve({
-                    title: info.title || '',
-                    thumbnail: info.thumbnail || '',
-                    duration: info.duration || 0,
-                    uploader: info.uploader || '',
-                    formats: formats
-                });
-            } catch (e) { resolve({ error: 'Erro ao parsear info' }); }
-        });
-        proc.on('error', e => resolve({ error: e.message }));
-        setTimeout(() => { try { proc.kill(); } catch {} }, 30000);
-    });
+    const args = ['--no-download', '--print-json', '--no-warnings', '--no-playlist'];
+    if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
+    args.push(url);
+    const result = await runYtDlpRobust(args, { timeout: 45000 });
+    if (result.code !== 0) return { error: result.stderr || 'Erro ao obter info' };
+    try {
+        const info = JSON.parse(result.stdout);
+        const formats = (info.formats || [])
+            .filter(f => f.vcodec !== 'none' || f.acodec !== 'none')
+            .map(f => ({
+                id: f.format_id,
+                ext: f.ext,
+                quality: f.format_note || f.resolution || '',
+                fps: f.fps || 0,
+                vcodec: f.vcodec,
+                acodec: f.acodec,
+                filesize: f.filesize || f.filesize_approx || 0,
+                hasVideo: f.vcodec !== 'none',
+                hasAudio: f.acodec !== 'none'
+            }));
+        return {
+            title: info.title || '',
+            thumbnail: info.thumbnail || '',
+            duration: info.duration || 0,
+            uploader: info.uploader || '',
+            formats: formats
+        };
+    } catch (e) { return { error: 'Erro ao parsear info' }; }
 });
 
 ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime, endTime }) => {
@@ -1676,49 +2019,41 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
 
     ytProgress = { active: true, percent: 0, speed: '', eta: '', title: '', status: 'downloading', error: '', outputDir: outputPath };
 
-    ytDownloadProc = spawn(ytDlpBin, args, { windowsHide: true });
     let lastFile = '';
 
-    ytDownloadProc.stdout.on('data', d => {
-        const lines = d.toString().split('\n');
-        for (const line of lines) {
-            // [download]  45.2% of  120.50MiB at  5.32MiB/s ETA 00:12
-            const m = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
-            if (m) {
-                ytProgress.percent = parseFloat(m[1]);
-                ytProgress.speed = m[3];
-                ytProgress.eta = m[4];
-            }
-            // [download] Destination: /path/to/file.mp4
-            const dm = line.match(/\[download\] Destination: (.+)/);
-            if (dm) lastFile = dm[1].trim();
-            // [Merger] Merging formats into "path/to/final.mp4" — this is the REAL final file
-            const mm = line.match(/\[Merger\] Merging formats into "(.+)"/);
-            if (mm) lastFile = mm[1].trim();
-            // [ExtractAudio] Destination: path/to/file.mp3
-            const am = line.match(/\[ExtractAudio\] Destination: (.+)/);
-            if (am) lastFile = am[1].trim();
-            // [Merger] or [ExtractAudio] status
-            if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
-                ytProgress.status = 'merging';
-                ytProgress.percent = 99;
-            }
-            // Already downloaded
-            if (line.includes('has already been downloaded')) {
-                ytProgress.percent = 100;
-                ytProgress.status = 'done';
-            }
+    // Helper pra parsear linha de stdout (compartilhado entre tentativas)
+    const onStdoutLine = (line) => {
+        const m = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
+        if (m) {
+            ytProgress.percent = parseFloat(m[1]);
+            ytProgress.speed = m[3];
+            ytProgress.eta = m[4];
+        }
+        const dm = line.match(/\[download\] Destination: (.+)/);
+        if (dm) lastFile = dm[1].trim();
+        const mm = line.match(/\[Merger\] Merging formats into "(.+)"/);
+        if (mm) lastFile = mm[1].trim();
+        const am = line.match(/\[ExtractAudio\] Destination: (.+)/);
+        if (am) lastFile = am[1].trim();
+        if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
+            ytProgress.status = 'merging';
+            ytProgress.percent = 99;
+        }
+        if (line.includes('has already been downloaded')) {
+            ytProgress.percent = 100;
+            ytProgress.status = 'done';
         }
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
-    });
+    };
 
-    ytDownloadProc.stderr.on('data', d => {
-        const err = d.toString().trim();
-        if (err) ytProgress.error = err;
-    });
-
-    ytDownloadProc.on('close', code => {
+    // Roda com retry de bot bypass
+    runYtDlpRobust(args, {
+        onProc: (proc) => { ytDownloadProc = proc; },
+        onStdoutLine,
+        onStderrLine: (line) => { if (line.trim()) ytProgress.error = line.trim(); },
+    }).then(result => {
         ytDownloadProc = null;
+        const code = result.code;
         if (code === 0) {
             // If lastFile is empty or doesn't exist, find newest file in output dir
             if (!lastFile || !fs.existsSync(lastFile)) {
@@ -1775,16 +2110,18 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
         } else {
             ytProgress.status = 'error';
             ytProgress.active = false;
-            if (!ytProgress.error) ytProgress.error = 'Download falhou (código ' + code + ')';
+            if (!ytProgress.error || ytIsBotError(result.stderr)) {
+                ytProgress.error = ytIsBotError(result.stderr)
+                    ? 'YouTube bloqueou o download — verifique se está logado no Chrome/Edge/Firefox e tente de novo'
+                    : (result.stderr || 'Download falhou (código ' + code + ')');
+            }
         }
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
-    });
-
-    ytDownloadProc.on('error', e => {
+    }).catch(e => {
         ytDownloadProc = null;
         ytProgress.status = 'error';
         ytProgress.active = false;
-        ytProgress.error = e.message;
+        ytProgress.error = e.message || String(e);
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
     });
 
@@ -1832,6 +2169,103 @@ function savePluginSessions() {
     } catch(e) {}
 }
 loadPluginSessions(); // Restore sessions on startup
+
+// ═══════ LION SEARCH state ═══════
+// pendingPluginCommands: queue of {id, type, payload} that plugin pops & executes
+// lionSearchEffectsCache: latest catalog from plugin (effects/transitions/presets)
+// lionSearchPending: { [requestId]: {resolve, reject} } — pra HTTP requests de lion-search.html
+//                    aguardarem o plugin retornar com o resultado
+const pendingPluginCommands = [];
+let lionSearchEffectsCache = [];
+let lionSearchEffectsCachedAt = 0;
+let lionSearchCatalogDebug = '';
+let lionSearchCatalogError = '';
+const lionSearchPendingResults = new Map(); // commandId -> { resolve, reject, timeout }
+let lionSearchWin = null; // janela do palette flutuante
+
+// Enfilera um comando pro plugin executar via JSX, retorna Promise com resultado
+function queuePluginCommand(type, payload, timeoutMs = 15000) {
+    const commandId = crypto.randomBytes(6).toString('hex');
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            lionSearchPendingResults.delete(commandId);
+            reject(new Error('Timeout aguardando plugin (' + (timeoutMs/1000) + 's) — plugin tá rodando no Premiere?'));
+        }, timeoutMs);
+        lionSearchPendingResults.set(commandId, { resolve, reject, timeout });
+        pendingPluginCommands.push({ id: commandId, type, payload: payload || {} });
+    });
+}
+
+// IPC pra lion-search.html chamar: lista efeitos
+ipcMain.handle('lion-search:list-effects', async (event, opts) => {
+    const opts2 = opts || {};
+    const ageOk = lionSearchEffectsCachedAt && (Date.now() - lionSearchEffectsCachedAt) < 5 * 60 * 1000;
+    if (ageOk && lionSearchEffectsCache.length > 0 && !opts2.forceRefresh) {
+        return { items: lionSearchEffectsCache, fromCache: true, debug: lionSearchCatalogDebug, jsxError: lionSearchCatalogError };
+    }
+    // Se já tem cache do plugin (mesmo vazio com erro), retorna direto
+    if (lionSearchEffectsCachedAt > 0 && !opts2.forceRefresh) {
+        return {
+            items: lionSearchEffectsCache,
+            fromCache: true,
+            debug: lionSearchCatalogDebug,
+            jsxError: lionSearchCatalogError,
+        };
+    }
+    try {
+        const result = await queuePluginCommand('list-effects', {}, 6000);
+        return {
+            items: result.items || [],
+            fromCache: false,
+            debug: result.debug || '',
+            jsxError: result.error || '',
+        };
+    } catch (e) {
+        if (lionSearchEffectsCache.length > 0) {
+            return { items: lionSearchEffectsCache, fromCache: true, staleError: e.message };
+        }
+        return { error: 'Plugin Lion Workspace não respondeu (6s). Abra o Premiere com o plugin (Window → Extensions) e faça login.' };
+    }
+});
+
+// IPC pra lion-search.html chamar: aplica efeito
+ipcMain.handle('lion-search:apply', async (event, payload) => {
+    try {
+        const result = await queuePluginCommand('apply-effect', payload, 15000);
+        return result;
+    } catch (e) { return { error: e.message }; }
+});
+
+// IPC pra fechar janela
+ipcMain.on('lion-search:close', () => {
+    try { if (lionSearchWin && !lionSearchWin.isDestroyed()) lionSearchWin.close(); } catch(e) {}
+});
+
+// IPC: mostra notificação nativa de erro (após apply otimista falhar)
+ipcMain.on('lion-search:show-error', (event, payload) => {
+    try {
+        const { Notification } = require('electron');
+        if (Notification.isSupported()) {
+            const n = new Notification({
+                title: payload?.title || 'LION SEARCH',
+                body: payload?.body || 'Erro ao aplicar',
+                silent: false,
+                urgency: 'normal',
+            });
+            n.show();
+        }
+    } catch(e) { console.warn('[lion-search] notif fail:', e); }
+});
+
+// IPC: get current selection context (video/audio/none, playhead)
+ipcMain.handle('lion-search:get-context', async () => {
+    try {
+        const result = await queuePluginCommand('get-context', {}, 4000);
+        return result.context || { selectionType: 'none', hasSequence: false };
+    } catch (e) {
+        return { error: e.message, selectionType: 'none', hasSequence: false };
+    }
+});
 
 // Periodic cleanup: prune expired plugin sessions every hour (prevents unbounded Map growth)
 setInterval(() => {
@@ -2070,17 +2504,42 @@ function startSyncServer() {
             return;
         }
 
+        // ═══════ LION SEARCH — settings (hotkey config + SFX folder) ═══════
+        if (req.method === 'GET' && req.url === '/lion-search/settings') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                hotkey: _lionSettings.hotkey,
+                enabled: _lionSettings.enabled,
+                sfxFolder: _lionSettings.sfxFolder || '',
+                registered: _registeredLionHotkey,
+            }));
+            return;
+        }
+
+        // ═══════ LION SEARCH — pending commands queue ═══════
+        // Plugin polls pra pegar comandos vindos do LW (ex: "list effects",
+        // "apply effect X"). Plugin executa via JSX e POSTa de volta o resultado.
+        if (req.method === 'GET' && req.url === '/lion-search/pop-pending') {
+            const cmds = pendingPluginCommands.splice(0, pendingPluginCommands.length);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ commands: cmds }));
+            return;
+        }
+        if (req.method === 'GET' && req.url === '/lion-search/effects-cache') {
+            // Cliente da lion-search.html pega catálogo cacheado (atualizado pelo plugin)
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                items: lionSearchEffectsCache,
+                fetchedAt: lionSearchEffectsCachedAt,
+                age: lionSearchEffectsCachedAt ? (Date.now() - lionSearchEffectsCachedAt) : null,
+            }));
+            return;
+        }
+
         // YouTube downloader HTTP endpoints (for plugin)
         if (req.method === 'GET' && req.url === '/yt/progress') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(ytProgress));
-            return;
-        }
-
-        // AutoCut progress polling (used by plugin for progress bar)
-        if (req.method === 'GET' && req.url === '/autocut/progress') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(autoCutProgress));
             return;
         }
 
@@ -2144,31 +2603,102 @@ function startSyncServer() {
                 try { data = JSON.parse(body || '{}'); } catch (e) {}
                 const command = req.url.replace(/^\//, '');
 
+                // ═══════ LION SEARCH — plugin altera hotkey config ═══════
+                if (command === 'lion-search/set-hotkey') {
+                    const newHotkey = String(data.hotkey || '').trim();
+                    const newEnabled = data.enabled !== false;
+                    const newSfxFolder = (data.sfxFolder !== undefined) ? String(data.sfxFolder || '') : (_lionSettings.sfxFolder || '');
+                    if (!newHotkey) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'hotkey vazio' }));
+                        return;
+                    }
+                    _lionSettings = { hotkey: newHotkey, enabled: newEnabled, sfxFolder: newSfxFolder };
+                    saveLionSearchSettings(_lionSettings);
+                    let regResult = { ok: true };
+                    if (newEnabled) {
+                        startHotkeyFgWatcher();
+                    } else {
+                        stopHotkeyFgWatcher();
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        ok: regResult.ok,
+                        error: regResult.error,
+                        hotkey: _lionSettings.hotkey,
+                        enabled: _lionSettings.enabled,
+                        registered: _registeredLionHotkey,
+                    }));
+                    return;
+                }
+
+                // ═══════ LION SEARCH — plugin submits results / catalog ═══════
+                // Plugin envia o catálogo. Effects/presets/transitions REPLACE cache;
+                // audio-sources ACUMULAM (porque Premiere 25.x só expõe o projeto ativo
+                // — quando user troca de projeto, novo scan adiciona ao cache).
+                if (command === 'lion-search/effects-update') {
+                    if (Array.isArray(data.items)) {
+                        const newItems = data.items;
+                        // Separa por kind
+                        const newAudio = newItems.filter(x => x.kind === 'audio-source');
+                        const newRest  = newItems.filter(x => x.kind !== 'audio-source');
+                        // Resto (effects, presets, transitions) → replace
+                        const oldAudio = lionSearchEffectsCache.filter(x => x.kind === 'audio-source');
+                        // Merge audio: dedup por matchName (que é nodeId ou file path)
+                        const audioMap = {};
+                        for (const a of oldAudio) audioMap[a.matchName || a.name] = a;
+                        for (const a of newAudio) audioMap[a.matchName || a.name] = a; // newer wins
+                        const mergedAudio = Object.values(audioMap);
+                        lionSearchEffectsCache = [...newRest, ...mergedAudio];
+                        lionSearchEffectsCachedAt = Date.now();
+                        lionSearchCatalogDebug = String(data.debug || '');
+                        lionSearchCatalogError = String(data.error || '');
+                        console.log('[lion-search] catálogo: total=' + lionSearchEffectsCache.length + ' (effects=' + newRest.length + ', audio merged=' + mergedAudio.length + ' [+' + (mergedAudio.length - oldAudio.length) + ' novos])');
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
+                // Limpa cache de audio (botão UI ou troca de profile)
+                if (command === 'lion-search/clear-audio-cache') {
+                    lionSearchEffectsCache = lionSearchEffectsCache.filter(x => x.kind !== 'audio-source');
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
+                // Plugin reporta resultado de uma execução pendente
+                if (command === 'lion-search/command-result' && data.commandId) {
+                    const pending = lionSearchPendingResults.get(data.commandId);
+                    if (pending) {
+                        clearTimeout(pending.timeout);
+                        pending.resolve(data);
+                        lionSearchPendingResults.delete(data.commandId);
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
+
                 // YouTube downloader HTTP API
                 if (command === 'yt/info' && data.url) {
                     try {
                         const cleanUrl = cleanYtUrl(data.url);
                         await ensureYtDlp();
-                        const result = await new Promise(resolve => {
-                            const args = ['--no-download', '--print-json', '--no-warnings', '--no-playlist'];
-                            if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
-                            args.push(cleanUrl);
-                            const proc = spawn(ytDlpBin, args, { windowsHide: true });
-                            let out = '', errOut = '';
-                            proc.stdout.on('data', d => out += d);
-                            proc.stderr.on('data', d => errOut += d);
-                            proc.on('close', code => {
-                                if (code !== 0) { resolve({ error: errOut || 'Erro' }); return; }
-                                try {
-                                    const info = JSON.parse(out);
-                                    resolve({ title: info.title || '', thumbnail: info.thumbnail || '', duration: info.duration || 0, uploader: info.uploader || '' });
-                                } catch { resolve({ error: 'Parse error' }); }
-                            });
-                            proc.on('error', e => resolve({ error: e.message }));
-                            setTimeout(() => { try { proc.kill(); } catch {} }, 30000);
-                        });
+                        const args = ['--no-download', '--print-json', '--no-warnings', '--no-playlist'];
+                        if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
+                        args.push(cleanUrl);
+                        const r = await runYtDlpRobust(args, { timeout: 45000 });
+                        let out = { error: r.stderr || 'Erro' };
+                        if (r.code === 0) {
+                            try {
+                                const info = JSON.parse(r.stdout);
+                                out = { title: info.title || '', thumbnail: info.thumbnail || '', duration: info.duration || 0, uploader: info.uploader || '' };
+                            } catch { out = { error: 'Parse error' }; }
+                        } else if (ytIsBotError(r.stderr)) {
+                            out = { error: 'YouTube bloqueou — faça login no Chrome/Edge no seu navegador e tente de novo' };
+                        }
                         res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify(result));
+                        res.end(JSON.stringify(out));
                     } catch (e) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message }));
@@ -2215,29 +2745,28 @@ function startSyncServer() {
                         dlArgs.push(cleanDlUrl);
 
                         ytProgress = { active: true, percent: 0, speed: '', eta: '', title: data.metaTitle||'', status: 'downloading', error: '', outputDir: outputPath, metaTitle: data.metaTitle||'', metaThumb: data.metaThumb||'', metaUploader: data.metaUploader||'', metaDuration: data.metaDuration||0, metaUrl: data.url||'' };
-                        ytDownloadProc = spawn(ytDlpBin, dlArgs, { windowsHide: true });
                         let lastFile = '';
-                        ytDownloadProc.stdout.on('data', d => {
-                            const lines = d.toString().split('\n');
-                            for (const line of lines) {
-                                const m = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
-                                if (m) { ytProgress.percent = parseFloat(m[1]); ytProgress.speed = m[3]; ytProgress.eta = m[4]; }
-                                const dm = line.match(/\[download\] Destination: (.+)/);
-                                if (dm) lastFile = dm[1].trim();
-                                // [Merger] Merging formats into "path/to/final.mp4" — REAL final file
-                                const mm = line.match(/\[Merger\] Merging formats into "(.+)"/);
-                                if (mm) lastFile = mm[1].trim();
-                                // [ExtractAudio] Destination: path/to/file.mp3
-                                const am = line.match(/\[ExtractAudio\] Destination: (.+)/);
-                                if (am) lastFile = am[1].trim();
-                                if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) { ytProgress.status = 'merging'; ytProgress.percent = 99; }
-                                if (line.includes('has already been downloaded')) { ytProgress.percent = 100; ytProgress.status = 'done'; }
-                            }
+                        const onStdoutLine2 = (line) => {
+                            const m = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
+                            if (m) { ytProgress.percent = parseFloat(m[1]); ytProgress.speed = m[3]; ytProgress.eta = m[4]; }
+                            const dm = line.match(/\[download\] Destination: (.+)/);
+                            if (dm) lastFile = dm[1].trim();
+                            const mm = line.match(/\[Merger\] Merging formats into "(.+)"/);
+                            if (mm) lastFile = mm[1].trim();
+                            const am = line.match(/\[ExtractAudio\] Destination: (.+)/);
+                            if (am) lastFile = am[1].trim();
+                            if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) { ytProgress.status = 'merging'; ytProgress.percent = 99; }
+                            if (line.includes('has already been downloaded')) { ytProgress.percent = 100; ytProgress.status = 'done'; }
                             if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
-                        });
-                        ytDownloadProc.stderr.on('data', d => { const err = d.toString().trim(); if (err) ytProgress.error = err; });
-                        ytDownloadProc.on('close', code => {
+                        };
+
+                        runYtDlpRobust(dlArgs, {
+                            onProc: (proc) => { ytDownloadProc = proc; },
+                            onStdoutLine: onStdoutLine2,
+                            onStderrLine: (line) => { if (line.trim()) ytProgress.error = line.trim(); },
+                        }).then(rdl => {
                             ytDownloadProc = null;
+                            const code = rdl.code;
                             if (code === 0) {
                                 if (!lastFile || !fs.existsSync(lastFile)) {
                                     try {
@@ -2281,17 +2810,24 @@ function startSyncServer() {
                                         ytProgress.file = lastFile;
                                         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
                                     });
-                                    return; // Don't emit done yet, wait for ffmpeg
+                                    return;
                                 }
 
                                 ytProgress.percent = 100; ytProgress.status = 'done'; ytProgress.active = false; ytProgress.file = lastFile;
                             } else {
                                 ytProgress.status = 'error'; ytProgress.active = false;
-                                if (!ytProgress.error) ytProgress.error = 'Falhou (código ' + code + ')';
+                                if (!ytProgress.error || ytIsBotError(rdl.stderr)) {
+                                    ytProgress.error = ytIsBotError(rdl.stderr)
+                                        ? 'YouTube bloqueou — faça login no Chrome/Edge/Firefox e tente de novo'
+                                        : (rdl.stderr || 'Falhou (código ' + code + ')');
+                                }
                             }
                             if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
+                        }).catch(e => {
+                            ytDownloadProc = null;
+                            ytProgress.status = 'error'; ytProgress.active = false; ytProgress.error = e.message || String(e);
+                            if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
                         });
-                        ytDownloadProc.on('error', e => { ytDownloadProc = null; ytProgress.status = 'error'; ytProgress.active = false; ytProgress.error = e.message; });
                     } catch (e) { ytProgress.status = 'error'; ytProgress.error = e.message; }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ ok: true }));
@@ -2579,394 +3115,6 @@ function startSyncServer() {
                     return;
                 }
 
-                // ═══════ AutoCut — Silence Detection via FFmpeg (with progress) ═══════
-                if (command === 'autocut/analyze' && data.filePath) {
-                    try {
-                        if (!ffmpegReady()) await ensureFfmpeg();
-                        if (!ffmpegReady()) {
-                            res.writeHead(500, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'FFmpeg não disponível' }));
-                            return;
-                        }
-                        const threshold = data.threshold || -30;
-                        const minDuration = data.minDuration || 0.5;
-                        const filePath = data.filePath;
-
-                        if (!fs.existsSync(filePath)) {
-                            res.writeHead(400, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Arquivo não encontrado: ' + filePath }));
-                            return;
-                        }
-
-                        // Reset progress — plugin polls /autocut/progress
-                        autoCutProgress = { active: true, percent: 0, phase: 'silence', eta: '' };
-
-                        const ffArgs = [
-                            '-nostdin',
-                            '-i', filePath,
-                            '-vn',  // skip video decoding (HUGE speedup)
-                            '-af', `silencedetect=noise=${threshold}dB:d=${minDuration}`,
-                            '-f', 'null', '-'
-                        ];
-
-                        const result = await new Promise((resolve) => {
-                            console.log('[autocut/analyze] FFmpeg start:', filePath, '| threshold=' + threshold + 'dB d=' + minDuration + 's');
-                            const proc = spawn(ffmpegBin, ffArgs, { windowsHide: true });
-                            autoCutProc = proc;
-                            let stderrFull = '';
-                            let totalDuration = 0;
-                            let durationParsed = false;
-                            let lastProgressMs = Date.now();
-                            let resolved = false;
-
-                            const finish = (payload) => {
-                                if (resolved) return;
-                                resolved = true;
-                                clearInterval(idleCheck);
-                                clearTimeout(hardTimeout);
-                                autoCutProc = null;
-                                resolve(payload);
-                            };
-
-                            proc.stderr.on('data', d => {
-                                const chunk = d.toString();
-                                stderrFull += chunk;
-                                lastProgressMs = Date.now(); // qualquer output = vivo
-
-                                if (!durationParsed) {
-                                    const durMatch = stderrFull.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
-                                    if (durMatch) {
-                                        totalDuration = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3]);
-                                        durationParsed = true;
-                                        console.log('[autocut/analyze] Duration:', totalDuration.toFixed(1) + 's');
-                                    }
-                                }
-
-                                const timeMatch = chunk.match(/time=\s*(\d+):(\d+):([\d.]+)/);
-                                if (timeMatch && totalDuration > 0) {
-                                    const currentTime = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseFloat(timeMatch[3]);
-                                    autoCutProgress.percent = Math.min(99, Math.round((currentTime / totalDuration) * 100));
-                                }
-                            });
-
-                            proc.on('close', (code) => {
-                                console.log('[autocut/analyze] FFmpeg closed with code', code);
-                                autoCutProgress = { active: false, percent: 100, phase: 'done', eta: '' };
-
-                                const silences = [];
-                                const lines = stderrFull.split('\n');
-                                let currentStart = null;
-                                for (const line of lines) {
-                                    const startMatch = line.match(/silence_start:\s*([\d.]+)/);
-                                    if (startMatch) currentStart = parseFloat(startMatch[1]);
-                                    const endMatch = line.match(/silence_end:\s*([\d.]+)\s*\|\s*silence_duration:\s*([\d.]+)/);
-                                    if (endMatch) {
-                                        silences.push({
-                                            start: currentStart !== null ? currentStart : 0,
-                                            end: parseFloat(endMatch[1]),
-                                            duration: parseFloat(endMatch[2])
-                                        });
-                                        currentStart = null;
-                                    }
-                                }
-
-                                const durMatch = stderrFull.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
-                                let dur = 0;
-                                if (durMatch) dur = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3]);
-                                console.log('[autocut/analyze] Found', silences.length, 'silences in', (dur || totalDuration).toFixed(1) + 's');
-                                finish({ silences, totalDuration: dur || totalDuration });
-                            });
-
-                            proc.on('error', e => {
-                                console.error('[autocut/analyze] FFmpeg error:', e.message);
-                                autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                                finish({ silences: [], totalDuration: 0, error: 'FFmpeg falhou: ' + e.message });
-                            });
-
-                            // ── Idle timeout: se FFmpeg não emite output novo em 60s, mata.
-                            // Antes era hard timeout de 10min cego — usuário esperava 10min
-                            // pra descobrir que FFmpeg travou. Agora detecta em 60s.
-                            const idleCheck = setInterval(() => {
-                                const idle = Date.now() - lastProgressMs;
-                                if (idle > 60000) {
-                                    console.warn('[autocut/analyze] FFmpeg idle ' + Math.round(idle/1000) + 's — killing');
-                                    try { proc.kill('SIGKILL'); } catch {}
-                                    autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                                    finish({
-                                        silences: [],
-                                        totalDuration: 0,
-                                        error: 'FFmpeg travou (sem progresso por 60s). Tente um clip menor ou verifique se o arquivo está acessível.'
-                                    });
-                                }
-                            }, 5000);
-
-                            // ── Hard timeout: 10min como fallback caso idle não dispare
-                            const hardTimeout = setTimeout(() => {
-                                try { proc.kill('SIGKILL'); } catch {}
-                                autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                                finish({ silences: [], totalDuration: 0, error: 'Timeout (10min) — arquivo muito grande?' });
-                            }, 600000);
-                        });
-
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify(result));
-                    } catch (e) {
-                        autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: e.message }));
-                    }
-                    return;
-                }
-
-                // ═══════ AutoCut — AI Cancel (abort running process) ═══════
-                if (command === 'autocut/cancel') {
-                    if (autoCutProc) { try { autoCutProc.kill(); } catch {} autoCutProc = null; }
-                    autoCutProgress = { active: false, percent: 0, phase: 'cancelled', eta: '' };
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ ok: true }));
-                    return;
-                }
-
-                // ═══════ AutoCut — AI Key management ═══════
-                if (command === 'autocut/ai-key') {
-                    if (data.key !== undefined) {
-                        const cfg = getAiConfig();
-                        cfg.openaiKey = data.key || '';
-                        saveAiConfig(cfg);
-                    }
-                    const cfg = getAiConfig();
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ hasKey: !!(cfg.openaiKey), masked: cfg.openaiKey ? ('sk-...' + cfg.openaiKey.slice(-4)) : '' }));
-                    return;
-                }
-
-                // ═══════ AutoCut — AI Transcription + Word Analysis ═══════
-                if (command === 'autocut/transcribe' && data.filePath) {
-                    try {
-                        // Get API key from request or stored config
-                        const apiKey = data.apiKey || (getAiConfig().openaiKey || '');
-                        if (!apiKey) {
-                            res.writeHead(400, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Chave da API OpenAI não configurada. Clique em "API Key" para configurar.' }));
-                            return;
-                        }
-
-                        if (!ffmpegReady()) await ensureFfmpeg();
-                        if (!ffmpegReady()) {
-                            res.writeHead(500, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'FFmpeg não disponível' }));
-                            return;
-                        }
-
-                        const filePath = data.filePath;
-                        if (!fs.existsSync(filePath)) {
-                            res.writeHead(400, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Arquivo não encontrado' }));
-                            return;
-                        }
-
-                        // ── Phase 1: Extract audio as MP3 (64kbps mono 16kHz = ~0.5MB/min) ──
-                        autoCutProgress = { active: true, percent: 5, phase: 'transcribe-extract', eta: '' };
-                        const tmpAudio = path.join(os.tmpdir(), 'lw-ac-audio-' + Date.now() + '.mp3');
-
-                        await new Promise((resolve, reject) => {
-                            const args = ['-i', filePath, '-vn', '-acodec', 'libmp3lame', '-b:a', '64k', '-ac', '1', '-ar', '16000', '-y', tmpAudio];
-                            const proc = spawn(ffmpegBin, args, { windowsHide: true });
-                            autoCutProc = proc;
-                            let extractDur = 0;
-                            let extractDurParsed = false;
-                            proc.stderr.on('data', d => {
-                                const chunk = d.toString();
-                                if (!extractDurParsed) {
-                                    const dm = chunk.match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
-                                    if (dm) { extractDur = parseInt(dm[1]) * 3600 + parseInt(dm[2]) * 60 + parseFloat(dm[3]); extractDurParsed = true; }
-                                }
-                                const tm = chunk.match(/time=\s*(\d+):(\d+):([\d.]+)/);
-                                if (tm && extractDur > 0) {
-                                    const ct = parseInt(tm[1]) * 3600 + parseInt(tm[2]) * 60 + parseFloat(tm[3]);
-                                    autoCutProgress.percent = 5 + Math.round((ct / extractDur) * 20); // 5-25%
-                                }
-                            });
-                            proc.on('close', code => { autoCutProc = null; code === 0 ? resolve() : reject(new Error('FFmpeg audio extract falhou (code ' + code + ')')); });
-                            proc.on('error', e => { autoCutProc = null; reject(e); });
-                            setTimeout(() => { try { proc.kill(); } catch {} autoCutProc = null; reject(new Error('Timeout extraindo áudio')); }, 120000);
-                        });
-
-                        // Check file size (Whisper API limit: 25MB)
-                        const audioStats = fs.statSync(tmpAudio);
-                        const audioSizeMB = Math.round(audioStats.size / (1024 * 1024));
-                        if (audioStats.size > 25 * 1024 * 1024) {
-                            safeRm(tmpAudio);
-                            autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                            res.writeHead(400, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Áudio muito grande (' + audioSizeMB + 'MB). Máximo: 25MB. Use um clip menor.' }));
-                            return;
-                        }
-
-                        // ── Phase 2: Send to OpenAI Whisper API ──
-                        autoCutProgress = { active: true, percent: 28, phase: 'transcribe-api', eta: '' };
-
-                        const audioData = fs.readFileSync(tmpAudio);
-                        safeRm(tmpAudio);
-
-                        const boundary = '----LWWhisper' + Date.now() + crypto.randomBytes(8).toString('hex');
-                        const lang = data.language || '';
-
-                        // Build multipart form data
-                        const parts = [];
-                        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.mp3"\r\nContent-Type: audio/mpeg\r\n\r\n`));
-                        parts.push(audioData);
-                        parts.push(Buffer.from(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n`));
-                        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="response_format"\r\n\r\nverbose_json\r\n`));
-                        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="timestamp_granularities[]"\r\n\r\nword\r\n`));
-                        if (lang) parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="language"\r\n\r\n${lang}\r\n`));
-                        parts.push(Buffer.from(`--${boundary}--\r\n`));
-                        const fullBody = Buffer.concat(parts);
-
-                        // Simulate progress during API call (we can't know real %)
-                        let apiPct = 28;
-                        const apiProgressTimer = setInterval(() => {
-                            if (apiPct < 78) { apiPct += 2; autoCutProgress.percent = apiPct; }
-                        }, 1500);
-
-                        let whisperResult;
-                        try {
-                            whisperResult = await new Promise((resolve, reject) => {
-                                const options = {
-                                    hostname: 'api.openai.com',
-                                    path: '/v1/audio/transcriptions',
-                                    method: 'POST',
-                                    headers: {
-                                        'Authorization': 'Bearer ' + apiKey,
-                                        'Content-Type': 'multipart/form-data; boundary=' + boundary,
-                                        'Content-Length': fullBody.length
-                                    }
-                                };
-                                let settled = false;
-                                let timeoutId = null;
-                                const done = (fn, val) => { if (settled) return; settled = true; if (timeoutId) clearTimeout(timeoutId); fn(val); };
-                                const httpsReq = require('https').request(options, (httpsRes) => {
-                                    let resData = '';
-                                    httpsRes.on('data', chunk => resData += chunk);
-                                    httpsRes.on('end', () => {
-                                        try { done(resolve, JSON.parse(resData)); }
-                                        catch (e) { done(reject, new Error('Whisper API parse error: ' + resData.substring(0, 300))); }
-                                    });
-                                });
-                                httpsReq.on('error', e => done(reject, e));
-                                httpsReq.write(fullBody);
-                                httpsReq.end();
-                                timeoutId = setTimeout(() => {
-                                    try { httpsReq.destroy(); } catch(e) {}
-                                    done(reject, new Error('Whisper API timeout (5min)'));
-                                }, 300000);
-                            });
-                        } finally {
-                            // ALWAYS clear the progress ticker, even on error/timeout
-                            clearInterval(apiProgressTimer);
-                        }
-
-                        // Check API errors
-                        if (whisperResult.error) {
-                            autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                            res.writeHead(400, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'Whisper API: ' + (whisperResult.error.message || JSON.stringify(whisperResult.error)) }));
-                            return;
-                        }
-
-                        // ── Phase 3: Analyze transcript for repeated words / fillers / stuttering ──
-                        autoCutProgress = { active: true, percent: 82, phase: 'transcribe-analyze', eta: '' };
-
-                        const words = whisperResult.words || [];
-                        const segments = whisperResult.segments || [];
-                        const fullText = whisperResult.text || '';
-
-                        // Filler words (PT + EN)
-                        const FILLERS_PT = ['é', 'ah', 'ãh', 'eh', 'éh', 'uh', 'uhm', 'hum', 'hmm', 'hã',
-                            'tipo', 'né', 'então', 'assim', 'basicamente', 'literalmente', 'enfim',
-                            'bom', 'olha', 'veja', 'cara', 'mano', 'tá', 'ok', 'certo', 'pronto',
-                            'aí', 'daí', 'pois', 'sabe', 'entendeu', 'tá ligado', 'meu'];
-                        const FILLERS_EN = ['uh', 'um', 'uhm', 'hmm', 'like', 'basically', 'literally',
-                            'actually', 'so', 'well', 'right', 'okay', 'oh'];
-                        const FILLERS = new Set([...FILLERS_PT, ...FILLERS_EN]);
-
-                        const issues = [];
-
-                        for (let i = 0; i < words.length; i++) {
-                            const w = words[i];
-                            const wClean = (w.word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
-                            if (!wClean || wClean.length < 1) continue;
-
-                            // ─ Check filler words ─
-                            if (FILLERS.has(wClean)) {
-                                issues.push({
-                                    type: 'filler', word: w.word.trim(),
-                                    start: w.start, end: w.end,
-                                    label: 'Filler: "' + w.word.trim() + '"'
-                                });
-                            }
-
-                            // ─ Check consecutive repeated words ─
-                            if (i > 0) {
-                                const prevClean = (words[i - 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
-                                if (wClean === prevClean && wClean.length > 1) {
-                                    // Find extent of the repetition group
-                                    let groupStart = i - 1;
-                                    while (groupStart > 0) {
-                                        const earlier = (words[groupStart - 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
-                                        if (earlier === wClean) groupStart--;
-                                        else break;
-                                    }
-                                    // Only add at the last word of the group (avoid duplicates)
-                                    const nextClean = (i + 1 < words.length) ? (words[i + 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '') : '';
-                                    if (nextClean !== wClean) {
-                                        const count = i - groupStart + 1;
-                                        issues.push({
-                                            type: 'repeat', word: w.word.trim(),
-                                            start: words[groupStart].start, end: w.end,
-                                            count: count,
-                                            label: '"' + w.word.trim() + '" repetido ' + count + 'x'
-                                        });
-                                    }
-                                }
-                            }
-
-                            // ─ Check stuttering (partial word repetition) ─
-                            if (i > 0 && wClean.length >= 3) {
-                                const prevClean = (words[i - 1].word || '').trim().toLowerCase().replace(/[.,!?;:'"()[\]{}]/g, '');
-                                if (prevClean.length >= 1 && prevClean.length <= 3 && prevClean !== wClean) {
-                                    // Previous is a short fragment that starts the same as current word
-                                    if (wClean.startsWith(prevClean)) {
-                                        issues.push({
-                                            type: 'stutter',
-                                            word: words[i - 1].word.trim() + ' ' + w.word.trim(),
-                                            start: words[i - 1].start, end: w.end,
-                                            label: 'Gaguejo: "' + words[i - 1].word.trim() + ' ' + w.word.trim() + '"'
-                                        });
-                                    }
-                                }
-                            }
-                        }
-
-                        autoCutProgress = { active: false, percent: 100, phase: 'done', eta: '' };
-
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({
-                            text: fullText,
-                            words: words,
-                            segments: segments,
-                            issues: issues,
-                            totalDuration: whisperResult.duration || 0,
-                            language: whisperResult.language || lang || 'auto'
-                        }));
-
-                    } catch (e) {
-                        autoCutProgress = { active: false, percent: 0, phase: '', eta: '' };
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: e.message }));
-                    }
-                    return;
-                }
 
                 if (command === 'yt/cancel') {
                     if (ytDownloadProc) { ytDownloadProc.kill(); ytDownloadProc = null; }
@@ -3655,6 +3803,244 @@ function autoInstallPremierePlugin() {
 
 app.on('window-all-closed', () => {
     if (!isMac) app.quit();
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — globalShortcut + janela do palette
+// ═══════════════════════════════════════════════════════════════════
+
+const LION_SEARCH_SETTINGS_FILE = path.join(currentUD, 'lion-search-settings.json');
+const DEFAULT_LION_HOTKEY = 'Control+Shift+L'; // não conflita com Excalibur (Alt+Space)
+
+function loadLionSearchSettings() {
+    try {
+        const raw = fs.readFileSync(LION_SEARCH_SETTINGS_FILE, 'utf8');
+        const j = JSON.parse(raw);
+        let hotkey = j.hotkey || DEFAULT_LION_HOTKEY;
+        if (hotkey === 'Alt+Space') {
+            console.log('[lion-search] migrando hotkey Alt+Space → ' + DEFAULT_LION_HOTKEY + ' (evita conflito com Excalibur)');
+            hotkey = DEFAULT_LION_HOTKEY;
+        }
+        return {
+            hotkey,
+            enabled: j.enabled !== false,
+            sfxFolder: j.sfxFolder || '',
+        };
+    } catch (e) {
+        return { hotkey: DEFAULT_LION_HOTKEY, enabled: true, sfxFolder: '' };
+    }
+}
+function saveLionSearchSettings(s) {
+    try { fs.writeFileSync(LION_SEARCH_SETTINGS_FILE, JSON.stringify(s), 'utf8'); } catch(e) {}
+}
+
+// Lê foreground process name (sync no Win via fgFile, fallback empty no Mac)
+function getFgProcSync() {
+    if (isWin) {
+        try { return fs.readFileSync(fgFile, 'utf8').trim().toLowerCase(); }
+        catch { return ''; }
+    }
+    return '';
+}
+
+// Verifica se o Premiere Pro está em foco
+function isPremiereForeground() {
+    const fg = getFgProcSync();
+    if (!fg) return false; // Mac: assume não-Premiere se não conseguir ler (será sobrescrito async)
+    return /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
+}
+
+function openLionSearch(forceOpen) {
+    if (lionSearchWin && !lionSearchWin.isDestroyed()) {
+        try { lionSearchWin.focus(); } catch(e) {}
+        return;
+    }
+    // Só abre se Premiere Pro estiver em foco (ou se for chamada manual via "Testar agora")
+    if (!forceOpen) {
+        if (isWin) {
+            if (!isPremiereForeground()) {
+                console.log('[lion-search] hotkey ignorado — foreground não é Premiere:', getFgProcSync());
+                return;
+            }
+        } else if (isMac) {
+            // Mac: check async, mas não bloqueia. Se não for Premiere, fecha imediatamente.
+            getFgProc((fg) => {
+                const isP = /premiere/i.test(fg || '');
+                if (!isP && lionSearchWin && !lionSearchWin.isDestroyed()) {
+                    try { lionSearchWin.close(); } catch(e) {}
+                }
+            });
+            // Continua abertura — Mac fecha depois se não for Premiere
+        }
+    }
+    // Tamanho compacto centralizado na tela ativa (cursor)
+    let display;
+    try { display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); }
+    catch(e) { display = screen.getPrimaryDisplay(); }
+    const wbounds = display.workArea;
+    // Tamanho compacto (estado vazio) — cresce ao digitar via lion-search:resize
+    const width = 440, height = 88;
+    const x = Math.round(wbounds.x + (wbounds.width - width) / 2);
+    const y = Math.round(wbounds.y + wbounds.height / 4); // ~25% do topo
+
+    lionSearchWin = new BrowserWindow({
+        width, height, x, y,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000',
+        alwaysOnTop: true,
+        resizable: false,
+        skipTaskbar: true,
+        show: false,
+        movable: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false,
+        },
+    });
+    lionSearchWin.setMenuBarVisibility(false);
+    lionSearchWin.loadFile(path.join(__dirname, 'lion-search.html'));
+    lionSearchWin.once('ready-to-show', () => {
+        lionSearchWin.show();
+        lionSearchWin.focus();
+    });
+    lionSearchWin.on('closed', () => { lionSearchWin = null; });
+    // Fecha em blur (mas precisa fix pq dev tools tira foco também — checa após pequeno delay)
+    lionSearchWin.on('blur', () => {
+        setTimeout(() => {
+            if (lionSearchWin && !lionSearchWin.isDestroyed() && !lionSearchWin.isFocused()) {
+                lionSearchWin.close();
+            }
+        }, 150);
+    });
+}
+
+let _lionSettings = loadLionSearchSettings();
+let _registeredLionHotkey = null;
+let _hotkeyFgWatcherTimer = null;
+
+function _doRegisterHotkey(hotkey) {
+    if (!hotkey) return false;
+    try {
+        const ok = globalShortcut.register(hotkey, openLionSearch);
+        if (!ok) return false;
+        _registeredLionHotkey = hotkey;
+        return true;
+    } catch (e) { return false; }
+}
+
+function _doUnregisterHotkey() {
+    if (_registeredLionHotkey) {
+        try { globalShortcut.unregister(_registeredLionHotkey); } catch(e) {}
+        _registeredLionHotkey = null;
+    }
+}
+
+// Watcher: a cada 500ms, checa se Premiere tá em foco.
+// - Premiere em foco + hotkey desregistrado → registra (passa a capturar a tecla)
+// - Outro app em foco + hotkey registrado → desregistra (tecla volta a funcionar normalmente)
+function startHotkeyFgWatcher() {
+    if (_hotkeyFgWatcherTimer) return;
+    let fgCallback = (fgRaw) => {
+        if (!_lionSettings.enabled || !_lionSettings.hotkey) {
+            _doUnregisterHotkey();
+            return;
+        }
+        const fg = String(fgRaw || '').toLowerCase();
+        const isPremiere = /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
+        // Lion Search window também conta como "Premiere" (pra hotkey continuar funcionando dentro dele)
+        const isLionSearch = lionSearchWin && !lionSearchWin.isDestroyed() && lionSearchWin.isFocused();
+
+        if ((isPremiere || isLionSearch) && !_registeredLionHotkey) {
+            const ok = _doRegisterHotkey(_lionSettings.hotkey);
+            if (ok) console.log('[lion-search] hotkey registrado (Premiere em foco):', _lionSettings.hotkey);
+        } else if (!isPremiere && !isLionSearch && _registeredLionHotkey) {
+            console.log('[lion-search] hotkey desregistrado (Premiere saiu de foco)');
+            _doUnregisterHotkey();
+        }
+    };
+    _hotkeyFgWatcherTimer = setInterval(() => {
+        if (isWin) {
+            // Lê do fgFile (sync)
+            try { fgCallback(fs.readFileSync(fgFile, 'utf8').trim()); } catch { fgCallback(''); }
+        } else if (isMac) {
+            // Mac: lê via osascript (async). Limita rate pra não acumular execs.
+            getFgProc((fg) => fgCallback(fg));
+        }
+    }, 500);
+}
+
+function stopHotkeyFgWatcher() {
+    if (_hotkeyFgWatcherTimer) { clearInterval(_hotkeyFgWatcherTimer); _hotkeyFgWatcherTimer = null; }
+    _doUnregisterHotkey();
+}
+
+// Wrapper público — substitui o registerLionHotkey antigo, mas agora só CONFIGURA
+// o hotkey nas settings. O watcher faz register/unregister dinamicamente.
+function registerLionHotkey(hotkey) {
+    if (!hotkey) return { ok: false, error: 'hotkey vazio' };
+    // Se já estava registrado, força re-register pra captar mudanças
+    _doUnregisterHotkey();
+    if (_lionSettings.enabled) startHotkeyFgWatcher();
+    return { ok: true };
+}
+
+// Registra watcher na boot
+app.whenReady().then(() => {
+    if (_lionSettings.enabled) startHotkeyFgWatcher();
+});
+app.on('will-quit', () => {
+    stopHotkeyFgWatcher();
+    try { globalShortcut.unregisterAll(); } catch(e) {}
+});
+
+// IPC pra UI principal configurar hotkey + SFX folder
+ipcMain.handle('lion-search:get-settings', () => _lionSettings);
+ipcMain.handle('lion-search:set-settings', (event, settings) => {
+    _lionSettings = {
+        hotkey: settings?.hotkey || DEFAULT_LION_HOTKEY,
+        enabled: settings?.enabled !== false,
+        sfxFolder: settings?.sfxFolder !== undefined ? String(settings.sfxFolder || '') : (_lionSettings.sfxFolder || ''),
+    };
+    saveLionSearchSettings(_lionSettings);
+    if (_lionSettings.enabled) {
+        startHotkeyFgWatcher();
+    } else {
+        stopHotkeyFgWatcher();
+    }
+    return { ok: true, settings: _lionSettings };
+});
+
+// IPC: dialog pra selecionar SFX folder
+ipcMain.handle('lion-search:pick-sfx-folder', async () => {
+    try {
+        const { dialog } = require('electron');
+        const result = await dialog.showOpenDialog({
+            properties: ['openDirectory'],
+            title: 'Selecionar pasta de Sound Effects',
+        });
+        if (result.canceled || !result.filePaths || !result.filePaths.length) {
+            return { ok: false, canceled: true };
+        }
+        return { ok: true, folder: result.filePaths[0] };
+    } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('lion-search:open', () => { openLionSearch(true); return { ok: true }; }); // testar manual = bypass FG check
+
+// IPC: resize da janela (chamado pela lion-search.html quando troca empty/typing)
+ipcMain.on('lion-search:resize', (event, payload) => {
+    try {
+        if (!lionSearchWin || lionSearchWin.isDestroyed()) return;
+        const w = Math.max(280, Math.min(800, payload?.w || 440));
+        const h = Math.max(60, Math.min(800, payload?.h || 88));
+        const [curX, curY] = lionSearchWin.getPosition();
+        // Temporariamente permite resize (alguns Electron travam setBounds com resizable:false)
+        const wasResizable = lionSearchWin.isResizable();
+        try { lionSearchWin.setResizable(true); } catch(e) {}
+        // setBounds funciona melhor que setSize em janelas frame:false transparent:true
+        lionSearchWin.setBounds({ x: curX, y: curY, width: w, height: h }, false);
+        try { if (!wasResizable) lionSearchWin.setResizable(false); } catch(e) {}
+    } catch(e) { console.warn('[lion-search] resize fail:', e); }
 });
 
 // macOS: re-create window when clicking dock icon

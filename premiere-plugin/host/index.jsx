@@ -1,4 +1,4 @@
-// ExtendScript for Adobe Premiere Pro — Lion Workspace Plugin
+﻿// ExtendScript for Adobe Premiere Pro — Lion Workspace Plugin
 
 // Get current project folder path
 function getProjectFolder() {
@@ -1047,523 +1047,6 @@ function insertClipToTimeline(filePath) {
     }
 }
 
-// ============================================
-// AUTOCUT — Silence-based auto-cutting
-// Receives silence timestamps from FFmpeg analysis
-// and performs razor cuts + removes silent segments
-// ============================================
-
-// Get the media file path of the first selected clip
-function autoCutGetClipInfo() {
-    try {
-        if (!app.project) return 'NO_PROJECT';
-        var seq = app.project.activeSequence;
-        if (!seq) return 'NO_SEQUENCE';
-        var clips = getSelectedClips();
-        if (clips.length === 0) return 'NO_SELECTION';
-
-        var clip = clips[0];
-        var mediaPath = '';
-        try {
-            var pi = clip.projectItem;
-            if (pi) mediaPath = pi.getMediaPath() || '';
-        } catch (e) {}
-
-        if (!mediaPath) return 'NO_MEDIA';
-
-        // Get clip timing info
-        var clipStart = Number(clip.start.ticks);
-        var clipEnd = Number(clip.end.ticks);
-        var clipInPoint = 0;
-        try { clipInPoint = Number(clip.inPoint.ticks); } catch (e) {}
-
-        // Get ticks per second for conversion
-        var tps = 254016000000; // Premiere default ticks per second
-        try {
-            var t = new Time();
-            t.seconds = 1;
-            tps = Number(t.ticks);
-        } catch (e) {}
-
-        // Find which track and index the clip is on
-        var trackIndex = -1;
-        var clipIndex = -1;
-        var trackType = 'video';
-        // Search video tracks
-        for (var vt = 0; vt < seq.videoTracks.numTracks; vt++) {
-            var track = seq.videoTracks[vt];
-            for (var c = 0; c < track.clips.numItems; c++) {
-                if (track.clips[c] === clip || Number(track.clips[c].start.ticks) === clipStart) {
-                    trackIndex = vt;
-                    clipIndex = c;
-                    break;
-                }
-            }
-            if (trackIndex >= 0) break;
-        }
-        // Search audio tracks if not found in video
-        if (trackIndex < 0) {
-            for (var at = 0; at < seq.audioTracks.numTracks; at++) {
-                var atrack = seq.audioTracks[at];
-                for (var c = 0; c < atrack.clips.numItems; c++) {
-                    if (atrack.clips[c] === clip || Number(atrack.clips[c].start.ticks) === clipStart) {
-                        trackIndex = at;
-                        clipIndex = c;
-                        trackType = 'audio';
-                        break;
-                    }
-                }
-                if (trackIndex >= 0) break;
-            }
-        }
-
-        var info = {
-            mediaPath: mediaPath,
-            clipStart: clipStart,
-            clipEnd: clipEnd,
-            clipInPoint: clipInPoint,
-            ticksPerSecond: tps,
-            trackIndex: trackIndex,
-            clipIndex: clipIndex,
-            trackType: trackType,
-            seqName: seq.name
-        };
-        return 'OK:' + JSON.stringify(info);
-    } catch (e) {
-        return 'ERROR:' + e.toString();
-    }
-}
-
-// ─── Backup sequence before destructive operations ───
-// Tries seq.clone() (Premiere 2024+); falls back to project save
-function autoCutBackupSequence() {
-    try {
-        if (!app.project) return 'NO_PROJECT';
-        var seq = app.project.activeSequence;
-        if (!seq) return 'NO_SEQUENCE';
-        var origName = seq.name;
-        var origID = seq.sequenceID; // captura ID antes do clone (pra poder voltar)
-        var stamp = new Date();
-        var tag = stamp.getFullYear() + '-' + (stamp.getMonth()+1) + '-' + stamp.getDate() +
-                  '_' + stamp.getHours() + 'h' + stamp.getMinutes();
-        var backupName = origName + ' [BACKUP ' + tag + ']';
-
-        // Try Sequence.clone() (newer Premiere versions)
-        try {
-            if (typeof seq.clone === 'function') {
-                var cloned = seq.clone();
-                if (cloned) {
-                    try { cloned.name = backupName; } catch(e) {}
-
-                    // CRÍTICO: voltar pra sequence ORIGINAL antes de cortar.
-                    // Em algumas versões do Premiere, clone() troca a active sequence
-                    // pra clonada. Se o autocut rodar na clonada, ele corta o backup
-                    // em vez do original — ou pior, opera em sequence vazia se o
-                    // clone() retornou um shell vazio.
-                    var restored = false;
-                    try {
-                        if (typeof app.project.openSequence === 'function') {
-                            app.project.openSequence(origID);
-                            restored = (app.project.activeSequence && app.project.activeSequence.sequenceID === origID);
-                        }
-                    } catch(eOpen) {}
-                    if (!restored) {
-                        try { app.project.activeSequence = seq; restored = true; } catch(eSet) {}
-                    }
-                    if (!restored) {
-                        // Não conseguiu voltar — sinaliza falha pro client cancelar.
-                        return 'BACKUP_LOST_FOCUS:' + backupName;
-                    }
-
-                    return 'CLONED:' + backupName;
-                }
-            }
-        } catch(eClone) {}
-
-        // Fallback 1: save project to disk (if it has been saved before)
-        try {
-            if (app.project.path && app.project.path.length > 0) {
-                app.project.save();
-                return 'SAVED';
-            }
-        } catch(eSave) {}
-
-        // Fallback 2: at least add a sequence marker as a visual anchor
-        try {
-            var markers = seq.markers;
-            if (markers && markers.createMarker) {
-                var m = markers.createMarker(0);
-                try { m.name = 'Pre-AutoCut: ' + tag; } catch(e) {}
-                try { m.comments = 'AutoCut iniciou aqui. Use Ctrl+Z pra desfazer.'; } catch(e) {}
-                return 'MARKER';
-            }
-        } catch(eMark) {}
-
-        return 'NONE';
-    } catch (e) {
-        return 'ERR:' + e.toString();
-    }
-}
-
-// ─── Extract helper: use QE sequence.extract() to remove range + ripple ───
-// Returns true if clip count changed (silence removed)
-function _doExtractRange(startTick, endTick, qeSeq, stdTrack) {
-    if (!qeSeq) return false;
-    var before = stdTrack.clips.numItems;
-    var startStr = String(Math.round(startTick));
-    var endStr = String(Math.round(endTick));
-    try {
-        qeSeq.setInPoint(startStr);
-        $.sleep(20);
-        qeSeq.setOutPoint(endStr);
-        $.sleep(20);
-        if (typeof qeSeq.extract === 'function') {
-            qeSeq.extract();
-            $.sleep(120);
-            return stdTrack.clips.numItems !== before;
-        }
-    } catch(e) {}
-    return false;
-}
-
-// ─── Progress writer pra fase execute (cliente polla via Node fs) ───
-function _acExecProgress(msg, pct, done) {
-    try {
-        var f = new File(Folder.temp.fsName + '/lw-autocut-execute.json');
-        f.encoding = 'UTF-8';
-        if (f.open('w')) {
-            f.write(JSON.stringify({
-                ts: (new Date()).getTime(),
-                msg: msg || '',
-                pct: typeof pct === 'number' ? pct : null,
-                done: !!done
-            }));
-            f.close();
-        }
-    } catch(e) {}
-}
-
-// ─── Razor helper: tries multiple methods, returns true if clip count increased ───
-//
-// PERF + UI: ordem importa. Os métodos B (qeTrack.razor com ticks)
-// e C (track.razor DOM) NÃO mexem no playhead. Os métodos A e D usam
-// setPlayerPosition() que faz a timeline pular e PISCAR a cada corte.
-// Em 100 silêncios = 200 jumps de playhead = flicker insuportável.
-//
-// Estratégia:
-//   1. Prioriza B → C (sem flicker)
-//   2. A e D só como último recurso (causam flicker mas funcionam)
-//   3. Sticky winner: 1º sucesso vira default pra essa sessão
-var _acRazorWinner = null;  // Reset no início de cada autoCutExecute
-
-function _doRazorAt(tickVal, targetTrack, qeTrack, qeSeq, seq) {
-    var nb = targetTrack.clips.numItems;
-    var tickStr = String(Math.round(tickVal));
-
-    // ── FAST PATH: já sabemos qual método funciona pra essa sessão ──
-    if (_acRazorWinner) {
-        if (_acRazorWinner === 'B' && qeTrack) {
-            try { qeTrack.razor(tickStr); $.sleep(60);
-                if (targetTrack.clips.numItems > nb) return 'B';
-            } catch (e) {}
-        } else if (_acRazorWinner === 'C') {
-            try { targetTrack.razor(createTimeAt(tickVal)); $.sleep(60);
-                if (targetTrack.clips.numItems > nb) return 'C';
-            } catch (e) {}
-        } else if (_acRazorWinner === 'A' && qeTrack) {
-            try {
-                seq.setPlayerPosition(tickStr);
-                $.sleep(15);
-                qeTrack.razor(seq.getPlayerPosition().ticks);
-                $.sleep(60);
-                if (targetTrack.clips.numItems > nb) return 'A';
-            } catch (e) {}
-        } else if (_acRazorWinner === 'D' && qeSeq) {
-            try {
-                seq.setPlayerPosition(tickStr);
-                $.sleep(15);
-                qeSeq.razor(seq.getPlayerPosition().ticks);
-                $.sleep(60);
-                if (targetTrack.clips.numItems > nb) return 'D';
-            } catch (e) {}
-        }
-        // Winner falhou nesse ponto específico — cai pra full retry abaixo
-    }
-
-    // ── SLOW PATH: detecta qual método funciona. Ordem otimizada pra UI:
-    //   B (qe ticks) e C (DOM) primeiro — não mexem playhead.
-    //   A e D depois — mexem playhead, causam flicker.
-
-    // Method B: QE track razor with our ticks directly (NO playhead movement)
-    if (qeTrack) {
-        try {
-            qeTrack.razor(tickStr);
-            $.sleep(60);
-            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'B'; return 'B'; }
-        } catch (e) {}
-    }
-
-    // Method C: Standard DOM track.razor with Time object (NO playhead movement)
-    try {
-        targetTrack.razor(createTimeAt(tickVal));
-        $.sleep(60);
-        if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'C'; return 'C'; }
-    } catch (e) {}
-
-    // Method A: Set playhead → QE track razor (causes flicker — fallback only)
-    if (qeTrack) {
-        try {
-            seq.setPlayerPosition(tickStr);
-            $.sleep(15);
-            qeTrack.razor(seq.getPlayerPosition().ticks);
-            $.sleep(60);
-            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'A'; return 'A'; }
-        } catch (e) {}
-    }
-
-    // Method D: QE sequence-level razor (cuts all targeted tracks — causes flicker)
-    if (qeSeq) {
-        try {
-            seq.setPlayerPosition(tickStr);
-            $.sleep(15);
-            qeSeq.razor(seq.getPlayerPosition().ticks);
-            $.sleep(60);
-            if (targetTrack.clips.numItems > nb) { _acRazorWinner = 'D'; return 'D'; }
-        } catch (e) {}
-    }
-
-    return '';
-}
-
-// Perform the actual cuts based on silence data
-// silencesJson: JSON string of [{start, end}] in seconds (relative to media start)
-// padding: seconds of padding to keep around speech
-// mode: 'remove' (delete silences) or 'cut' (just razor, don't delete)
-// trackIdx: video/audio track index (from autoCutGetClipInfo)
-// trackTyp: 'video' or 'audio'
-function autoCutExecute(silencesJson, padding, mode, trackIdx, trackTyp) {
-    try {
-        if (!app.project) return 'NO_PROJECT';
-        var seq = app.project.activeSequence;
-        if (!seq) return 'NO_SEQUENCE';
-
-        // Reset razor winner — cada execute redescobre qual método funciona
-        _acRazorWinner = null;
-        _acExecProgress('Iniciando...', 0, false);
-
-        var silences;
-        try { silences = eval('(' + silencesJson + ')'); } catch (ep) { return 'PARSE_ERR'; }
-        if (!silences || silences.length === 0) return 'NO_SILENCES';
-
-        padding = padding || 0;
-        mode = mode || 'remove';
-        trackIdx = parseInt(String(trackIdx), 10);
-        trackTyp = String(trackTyp || 'video');
-
-        var clips = getSelectedClips();
-        if (clips.length === 0) return 'NO_SELECTION';
-
-        var clip = clips[0];
-        var clipStartTicks = Number(clip.start.ticks);
-        var clipEndTicks = Number(clip.end.ticks);
-        var clipInTicks = 0;
-        try { clipInTicks = Number(clip.inPoint.ticks); } catch (e) {}
-
-        var tps = 254016000000;
-        try { var t = new Time(); t.seconds = 1; tps = Number(t.ticks); } catch (e) {}
-
-        // ─── Find track ───
-        var targetTrack = null;
-        var fIdx = trackIdx, fTyp = trackTyp;
-        if (!isNaN(trackIdx) && trackIdx >= 0) {
-            try {
-                if (trackTyp === 'audio') targetTrack = seq.audioTracks[trackIdx];
-                else targetTrack = seq.videoTracks[trackIdx];
-            } catch (e) {}
-        }
-        if (!targetTrack) {
-            for (var vt = 0; vt < seq.videoTracks.numTracks; vt++) {
-                var vtrack = seq.videoTracks[vt];
-                for (var vc = 0; vc < vtrack.clips.numItems; vc++) {
-                    if (Math.abs(Number(vtrack.clips[vc].start.ticks) - clipStartTicks) < tps * 0.01) {
-                        targetTrack = vtrack; fIdx = vt; fTyp = 'video'; break;
-                    }
-                }
-                if (targetTrack) break;
-            }
-        }
-        if (!targetTrack) {
-            for (var at = 0; at < seq.audioTracks.numTracks; at++) {
-                var atrack = seq.audioTracks[at];
-                for (var ac = 0; ac < atrack.clips.numItems; ac++) {
-                    if (Math.abs(Number(atrack.clips[ac].start.ticks) - clipStartTicks) < tps * 0.01) {
-                        targetTrack = atrack; fIdx = at; fTyp = 'audio'; break;
-                    }
-                }
-                if (targetTrack) break;
-            }
-        }
-        if (!targetTrack) return 'NO_TRACK';
-        if (targetTrack.clips.numItems === 0) return 'TRACK_EMPTY';
-
-        // ─── Target ONLY this track (required for razor) ───
-        try {
-            for (var ti = 0; ti < seq.videoTracks.numTracks; ti++) {
-                seq.videoTracks[ti].setTargeted(ti === fIdx && fTyp === 'video', true);
-            }
-            for (var tai = 0; tai < seq.audioTracks.numTracks; tai++) {
-                seq.audioTracks[tai].setTargeted(tai === fIdx && fTyp === 'audio', true);
-            }
-        } catch (eTgt) {}
-
-        // ─── Enable QE DOM ───
-        var qeSeq = null, qeTrack = null;
-        try {
-            app.enableQE();
-            qeSeq = qe.project.getActiveSequence();
-            if (fTyp === 'audio') qeTrack = qeSeq.getAudioTrackAt(fIdx);
-            else qeTrack = qeSeq.getVideoTrackAt(fIdx);
-        } catch (eqe) {}
-
-        // ─── Convert silence times to timeline ticks ───
-        var cutPoints = [];
-        var totalCutTicks = 0;
-        var clipDurTicks = clipEndTicks - clipStartTicks;
-        for (var i = 0; i < silences.length; i++) {
-            var s = silences[i];
-            var silStartSec = Math.max(0, s.start + padding);
-            var silEndSec = Math.max(silStartSec, s.end - padding);
-            if (silEndSec <= silStartSec) continue;
-
-            var tlStart = clipStartTicks + Math.round((silStartSec * tps) - clipInTicks);
-            var tlEnd = clipStartTicks + Math.round((silEndSec * tps) - clipInTicks);
-
-            if (tlStart < clipStartTicks) tlStart = clipStartTicks;
-            if (tlEnd > clipEndTicks) tlEnd = clipEndTicks;
-            if (tlEnd <= tlStart) continue;
-
-            cutPoints.push({ start: tlStart, end: tlEnd });
-            totalCutTicks += (tlEnd - tlStart);
-        }
-
-        if (cutPoints.length === 0) return 'NO_CUTS';
-
-        // ─── SAFEGUARD: aborta se os cortes cobrem >=95% do clip ───
-        // Threshold mal ajustado pode marcar o clip inteiro como silêncio.
-        // Sem esse guard, autocut removeria o vídeo todo da timeline.
-        if (clipDurTicks > 0 && totalCutTicks / clipDurTicks >= 0.95) {
-            var pct = Math.round((totalCutTicks / clipDurTicks) * 100);
-            return 'OK:0:0|DBG:abort-cover-' + pct + 'pct';
-        }
-        cutPoints.sort(function(a, b) { return b.start - a.start; });
-
-        var cutsApplied = 0, removedDuration = 0;
-        var dbg = [];
-        var tol = Math.round(tps * 0.05);
-        var origPlayhead = seq.getPlayerPosition().ticks;
-
-        // Unlock target track so razor can operate on it
-        try { if (typeof targetTrack.setLocked === 'function') targetTrack.setLocked(false); } catch(e) {}
-
-        var consecutiveFails = 0; // pra abortar se nada funcionar
-        var totalCuts = cutPoints.length;
-        var lastProgressMs = 0;
-        _acExecProgress('Cortando ' + totalCuts + ' silêncios...', 0, false);
-
-        for (var ci = 0; ci < cutPoints.length; ci++) {
-            var cp = cutPoints[ci];
-
-            // Heartbeat pro client (a cada ~250ms)
-            var nowMs = (new Date()).getTime();
-            if (nowMs - lastProgressMs > 250) {
-                var pct = Math.floor((ci / totalCuts) * 100);
-                _acExecProgress('Cortando silêncio ' + (ci + 1) + '/' + totalCuts + '...', pct, false);
-                lastProgressMs = nowMs;
-            }
-
-            try {
-                var numBefore = targetTrack.clips.numItems;
-                var method = '';
-
-                // ── Razor at both points + remove middle clip ──
-                //
-                // NOTA: removemos o caminho qeSeq.extract() que era tentado primeiro.
-                // Ele usa qeSeq.setInPoint/setOutPoint que coloca marcadores in/out
-                // na timeline a cada silêncio — em 100 silêncios = 100 marcadores
-                // piscando = flicker insuportável + timeline ilegível durante o corte.
-                // Razor + remove é menos UI churn (só repinta no ponto do corte).
-                var rEnd = _doRazorAt(cp.end, targetTrack, qeTrack, qeSeq, seq);
-                var rStart = _doRazorAt(cp.start, targetTrack, qeTrack, qeSeq, seq);
-                var numAfter = targetTrack.clips.numItems;
-
-                if (ci === 0) {
-                    dbg.push('razor=' + rEnd + '/' + rStart);
-                    dbg.push('n=' + numBefore + '>' + numAfter);
-                }
-
-                if (numAfter <= numBefore) {
-                    consecutiveFails++;
-                    // Razor didn't create new clips — dump diagnostics for first failure
-                    if (ci === 0) {
-                        dbg.push('tps=' + tps);
-                        dbg.push('cp=' + (Math.round(cp.start / tps * 100) / 100) + '-' + (Math.round(cp.end / tps * 100) / 100) + 's');
-                        dbg.push('clip=' + (Math.round(clipStartTicks / tps * 100) / 100) + '-' + (Math.round(clipEndTicks / tps * 100) / 100) + 's');
-                        dbg.push('qeT=' + (qeTrack ? typeof qeTrack.razor : 'null'));
-                        dbg.push('qeS=' + (qeSeq ? typeof qeSeq.razor : 'null'));
-                        dbg.push('qeX=' + (qeSeq ? typeof qeSeq.extract : 'null'));
-                    }
-                    // Abort cedo: se 5 cortes seguidos falharem (ou os primeiros 3),
-                    // não adianta continuar gastando segundos por corte. Sai com erro.
-                    if (consecutiveFails >= 5 || (ci < 3 && consecutiveFails === ci + 1)) {
-                        dbg.push('abort@' + ci + ':allfail');
-                        _acExecProgress('Razor falhou — nenhum método compatível', 100, true);
-                        return 'OK:0:0|DBG:' + dbg.join(';');
-                    }
-                    continue;
-                }
-                consecutiveFails = 0;
-
-                // ── Razor worked! Find and remove silence clip ──
-                if (mode === 'remove') {
-                    var found = false;
-                    for (var fc = targetTrack.clips.numItems - 1; fc >= 0; fc--) {
-                        var tc = targetTrack.clips[fc];
-                        var ts = Number(tc.start.ticks);
-                        var te = Number(tc.end.ticks);
-                        if (Math.abs(ts - cp.start) <= tol && Math.abs(te - cp.end) <= tol) {
-                            removedDuration += (te - ts) / tps;
-                            tc.remove(true, true);
-                            cutsApplied++;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found && ci < 3) {
-                        dbg.push('miss' + ci + ':w=' + Math.round(cp.start) + '-' + Math.round(cp.end));
-                    }
-                } else {
-                    cutsApplied++;
-                }
-                // sleep(30) removido — operações DOM já têm overhead suficiente,
-                // 30ms x N cortes virava 3-5s extras de tela preta sem benefício
-            } catch (eCut) {
-                dbg.push('e' + ci + ':' + eCut.toString().substring(0, 30));
-            }
-        }
-
-        _acExecProgress(cutsApplied + ' cortes aplicados', 100, true);
-
-        // Restore playhead (não restauramos in/out points pq não usamos extract)
-        try { seq.setPlayerPosition(origPlayhead); } catch (e) {}
-        forceUIRefresh();
-
-        var result = 'OK:' + cutsApplied + ':' + (Math.round(removedDuration * 10) / 10);
-        if (dbg.length > 0) result += '|DBG:' + dbg.join(';');
-        return result;
-    } catch (e) {
-        return 'ERROR:' + e.toString();
-    }
-}
 
 
 // ============================================
@@ -1825,4 +1308,1696 @@ function lwBgRefreshFootage(filePath) {
     } catch (e) {
         return "ERR:" + e.toString();
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — Excalibur-style command palette
+// Lista todos os efeitos / presets / transições disponíveis e
+// permite aplicar via matchName ao clip selecionado.
+// ═══════════════════════════════════════════════════════════════════
+
+// Helper: lê propriedade safely retornando string descritiva
+function _safeStr(obj, prop) {
+    try {
+        var v = obj[prop];
+        if (v === null) return 'null';
+        if (v === undefined) return 'undefined';
+        if (typeof v === 'function') return 'fn()';
+        return String(v).substr(0, 80);
+    } catch(e) { return 'ERR:' + e; }
+}
+
+// Helper: escapa string pra JSON-compatible (evita break em title/name com aspas/backslash)
+function _lwEscapeJson(s) {
+    if (s == null) return '';
+    s = String(s);
+    s = s.replace(/\\/g, '\\\\');
+    s = s.replace(/"/g, '\\"');
+    s = s.replace(/\n/g, '\\n');
+    s = s.replace(/\r/g, '');
+    s = s.replace(/\t/g, ' ');
+    return s;
+}
+
+// Lista todos os effects + transitions + presets disponíveis no Premiere.
+// Retorna JSON: { items: [...], debug: "...", error: "..." }
+function lwSearchListAll() {
+    var items = [];
+    var seen = {};
+    var debug = [];
+    var errors = [];
+
+    function pushItem(kind, name, matchName, category) {
+        if (!matchName) return;
+        var key = kind + '|' + matchName;
+        if (seen[key]) return;
+        seen[key] = 1;
+        items.push({
+            kind: kind,
+            name: name || matchName,
+            matchName: matchName,
+            category: category || '',
+        });
+    }
+
+    // Tenta MUITOS jeitos de extrair length/iteração — QE varia muito por versão
+    function _qeLen(obj) {
+        if (!obj) return 0;
+        try { if (typeof obj.numItems === 'number') return obj.numItems; } catch(e) {}
+        try { if (typeof obj.length === 'number') return obj.length; } catch(e) {}
+        try { if (typeof obj.getItemAt === 'function') {
+            // Tenta achar o tamanho via getItemAt indo até falhar
+            var n = 0;
+            while (n < 500) { try { if (!obj.getItemAt(n)) break; n++; } catch(e2) { break; } }
+            return n;
+        }} catch(e) {}
+        // Fallback: brute-force até falhar
+        var i = 0;
+        while (i < 500) { try { if (obj[i] === undefined || obj[i] === null) break; i++; } catch(e3) { break; } }
+        return i;
+    }
+    function _qeAt(obj, i) {
+        try { var v = obj[i]; if (v) return v; } catch(e) {}
+        try { return obj.getItemAt(i); } catch(e2) {}
+        return null;
+    }
+
+    // Lê propriedade tentando vários acessos (alguns QE expõem como method, outros prop)
+    function _qeProp(obj, names) {
+        if (!obj) return '';
+        for (var i = 0; i < names.length; i++) {
+            var n = names[i];
+            try {
+                var v = obj[n];
+                if (typeof v === 'function') {
+                    try { v = v.call(obj); } catch(e1) {}
+                }
+                if (v && typeof v === 'string') return v;
+            } catch(e) {}
+        }
+        return '';
+    }
+    var NAME_KEYS = ['name', 'title', 'displayName', 'effectName', 'getName'];
+    var MATCH_KEYS = ['matchName', 'matchname', 'getMatchName'];
+
+    // Recursivo — enumera todos effects em qualquer profundidade.
+    function _scanEffects(node, kind, parentCat, depth, sample) {
+        if (!node || depth > 4) return 0;
+        // CASO NOVO (PR 2024+ / 25.x): list é Array de strings (nomes só)
+        if (typeof node === 'string') {
+            // Em Premiere 2024+, name é o "matchName" — apply usa getVideoEffectByName(name)
+            pushItem(kind, node, node, parentCat || '');
+            if (sample && sample.length < 5) sample.push(node);
+            return 1;
+        }
+        var added = 0;
+        // CASO ANTIGO: nodes são objetos com matchName/name
+        var nMatch = _qeProp(node, MATCH_KEYS);
+        var nName = _qeProp(node, NAME_KEYS);
+        if (nMatch) {
+            pushItem(kind, nName, nMatch, parentCat || '');
+            if (sample && sample.length < 5 && nName) sample.push(nName);
+            return 1;
+        }
+        // Container — itera filhos
+        var len = _qeLen(node);
+        if (len === 0) return 0;
+        var thisCat = nName || parentCat || '';
+        for (var i = 0; i < len; i++) {
+            var child = _qeAt(node, i);
+            if (child === null || child === undefined) continue;
+            added += _scanEffects(child, kind, thisCat, depth + 1, sample);
+        }
+        return added;
+    }
+
+    function iterateList(qeList, kind, label) {
+        try {
+            if (!qeList) { debug.push(label + '=null'); return 0; }
+            var sampleNames = [];
+            var added = _scanEffects(qeList, kind, '', 0, sampleNames);
+            var lenTop = _qeLen(qeList);
+            debug.push(label + '=' + lenTop + 'top/' + added + 'fx[' + sampleNames.join('|') + ']');
+            return added;
+        } catch (e) {
+            errors.push(label + ':' + e.toString().slice(0, 80));
+            return 0;
+        }
+    }
+
+    try {
+        // 1) Garante app
+        if (typeof app === 'undefined' || !app) return _lwSearchJson([], 'no-app', ['app indefinido']);
+
+        // 2) Habilita QE — retentativas
+        var qeReady = false;
+        // QE quase sempre tá pronto na 1ª tentativa — sleep só se falhar
+        for (var tries = 0; tries < 3; tries++) {
+            try { if (typeof qe === 'undefined') app.enableQE(); } catch(eEnable) {}
+            if (typeof qe !== 'undefined' && qe.project) { qeReady = true; break; }
+            $.sleep(30);
+        }
+        debug.push('qeReady=' + qeReady);
+        if (!qeReady) {
+            errors.push('qe.project undefined — nenhum projeto aberto?');
+            return _lwSearchJson([], debug.join(','), errors);
+        }
+
+        // 3) Effects + Transitions — tenta múltiplas APIs
+        // Versões do Premiere expõem essas listas de jeitos diferentes:
+        // - PR antigo: qe.project.getVideoEffectList()
+        // - PR 2024+: pode estar em qe.project ou qe.app ou via property
+        var listCalls = [
+            ['getVideoEffectList',     'video-fx', 'vfx'],
+            ['getAudioEffectList',     'audio-fx', 'afx'],
+            ['getVideoTransitionList', 'video-tx', 'vtx'],
+            ['getAudioTransitionList', 'audio-tx', 'atx'],
+        ];
+        // Lista de "containers" pra tentar — qe.project, qe.app, qe
+        var qeContainers = [];
+        try { if (qe && qe.project) qeContainers.push({ obj: qe.project, label: 'qe.project' }); } catch(eQp) {}
+        try { if (qe && qe.app) qeContainers.push({ obj: qe.app, label: 'qe.app' }); } catch(eQa) {}
+        try { if (qe) qeContainers.push({ obj: qe, label: 'qe' }); } catch(eQ) {}
+        // ExtendScript é ES3 — não tem .map(). Loop manual.
+        var _ctrLabels = '';
+        for (var _lc = 0; _lc < qeContainers.length; _lc++) {
+            if (_lc > 0) _ctrLabels += '+';
+            _ctrLabels += qeContainers[_lc].label;
+        }
+        debug.push('containers=' + _ctrLabels);
+
+        for (var l = 0; l < listCalls.length; l++) {
+            var fnName = listCalls[l][0], kind = listCalls[l][1], lbl = listCalls[l][2];
+            var lst = null, found = false;
+            for (var ci = 0; ci < qeContainers.length && !lst; ci++) {
+                var container = qeContainers[ci].obj;
+                // Tenta como method
+                try {
+                    if (typeof container[fnName] === 'function') {
+                        lst = container[fnName]();
+                        if (lst) { found = true; debug.push(lbl + '@' + qeContainers[ci].label + 'fn'); }
+                    }
+                } catch(eL1) {}
+                // Tenta como property
+                if (!lst) {
+                    try {
+                        var propName = fnName.replace(/^get/, '').charAt(0).toLowerCase() + fnName.replace(/^get/, '').slice(1);
+                        if (container[propName]) {
+                            lst = container[propName];
+                            found = true;
+                            debug.push(lbl + '@' + qeContainers[ci].label + 'prop:' + propName);
+                        }
+                    } catch(eL2) {}
+                }
+            }
+            if (!found) { errors.push(fnName + ':not-found'); continue; }
+            iterateList(lst, kind, lbl);
+        }
+
+        // 4) Effect Presets — scan rootItem por bins .prfpset
+        try {
+            if (app.project && app.project.rootItem) {
+                _lwScanPresets(app.project.rootItem, items, seen, 0);
+            }
+        } catch(ePr) { errors.push('presets:' + ePr.toString().slice(0, 60)); }
+    } catch(eAll) {
+        errors.push('outer:' + eAll.toString().slice(0, 80));
+    }
+
+    // Escreve resultado num arquivo temp pra debug — usuário pode mandar o conteúdo
+    try {
+        var fdbg = new File(Folder.temp.fsName + '/lion-search-debug.txt');
+        if (fdbg.open('w')) {
+            fdbg.encoding = 'UTF-8';
+            fdbg.writeln('items=' + items.length);
+            fdbg.writeln('debug=' + debug.join(','));
+            fdbg.writeln('errors=' + (errors.length ? errors.join(' | ') : '(none)'));
+            fdbg.writeln('');
+            fdbg.writeln('--- typeof checks ---');
+            fdbg.writeln('typeof app=' + (typeof app));
+            fdbg.writeln('typeof qe=' + (typeof qe));
+            try { fdbg.writeln('app.version=' + app.version); } catch(e1) { fdbg.writeln('app.version=ERR:' + e1); }
+            try { fdbg.writeln('qe.project=' + (qe.project ? 'YES' : 'no')); } catch(e2) { fdbg.writeln('qe.project=ERR:' + e2); }
+
+            // Inspeciona a estrutura do PRIMEIRO item da getVideoEffectList()
+            try {
+                if (qe && qe.project && typeof qe.project.getVideoEffectList === 'function') {
+                    var vfxL = qe.project.getVideoEffectList();
+                    fdbg.writeln('');
+                    fdbg.writeln('--- vfxList top-level inspection ---');
+                    fdbg.writeln('numItems=' + (vfxL.numItems || 'undefined'));
+                    fdbg.writeln('length=' + (vfxL.length || 'undefined'));
+                    var item0 = null;
+                    try { item0 = vfxL[0]; } catch(e0) {}
+                    if (!item0) { try { item0 = vfxL.getItemAt(0); } catch(e0b) {} }
+                    if (item0) {
+                        fdbg.writeln('item[0] type=' + (typeof item0));
+                        fdbg.writeln('item[0] toString=' + (item0.toString ? item0.toString().substr(0, 100) : 'no toString'));
+                        var props = '';
+                        for (var pp in item0) { props += pp + ','; }
+                        fdbg.writeln('item[0] enum props: ' + (props.length > 800 ? props.substr(0, 800) + '...' : props));
+                        // Tenta acessar várias props comuns
+                        fdbg.writeln('item[0].name=' + _safeStr(item0, 'name'));
+                        fdbg.writeln('item[0].matchName=' + _safeStr(item0, 'matchName'));
+                        fdbg.writeln('item[0].title=' + _safeStr(item0, 'title'));
+                        fdbg.writeln('item[0].displayName=' + _safeStr(item0, 'displayName'));
+                        fdbg.writeln('item[0].numItems=' + _safeStr(item0, 'numItems'));
+                        fdbg.writeln('item[0].length=' + _safeStr(item0, 'length'));
+                    } else {
+                        fdbg.writeln('item[0] = null/undefined');
+                    }
+                }
+            } catch(eIns) { fdbg.writeln('inspection err: ' + eIns); }
+
+            fdbg.writeln('');
+            fdbg.writeln('--- first 10 items achados ---');
+            for (var ii = 0; ii < Math.min(10, items.length); ii++) {
+                fdbg.writeln(items[ii].kind + ' / cat=' + items[ii].category + ' / ' + items[ii].name + ' (' + items[ii].matchName + ')');
+            }
+            fdbg.close();
+        }
+    } catch(eFw) {}
+
+    return _lwSearchJson(items, debug.join(','), errors);
+}
+
+// Builda JSON estruturado: { items, debug, error } — preserva TODAS as flags
+function _lwSearchJson(items, debug, errors) {
+    var out = '{"items":[';
+    for (var i = 0; i < items.length; i++) {
+        if (i > 0) out += ',';
+        var it = items[i];
+        out += '{"kind":"' + _lwEscapeJson(it.kind) + '"';
+        out += ',"name":"' + _lwEscapeJson(it.name) + '"';
+        out += ',"matchName":"' + _lwEscapeJson(it.matchName) + '"';
+        out += ',"category":"' + _lwEscapeJson(it.category) + '"';
+        if (it.audioOnly) out += ',"audioOnly":true';
+        if (it.videoOnly) out += ',"videoOnly":true';
+        if (it.isContainer) out += ',"isContainer":true';
+        if (it.projName) out += ',"projName":"' + _lwEscapeJson(it.projName) + '"';
+        out += '}';
+    }
+    out += '],"debug":"' + _lwEscapeJson(debug || '') + '"';
+    out += ',"error":"' + _lwEscapeJson((errors && errors.length) ? errors.join(' | ') : '') + '"}';
+    return out;
+}
+
+function _lwScanPresets(item, items, seen, depth) {
+    depth = depth || 0;
+    if (depth > 10) return;
+    try {
+        if (item.type === 1 && item.children && item.children.numItems > 0) {
+            for (var i = 0; i < item.children.numItems; i++) {
+                _lwScanPresets(item.children[i], items, seen, depth + 1);
+            }
+        }
+    } catch(e) {}
+}
+
+// Helper: itera todas as QE tracks (video ou audio) e retorna a lista de QE clips selecionados.
+// Tenta 2 estratégias: 1) QE isSelected, 2) match por start time com clips selecionados do API normal.
+function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
+    var found = [];
+    var numTracks = isVideo ? qeSeq.numVideoTracks : qeSeq.numAudioTracks;
+
+    // Estratégia 1: QE isSelected()
+    for (var i = 0; i < numTracks; i++) {
+        var t = null;
+        try { t = isVideo ? qeSeq.getVideoTrackAt(i) : qeSeq.getAudioTrackAt(i); } catch(e0) {}
+        if (!t) continue;
+        var n = 0;
+        try { n = t.numItems; } catch(eN) { n = 0; }
+        for (var j = 0; j < n; j++) {
+            var item = null;
+            try { item = t.getItemAt(j); } catch(eI) {}
+            if (!item) continue;
+            try { if (item.type === 1) continue; } catch(eT) {}
+            try { if (item.isSelected && item.isSelected()) { found.push(item); } } catch(eS) {}
+        }
+    }
+    if (found.length > 0) return found;
+
+    // Estratégia 2: pega clips selecionados do API normal e mapeia pra QE por start time
+    if (!seq) return found;
+    var trackList = isVideo ? seq.videoTracks : seq.audioTracks;
+    var selStarts = [];
+    for (var ti = 0; ti < trackList.numTracks; ti++) {
+        var tk = trackList[ti];
+        for (var ci = 0; ci < tk.clips.numItems; ci++) {
+            try {
+                if (tk.clips[ci].isSelected()) {
+                    selStarts.push({
+                        trackIdx: ti,
+                        startSec: tk.clips[ci].start.seconds,
+                        startTicks: String(tk.clips[ci].start.ticks),
+                        name: tk.clips[ci].name,
+                    });
+                }
+            } catch(eIs) {}
+        }
+    }
+    for (var si = 0; si < selStarts.length; si++) {
+        var sel = selStarts[si];
+        var qeT = null;
+        try { qeT = isVideo ? qeSeq.getVideoTrackAt(sel.trackIdx) : qeSeq.getAudioTrackAt(sel.trackIdx); } catch(eGT) {}
+        if (!qeT) continue;
+        var matched = null;
+        var qN = 0;
+        try { qN = qeT.numItems; } catch(eQN) { qN = 0; }
+        for (var qj = 0; qj < qN; qj++) {
+            var qit = null;
+            try { qit = qeT.getItemAt(qj); } catch(eGI) {}
+            if (!qit) continue;
+            try { if (qit.type === 1) continue; } catch(eQT) {}
+            // Tenta match por ticks (string), seconds (float), ou name
+            try {
+                var qts = String(qit.start.ticks);
+                if (qts === sel.startTicks) { matched = qit; break; }
+            } catch(eQTk) {}
+            try {
+                if (Math.abs(qit.start.seconds - sel.startSec) < 0.5) {
+                    if (!matched) matched = qit;
+                    try { if (qit.name === sel.name) { matched = qit; break; } } catch(eN2) {}
+                }
+            } catch(eQS) {}
+        }
+        if (matched) found.push(matched);
+    }
+    return found;
+}
+
+// Aplica um effect/transition num clip selecionado.
+// kind = "video-fx" | "audio-fx" | "video-tx" | "audio-tx"
+// matchName = nome do effect (em PR 2024+, é o display name retornado por getVideoEffectList)
+function lwSearchApply(kind, matchName) {
+    try {
+        if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
+        var seq = app.project.activeSequence;
+        try { app.enableQE(); } catch(e0) {}
+        if (typeof qe === 'undefined' || !qe.project) return 'ERR:qe_not_available';
+        var qeSeq = qe.project.getActiveSequence();
+        if (!qeSeq) return 'ERR:no_qe_sequence';
+
+        if (kind === 'video-fx') {
+            // Acha QE clips selecionados (video)
+            var selVideoClips = _lwFindSelectedQEClips(qeSeq, true, seq);
+            if (selVideoClips.length === 0) return 'NO_CLIP_SELECTED';
+            // Pega o effect object pelo nome
+            var fxObj = null;
+            try { fxObj = qe.project.getVideoEffectByName(matchName); } catch(e1) {}
+            if (!fxObj) return 'ERR:effect_not_found:' + matchName;
+            // Aplica em todos os clips selecionados
+            var appliedV = 0;
+            for (var iv = 0; iv < selVideoClips.length; iv++) {
+                try { selVideoClips[iv].addVideoEffect(fxObj); appliedV++; } catch(eAv) {}
+            }
+            if (appliedV === 0) return 'ERR:could_not_apply';
+            return 'OK:applied:' + appliedV;
+        } else if (kind === 'audio-fx') {
+            var selAudioClips = _lwFindSelectedQEClips(qeSeq, false, seq);
+            if (selAudioClips.length === 0) return 'NO_AUDIO_CLIP_SELECTED';
+            var afxObj = null;
+            try { afxObj = qe.project.getAudioEffectByName(matchName); } catch(e2) {}
+            if (!afxObj) return 'ERR:audio_effect_not_found:' + matchName;
+            var appliedA = 0;
+            for (var ia = 0; ia < selAudioClips.length; ia++) {
+                try { selAudioClips[ia].addAudioEffect(afxObj); appliedA++; } catch(eAa) {}
+            }
+            if (appliedA === 0) return 'ERR:could_not_apply';
+            return 'OK:applied:' + appliedA;
+        } else if (kind === 'video-tx' || kind === 'audio-tx') {
+            return 'ERR:transitions_not_implemented_yet';
+        } else if (kind === 'preset') {
+            return _lwApplyPreset(matchName); // matchName aqui é o full path do .prfpset
+        } else if (kind === 'audio-source') {
+            return _lwInsertAudioSource(matchName); // matchName é o nodeId/name do project item
+        } else {
+            return 'ERR:unknown_kind:' + kind;
+        }
+    } catch (eAll) {
+        return 'ERR:' + eAll.toString().slice(0, 200);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — GET CONTEXT (tipo do clip selecionado, playhead, etc)
+// ═══════════════════════════════════════════════════════════════════
+function lwSearchGetContext() {
+    try {
+        var ctx = {
+            selectionType: 'none', // 'video' | 'audio' | 'mixed' | 'none'
+            videoSelected: 0,
+            audioSelected: 0,
+            playheadSec: 0,
+            playheadTicks: '0',
+            hasSequence: false,
+        };
+        if (!app.project || !app.project.activeSequence) return _lwCtxJson(ctx);
+        var seq = app.project.activeSequence;
+        ctx.hasSequence = true;
+
+        // Conta clips selecionados
+        var i, j, tk;
+        for (i = 0; i < seq.videoTracks.numTracks; i++) {
+            tk = seq.videoTracks[i];
+            for (j = 0; j < tk.clips.numItems; j++) {
+                try { if (tk.clips[j].isSelected()) ctx.videoSelected++; } catch(e) {}
+            }
+        }
+        for (i = 0; i < seq.audioTracks.numTracks; i++) {
+            tk = seq.audioTracks[i];
+            for (j = 0; j < tk.clips.numItems; j++) {
+                try { if (tk.clips[j].isSelected()) ctx.audioSelected++; } catch(e) {}
+            }
+        }
+        if (ctx.videoSelected > 0 && ctx.audioSelected > 0) ctx.selectionType = 'mixed';
+        else if (ctx.videoSelected > 0) ctx.selectionType = 'video';
+        else if (ctx.audioSelected > 0) ctx.selectionType = 'audio';
+        else ctx.selectionType = 'none';
+
+        // Playhead
+        try {
+            var pos = seq.getPlayerPosition();
+            if (pos) {
+                ctx.playheadSec = pos.seconds;
+                ctx.playheadTicks = String(pos.ticks);
+            }
+        } catch(eP) {}
+
+        return _lwCtxJson(ctx);
+    } catch (e) {
+        return '{"error":"' + _lwEscapeJson(e.toString()) + '"}';
+    }
+}
+
+function _lwCtxJson(ctx) {
+    var out = '{';
+    out += '"selectionType":"' + ctx.selectionType + '"';
+    out += ',"videoSelected":' + ctx.videoSelected;
+    out += ',"audioSelected":' + ctx.audioSelected;
+    out += ',"playheadSec":' + ctx.playheadSec;
+    out += ',"playheadTicks":"' + ctx.playheadTicks + '"';
+    out += ',"hasSequence":' + (ctx.hasSequence ? 'true' : 'false');
+    out += '}';
+    return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — LIST AUDIO SOURCES
+// Scaneia: 1) projetos abertos (active + outros se Premiere expor)
+//          2) pasta de SFX configurável (Lion Workspace settings)
+// ═══════════════════════════════════════════════════════════════════
+function lwSearchListAudioSources(sfxFolderPath) {
+    var items = [];
+    var seen = {};
+    var debug = [];
+    var dbgLog = [];
+    function dlog(m) { dbgLog.push(m); }
+
+    try {
+        // ─── PARTE 1: Projetos abertos no Premiere ───
+        var projects = [];
+        var seenProjects = {};
+        function addProj(p, src) {
+            if (!p) return;
+            try {
+                var key = '';
+                try { key = p.path || p.name || ''; } catch(eK) {}
+                if (key && seenProjects[key]) return;
+                seenProjects[key] = 1;
+                projects.push({ proj: p, src: src });
+                dlog('  [+] proj via ' + src + ': ' + (p.name || '?'));
+            } catch(e) {}
+        }
+
+        // 1a) Inspeciona app — list ALL methods/properties pra debug
+        try {
+            var appKeys = '';
+            for (var k in app) appKeys += k + ',';
+            dlog('app keys (parcial): ' + appKeys.substr(0, 600));
+        } catch(eK0) { dlog('app-keys-err: ' + eK0); }
+
+        // 1b) Habilita QE pra ter acesso multi-projeto
+        try { app.enableQE(); } catch(eQE) {}
+
+        // 1c) QE DOM: qe.numProjects / qe.getProject(i)
+        try {
+            if (typeof qe !== 'undefined' && qe) {
+                var qeKeys = '';
+                for (var qk in qe) qeKeys += qk + ',';
+                dlog('qe keys (parcial): ' + qeKeys.substr(0, 400));
+                var qeNumProj = 0;
+                try { qeNumProj = qe.numProjects || 0; } catch(eQN) {}
+                dlog('qe.numProjects=' + qeNumProj);
+                for (var qpi = 0; qpi < qeNumProj; qpi++) {
+                    var qp = null;
+                    try { qp = qe.getProject(qpi); } catch(eGP) {}
+                    if (qp) {
+                        var qpName = '';
+                        try { qpName = qp.name || ''; } catch(eN1) {}
+                        dlog('  qe.getProject(' + qpi + ').name=' + qpName);
+                    }
+                }
+                debug.push('qe-projects=' + qeNumProj);
+            }
+        } catch(eQ) { debug.push('qe-err:' + eQ.toString().slice(0, 40)); dlog('qe err: ' + eQ); }
+
+        // 1d) app.openDocuments
+        try {
+            if (typeof app.openDocuments !== 'undefined') {
+                var nDocs = 0;
+                try { nDocs = app.openDocuments.numItems || app.openDocuments.length || 0; } catch(eN) { nDocs = 0; }
+                dlog('app.openDocuments exists; numItems/length=' + nDocs);
+                for (var d = 0; d < nDocs; d++) {
+                    var doc = null;
+                    try { doc = app.openDocuments[d]; } catch(eD) {}
+                    if (!doc) try { doc = app.openDocuments.getItemAt(d); } catch(eD2) {}
+                    if (doc) addProj(doc, 'openDocuments[' + d + ']');
+                }
+                debug.push('openDocs=' + nDocs);
+            } else { dlog('app.openDocuments = undefined'); debug.push('openDocs=undef'); }
+        } catch(e1) { debug.push('openDocs-err:' + e1.toString().slice(0, 40)); dlog('openDocs err: ' + e1); }
+
+        // 1e) app.projects
+        try {
+            if (typeof app.projects !== 'undefined') {
+                var nProj = 0;
+                try { nProj = app.projects.numProjects || app.projects.numItems || app.projects.length || 0; } catch(eP) { nProj = 0; }
+                dlog('app.projects exists; numProjects/length=' + nProj);
+                for (var ip = 0; ip < nProj; ip++) {
+                    var pr = null;
+                    try { pr = app.projects[ip]; } catch(ePr) {}
+                    if (pr) addProj(pr, 'projects[' + ip + ']');
+                }
+                debug.push('projects=' + nProj);
+            } else { dlog('app.projects = undefined'); debug.push('projects=undef'); }
+        } catch(e2) { debug.push('projects-err:' + e2.toString().slice(0, 40)); dlog('projects err: ' + e2); }
+
+        // 1f) Fallback: active project (sempre adicionado)
+        try {
+            if (app.project) {
+                addProj(app.project, 'active');
+            }
+        } catch(e3) {}
+
+        dlog('Total projetos detectados: ' + projects.length);
+
+        // 1e) Itera cada projeto
+        for (var pi = 0; pi < projects.length; pi++) {
+            var proj = projects[pi].proj;
+            var projName = '';
+            try { projName = proj.name || ''; } catch(eN) {}
+            try { projName = projName.replace(/\.prproj$/i, ''); } catch(eR) {}
+
+            var rootItem = null;
+            try { rootItem = proj.rootItem; } catch(eRoot) {}
+            if (!rootItem) { debug.push('p[' + pi + ']:noroot'); continue; }
+
+            var beforeCount = items.length;
+            _lwScanForAudio(rootItem, '', items, seen, 0, projName);
+            dlog('  proj[' + projName + '] -> +' + (items.length - beforeCount) + ' áudios');
+        }
+
+        // ─── PARTE 2: Pasta SFX configurável ───
+        if (sfxFolderPath) {
+            dlog('Scanning SFX folder: ' + sfxFolderPath);
+            var sfxF = new Folder(sfxFolderPath);
+            if (sfxF.exists) {
+                var beforeFs = items.length;
+                _lwScanFsForAudio(sfxF, '', items, seen, 0);
+                dlog('  SFX folder -> +' + (items.length - beforeFs) + ' áudios');
+                debug.push('sfx-folder=' + (items.length - beforeFs));
+            } else {
+                dlog('  SFX folder NÃO existe: ' + sfxFolderPath);
+                debug.push('sfx-folder=missing');
+            }
+        }
+    } catch(e) {
+        return _lwSearchJson(items, 'audio-scan-err:' + e.toString().slice(0, 80), []);
+    }
+
+    // Escreve debug detalhado
+    try {
+        var fdbg = new File(Folder.temp.fsName + '/lion-search-audio-debug.txt');
+        if (fdbg.open('w')) {
+            fdbg.encoding = 'UTF-8';
+            for (var dli = 0; dli < dbgLog.length; dli++) fdbg.writeln(dbgLog[dli]);
+            fdbg.writeln('');
+            fdbg.writeln('--- Total: ' + items.length + ' ---');
+            for (var fi = 0; fi < Math.min(20, items.length); fi++) {
+                fdbg.writeln(items[fi].name + ' | ' + items[fi].category);
+            }
+            fdbg.close();
+        }
+    } catch(eFw) {}
+
+    return _lwSearchJson(items, 'audio:' + debug.join(',') + ',total=' + items.length, []);
+}
+
+// Scaneia pasta do filesystem por arquivos de áudio
+function _lwScanFsForAudio(folder, parentPath, items, seen, depth) {
+    if (!folder || depth > 8) return;
+    var files = null;
+    try { files = folder.getFiles(); } catch(e) { return; }
+    if (!files) return;
+    for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (f instanceof Folder) {
+            var sub = parentPath ? parentPath + ' / ' + f.name : f.name;
+            _lwScanFsForAudio(f, sub, items, seen, depth + 1);
+        } else {
+            var fname = String(f.name);
+            var lname = fname.toLowerCase();
+            if (lname.match(/\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff|wma|opus)$/)) {
+                var fullPath = f.fsName;
+                if (seen[fullPath]) continue;
+                seen[fullPath] = 1;
+                var displayName = fname;
+                items.push({
+                    kind: 'audio-source',
+                    name: displayName,
+                    matchName: 'FS:' + fullPath, // prefix FS: pra apply saber que é do filesystem
+                    category: '🗂️ ' + (parentPath || 'SFX'),
+                    sfxPath: fullPath,
+                });
+            }
+        }
+    }
+}
+
+function _lwScanForAudio(item, parentPath, items, seen, depth, projName) {
+    if (!item || depth > 8) return;
+    try {
+        // type 1=BIN, 2=CLIP, 3=ROOT, 4=FILE — vamos recursar em todos
+        var name = '';
+        try { name = item.name || ''; } catch(eN) {}
+        var children = null;
+        try { children = item.children; } catch(eC) {}
+
+        if (children && children.numItems > 0) {
+            var subPath = (parentPath || depth === 0) ? (parentPath ? parentPath + ' / ' + name : name) : '';
+            for (var i = 0; i < children.numItems; i++) {
+                _lwScanForAudio(children[i], subPath, items, seen, depth + 1, projName);
+            }
+            return;
+        }
+
+        // Não tem filhos — é uma folha (clip de mídia)
+        var nodeId = '';
+        try { nodeId = item.nodeId || name; } catch(eId) { nodeId = name; }
+
+        // Detecta se tem áudio
+        var hasAudio = false;
+        try {
+            if (item.hasAudio && typeof item.hasAudio === 'function') hasAudio = item.hasAudio();
+            else if (item.hasAudio === true) hasAudio = true;
+        } catch(eH) {}
+
+        // Fallback por extensão
+        if (!hasAudio) {
+            var lname = String(name).toLowerCase();
+            if (lname.match(/\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff|wma|opus)$/)) hasAudio = true;
+        }
+        // Detecta se tem video tb (pra rotular categoria)
+        var hasVideo = false;
+        try {
+            if (item.hasVideo && typeof item.hasVideo === 'function') hasVideo = item.hasVideo();
+        } catch(eV) {}
+
+        // Dedup por file path (mesmo som em múltiplos projetos = 1 entrada só)
+        var mediaPath = '';
+        try { mediaPath = item.getMediaPath ? item.getMediaPath() : ''; } catch(eMp) {}
+        // Fallback dedup key: name+nodeId+proj se não tiver path
+        var dedupKey = mediaPath || ((projName || '') + '|' + nodeId + '|' + name);
+        if (hasAudio && !seen[dedupKey]) {
+            seen[dedupKey] = 1;
+            // Categoria: [Projeto] / Bin / Subbin
+            var categoryParts = [];
+            if (projName) categoryParts.push(projName);
+            if (parentPath) categoryParts.push(parentPath);
+            else categoryParts.push(hasVideo ? 'Audio+Video' : 'Audio');
+            items.push({
+                kind: 'audio-source',
+                name: name || '(sem nome)',
+                matchName: nodeId,
+                category: categoryParts.join(' / '),
+                projName: projName || '',
+            });
+        }
+    } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — LIST PRESETS (.prfpset no filesystem)
+// Estratégia: scan agressivo em múltiplos paths, escreve debug detalhado.
+//   Win: %USERPROFILE%\Documents\Adobe\Premiere Pro\<ver>\Profile-<user>\...
+//        %APPDATA%\Adobe\Premiere Pro\<ver>\Profile-<user>\...
+//        + OneDrive Documents (se sync ativo)
+//   Mac: ~/Documents/Adobe/Premiere Pro/<ver>/Profile-<user>/...
+//        ~/Library/Application Support/Adobe/Premiere Pro/<ver>/Profile-<user>/...
+// ═══════════════════════════════════════════════════════════════════
+function lwSearchListPresets() {
+    var items = [];
+    var debug = '';
+    var pathsTried = [];
+    var pathsExisted = [];
+    var dbgLog = []; // Log detalhado pra arquivo
+
+    function dlog(msg) { try { dbgLog.push(msg); } catch(e) {} }
+
+    // ─── ESTRATÉGIA 1: API QE (Excalibur usa essa via) ───
+    try {
+        if (typeof qe === 'undefined') { try { app.enableQE(); } catch(eE) {} }
+        if (typeof qe !== 'undefined' && qe && qe.project) {
+            // Lista TODAS as propriedades/métodos de qe.project (debug)
+            var qePjKeys = '';
+            try { for (var k in qe.project) qePjKeys += k + ','; } catch(eK) {}
+            dlog('qe.project keys: ' + qePjKeys.substr(0, 800));
+
+            // Tenta cada possível API de preset
+            var presetApiNames = [
+                'getEffectPresetList',
+                'getEffectPresets',
+                'getPresetList',
+                'getPresets',
+                'getVideoEffectPresetList',
+                'getAudioEffectPresetList',
+                'effectPresets',
+                'presets',
+            ];
+            for (var pa = 0; pa < presetApiNames.length; pa++) {
+                var apiName = presetApiNames[pa];
+                try {
+                    var fn = qe.project[apiName];
+                    if (!fn) continue;
+                    var result = null;
+                    if (typeof fn === 'function') {
+                        try { result = fn.call(qe.project); } catch(eC) { dlog('  ' + apiName + '() throw: ' + eC); continue; }
+                    } else {
+                        result = fn;
+                    }
+                    if (result) {
+                        var rType = typeof result;
+                        var rLen = 0;
+                        try { rLen = result.numItems || result.length || 0; } catch(eL) {}
+                        dlog('  qe.project.' + apiName + ' = ' + rType + ' (len=' + rLen + ')');
+                        // Se for lista, processa
+                        if (rLen > 0) {
+                            for (var ri = 0; ri < rLen; ri++) {
+                                var entry = null;
+                                try { entry = result[ri]; } catch(eR) {}
+                                if (!entry) try { entry = result.getItemAt(ri); } catch(eR2) {}
+                                if (!entry) continue;
+                                var name = '', match = '', cat = '';
+                                if (typeof entry === 'string') {
+                                    name = entry; match = entry;
+                                } else {
+                                    try { name = entry.name || entry.title || ''; } catch(eN) {}
+                                    try { match = entry.matchName || entry.name || ''; } catch(eM) {}
+                                    try { cat = entry.category || ''; } catch(eCC) {}
+                                }
+                                if (name) {
+                                    items.push({
+                                        kind: 'preset',
+                                        name: name,
+                                        matchName: match || name,
+                                        category: cat || ('QE: ' + apiName),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch(eApi) { dlog('  ' + apiName + ' err: ' + eApi); }
+            }
+        }
+    } catch(eQE) { dlog('QE preset err: ' + eQE); }
+
+    if (items.length > 0) {
+        dlog('Total presets via QE: ' + items.length);
+    }
+
+    try {
+        var rootCandidates = [];
+
+        // 0) APIs do app (mais confiáveis — sabem o caminho exato da Adobe)
+        try {
+            if (typeof app.getPProPrefPath === 'function') {
+                var prefPath = app.getPProPrefPath();
+                if (prefPath) {
+                    dlog('app.getPProPrefPath()=' + prefPath);
+                    // pref path é tipo .../Profile-<user>/, então adiciona seu pai
+                    rootCandidates.push(prefPath);
+                    // Também adiciona o pai (volta níveis pra Adobe Premiere Pro/)
+                    var p2 = String(prefPath).replace(/\\/g, '/');
+                    var parts = p2.split('/');
+                    while (parts.length > 0) {
+                        var newPath = parts.join('/');
+                        if (newPath) rootCandidates.push(newPath);
+                        // Para quando achar "Adobe" no path
+                        if (parts[parts.length - 1] === 'Adobe' || parts.length <= 2) break;
+                        parts.pop();
+                    }
+                }
+            }
+        } catch(eAPP) { dlog('getPProPrefPath err: ' + eAPP); }
+
+        try {
+            if (typeof app.getPProSystemPrefPath === 'function') {
+                var sysPrefPath = app.getPProSystemPrefPath();
+                if (sysPrefPath) {
+                    dlog('app.getPProSystemPrefPath()=' + sysPrefPath);
+                    rootCandidates.push(sysPrefPath);
+                }
+            }
+        } catch(eAPS) { dlog('getPProSystemPrefPath err: ' + eAPS); }
+
+        // app.path = caminho do executável da Adobe Premiere Pro
+        try {
+            if (app.path) {
+                dlog('app.path=' + app.path);
+                // app.path é o .exe file, get parent dir
+                var ap = String(app.path).replace(/\\/g, '/');
+                var apParent = ap.substring(0, ap.lastIndexOf('/'));
+                if (apParent) {
+                    rootCandidates.push(apParent);
+                    rootCandidates.push(apParent + '/Effect Presets');
+                    // Mac .app bundle
+                    rootCandidates.push(apParent + '/../Resources');
+                }
+            }
+        } catch(eAp) { dlog('app.path err: ' + eAp); }
+
+        // 1) Folder.myDocuments
+        try {
+            if (Folder.myDocuments) {
+                rootCandidates.push(Folder.myDocuments.fsName + '/Adobe/Premiere Pro');
+            }
+        } catch(e1) { dlog('myDocuments err: ' + e1); }
+
+        // 2) Folder.appData (Win: %APPDATA% | Mac: ~/Library/Application Support)
+        try {
+            if (Folder.appData) {
+                rootCandidates.push(Folder.appData.fsName + '/Adobe/Premiere Pro');
+            }
+        } catch(e2) { dlog('appData err: ' + e2); }
+
+        // 3) Folder.userData
+        try {
+            if (Folder.userData && Folder.userData.fsName !== Folder.appData.fsName) {
+                rootCandidates.push(Folder.userData.fsName + '/Adobe/Premiere Pro');
+            }
+        } catch(e3) {}
+
+        // 4) Variáveis env
+        if (File.fs === 'Windows') {
+            try {
+                var userProfile = $.getenv('USERPROFILE');
+                if (userProfile) {
+                    rootCandidates.push(userProfile + '/Documents/Adobe/Premiere Pro');
+                    rootCandidates.push(userProfile + '/OneDrive/Documents/Adobe/Premiere Pro');
+                    rootCandidates.push(userProfile + '/OneDrive/Documentos/Adobe/Premiere Pro');
+                    rootCandidates.push(userProfile + '/Documentos/Adobe/Premiere Pro');
+                }
+                var appData = $.getenv('APPDATA');
+                if (appData) rootCandidates.push(appData + '/Adobe/Premiere Pro');
+            } catch(eEnv) { dlog('env err: ' + eEnv); }
+        } else if (File.fs === 'Macintosh') {
+            try {
+                var home = $.getenv('HOME');
+                if (home) {
+                    rootCandidates.push(home + '/Documents/Adobe/Premiere Pro');
+                    rootCandidates.push(home + '/Library/Application Support/Adobe/Premiere Pro');
+                }
+                rootCandidates.push('/Library/Application Support/Adobe/Premiere Pro');
+            } catch(eMac) { dlog('mac env err: ' + eMac); }
+        }
+
+        // Dedup paths
+        var uniqRoots = [];
+        var seenPath = {};
+        for (var dr = 0; dr < rootCandidates.length; dr++) {
+            var pp = rootCandidates[dr];
+            if (!pp || seenPath[pp]) continue;
+            seenPath[pp] = 1;
+            uniqRoots.push(pp);
+        }
+
+        dlog('--- Paths tentados ---');
+        for (var lp = 0; lp < uniqRoots.length; lp++) dlog('  ' + uniqRoots[lp]);
+
+        // Encontra pastas de presets em cada root
+        var presetRoots = [];
+        var seenRoots = {};
+        for (var rc = 0; rc < uniqRoots.length; rc++) {
+            var rootPath = uniqRoots[rc];
+            pathsTried.push(rootPath);
+            var rootF = new Folder(rootPath);
+            if (!rootF.exists) { dlog('  [NAO EXISTE] ' + rootPath); continue; }
+            pathsExisted.push(rootPath);
+            dlog('  [OK] ' + rootPath);
+            _lwFindPresetRoots(rootF, presetRoots, seenRoots, 0, dlog);
+        }
+
+        dlog('--- Pastas de preset encontradas ---');
+        for (var lpr = 0; lpr < presetRoots.length; lpr++) dlog('  ' + presetRoots[lpr].fsName);
+
+        // Scan cada root de preset
+        var seen = {};
+        for (var r = 0; r < presetRoots.length; r++) {
+            _lwScanPresetFolder(presetRoots[r], '', items, seen, 0);
+        }
+        dlog('Total .prfpset achados: ' + items.length);
+
+        // Dedup por NAME (mesmo preset em múltiplas versões = 1 entrada só)
+        var dedupMap = {};
+        var dedupedItems = [];
+        for (var di = 0; di < items.length; di++) {
+            var nKey = items[di].name + '|' + (items[di].category || '');
+            if (!dedupMap[nKey]) {
+                dedupMap[nKey] = 1;
+                dedupedItems.push(items[di]);
+            }
+        }
+        items = dedupedItems;
+        dlog('Após dedup por nome: ' + items.length);
+
+        debug = 'tried=' + pathsTried.length + ',existed=' + pathsExisted.length + ',roots=' + presetRoots.length + ',presets=' + items.length;
+    } catch(e) {
+        debug = 'preset-scan-err:' + e.toString().slice(0, 80);
+        dlog('OUTER ERR: ' + e);
+    }
+
+    // Escreve log detalhado em arquivo temp pra debug
+    try {
+        var fdbg = new File(Folder.temp.fsName + '/lion-search-presets-debug.txt');
+        if (fdbg.open('w')) {
+            fdbg.encoding = 'UTF-8';
+            fdbg.writeln('Platform: ' + File.fs);
+            fdbg.writeln('Folder.myDocuments: ' + (Folder.myDocuments ? Folder.myDocuments.fsName : 'null'));
+            fdbg.writeln('Folder.appData: ' + (Folder.appData ? Folder.appData.fsName : 'null'));
+            fdbg.writeln('Folder.userData: ' + (Folder.userData ? Folder.userData.fsName : 'null'));
+            try { fdbg.writeln('USERPROFILE: ' + $.getenv('USERPROFILE')); } catch(e) {}
+            try { fdbg.writeln('HOME: ' + $.getenv('HOME')); } catch(e) {}
+            try { fdbg.writeln('APPDATA: ' + $.getenv('APPDATA')); } catch(e) {}
+            fdbg.writeln('');
+            for (var dl = 0; dl < dbgLog.length; dl++) fdbg.writeln(dbgLog[dl]);
+            fdbg.writeln('');
+            fdbg.writeln('--- First 10 presets ---');
+            for (var fi = 0; fi < Math.min(10, items.length); fi++) {
+                fdbg.writeln(items[fi].name + ' @ ' + items[fi].matchName);
+            }
+            fdbg.close();
+        }
+    } catch(eFw) {}
+
+    return _lwSearchJson(items, debug, []);
+}
+
+// Encontra recursivamente pastas com .prfpset OU pastas com nome conhecido
+// Estratégia: marca uma pasta como "preset root" se contém pelo menos 1 .prfpset
+// OU se o nome bate com "Effect Presets" / similar
+function _lwFindPresetRoots(folder, out, seen, depth, dlog) {
+    if (!folder || depth > 10) return;
+    var files = null;
+    try { files = folder.getFiles(); } catch(e) {
+        if (dlog) dlog('  getFiles err @ ' + folder.fsName + ': ' + e);
+        return;
+    }
+    if (!files) return;
+    var hasPrfpsetFile = false;
+    for (var fi = 0; fi < files.length; fi++) {
+        var ff = files[fi];
+        if (ff instanceof File) {
+            var nm = String(ff.name).toLowerCase();
+            if (nm.length > 8 && nm.substr(nm.length - 8) === '.prfpset') {
+                hasPrfpsetFile = true;
+                break;
+            }
+        }
+    }
+    var fname = String(folder.name);
+    var lname = fname.toLowerCase();
+    var isKnownPresetFolder = (
+        fname === 'Effect Presets and Custom Items'
+        || fname === 'Effect Presets'
+        || lname === 'effect presets and custom items'
+        || lname === 'effect presets'
+        || (lname.indexOf('preset') >= 0 && (lname.indexOf('effect') >= 0 || lname.indexOf('custom') >= 0))
+    );
+    if (hasPrfpsetFile || isKnownPresetFolder) {
+        if (!seen[folder.fsName]) {
+            seen[folder.fsName] = 1;
+            out.push(folder);
+            if (dlog) dlog('  [PRESET ROOT] ' + folder.fsName + (hasPrfpsetFile ? ' (has .prfpset)' : ' (named)'));
+        }
+    }
+    // Continua descendo em todas as subpastas (limitado por depth)
+    for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (!(f instanceof Folder)) continue;
+        _lwFindPresetRoots(f, out, seen, depth + 1, dlog);
+    }
+}
+
+// Helper: ExtendScript File.name retorna URL-encoded ("Cross%20Dissolve.prfpset")
+// — converte pra string legível
+function _lwDecodeName(s) {
+    if (!s) return '';
+    try { return decodeURIComponent(s); } catch(e) { return s; }
+}
+
+function _lwScanPresetFolder(folder, parentPath, items, seen, depth) {
+    if (!folder || depth > 8) return;
+    var files;
+    try { files = folder.getFiles(); } catch(e) { return; }
+    if (!files) return;
+    for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (f instanceof Folder) {
+            var sub = parentPath ? parentPath + ' / ' + _lwDecodeName(f.name) : _lwDecodeName(f.name);
+            _lwScanPresetFolder(f, sub, items, seen, depth + 1);
+        } else {
+            var fname = _lwDecodeName(String(f.name));
+            var lower = fname.toLowerCase();
+            if (lower.length > 8 && lower.substr(lower.length - 8) === '.prfpset') {
+                var displayName = fname.substr(0, fname.length - 8);
+                var displayLower = displayName.toLowerCase();
+                if (displayLower === '.ds_store') continue;
+                // Container files com várias presets dentro: marca pra parser parsear
+                var isContainer = false;
+                var containerNames = ['factory presets', 'lumetri presets', 'lumetri color presets', 'maskpresets', 'effect presets and custom items'];
+                for (var cn = 0; cn < containerNames.length; cn++) {
+                    if (displayLower === containerNames[cn]) { isContainer = true; break; }
+                }
+                var fullPath = f.fsName;
+                if (seen[fullPath]) continue;
+                seen[fullPath] = 1;
+                var pathLower = String(parentPath + '/' + displayName).toLowerCase();
+                var audioOnly = (pathLower.indexOf('audio') >= 0);
+                var videoOnly = (pathLower.indexOf('video') >= 0 && !audioOnly);
+                items.push({
+                    kind: 'preset',
+                    name: displayName,
+                    matchName: fullPath,
+                    category: parentPath || 'Presets',
+                    audioOnly: audioOnly,
+                    videoOnly: videoOnly,
+                    isContainer: isContainer, // plugin client vai parsear se for container
+                });
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — APPLY PRESET (drag .prfpset no clip selecionado)
+// ═══════════════════════════════════════════════════════════════════
+function _lwApplyPreset(presetPath) {
+    try {
+        if (!presetPath) return 'ERR:preset_path_empty';
+        var pf = new File(presetPath);
+        if (!pf.exists) return 'ERR:preset_file_not_found:' + presetPath;
+        if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
+        try { app.enableQE(); } catch(e0) {}
+        if (typeof qe === 'undefined' || !qe.project) return 'ERR:qe_not_available';
+
+        // Acha clips selecionados (pode ser audio ou video — preset detecta-se sozinho)
+        var qeSeq = qe.project.getActiveSequence();
+        if (!qeSeq) return 'ERR:no_qe_sequence';
+        var seq = app.project.activeSequence;
+        var sel = _lwFindSelectedQEClips(qeSeq, true, seq);
+        if (sel.length === 0) sel = _lwFindSelectedQEClips(qeSeq, false, seq);
+        if (sel.length === 0) return 'NO_CLIP_SELECTED';
+
+        var applied = 0;
+        for (var i = 0; i < sel.length; i++) {
+            // Tenta múltiplas APIs de preset
+            var ok = false;
+            try { sel[i].applyPreset(presetPath); ok = true; } catch(e1) {}
+            if (!ok) { try { sel[i].applyEffectPreset(presetPath); ok = true; } catch(e2) {} }
+            if (ok) applied++;
+        }
+        if (applied === 0) return 'ERR:preset_apply_failed_qe_method_unsupported';
+        return 'OK:applied:' + applied;
+    } catch (e) {
+        return 'ERR:' + e.toString().slice(0, 200);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — INSERT AUDIO SOURCE (gap finder + nova track se preciso)
+// ═══════════════════════════════════════════════════════════════════
+function _lwInsertAudioSource(nodeIdOrName) {
+    try {
+        if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
+        var seq = app.project.activeSequence;
+
+        var foundItem = null;
+        var preImportedFromFs = false;
+
+        // Se for FS path (do SFX folder), importa direto
+        if (nodeIdOrName.indexOf('FS:') === 0) {
+            var fsPath = nodeIdOrName.substr(3);
+            var fsFile = new File(fsPath);
+            if (!fsFile.exists) return 'ERR:sfx_file_not_found:' + fsPath;
+            // Verifica se já tá importado (busca por mediaPath)
+            function _findFsByPath(bin, target, holder) {
+                if (holder.found) return;
+                try {
+                    if (!bin.children || bin.children.numItems === 0) return;
+                    for (var ii = 0; ii < bin.children.numItems; ii++) {
+                        if (holder.found) return;
+                        var it = bin.children[ii];
+                        var ch = null;
+                        try { ch = it.children; } catch(eC) {}
+                        if (ch && ch.numItems > 0) { _findFsByPath(it, target, holder); }
+                        else {
+                            var p = '';
+                            try { p = it.getMediaPath(); } catch(eM) {}
+                            if (p === target) { holder.found = it; return; }
+                        }
+                    }
+                } catch(e) {}
+            }
+            var holder = { found: null };
+            _findFsByPath(app.project.rootItem, fsPath, holder);
+            if (holder.found) {
+                foundItem = holder.found;
+            } else {
+                // Importa pro projeto ativo
+                var importOk = false;
+                try { importOk = app.project.importFiles([fsPath]); } catch(eI) {}
+                if (!importOk) return 'ERR:sfx_import_failed:' + fsPath;
+                holder = { found: null };
+                _findFsByPath(app.project.rootItem, fsPath, holder);
+                if (!holder.found) return 'ERR:sfx_imported_not_found:' + fsPath;
+                foundItem = holder.found;
+                preImportedFromFs = true;
+            }
+        }
+
+        // Se não veio de FS, acha o project item — procura em TODOS os projetos abertos
+        function _findInBin(bin) {
+            if (foundItem) return;
+            try {
+                if (!bin.children || bin.children.numItems === 0) return;
+                for (var i = 0; i < bin.children.numItems; i++) {
+                    if (foundItem) return;
+                    var it = bin.children[i];
+                    var ch = null;
+                    try { ch = it.children; } catch(eC) {}
+                    if (ch && ch.numItems > 0) { _findInBin(it); }
+                    else {
+                        var nid = '';
+                        try { nid = it.nodeId || it.name || ''; } catch(eN) {}
+                        var nm = '';
+                        try { nm = it.name || ''; } catch(eM) {}
+                        if (nid === nodeIdOrName || nm === nodeIdOrName) { foundItem = it; return; }
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // Coleta todos os projetos abertos
+        var projects = [];
+        try {
+            if (app.openDocuments) {
+                var nDocs = app.openDocuments.numItems || app.openDocuments.length || 0;
+                for (var d = 0; d < nDocs; d++) {
+                    var doc = null;
+                    try { doc = app.openDocuments[d]; } catch(eDD) {}
+                    if (!doc) try { doc = app.openDocuments.getItemAt(d); } catch(eDD2) {}
+                    if (doc) projects.push(doc);
+                }
+            }
+        } catch(eOd) {}
+        try {
+            if (app.projects && projects.length === 0) {
+                var nProj = app.projects.numProjects || app.projects.length || 0;
+                for (var ip = 0; ip < nProj; ip++) {
+                    var pr = null;
+                    try { pr = app.projects[ip]; } catch(ePj) {}
+                    if (pr) projects.push(pr);
+                }
+            }
+        } catch(eP) {}
+        if (projects.length === 0) projects.push(app.project); // fallback
+
+        // Procura primeiro no projeto ativo (mais provável + insertClip funciona)
+        try { _findInBin(app.project.rootItem); } catch(eA) {}
+
+        // Se não achou, tenta nos outros projetos
+        if (!foundItem) {
+            for (var pp = 0; pp < projects.length && !foundItem; pp++) {
+                var pr2 = projects[pp];
+                if (pr2 === app.project) continue; // já tentou
+                try { _findInBin(pr2.rootItem); } catch(eB) {}
+            }
+        }
+
+        if (!foundItem) return 'ERR:audio_source_not_found:' + nodeIdOrName;
+
+        // Se o item não pertence ao projeto ativo, IMPORTA o arquivo pro projeto ativo
+        // pra poder fazer track.insertClip (que requer item do mesmo projeto).
+        var itemBelongsToActive = false;
+        try {
+            // Walk up parents — se chegar no rootItem do app.project, pertence
+            var p = foundItem;
+            for (var pw = 0; pw < 20 && p; pw++) {
+                if (p === app.project.rootItem) { itemBelongsToActive = true; break; }
+                try { p = p.parent; } catch(eP) { break; }
+                if (!p) break;
+            }
+        } catch(eBel) {}
+
+        if (!itemBelongsToActive) {
+            // Pega o file path e importa
+            var mediaPath = '';
+            try { mediaPath = foundItem.getMediaPath(); } catch(eMp) {}
+            if (!mediaPath) {
+                try { mediaPath = foundItem.canonicalUri || ''; } catch(eC) {}
+            }
+            if (!mediaPath) return 'ERR:could_not_get_path_other_project';
+
+            // Helper: normaliza path pra comparar (lowercase, forward slashes, sem URL-encoding)
+            function _normPath(p) {
+                if (!p) return '';
+                var s = String(p);
+                try { s = decodeURIComponent(s); } catch(eD) {}
+                s = s.replace(/\\/g, '/').toLowerCase();
+                // Remove file:// prefix se houver
+                s = s.replace(/^file:\/\/+/, '');
+                return s;
+            }
+            var targetNorm = _normPath(mediaPath);
+            // Extrai filename pra fallback
+            var targetFilename = '';
+            try {
+                var slashIdx = Math.max(targetNorm.lastIndexOf('/'), targetNorm.lastIndexOf('\\'));
+                targetFilename = slashIdx >= 0 ? targetNorm.substr(slashIdx + 1) : targetNorm;
+            } catch(eFn) {}
+
+            // Conta itens antes do import (pra detectar o novo)
+            function _countLeaves(bin, depth) {
+                if (!bin || depth > 10) return 0;
+                var n = 0;
+                try {
+                    if (!bin.children || bin.children.numItems === 0) return 0;
+                    for (var ic = 0; ic < bin.children.numItems; ic++) {
+                        var ck = bin.children[ic];
+                        var ck2 = null;
+                        try { ck2 = ck.children; } catch(eCh) {}
+                        if (ck2 && ck2.numItems > 0) n += _countLeaves(ck, depth + 1);
+                        else n++;
+                    }
+                } catch(e) {}
+                return n;
+            }
+            var leavesBefore = _countLeaves(app.project.rootItem, 0);
+
+            // Importa pro projeto ativo
+            var importedOk = false;
+            try {
+                importedOk = app.project.importFiles([mediaPath], 1, app.project.getInsertionBin(), 0);
+            } catch(eImp) {}
+            if (!importedOk) {
+                try {
+                    importedOk = app.project.importFiles([mediaPath]);
+                } catch(eImp2) { return 'ERR:import_failed:' + eImp2.toString().slice(0, 100); }
+            }
+
+            // Aguarda Premiere processar o import
+            try { $.sleep(80); } catch(eSl) {}
+
+            // Busca o item — 3 estratégias
+            var newItem = null;
+
+            // Estratégia 1: match por path normalizado
+            function _findByPathNorm(bin, depth) {
+                if (newItem || depth > 10) return;
+                try {
+                    if (!bin.children || bin.children.numItems === 0) return;
+                    for (var ii = 0; ii < bin.children.numItems; ii++) {
+                        if (newItem) return;
+                        var it2 = bin.children[ii];
+                        var ch2 = null;
+                        try { ch2 = it2.children; } catch(eC2) {}
+                        if (ch2 && ch2.numItems > 0) { _findByPathNorm(it2, depth + 1); }
+                        else {
+                            var pp2 = '';
+                            try { pp2 = it2.getMediaPath(); } catch(eMp2) {}
+                            if (_normPath(pp2) === targetNorm) { newItem = it2; return; }
+                        }
+                    }
+                } catch(eF) {}
+            }
+            _findByPathNorm(app.project.rootItem, 0);
+
+            // Estratégia 2: match por filename + path contém targetFilename
+            if (!newItem && targetFilename) {
+                function _findByFilename(bin, depth) {
+                    if (newItem || depth > 10) return;
+                    try {
+                        if (!bin.children || bin.children.numItems === 0) return;
+                        for (var ii2 = 0; ii2 < bin.children.numItems; ii2++) {
+                            if (newItem) return;
+                            var it3 = bin.children[ii2];
+                            var ch3 = null;
+                            try { ch3 = it3.children; } catch(eCh3) {}
+                            if (ch3 && ch3.numItems > 0) { _findByFilename(it3, depth + 1); }
+                            else {
+                                var nm3 = '';
+                                try { nm3 = String(it3.name).toLowerCase(); } catch(eNm) {}
+                                var pp3 = '';
+                                try { pp3 = _normPath(it3.getMediaPath()); } catch(eMp3) {}
+                                // Match se nome bate ou path contém filename
+                                if (nm3 === targetFilename || nm3 + '.' + (it3.type || '') === targetFilename
+                                    || (pp3 && pp3.indexOf(targetFilename) >= 0)) {
+                                    newItem = it3;
+                                    return;
+                                }
+                            }
+                        }
+                    } catch(eF2) {}
+                }
+                _findByFilename(app.project.rootItem, 0);
+            }
+
+            // Estratégia 3: pega o último leaf adicionado (newest item)
+            if (!newItem) {
+                var leavesAfter = _countLeaves(app.project.rootItem, 0);
+                if (leavesAfter > leavesBefore) {
+                    // Pega o último leaf — provavelmente é o que importamos
+                    function _getLastLeaf(bin, depth) {
+                        if (!bin || depth > 10) return null;
+                        try {
+                            if (!bin.children || bin.children.numItems === 0) return null;
+                            // Itera de trás pra frente — último item costuma ser o mais novo
+                            for (var li = bin.children.numItems - 1; li >= 0; li--) {
+                                var it4 = bin.children[li];
+                                var ch4 = null;
+                                try { ch4 = it4.children; } catch(eCh4) {}
+                                if (ch4 && ch4.numItems > 0) {
+                                    var deep = _getLastLeaf(it4, depth + 1);
+                                    if (deep) return deep;
+                                } else {
+                                    return it4;
+                                }
+                            }
+                        } catch(e) {}
+                        return null;
+                    }
+                    newItem = _getLastLeaf(app.project.rootItem, 0);
+                }
+            }
+
+            if (!newItem) return 'ERR:imported_but_not_found:' + mediaPath + ' (target=' + targetFilename + ')';
+            foundItem = newItem;
+        }
+
+        // Calcula duração — respeita in/out se setados
+        var insertDurationSec = 0;
+        var hasInOut = false;
+        var inSec = 0, outSec = 0;
+        try {
+            // Tenta múltiplos mediaType pra in/out
+            var inPt = null, outPt = null;
+            var mediaTypes = [4, 1, 0]; // audio, video, both
+            for (var mt = 0; mt < mediaTypes.length; mt++) {
+                try {
+                    var ip = foundItem.getInPoint(mediaTypes[mt]);
+                    var op = foundItem.getOutPoint(mediaTypes[mt]);
+                    if (ip && op) { inPt = ip; outPt = op; break; }
+                } catch(eMT) {}
+            }
+            if (inPt && outPt) {
+                inSec = parseFloat(inPt.seconds);
+                outSec = parseFloat(outPt.seconds);
+                if (outSec > inSec) {
+                    insertDurationSec = outSec - inSec;
+                    hasInOut = true;
+                }
+            }
+        } catch(eIO) {}
+
+        // Se não tem in/out válido, usa duração total
+        if (insertDurationSec <= 0) {
+            try {
+                var dur = foundItem.getOutPoint(0); // tenta full duration
+                if (dur && dur.seconds > 0) insertDurationSec = parseFloat(dur.seconds);
+            } catch(eD) {}
+        }
+        if (insertDurationSec <= 0) {
+            // Fallback: tenta via clip projecting.. assume 5s mínimo
+            insertDurationSec = 5;
+        }
+
+        // Posição playhead
+        var insertStartSec = 0;
+        try {
+            var pp = seq.getPlayerPosition();
+            if (pp) insertStartSec = parseFloat(pp.seconds);
+        } catch(ePh) {}
+        var insertEndSec = insertStartSec + insertDurationSec;
+
+        // Encontra audio track sem overlap
+        var targetTrackIdx = -1;
+        var EPS = 0.001;
+        for (var ti = 0; ti < seq.audioTracks.numTracks; ti++) {
+            var atk = seq.audioTracks[ti];
+            var hasOverlap = false;
+            for (var ci = 0; ci < atk.clips.numItems; ci++) {
+                var c = atk.clips[ci];
+                var cStart = 0, cEnd = 0;
+                try { cStart = parseFloat(c.start.seconds); cEnd = parseFloat(c.end.seconds); } catch(eC) {}
+                // Overlap se [cStart, cEnd) intersecta [insertStartSec, insertEndSec)
+                if (cStart < insertEndSec - EPS && cEnd > insertStartSec + EPS) { hasOverlap = true; break; }
+            }
+            if (!hasOverlap) { targetTrackIdx = ti; break; }
+        }
+
+        // Se nenhuma track livre, cria nova audio track
+        if (targetTrackIdx < 0) {
+            try {
+                // addTracks(numVid, vidIdx, numAudio, audioChType, audioIdx)
+                // audioChType: 0=Mono, 1=Stereo, 2=5.1, 3=Adaptive
+                seq.addTracks(0, 0, 1, 1, -1); // 1 stereo audio no final
+                targetTrackIdx = seq.audioTracks.numTracks - 1;
+            } catch(eAdd) {
+                // Fallback via QE
+                try {
+                    app.enableQE();
+                    var qSeq = qe.project.getActiveSequence();
+                    if (qSeq && qSeq.addAudioTrack) {
+                        qSeq.addAudioTrack();
+                        targetTrackIdx = seq.audioTracks.numTracks - 1;
+                    }
+                } catch(eQA) { return 'ERR:could_not_create_audio_track:' + eAdd.toString().slice(0, 80); }
+            }
+        }
+        if (targetTrackIdx < 0) return 'ERR:no_track_available';
+
+        // Insere o clip no playhead
+        try {
+            var targetTrack = seq.audioTracks[targetTrackIdx];
+            var beforeCount = targetTrack.clips.numItems;
+
+            // Tenta insertClip primeiro
+            var insertOk = false;
+            var lastInsertErr = '';
+            try {
+                targetTrack.insertClip(foundItem, insertStartSec);
+                insertOk = true;
+            } catch (eIns) {
+                lastInsertErr = eIns.toString();
+            }
+
+            // Fallback 1: overwriteClip (não conflita com IDs em alguns casos)
+            if (!insertOk) {
+                try {
+                    targetTrack.overwriteClip(foundItem, insertStartSec);
+                    insertOk = true;
+                } catch (eOw) {
+                    lastInsertErr += ' | overwrite: ' + eOw.toString();
+                }
+            }
+
+            if (!insertOk) {
+                // Detecta erro de "multiple projects with the same ID" e dá mensagem clara
+                if (/same id|multiple projects/i.test(lastInsertErr)) {
+                    return 'ERR:duplicate_project_id';
+                }
+                return 'ERR:insert_failed:' + lastInsertErr.slice(0, 200);
+            }
+
+            // Se tinha in/out e o clip inserido pegou tudo, ajusta o end
+            if (hasInOut) {
+                var newClip = null;
+                for (var nci = targetTrack.clips.numItems - 1; nci >= 0; nci--) {
+                    var nc = targetTrack.clips[nci];
+                    var ncStart = 0;
+                    try { ncStart = parseFloat(nc.start.seconds); } catch(eNS) {}
+                    if (Math.abs(ncStart - insertStartSec) < 0.5) { newClip = nc; break; }
+                }
+                if (newClip) {
+                    try { newClip.end = insertStartSec + insertDurationSec; } catch(eEd) {}
+                }
+            }
+
+            return 'OK:inserted:track' + (targetTrackIdx + 1) + ':' + insertDurationSec.toFixed(2) + 's';
+        } catch (eOuter) {
+            return 'ERR:insert_failed:' + eOuter.toString().slice(0, 200);
+        }
+    } catch (eAll) {
+        return 'ERR:' + eAll.toString().slice(0, 200);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — LIST ALL (effects + presets + audio sources merged)
+// ═══════════════════════════════════════════════════════════════════
+function lwSearchListAllExtended(sfxFolderPath) {
+    var items = [];
+    var debug = [];
+    var errors = [];
+    var masterDebug = [];
+
+    function mlog(m) { try { masterDebug.push(m); } catch(e) {} }
+
+    function mergeFrom(jsonStr, label) {
+        try {
+            if (typeof JSON !== 'undefined') {
+                var parsed = JSON.parse(jsonStr);
+                if (parsed.items) {
+                    for (var i = 0; i < parsed.items.length; i++) items.push(parsed.items[i]);
+                }
+                if (parsed.debug) debug.push(label + ':' + parsed.debug);
+                if (parsed.error) errors.push(label + ':' + parsed.error);
+                mlog('  ' + label + ': items=' + (parsed.items ? parsed.items.length : 0) + ' debug=' + (parsed.debug || '') + (parsed.error ? ' err=' + parsed.error : ''));
+            }
+        } catch(e) {
+            errors.push(label + ':' + e.toString().slice(0, 60));
+            mlog('  ' + label + ': PARSE-ERR ' + e);
+        }
+    }
+
+    mlog('=== LION SEARCH MASTER DEBUG ===');
+    mlog('time: ' + (new Date()).toString());
+
+    // Inspeção inicial do app/qe
+    try {
+        mlog('app.version=' + app.version);
+        mlog('app.project.name=' + (app.project ? app.project.name : 'null'));
+    } catch(eA) { mlog('app inspect err: ' + eA); }
+    try { app.enableQE(); } catch(eQE) {}
+    try {
+        mlog('typeof qe=' + (typeof qe));
+        if (typeof qe !== 'undefined' && qe) {
+            try { mlog('qe.numProjects=' + (qe.numProjects || 'undefined')); } catch(eQNP) {}
+            // Lista TODAS as keys/methods de qe
+            try {
+                var qeKeys = '';
+                for (var qk in qe) qeKeys += qk + ',';
+                mlog('qe keys: ' + qeKeys);
+            } catch(eQK) { mlog('qe keys err: ' + eQK); }
+            // Lista TODAS as keys/methods de qe.project
+            try {
+                if (qe.project) {
+                    var qePjKeys = '';
+                    for (var qpk in qe.project) qePjKeys += qpk + ',';
+                    mlog('qe.project keys: ' + qePjKeys);
+                }
+            } catch(eQPK) { mlog('qe.project keys err: ' + eQPK); }
+        }
+    } catch(eQ) { mlog('qe inspect err: ' + eQ); }
+    try {
+        mlog('typeof app.openDocuments=' + (typeof app.openDocuments));
+        if (typeof app.openDocuments !== 'undefined') {
+            try { mlog('app.openDocuments.numItems=' + (app.openDocuments.numItems || 'undef')); } catch(eND) {}
+            try { mlog('app.openDocuments.length=' + (app.openDocuments.length || 'undef')); } catch(eLD) {}
+        }
+    } catch(eOD) { mlog('openDocs inspect err: ' + eOD); }
+    try {
+        mlog('typeof app.projects=' + (typeof app.projects));
+        if (typeof app.projects !== 'undefined') {
+            try { mlog('app.projects.numProjects=' + (app.projects.numProjects || 'undef')); } catch(eNP) {}
+        }
+    } catch(eAP) { mlog('app.projects inspect err: ' + eAP); }
+    // Keys do app
+    try {
+        var appKeys = '';
+        for (var ak in app) appKeys += ak + ',';
+        mlog('app keys: ' + appKeys);
+    } catch(eAK) { mlog('app keys err: ' + eAK); }
+
+    // ─── EFFECTS ───
+    mlog('--- listing effects ---');
+    var fxJson = '';
+    try { fxJson = lwSearchListAll(); } catch(e1) { errors.push('fx-call:' + e1); mlog('fx call exception: ' + e1); }
+    mergeFrom(fxJson, 'fx');
+
+    // ─── PRESETS ───
+    mlog('--- listing presets ---');
+    var presetsJson = '';
+    try { presetsJson = lwSearchListPresets(); } catch(e2) { errors.push('preset-call:' + e2); mlog('preset call exception: ' + e2); }
+    mergeFrom(presetsJson, 'pre');
+
+    // ─── AUDIO SOURCES ───
+    mlog('--- listing audio sources ---');
+    var audioJson = '';
+    try { audioJson = lwSearchListAudioSources(sfxFolderPath || ''); } catch(e3) { errors.push('audio-call:' + e3); mlog('audio call exception: ' + e3); }
+    mergeFrom(audioJson, 'aud');
+
+    mlog('=== TOTAL items: ' + items.length + ' ===');
+
+    // Escreve master debug — tenta Desktop primeiro (mais fácil de achar), TEMP como fallback
+    var debugPaths = [];
+    try { debugPaths.push(Folder.desktop.fsName + '/lion-search-debug.txt'); } catch(eDk) {}
+    try { debugPaths.push(Folder.temp.fsName + '/lion-search-master-debug.txt'); } catch(eTmp) {}
+    for (var dp = 0; dp < debugPaths.length; dp++) {
+        try {
+            var fdbg = new File(debugPaths[dp]);
+            if (fdbg.open('w')) {
+                fdbg.encoding = 'UTF-8';
+                for (var di = 0; di < masterDebug.length; di++) fdbg.writeln(masterDebug[di]);
+                fdbg.writeln('');
+                fdbg.writeln('--- Sample of first items per kind ---');
+                var samples = { 'video-fx': [], 'audio-fx': [], 'preset': [], 'audio-source': [] };
+                for (var si = 0; si < items.length; si++) {
+                    var k = items[si].kind;
+                    if (samples[k] && samples[k].length < 5) samples[k].push(items[si]);
+                }
+                for (var sk in samples) {
+                    var cnt = 0;
+                    for (var x = 0; x < items.length; x++) if (items[x].kind === sk) cnt++;
+                    fdbg.writeln('  ' + sk + ' (count: ' + cnt + '):');
+                    for (var ssi = 0; ssi < samples[sk].length; ssi++) {
+                        fdbg.writeln('    - ' + samples[sk][ssi].name + ' [' + samples[sk][ssi].category + ']');
+                    }
+                }
+                fdbg.close();
+            }
+        } catch(eDw) {}
+    }
+    return _lwSearchJsonWithFlags(items, debug.join(','), errors);
+}
+
+// Versão estendida que preserva audioOnly/videoOnly nos items (usados pra filtrar)
+function _lwSearchJsonWithFlags(items, debug, errors) {
+    var out = '{"items":[';
+    for (var i = 0; i < items.length; i++) {
+        if (i > 0) out += ',';
+        var it = items[i];
+        out += '{"kind":"' + _lwEscapeJson(it.kind) + '"';
+        out += ',"name":"' + _lwEscapeJson(it.name) + '"';
+        out += ',"matchName":"' + _lwEscapeJson(it.matchName) + '"';
+        out += ',"category":"' + _lwEscapeJson(it.category) + '"';
+        if (it.audioOnly) out += ',"audioOnly":true';
+        if (it.videoOnly) out += ',"videoOnly":true';
+        if (it.isContainer) out += ',"isContainer":true';
+        out += '}';
+    }
+    out += '],"debug":"' + _lwEscapeJson(debug || '') + '"';
+    out += ',"error":"' + _lwEscapeJson((errors && errors.length) ? errors.join(' | ') : '') + '"}';
+    return out;
 }
