@@ -2613,11 +2613,19 @@ function startSyncServer() {
                         res.end(JSON.stringify({ error: 'hotkey vazio' }));
                         return;
                     }
+                    const oldHotkey2 = _lionSettings.hotkey;
                     _lionSettings = { hotkey: newHotkey, enabled: newEnabled, sfxFolder: newSfxFolder };
                     saveLionSearchSettings(_lionSettings);
                     let regResult = { ok: true };
+                    if (oldHotkey2 !== newHotkey || !newEnabled) {
+                        _doUnregisterHotkey();
+                    }
                     if (newEnabled) {
                         startHotkeyFgWatcher();
+                        try {
+                            if (isWin) _checkAndRegisterHotkey(fs.readFileSync(fgFile, 'utf8').trim());
+                            else if (isMac) getFgProc((fg) => _checkAndRegisterHotkey(fg));
+                        } catch(e) {}
                     } else {
                         stopHotkeyFgWatcher();
                     }
@@ -3936,46 +3944,50 @@ function _doUnregisterHotkey() {
     }
 }
 
-// Watcher: a cada 500ms, checa se Premiere tá em foco.
-// - Premiere em foco + hotkey desregistrado → registra (passa a capturar a tecla)
-// - Outro app em foco + hotkey registrado → desregistra (tecla volta a funcionar normalmente)
-// - LION SEARCH window aberta mas Premiere fora de foco → fecha LION SEARCH
+// Função reusável que checa e registra/desregistra com base no foreground atual
+function _checkAndRegisterHotkey(fgRaw) {
+    const fg = String(fgRaw || '').toLowerCase();
+    const isPremiere = /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
+    const lionOpen = lionSearchWin && !lionSearchWin.isDestroyed();
+    let lionFocused = false;
+    try { lionFocused = lionOpen && lionSearchWin.isFocused(); } catch(e) {}
+
+    // GUARD: fecha LION SEARCH se Premiere saiu de foco E LION SEARCH também perdeu foco
+    if (lionOpen && !isPremiere && !lionFocused) {
+        try { lionSearchWin.close(); } catch(e) {}
+    }
+
+    if (!_lionSettings.enabled || !_lionSettings.hotkey) {
+        _doUnregisterHotkey();
+        return;
+    }
+    const wantHotkey = _lionSettings.hotkey;
+    const shouldRegister = isPremiere || lionFocused;
+
+    if (shouldRegister) {
+        // Se hotkey atual é diferente do que queremos (mudou setting), re-registra
+        if (_registeredLionHotkey !== wantHotkey) {
+            _doUnregisterHotkey();
+            const ok = _doRegisterHotkey(wantHotkey);
+            if (ok) console.log('[lion-search] hotkey registrado:', wantHotkey);
+        }
+    } else if (_registeredLionHotkey) {
+        console.log('[lion-search] hotkey desregistrado (Premiere fora de foco) — tecla volta ao normal');
+        _doUnregisterHotkey();
+    }
+}
+
+// Watcher: a cada 200ms, checa se Premiere tá em foco e ajusta registro do hotkey
 function startHotkeyFgWatcher() {
     if (_hotkeyFgWatcherTimer) return;
-    let fgCallback = (fgRaw) => {
-        const fg = String(fgRaw || '').toLowerCase();
-        const isPremiere = /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
-        // Lion Search window: foco verificado via isFocused (não conta como Premiere pra hotkey)
-        const lionOpen = lionSearchWin && !lionSearchWin.isDestroyed();
-        const lionFocused = lionOpen && lionSearchWin.isFocused();
-
-        // GUARD: fecha LION SEARCH se Premiere saiu de foco E LION SEARCH não tem foco também
-        // (Ex: user alt-tab pra Desktop, deixou LION SEARCH órfão flutuando)
-        if (lionOpen && !isPremiere && !lionFocused) {
-            try { lionSearchWin.close(); } catch(e) {}
-        }
-
-        if (!_lionSettings.enabled || !_lionSettings.hotkey) {
-            _doUnregisterHotkey();
-            return;
-        }
-        if ((isPremiere || lionFocused) && !_registeredLionHotkey) {
-            const ok = _doRegisterHotkey(_lionSettings.hotkey);
-            if (ok) console.log('[lion-search] hotkey registrado (Premiere em foco):', _lionSettings.hotkey);
-        } else if (!isPremiere && !lionFocused && _registeredLionHotkey) {
-            console.log('[lion-search] hotkey desregistrado (Premiere saiu de foco)');
-            _doUnregisterHotkey();
-        }
-    };
     _hotkeyFgWatcherTimer = setInterval(() => {
         if (isWin) {
-            // Lê do fgFile (sync)
-            try { fgCallback(fs.readFileSync(fgFile, 'utf8').trim()); } catch { fgCallback(''); }
+            try { _checkAndRegisterHotkey(fs.readFileSync(fgFile, 'utf8').trim()); }
+            catch { _checkAndRegisterHotkey(''); }
         } else if (isMac) {
-            // Mac: lê via osascript (async). Limita rate pra não acumular execs.
-            getFgProc((fg) => fgCallback(fg));
+            getFgProc((fg) => _checkAndRegisterHotkey(fg));
         }
-    }, 500);
+    }, 200);
 }
 
 function stopHotkeyFgWatcher() {
@@ -4005,14 +4017,24 @@ app.on('will-quit', () => {
 // IPC pra UI principal configurar hotkey + SFX folder
 ipcMain.handle('lion-search:get-settings', () => _lionSettings);
 ipcMain.handle('lion-search:set-settings', (event, settings) => {
+    const oldHotkey = _lionSettings.hotkey;
     _lionSettings = {
         hotkey: settings?.hotkey || DEFAULT_LION_HOTKEY,
         enabled: settings?.enabled !== false,
         sfxFolder: settings?.sfxFolder !== undefined ? String(settings.sfxFolder || '') : (_lionSettings.sfxFolder || ''),
     };
     saveLionSearchSettings(_lionSettings);
+    // SEMPRE força unregister do antigo quando muda settings — evita hotkey órfão
+    if (oldHotkey !== _lionSettings.hotkey || !_lionSettings.enabled) {
+        _doUnregisterHotkey();
+    }
     if (_lionSettings.enabled) {
         startHotkeyFgWatcher();
+        // Force check imediato (não espera 200ms) pra registrar logo se Premiere em foco
+        try {
+            if (isWin) _checkAndRegisterHotkey(fs.readFileSync(fgFile, 'utf8').trim());
+            else if (isMac) getFgProc((fg) => _checkAndRegisterHotkey(fg));
+        } catch(e) {}
     } else {
         stopHotkeyFgWatcher();
     }
