@@ -2412,16 +2412,28 @@ function _lwScanPresetFolder(folder, parentPath, items, seen, depth) {
 // ═══════════════════════════════════════════════════════════════════
 // LION SEARCH — APPLY PRESET (drag .prfpset no clip selecionado)
 // ═══════════════════════════════════════════════════════════════════
-function _lwApplyPreset(presetPath) {
+function _lwApplyPreset(presetIdentifier) {
     try {
-        if (!presetPath) return 'ERR:preset_path_empty';
-        var pf = new File(presetPath);
-        if (!pf.exists) return 'ERR:preset_file_not_found:' + presetPath;
+        if (!presetIdentifier) return 'ERR:preset_id_empty';
         if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
         try { app.enableQE(); } catch(e0) {}
         if (typeof qe === 'undefined' || !qe.project) return 'ERR:qe_not_available';
 
-        // Acha clips selecionados (pode ser audio ou video — preset detecta-se sozinho)
+        // Identifier pode ser:
+        //   1) "C:/.../Lumetri Presets.prfpset#Cinematic Look 1" — container + preset
+        //   2) "C:/.../UserPreset.prfpset" — arquivo individual
+        //   3) "Cinematic Look 1" — só o nome
+        var presetName = presetIdentifier;
+        var presetPath = presetIdentifier;
+        var hashIdx = presetIdentifier.indexOf('#');
+        if (hashIdx > 0) {
+            presetPath = presetIdentifier.substring(0, hashIdx);
+            presetName = presetIdentifier.substring(hashIdx + 1);
+        } else if (!/\.prfpset$/i.test(presetIdentifier)) {
+            // Identifier não é caminho — é só o nome
+            presetPath = '';
+        }
+
         var qeSeq = qe.project.getActiveSequence();
         if (!qeSeq) return 'ERR:no_qe_sequence';
         var seq = app.project.activeSequence;
@@ -2430,14 +2442,41 @@ function _lwApplyPreset(presetPath) {
         if (sel.length === 0) return 'NO_CLIP_SELECTED';
 
         var applied = 0;
+        var lastErrs = [];
+
         for (var i = 0; i < sel.length; i++) {
-            // Tenta múltiplas APIs de preset
             var ok = false;
-            try { sel[i].applyPreset(presetPath); ok = true; } catch(e1) {}
-            if (!ok) { try { sel[i].applyEffectPreset(presetPath); ok = true; } catch(e2) {} }
+            // Estratégia 1: applyPresetByName(name) — só nome
+            if (!ok && presetName) {
+                try { sel[i].applyPresetByName(presetName); ok = true; } catch(e1) { lastErrs.push('applyPresetByName:' + e1.toString().slice(0, 50)); }
+            }
+            // Estratégia 2: applyPreset(name) — pode aceitar nome OU path
+            if (!ok && presetName) {
+                try { sel[i].applyPreset(presetName); ok = true; } catch(e2) { lastErrs.push('applyPreset(name):' + e2.toString().slice(0, 50)); }
+            }
+            // Estratégia 3: applyPreset(path) — path do arquivo (works pra individual .prfpset)
+            if (!ok && presetPath) {
+                try {
+                    var pf = new File(presetPath);
+                    if (pf.exists) {
+                        sel[i].applyPreset(presetPath);
+                        ok = true;
+                    }
+                } catch(e3) { lastErrs.push('applyPreset(path):' + e3.toString().slice(0, 50)); }
+            }
+            // Estratégia 4: applyEffectPreset
+            if (!ok && presetPath) {
+                try {
+                    sel[i].applyEffectPreset(presetPath);
+                    ok = true;
+                } catch(e4) { lastErrs.push('applyEffectPreset:' + e4.toString().slice(0, 50)); }
+            }
             if (ok) applied++;
         }
-        if (applied === 0) return 'ERR:preset_apply_failed_qe_method_unsupported';
+
+        if (applied === 0) {
+            return 'ERR:preset_apply_unsupported:' + (lastErrs.length ? lastErrs[0] : 'all methods failed');
+        }
         return 'OK:applied:' + applied;
     } catch (e) {
         return 'ERR:' + e.toString().slice(0, 200);

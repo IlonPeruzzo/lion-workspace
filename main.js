@@ -3939,22 +3939,30 @@ function _doUnregisterHotkey() {
 // Watcher: a cada 500ms, checa se Premiere tá em foco.
 // - Premiere em foco + hotkey desregistrado → registra (passa a capturar a tecla)
 // - Outro app em foco + hotkey registrado → desregistra (tecla volta a funcionar normalmente)
+// - LION SEARCH window aberta mas Premiere fora de foco → fecha LION SEARCH
 function startHotkeyFgWatcher() {
     if (_hotkeyFgWatcherTimer) return;
     let fgCallback = (fgRaw) => {
+        const fg = String(fgRaw || '').toLowerCase();
+        const isPremiere = /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
+        // Lion Search window: foco verificado via isFocused (não conta como Premiere pra hotkey)
+        const lionOpen = lionSearchWin && !lionSearchWin.isDestroyed();
+        const lionFocused = lionOpen && lionSearchWin.isFocused();
+
+        // GUARD: fecha LION SEARCH se Premiere saiu de foco E LION SEARCH não tem foco também
+        // (Ex: user alt-tab pra Desktop, deixou LION SEARCH órfão flutuando)
+        if (lionOpen && !isPremiere && !lionFocused) {
+            try { lionSearchWin.close(); } catch(e) {}
+        }
+
         if (!_lionSettings.enabled || !_lionSettings.hotkey) {
             _doUnregisterHotkey();
             return;
         }
-        const fg = String(fgRaw || '').toLowerCase();
-        const isPremiere = /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
-        // Lion Search window também conta como "Premiere" (pra hotkey continuar funcionando dentro dele)
-        const isLionSearch = lionSearchWin && !lionSearchWin.isDestroyed() && lionSearchWin.isFocused();
-
-        if ((isPremiere || isLionSearch) && !_registeredLionHotkey) {
+        if ((isPremiere || lionFocused) && !_registeredLionHotkey) {
             const ok = _doRegisterHotkey(_lionSettings.hotkey);
             if (ok) console.log('[lion-search] hotkey registrado (Premiere em foco):', _lionSettings.hotkey);
-        } else if (!isPremiere && !isLionSearch && _registeredLionHotkey) {
+        } else if (!isPremiere && !lionFocused && _registeredLionHotkey) {
             console.log('[lion-search] hotkey desregistrado (Premiere saiu de foco)');
             _doUnregisterHotkey();
         }
