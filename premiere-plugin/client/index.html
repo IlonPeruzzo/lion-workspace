@@ -2495,8 +2495,8 @@
             });
         });
     }
-    // Espera 4s após bootstrap pra QE ter tempo de carregar
-    setTimeout(lsSendCatalogOnce, 4000);
+    // Manda catálogo logo após bootstrap (QE costuma estar pronto em 1-2s)
+    setTimeout(lsSendCatalogOnce, 1500);
 
     /* ═══════ LION SEARCH — hotkey config UI no plugin ═══════ */
     var _lsPlCapturing = false;

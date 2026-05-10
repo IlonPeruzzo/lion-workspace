@@ -2171,17 +2171,46 @@ function savePluginSessions() {
 loadPluginSessions(); // Restore sessions on startup
 
 // ═══════ LION SEARCH state ═══════
-// pendingPluginCommands: queue of {id, type, payload} that plugin pops & executes
-// lionSearchEffectsCache: latest catalog from plugin (effects/transitions/presets)
-// lionSearchPending: { [requestId]: {resolve, reject} } — pra HTTP requests de lion-search.html
-//                    aguardarem o plugin retornar com o resultado
 const pendingPluginCommands = [];
 let lionSearchEffectsCache = [];
 let lionSearchEffectsCachedAt = 0;
 let lionSearchCatalogDebug = '';
 let lionSearchCatalogError = '';
-const lionSearchPendingResults = new Map(); // commandId -> { resolve, reject, timeout }
-let lionSearchWin = null; // janela do palette flutuante
+const lionSearchPendingResults = new Map();
+let lionSearchWin = null;
+
+// Persistência do catálogo em disco — disponível imediato no boot do app
+// (sem precisar esperar plugin reenviar quando Premiere abre)
+const LION_CATALOG_FILE = path.join(currentUD, 'lion-search-catalog.json');
+
+function saveLionCatalogToDisk() {
+    try {
+        const data = {
+            items: lionSearchEffectsCache,
+            cachedAt: lionSearchEffectsCachedAt,
+            debug: lionSearchCatalogDebug,
+            error: lionSearchCatalogError,
+            version: 1,
+        };
+        fs.writeFileSync(LION_CATALOG_FILE, JSON.stringify(data), 'utf8');
+    } catch(e) { /* ignora — não-crítico */ }
+}
+
+function loadLionCatalogFromDisk() {
+    try {
+        const raw = fs.readFileSync(LION_CATALOG_FILE, 'utf8');
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.items)) {
+            lionSearchEffectsCache = data.items;
+            lionSearchEffectsCachedAt = data.cachedAt || Date.now();
+            lionSearchCatalogDebug = data.debug || '';
+            lionSearchCatalogError = data.error || '';
+            console.log('[lion-search] catálogo carregado do disco:', data.items.length, 'itens');
+        }
+    } catch(e) { /* primeira vez — sem cache ainda */ }
+}
+// Carrega imediatamente na boot do main.js
+loadLionCatalogFromDisk();
 
 // Enfilera um comando pro plugin executar via JSX, retorna Promise com resultado
 function queuePluginCommand(type, payload, timeoutMs = 15000) {
@@ -2645,23 +2674,22 @@ function startSyncServer() {
                 // audio-sources ACUMULAM (porque Premiere 25.x só expõe o projeto ativo
                 // — quando user troca de projeto, novo scan adiciona ao cache).
                 if (command === 'lion-search/effects-update') {
-                    if (Array.isArray(data.items)) {
+                    if (Array.isArray(data.items) && data.items.length > 0) {
                         const newItems = data.items;
-                        // Separa por kind
                         const newAudio = newItems.filter(x => x.kind === 'audio-source');
                         const newRest  = newItems.filter(x => x.kind !== 'audio-source');
-                        // Resto (effects, presets, transitions) → replace
                         const oldAudio = lionSearchEffectsCache.filter(x => x.kind === 'audio-source');
-                        // Merge audio: dedup por matchName (que é nodeId ou file path)
                         const audioMap = {};
                         for (const a of oldAudio) audioMap[a.matchName || a.name] = a;
-                        for (const a of newAudio) audioMap[a.matchName || a.name] = a; // newer wins
+                        for (const a of newAudio) audioMap[a.matchName || a.name] = a;
                         const mergedAudio = Object.values(audioMap);
                         lionSearchEffectsCache = [...newRest, ...mergedAudio];
                         lionSearchEffectsCachedAt = Date.now();
                         lionSearchCatalogDebug = String(data.debug || '');
                         lionSearchCatalogError = String(data.error || '');
                         console.log('[lion-search] catálogo: total=' + lionSearchEffectsCache.length + ' (effects=' + newRest.length + ', audio merged=' + mergedAudio.length + ' [+' + (mergedAudio.length - oldAudio.length) + ' novos])');
+                        // Persiste no disco — disponível na próxima boot do app
+                        saveLionCatalogToDisk();
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ ok: true }));

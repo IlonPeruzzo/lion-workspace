@@ -569,7 +569,16 @@ async function _applyResult(r, isFresh) {
         updateBadge();
         return false;
     }
-    allItems = r.items || [];
+    const newItems = r.items || [];
+    // CRÍTICO: se chegou items novos VAZIOS mas já tem items cacheados, NÃO sobrescreve
+    // (evita perder o cache do disco quando plugin ainda não respondeu fresh)
+    if (newItems.length === 0 && allItems.length > 0 && isFresh) {
+        // Mantém o cache antigo, só atualiza debug/error
+        lastJsxError = r.jsxError || lastJsxError;
+        lastDebug = r.debug || lastDebug;
+        return true;
+    }
+    allItems = newItems;
     lastJsxError = r.jsxError || '';
     lastDebug = r.debug || '';
     booted = true;
