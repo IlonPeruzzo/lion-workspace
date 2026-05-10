@@ -3810,7 +3810,7 @@ app.on('window-all-closed', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 const LION_SEARCH_SETTINGS_FILE = path.join(currentUD, 'lion-search-settings.json');
-const DEFAULT_LION_HOTKEY = 'Control+Shift+L'; // não conflita com Excalibur (Alt+Space)
+const DEFAULT_LION_HOTKEY = 'Control+Shift+L';
 
 function loadLionSearchSettings() {
     try {
@@ -3818,7 +3818,7 @@ function loadLionSearchSettings() {
         const j = JSON.parse(raw);
         let hotkey = j.hotkey || DEFAULT_LION_HOTKEY;
         if (hotkey === 'Alt+Space') {
-            console.log('[lion-search] migrando hotkey Alt+Space → ' + DEFAULT_LION_HOTKEY + ' (evita conflito com Excalibur)');
+            console.log('[lion-search] migrando hotkey Alt+Space → ' + DEFAULT_LION_HOTKEY);
             hotkey = DEFAULT_LION_HOTKEY;
         }
         return {

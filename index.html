@@ -1441,17 +1441,11 @@
     <div class="tab-content" id="tab-atalhos">
         <div class="card">
             <div class="card-title">Atalhos · LION SEARCH</div>
-            <div style="font-size:.78rem;color:var(--text3);margin-bottom:14px;line-height:1.55">
-                Aperte o atalho <strong>dentro do Premiere Pro</strong> pra abrir uma busca rápida estilo Excalibur.
-                Pesquise efeitos, presets, transições — tudo do Premiere — e aplique no clip selecionado sem usar mouse.
-                <em>Só dispara quando o Premiere está em foco — não atrapalha outros apps.</em>
-            </div>
 
             <div style="display:flex;flex-direction:column;gap:14px">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;background:rgba(190,242,100,.03);border:1px solid rgba(190,242,100,.10);border-radius:10px">
                     <div style="flex:1;min-width:0">
                         <div style="font-size:.86rem;font-weight:600;color:var(--text1);margin-bottom:3px">Ativar LION SEARCH</div>
-                        <div style="font-size:.7rem;color:var(--text3)">Liga o atalho global. Desliga se você prefere usar só pelo plugin.</div>
                     </div>
                     <label class="switch" style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0">
                         <input type="checkbox" id="lsEnabled" onchange="lsSettingsSave()" style="opacity:0;width:0;height:0">
@@ -1460,15 +1454,14 @@
                 </div>
 
                 <div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
-                    <div style="font-size:.86rem;font-weight:600;color:var(--text1);margin-bottom:6px">Atalho do Premiere Pro</div>
-                    <div style="font-size:.7rem;color:var(--text3);margin-bottom:10px">Clique no campo e aperte qualquer combinação (ou tecla solta). <strong>Só dispara quando o Premiere Pro está em foco</strong> — não interfere em outros programas.</div>
+                    <div style="font-size:.86rem;font-weight:600;color:var(--text1);margin-bottom:6px">Tecla de atalho</div>
                     <div style="display:flex;gap:8px;align-items:center">
                         <input type="text" id="lsHotkey" readonly placeholder="Clique e aperte..." onclick="lsHotkeyCapture()" style="flex:1;padding:10px 14px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86rem;text-align:center;background:rgba(0,0,0,.4);border:1px solid rgba(190,242,100,.2);border-radius:8px;color:#bef264;cursor:pointer;font-weight:700;letter-spacing:1.2px">
                         <button class="btn btn-o" onclick="lsResetHotkey()" style="font-size:.74rem;padding:8px 12px">Padrão</button>
                     </div>
                     <div id="lsHotkeyStatus" style="font-size:.7rem;color:var(--text3);margin-top:8px;min-height:14px"></div>
 
-                    <div style="font-size:.66rem;color:var(--text3);margin-top:14px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Sugestões (cliques rápidos)</div>
+                    <div style="font-size:.66rem;color:var(--text3);margin-top:14px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Sugestões</div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px">
                         <button class="btn btn-o" onclick="lsApplySuggestion('Control+Shift+L')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Ctrl+Shift+L</button>
                         <button class="btn btn-o" onclick="lsApplySuggestion('Control+Alt+Space')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Ctrl+Alt+Space</button>
@@ -1476,23 +1469,9 @@
                         <button class="btn btn-o" onclick="lsApplySuggestion('Control+Shift+P')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Ctrl+Shift+P</button>
                         <button class="btn btn-o" onclick="lsApplySuggestion('F2')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">F2</button>
                         <button class="btn btn-o" onclick="lsApplySuggestion('Alt+Q')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">Alt+Q</button>
-                        <button class="btn btn-o" onclick="lsApplySuggestion('F13')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace" title="Tecla solta — vai disparar global">F13</button>
-                    </div>
-                    <div style="font-size:.62rem;color:var(--text3);margin-top:8px;line-height:1.5">
-                        💡 <strong>Pode ser tecla solta:</strong> aperte só uma letra/F-key sem Ctrl/Alt/Shift.
-                        Como o atalho só dispara quando o <strong>Premiere Pro está em foco</strong>,
-                        usar tecla solta como `Q` ou `M` é seguro (não interfere quando você usa outros programas).
+                        <button class="btn btn-o" onclick="lsApplySuggestion('F13')" style="font-size:.7rem;padding:6px 10px;font-family:'JetBrains Mono',ui-monospace,monospace">F13</button>
                     </div>
                 </div>
-
-                <div style="padding:12px 14px;background:rgba(34,211,238,.05);border:1px solid rgba(34,211,238,.12);border-radius:10px;font-size:.74rem;color:#22d3ee;line-height:1.55">
-                    <strong>Dica:</strong> abra o Premiere com o plugin Lion Workspace ativo, selecione um clip na timeline, aperte o atalho e digite o nome do efeito. Use <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">↑</kbd> <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">↓</kbd> pra navegar e <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">Enter</kbd> pra aplicar.
-                </div>
-                <div style="padding:10px 14px;background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.15);border-radius:10px;font-size:.7rem;color:#fbbf24;line-height:1.55">
-                    <strong>⚠ Tem Excalibur instalado?</strong> Excalibur usa <kbd style="padding:1px 5px;background:rgba(255,255,255,.06);border-radius:3px;font-family:monospace">Alt+Space</kbd> por padrão. Use uma combinação diferente pra LION SEARCH (sugestões abaixo).
-                </div>
-
-                <button class="btn btn-a" onclick="lsTestOpen()" style="align-self:flex-start;font-size:.78rem;padding:9px 16px">Testar agora (abrir LION SEARCH)</button>
             </div>
         </div>
 
@@ -2691,14 +2670,6 @@ function lsApplySuggestion(accel) {
     document.getElementById('lsHotkey').value = accel;
     document.getElementById('lsEnabled').checked = true;
     lsSettingsSave();
-}
-async function lsTestOpen() {
-    try {
-        const { ipcRenderer } = require('electron');
-        await ipcRenderer.invoke('lion-search:open');
-    } catch(e) {
-        alert('Erro: ' + e.message);
-    }
 }
 
 // ===== IMPOSTOS =====
