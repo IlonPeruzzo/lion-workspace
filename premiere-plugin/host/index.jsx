@@ -2480,6 +2480,34 @@ function _lwDbgPreset(msg) {
     } catch(e) {}
 }
 
+// Helper: resolve path tentando múltiplas variações (URL-encoded, slashes diferentes)
+// Retorna o primeiro path que existe, ou null se nenhum existe
+function _lwResolveExistingPath(rawPath) {
+    if (!rawPath) return null;
+    var p = String(rawPath);
+    // Remove file:// prefix se houver
+    p = p.replace(/^file:\/+/, '');
+    // Lista de variações pra tentar
+    var tries = [p];
+    try { tries.push(decodeURIComponent(p)); } catch(e1) {}
+    tries.push(p.replace(/\//g, '\\'));
+    tries.push(p.replace(/\\/g, '/'));
+    try { tries.push(decodeURIComponent(p.replace(/\//g, '\\'))); } catch(e2) {}
+    try { tries.push(decodeURIComponent(p.replace(/\\/g, '/'))); } catch(e3) {}
+
+    var seen = {};
+    for (var i = 0; i < tries.length; i++) {
+        var t = tries[i];
+        if (!t || seen[t]) continue;
+        seen[t] = 1;
+        try {
+            var f = new File(t);
+            if (f.exists) return t;
+        } catch(eE) {}
+    }
+    return null;
+}
+
 // Helper: encontra um project item por nome no rootItem (busca recursiva)
 function _lwFindProjectItemByName(bin, targetName, depth) {
     if (!bin || depth > 12) return null;
@@ -2712,11 +2740,10 @@ function _lwInsertAudioSource(nodeIdOrName) {
             if (holder.found) {
                 foundItem = holder.found;
             } else {
-                // Verifica que arquivo existe antes de importar (evita dialog Premiere)
-                try {
-                    var fsCheckFile = new File(fsPath);
-                    if (!fsCheckFile.exists) return 'ERR:sfx_file_not_on_disk:' + fsPath;
-                } catch(eFs) { return 'ERR:sfx_file_check_failed'; }
+                // Check tolerante (URL-encoding etc)
+                var resolvedFsPath = _lwResolveExistingPath(fsPath);
+                if (!resolvedFsPath) return 'ERR:sfx_file_not_on_disk:' + fsPath;
+                fsPath = resolvedFsPath;
                 // Importa com suppressUI=true
                 var importOk = false;
                 try { importOk = app.project.importFiles([fsPath], true); } catch(eI) {}
@@ -2804,7 +2831,6 @@ function _lwInsertAudioSource(nodeIdOrName) {
         } catch(eBel) {}
 
         if (!itemBelongsToActive) {
-            // Pega o file path e importa
             var mediaPath = '';
             try { mediaPath = foundItem.getMediaPath(); } catch(eMp) {}
             if (!mediaPath) {
@@ -2812,16 +2838,13 @@ function _lwInsertAudioSource(nodeIdOrName) {
             }
             if (!mediaPath) return 'ERR:could_not_get_path_other_project';
 
-            // CRÍTICO: verifica se arquivo existe ANTES de importar — senão Premiere mostra
-            // dialog de erro "File Import Failure" pro usuário
-            try {
-                var checkFile = new File(mediaPath);
-                if (!checkFile.exists) {
-                    return 'ERR:file_not_on_disk:' + mediaPath;
-                }
-            } catch(eEx) {
-                return 'ERR:file_check_failed:' + mediaPath;
+            // Check tolerante: getMediaPath() pode retornar URL-encoded (%20 pra espaços),
+            // forward slashes, etc — File.exists falha. Tenta múltiplas variações.
+            var resolvedPath = _lwResolveExistingPath(mediaPath);
+            if (!resolvedPath) {
+                return 'ERR:file_not_on_disk:' + mediaPath;
             }
+            mediaPath = resolvedPath; // usa o path que funcionou
 
             function _normPath(p) {
                 if (!p) return '';
