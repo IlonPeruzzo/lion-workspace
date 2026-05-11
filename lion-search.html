@@ -570,6 +570,7 @@ async function apply() {
             else if (result.startsWith('ERR:audio_source_not_found')) msg = 'Áudio não encontrado no projeto';
             else if (result.startsWith('ERR:could_not_create_audio_track')) msg = 'Não consegui criar nova audio track';
             else if (result === 'ERR:duplicate_project_id') msg = 'Premiere tem o mesmo projeto aberto duas vezes — feche o duplicado';
+            else if (result.startsWith('ERR:file_not_on_disk') || result.startsWith('ERR:sfx_file_not_on_disk')) msg = 'Arquivo não existe mais no disco — foi deletado ou movido?';
             else msg = result || 'Erro ao aplicar';
             // Envia notificação pro Lion Workspace (toast nativo)
             try { ipcRenderer.send('lion-search:show-error', { title: 'LION SEARCH — ' + it.name, body: msg }); } catch(e) {}

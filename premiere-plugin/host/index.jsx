@@ -2588,12 +2588,18 @@ function _lwApplyPreset(presetIdentifier) {
         var importedProjectItem = null;
         if (pf && presetName) {
             try {
-                var beforeCount = app.project.rootItem.children.numItems;
-                var importOk = app.project.importFiles([presetPath]);
-                $.sleep(200);
-                _lwDbgPreset('  importFiles=' + importOk + ' before=' + beforeCount + ' after=' + app.project.rootItem.children.numItems);
-                importedProjectItem = _lwFindProjectItemByName(app.project.rootItem, presetName, 0);
-                _lwDbgPreset('  importedItem(' + presetName + ')=' + (importedProjectItem ? 'FOUND' : 'NOT FOUND'));
+                // Verifica que arquivo existe — evita dialog Premiere
+                if (!pf.exists) {
+                    _lwDbgPreset('  SKIP import — preset file não existe: ' + presetPath);
+                } else {
+                    var beforeCount = app.project.rootItem.children.numItems;
+                    // suppressUI=true (segundo arg) — não mostra dialog se falhar
+                    var importOk = app.project.importFiles([presetPath], true);
+                    $.sleep(200);
+                    _lwDbgPreset('  importFiles=' + importOk + ' before=' + beforeCount + ' after=' + app.project.rootItem.children.numItems);
+                    importedProjectItem = _lwFindProjectItemByName(app.project.rootItem, presetName, 0);
+                    _lwDbgPreset('  importedItem(' + presetName + ')=' + (importedProjectItem ? 'FOUND' : 'NOT FOUND'));
+                }
             } catch(eImp) { _lwDbgPreset('  import err: ' + eImp); }
         }
 
@@ -2706,9 +2712,14 @@ function _lwInsertAudioSource(nodeIdOrName) {
             if (holder.found) {
                 foundItem = holder.found;
             } else {
-                // Importa pro projeto ativo
+                // Verifica que arquivo existe antes de importar (evita dialog Premiere)
+                try {
+                    var fsCheckFile = new File(fsPath);
+                    if (!fsCheckFile.exists) return 'ERR:sfx_file_not_on_disk:' + fsPath;
+                } catch(eFs) { return 'ERR:sfx_file_check_failed'; }
+                // Importa com suppressUI=true
                 var importOk = false;
-                try { importOk = app.project.importFiles([fsPath]); } catch(eI) {}
+                try { importOk = app.project.importFiles([fsPath], true); } catch(eI) {}
                 if (!importOk) return 'ERR:sfx_import_failed:' + fsPath;
                 holder = { found: null };
                 _findFsByPath(app.project.rootItem, fsPath, holder);
@@ -2801,25 +2812,32 @@ function _lwInsertAudioSource(nodeIdOrName) {
             }
             if (!mediaPath) return 'ERR:could_not_get_path_other_project';
 
-            // Helper: normaliza path pra comparar (lowercase, forward slashes, sem URL-encoding)
+            // CRÍTICO: verifica se arquivo existe ANTES de importar — senão Premiere mostra
+            // dialog de erro "File Import Failure" pro usuário
+            try {
+                var checkFile = new File(mediaPath);
+                if (!checkFile.exists) {
+                    return 'ERR:file_not_on_disk:' + mediaPath;
+                }
+            } catch(eEx) {
+                return 'ERR:file_check_failed:' + mediaPath;
+            }
+
             function _normPath(p) {
                 if (!p) return '';
                 var s = String(p);
                 try { s = decodeURIComponent(s); } catch(eD) {}
                 s = s.replace(/\\/g, '/').toLowerCase();
-                // Remove file:// prefix se houver
                 s = s.replace(/^file:\/\/+/, '');
                 return s;
             }
             var targetNorm = _normPath(mediaPath);
-            // Extrai filename pra fallback
             var targetFilename = '';
             try {
                 var slashIdx = Math.max(targetNorm.lastIndexOf('/'), targetNorm.lastIndexOf('\\'));
                 targetFilename = slashIdx >= 0 ? targetNorm.substr(slashIdx + 1) : targetNorm;
             } catch(eFn) {}
 
-            // Conta itens antes do import (pra detectar o novo)
             function _countLeaves(bin, depth) {
                 if (!bin || depth > 10) return 0;
                 var n = 0;
@@ -2837,14 +2855,15 @@ function _lwInsertAudioSource(nodeIdOrName) {
             }
             var leavesBefore = _countLeaves(app.project.rootItem, 0);
 
-            // Importa pro projeto ativo
+            // Importa com suppressUI=true SEMPRE pra não mostrar dialog Premiere
             var importedOk = false;
             try {
-                importedOk = app.project.importFiles([mediaPath], 1, app.project.getInsertionBin(), 0);
+                importedOk = app.project.importFiles([mediaPath], true, app.project.getInsertionBin(), false);
             } catch(eImp) {}
             if (!importedOk) {
+                // Segunda tentativa também com suppressUI=true
                 try {
-                    importedOk = app.project.importFiles([mediaPath]);
+                    importedOk = app.project.importFiles([mediaPath], true);
                 } catch(eImp2) { return 'ERR:import_failed:' + eImp2.toString().slice(0, 100); }
             }
 
