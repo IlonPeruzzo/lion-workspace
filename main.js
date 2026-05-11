@@ -3933,14 +3933,15 @@ function openLionSearch(forceOpen) {
         try { lionSearchWin.focus(); } catch(e) {}
         return;
     }
-    // Só abre se Premiere Pro estiver em foco (forceOpen=true ignora — pra "Testar")
     if (!forceOpen) {
-        // Win + Mac: usa cache do foreground (Mac usa _macFgCache)
         if (!isPremiereForeground()) {
             console.log('[lion-search] hotkey ignorado — foreground não é Premiere:', getFgProcSync());
             return;
         }
     }
+    // Flag pra activate handler do Mac NÃO criar mainWin enquanto abrimos LION SEARCH
+    _isOpeningLionSearch = true;
+    setTimeout(() => { _isOpeningLionSearch = false; }, 1500);
     // Tamanho compacto centralizado na tela ativa (cursor)
     let display;
     try { display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); }
@@ -4139,8 +4140,19 @@ ipcMain.on('lion-search:resize', (event, payload) => {
 });
 
 // macOS: re-create window when clicking dock icon
+// CRÍTICO: ignora activate quando LION SEARCH está abrindo (senão abre janela principal
+// quando user só queria o palette via hotkey)
+let _isOpeningLionSearch = false;
 if (isMac) {
     app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        // Skip se LION SEARCH foi acabou de ser disparada via hotkey
+        if (_isOpeningLionSearch) return;
+        if (lionSearchWin && !lionSearchWin.isDestroyed()) return; // LION SEARCH aberta
+        // Só recria mainWin se foi explicitamente fechada E user clicou no dock
+        if (mainWin && !mainWin.isDestroyed() && !mainWin.isVisible()) {
+            mainWin.show();
+        } else if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
     });
 }
