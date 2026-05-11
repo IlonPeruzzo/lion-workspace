@@ -1851,10 +1851,20 @@ function detectInstalledBrowsers() {
 }
 
 // Args base pra bypass de bot — sem cookies (rápido/leve)
+// Ordem dos clients importa:
+// - web/android: streams não-DRM, mais limpos
+// - tv/tv_simply: ajuda bot detection mas pode retornar DRM em alguns videos
+// - mweb: backup
 function ytBypassArgs() {
     return [
-        // tv_simply é o client mais permissivo do YT; default é fallback.
-        '--extractor-args', 'youtube:player_client=default,tv_simply,tv,web_safari,mweb',
+        '--extractor-args', 'youtube:player_client=default,web,android,mweb,tv_simply',
+    ];
+}
+
+// Args alternativos quando primeiro falha com DRM
+function ytBypassArgsAltDRM() {
+    return [
+        '--extractor-args', 'youtube:player_client=android,web_safari,ios,web',
     ];
 }
 
@@ -1864,16 +1874,23 @@ function ytIsBotError(stderr) {
     return /Sign in to confirm|not a bot|cookies-from-browser|Use --cookies/i.test(stderr);
 }
 
+function ytIsDrmError(stderr) {
+    if (!stderr) return false;
+    return /DRM protected|DRM-protected|drm protected/i.test(stderr);
+}
+
 // Roda yt-dlp com bypass + retry com cookies se cair em bot error.
 // onProc(proc, attemptIdx) chamado quando spawn → opção pra hooked progress parsing
 // ou para registrar em ytDownloadProc, etc.
 async function runYtDlpRobust(userArgs, opts = {}) {
     const { onProc, onStdoutLine, onStderrLine, timeout } = opts;
     const browsersToTry = detectInstalledBrowsers();
-    // 1ª tentativa: sem cookies, com bypass clients
-    // 2ª+ tentativas: com cada browser cookies em ordem
+    // 1ª tentativa: sem cookies, com bypass clients ideais
+    // 2ª: alt clients (pra DRM)
+    // 3ª+: cookies de cada browser
     const attempts = [
-        { args: [...ytBypassArgs()], label: 'bypass-only' },
+        { args: [...ytBypassArgs()], label: 'bypass-default' },
+        { args: [...ytBypassArgsAltDRM()], label: 'bypass-alt-drm' },
         ...browsersToTry.map(b => ({ args: ['--cookies-from-browser', b, ...ytBypassArgs()], label: 'cookies-' + b })),
     ];
 
@@ -1919,10 +1936,16 @@ async function runYtDlpRobust(userArgs, opts = {}) {
         lastResult = result;
         if (result.code === 0) return result;
 
-        // Se NÃO é bot error, não adianta tentar outro browser — retorna o erro
-        if (!ytIsBotError(result.stderr)) return result;
-        // Se chegou aqui, é bot error — tenta próxima estratégia (browser)
-        console.log('[yt-dlp] bot error detected, trying next strategy...');
+        // Bot error: tenta próxima (com cookies)
+        // DRM error: tenta próxima (alt clients)
+        // Outro erro: retorna direto
+        if (ytIsBotError(result.stderr)) {
+            console.log('[yt-dlp] bot error detected, trying next strategy...');
+        } else if (ytIsDrmError(result.stderr)) {
+            console.log('[yt-dlp] DRM error detected, trying alt clients...');
+        } else {
+            return result; // Erro diferente — não adianta retry
+        }
     }
     return lastResult;
 }
@@ -3870,11 +3893,30 @@ function saveLionSearchSettings(s) {
     try { fs.writeFileSync(LION_SEARCH_SETTINGS_FILE, JSON.stringify(s), 'utf8'); } catch(e) {}
 }
 
-// Lê foreground process name (sync no Win via fgFile, fallback empty no Mac)
+// Cache do foreground process no Mac (osascript é caro — ~100ms cada call)
+let _macFgCache = '';
+let _macFgCacheAt = 0;
+let _macFgPolling = false;
+
+function _macFgPoll() {
+    if (_macFgPolling) return;
+    _macFgPolling = true;
+    getFgProc((fg) => {
+        _macFgCache = String(fg || '').toLowerCase();
+        _macFgCacheAt = Date.now();
+        _macFgPolling = false;
+    });
+}
+
+// Lê foreground process name (sync no Win via fgFile, cached no Mac)
 function getFgProcSync() {
     if (isWin) {
         try { return fs.readFileSync(fgFile, 'utf8').trim().toLowerCase(); }
         catch { return ''; }
+    } else if (isMac) {
+        // Se cache é antigo (>800ms), dispara nova call async (não bloqueia)
+        if (Date.now() - _macFgCacheAt > 800) _macFgPoll();
+        return _macFgCache;
     }
     return '';
 }
@@ -3882,7 +3924,7 @@ function getFgProcSync() {
 // Verifica se o Premiere Pro está em foco
 function isPremiereForeground() {
     const fg = getFgProcSync();
-    if (!fg) return false; // Mac: assume não-Premiere se não conseguir ler (será sobrescrito async)
+    if (!fg) return false;
     return /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
 }
 
@@ -3891,22 +3933,12 @@ function openLionSearch(forceOpen) {
         try { lionSearchWin.focus(); } catch(e) {}
         return;
     }
-    // Só abre se Premiere Pro estiver em foco (ou se for chamada manual via "Testar agora")
+    // Só abre se Premiere Pro estiver em foco (forceOpen=true ignora — pra "Testar")
     if (!forceOpen) {
-        if (isWin) {
-            if (!isPremiereForeground()) {
-                console.log('[lion-search] hotkey ignorado — foreground não é Premiere:', getFgProcSync());
-                return;
-            }
-        } else if (isMac) {
-            // Mac: check async, mas não bloqueia. Se não for Premiere, fecha imediatamente.
-            getFgProc((fg) => {
-                const isP = /premiere/i.test(fg || '');
-                if (!isP && lionSearchWin && !lionSearchWin.isDestroyed()) {
-                    try { lionSearchWin.close(); } catch(e) {}
-                }
-            });
-            // Continua abertura — Mac fecha depois se não for Premiere
+        // Win + Mac: usa cache do foreground (Mac usa _macFgCache)
+        if (!isPremiereForeground()) {
+            console.log('[lion-search] hotkey ignorado — foreground não é Premiere:', getFgProcSync());
+            return;
         }
     }
     // Tamanho compacto centralizado na tela ativa (cursor)
@@ -4013,7 +4045,10 @@ function startHotkeyFgWatcher() {
             try { _checkAndRegisterHotkey(fs.readFileSync(fgFile, 'utf8').trim()); }
             catch { _checkAndRegisterHotkey(''); }
         } else if (isMac) {
-            getFgProc((fg) => _checkAndRegisterHotkey(fg));
+            // Usa cache (atualizado em background pelo _macFgPoll)
+            _checkAndRegisterHotkey(_macFgCache);
+            // Mantém cache fresco
+            if (Date.now() - _macFgCacheAt > 800) _macFgPoll();
         }
     }, 200);
 }
@@ -4036,6 +4071,8 @@ function registerLionHotkey(hotkey) {
 // Registra watcher na boot
 app.whenReady().then(() => {
     if (_lionSettings.enabled) startHotkeyFgWatcher();
+    // Mac: warm up fg cache imediato
+    if (isMac) _macFgPoll();
 });
 app.on('will-quit', () => {
     stopHotkeyFgWatcher();
