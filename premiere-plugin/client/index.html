@@ -2453,8 +2453,10 @@
             });
         } else if (cmd.type === 'apply-effect') {
             var p = cmd.payload || {};
-            var jsxKind = (p.kind || '').replace(/"/g, '');
-            var jsxMatch = (p.matchName || '').replace(/"/g, '');
+            // CRÍTICO: escapa backslashes ANTES de aspas. Senão paths Windows
+            // (C:\Users\...) viram C:Users... porque \U etc são escape chars JS.
+            var jsxKind = (p.kind || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            var jsxMatch = (p.matchName || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
             var script = 'lwSearchApply("' + jsxKind + '", "' + jsxMatch + '")';
             csInterface.evalScript(script, function(result) {
                 LWHttp.post(API + '/lion-search/command-result', {
