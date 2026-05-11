@@ -545,19 +545,14 @@ $results.addEventListener('mousemove', (e) => {
 
 // UI OTIMISTA — fecha janela IMEDIATAMENTE, aplica em background.
 // Se der erro, mostra notificação retroativa via IPC.
+// IMPORTANTE: NÃO faz pre-validation de "tem clip selecionado" — selCtx do boot
+// pode estar desatualizado, plus Premiere pode deselect quando LION SEARCH abre.
+// O plugin checa a seleção REAL no momento do apply.
 async function apply() {
     if (busy) return;
     const it = flatList[selectedIdx];
     if (!it) return;
     busy = true;
-
-    // Pre-validation rápida: clip selecionado pra effects
-    const needsClip = it.kind === 'video-fx' || it.kind === 'audio-fx' || it.kind === 'preset';
-    if (needsClip && selCtx && selCtx.selectionType === 'none') {
-        showToast('Selecione um clip na timeline primeiro', 'error');
-        busy = false;
-        return;
-    }
 
     // Fire-and-forget: dispara o apply, fecha imediatamente
     ipcRenderer.invoke('lion-search:apply', {

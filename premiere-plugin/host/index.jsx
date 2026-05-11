@@ -1614,13 +1614,66 @@ function _lwScanPresets(item, items, seen, depth) {
     } catch(e) {}
 }
 
-// Helper: itera todas as QE tracks (video ou audio) e retorna a lista de QE clips selecionados.
-// Tenta 2 estratégias: 1) QE isSelected, 2) match por start time com clips selecionados do API normal.
+// Helper: itera todas as QE tracks e retorna a lista de QE clips selecionados.
+// Tenta 3 estratégias:
+//   1) seq.getSelection() — API moderna mais confiável
+//   2) QE isSelected() — direto no QE clip
+//   3) std isSelected() + mapear pra QE por start time (fallback)
 function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
     var found = [];
-    var numTracks = isVideo ? qeSeq.numVideoTracks : qeSeq.numAudioTracks;
+    var debugInfo = [];
 
-    // Estratégia 1: QE isSelected()
+    // ─── Estratégia 1: seq.getSelection() (API mais nova e confiável) ───
+    var stdSelected = [];
+    try {
+        if (seq && typeof seq.getSelection === 'function') {
+            var selectedItems = seq.getSelection();
+            if (selectedItems && selectedItems.length !== undefined) {
+                debugInfo.push('getSelection=' + selectedItems.length);
+                for (var gs = 0; gs < selectedItems.length; gs++) {
+                    var si = selectedItems[gs];
+                    // Filtra video vs audio
+                    var isVid = false;
+                    try {
+                        // mediaType property: 1=video, 4=audio (varia por versão)
+                        // Tenta detectar por nodeId/parent track
+                        var p = si.projectItem || null;
+                        if (p) {
+                            try { isVid = p.hasVideo && p.hasVideo(); } catch(eHV) {}
+                            if (!isVid) {
+                                try {
+                                    var path = p.getMediaPath && p.getMediaPath();
+                                    if (path) isVid = !/\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff)$/i.test(path);
+                                } catch(eMP) {}
+                            }
+                        }
+                    } catch(eMT) {}
+                    // Se não conseguiu detectar, assume baseado em isVideo solicitado
+                    if (isVid === undefined) isVid = isVideo;
+                    if ((isVideo && isVid) || (!isVideo && !isVid)) {
+                        stdSelected.push(si);
+                    }
+                }
+            }
+        }
+    } catch(eGS) { debugInfo.push('getSelection-err:' + eGS.toString().slice(0,40)); }
+
+    // Se não temos getSelection ou retornou vazio, fallback pra iterar tracks
+    if (stdSelected.length === 0 && seq) {
+        var trackList0 = isVideo ? seq.videoTracks : seq.audioTracks;
+        for (var ti0 = 0; ti0 < trackList0.numTracks; ti0++) {
+            var tk0 = trackList0[ti0];
+            for (var ci0 = 0; ci0 < tk0.clips.numItems; ci0++) {
+                try {
+                    if (tk0.clips[ci0].isSelected()) stdSelected.push(tk0.clips[ci0]);
+                } catch(eIs0) {}
+            }
+        }
+        debugInfo.push('stdIterate=' + stdSelected.length);
+    }
+
+    // ─── Estratégia 2: QE isSelected() ───
+    var numTracks = isVideo ? qeSeq.numVideoTracks : qeSeq.numAudioTracks;
     for (var i = 0; i < numTracks; i++) {
         var t = null;
         try { t = isVideo ? qeSeq.getVideoTrackAt(i) : qeSeq.getAudioTrackAt(i); } catch(e0) {}
@@ -1635,53 +1688,56 @@ function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
             try { if (item.isSelected && item.isSelected()) { found.push(item); } } catch(eS) {}
         }
     }
-    if (found.length > 0) return found;
-
-    // Estratégia 2: pega clips selecionados do API normal e mapeia pra QE por start time
-    if (!seq) return found;
-    var trackList = isVideo ? seq.videoTracks : seq.audioTracks;
-    var selStarts = [];
-    for (var ti = 0; ti < trackList.numTracks; ti++) {
-        var tk = trackList[ti];
-        for (var ci = 0; ci < tk.clips.numItems; ci++) {
-            try {
-                if (tk.clips[ci].isSelected()) {
-                    selStarts.push({
-                        trackIdx: ti,
-                        startSec: tk.clips[ci].start.seconds,
-                        startTicks: String(tk.clips[ci].start.ticks),
-                        name: tk.clips[ci].name,
-                    });
-                }
-            } catch(eIs) {}
-        }
+    if (found.length > 0) {
+        debugInfo.push('qeIsSelected=' + found.length);
+        _lwDbgPreset && _lwDbgPreset('  _lwFindSelectedQEClips(' + (isVideo?'video':'audio') + '): ' + debugInfo.join(','));
+        return found;
     }
-    for (var si = 0; si < selStarts.length; si++) {
-        var sel = selStarts[si];
-        var qeT = null;
-        try { qeT = isVideo ? qeSeq.getVideoTrackAt(sel.trackIdx) : qeSeq.getAudioTrackAt(sel.trackIdx); } catch(eGT) {}
-        if (!qeT) continue;
-        var matched = null;
-        var qN = 0;
-        try { qN = qeT.numItems; } catch(eQN) { qN = 0; }
-        for (var qj = 0; qj < qN; qj++) {
-            var qit = null;
-            try { qit = qeT.getItemAt(qj); } catch(eGI) {}
-            if (!qit) continue;
-            try { if (qit.type === 1) continue; } catch(eQT) {}
-            // Tenta match por ticks (string), seconds (float), ou name
-            try {
-                var qts = String(qit.start.ticks);
-                if (qts === sel.startTicks) { matched = qit; break; }
-            } catch(eQTk) {}
-            try {
-                if (Math.abs(qit.start.seconds - sel.startSec) < 0.5) {
-                    if (!matched) matched = qit;
-                    try { if (qit.name === sel.name) { matched = qit; break; } } catch(eN2) {}
+
+    // ─── Estratégia 3: mapeia stdSelected → QE clips por start time ───
+    if (stdSelected.length > 0) {
+        for (var ssi = 0; ssi < stdSelected.length; ssi++) {
+            var stdClip = stdSelected[ssi];
+            // Tenta achar a track index do clip selecionado
+            var trackIdx = -1;
+            var trackListM = isVideo ? seq.videoTracks : seq.audioTracks;
+            for (var tim = 0; tim < trackListM.numTracks && trackIdx < 0; tim++) {
+                var tkm = trackListM[tim];
+                for (var cim = 0; cim < tkm.clips.numItems; cim++) {
+                    if (tkm.clips[cim] === stdClip || (tkm.clips[cim].nodeId && tkm.clips[cim].nodeId === stdClip.nodeId)) {
+                        trackIdx = tim; break;
+                    }
                 }
-            } catch(eQS) {}
+            }
+            if (trackIdx < 0) continue;
+            var qeT = null;
+            try { qeT = isVideo ? qeSeq.getVideoTrackAt(trackIdx) : qeSeq.getAudioTrackAt(trackIdx); } catch(eGT2) {}
+            if (!qeT) continue;
+            var startSec = 0, startTicks = '';
+            try { startSec = parseFloat(stdClip.start.seconds); } catch(eSS) {}
+            try { startTicks = String(stdClip.start.ticks); } catch(eST) {}
+            var matched = null;
+            var qN2 = 0;
+            try { qN2 = qeT.numItems; } catch(eQN2) {}
+            for (var qj2 = 0; qj2 < qN2; qj2++) {
+                var qit2 = null;
+                try { qit2 = qeT.getItemAt(qj2); } catch(eGI2) {}
+                if (!qit2) continue;
+                try { if (qit2.type === 1) continue; } catch(eQT2) {}
+                try {
+                    if (String(qit2.start.ticks) === startTicks) { matched = qit2; break; }
+                } catch(eQTk2) {}
+                try {
+                    if (Math.abs(qit2.start.seconds - startSec) < 0.5) { matched = qit2; break; }
+                } catch(eQS2) {}
+            }
+            if (matched) found.push(matched);
         }
-        if (matched) found.push(matched);
+        debugInfo.push('mappedQE=' + found.length);
+    }
+
+    if (typeof _lwDbgPreset === 'function') {
+        _lwDbgPreset('  _lwFindSelectedQEClips(' + (isVideo?'video':'audio') + '): ' + debugInfo.join(',') + ' → ' + found.length);
     }
     return found;
 }
