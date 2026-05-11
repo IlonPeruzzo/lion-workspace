@@ -411,7 +411,12 @@ function render() {
     }
 
     if (!booted && !bootError) {
-        $results.innerHTML = '<div class="empty loading"><span class="spinner"></span>Carregando catálogo do Premiere...</div>';
+        // Mostra mensagem mais útil dependendo de quantas tentativas
+        let msg = 'Carregando catálogo do Premiere...';
+        if (bootAttempts >= 2) {
+            msg = 'Plugin não respondeu — verifique se o Premiere está aberto com o plugin Lion Workspace ativo.';
+        }
+        $results.innerHTML = '<div class="empty loading"><span class="spinner"></span>' + msg + '</div>';
         return;
     }
     if (bootError) {
@@ -565,15 +570,14 @@ function updateSelectionBadge() {
 
 async function _applyResult(r, isFresh) {
     if (r?.error) {
-        if (bootAttempts >= 3) bootError = r.error;
+        // Mostra erro JÁ na primeira tentativa se NÃO tem cache nenhum
+        // (sem isso, user fica esperando 60s+ sem entender que precisa abrir o plugin)
+        if (bootAttempts >= 2 || allItems.length === 0) bootError = r.error;
         updateBadge();
         return false;
     }
     const newItems = r.items || [];
-    // CRÍTICO: se chegou items novos VAZIOS mas já tem items cacheados, NÃO sobrescreve
-    // (evita perder o cache do disco quando plugin ainda não respondeu fresh)
     if (newItems.length === 0 && allItems.length > 0 && isFresh) {
-        // Mantém o cache antigo, só atualiza debug/error
         lastJsxError = r.jsxError || lastJsxError;
         lastDebug = r.debug || lastDebug;
         return true;
@@ -584,8 +588,8 @@ async function _applyResult(r, isFresh) {
     booted = true;
     if (allItems.length === 0 && lastJsxError) {
         bootError = 'Premiere: ' + lastJsxError;
-    } else if (allItems.length === 0 && bootAttempts >= 3) {
-        bootError = 'Plugin retornou catálogo vazio. Plugin tá logado? Tem projeto aberto?';
+    } else if (allItems.length === 0 && bootAttempts >= 2) {
+        bootError = 'Plugin retornou catálogo vazio. Abra o Premiere com plugin ativo + login.';
     } else if (allItems.length > 0) {
         bootError = null;
     }
@@ -617,15 +621,25 @@ async function boot() {
 }
 boot();
 
-// Re-fetch periódico — capta sfx novos adicionados ao projeto enquanto LION SEARCH está aberto
-// 30s pq parsing é caro; cache do plugin client já dedupa rápido subsequent calls
-let _refreshTimer = setInterval(async () => {
-    if (busy) return;
-    try {
-        const r = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true });
-        if (r?.items) await _applyResult(r, true);
-    } catch (e) {}
-}, 30000);
+// Re-fetch periódico — adapta interval baseado em ter cache ou não
+let _refreshTimer = null;
+function _scheduleRefresh() {
+    if (_refreshTimer) clearInterval(_refreshTimer);
+    // Se cache vazio: retry rápido (3s) — plugin pode estar carregando
+    // Se cache cheio: retry lento (30s) — só atualiza sfx novos
+    const interval = (allItems.length === 0) ? 3000 : 30000;
+    _refreshTimer = setInterval(async () => {
+        if (busy) return;
+        try {
+            const r = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true });
+            if (r) await _applyResult(r, true);
+            // Se interval mudou (passou de empty pra populated ou vice-versa), reagenda
+            const newInterval = (allItems.length === 0) ? 3000 : 30000;
+            if (newInterval !== interval) _scheduleRefresh();
+        } catch (e) {}
+    }, interval);
+}
+_scheduleRefresh();
 window.addEventListener('beforeunload', () => { try { clearInterval(_refreshTimer); } catch(e) {} });
 </script>
 </body>

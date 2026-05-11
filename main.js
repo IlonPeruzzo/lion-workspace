@@ -2265,7 +2265,8 @@ ipcMain.handle('lion-search:list-effects', async (event, opts) => {
         };
     }
     try {
-        const result = await queuePluginCommand('list-effects', {}, 6000);
+        // Timeout reduzido pra 3s — feedback mais rápido se plugin não tá rodando
+        const result = await queuePluginCommand('list-effects', {}, 3000);
         return {
             items: result.items || [],
             fromCache: false,
@@ -2276,7 +2277,7 @@ ipcMain.handle('lion-search:list-effects', async (event, opts) => {
         if (lionSearchEffectsCache.length > 0) {
             return { items: lionSearchEffectsCache, fromCache: true, staleError: e.message };
         }
-        return { error: 'Plugin Lion Workspace não respondeu (6s). Abra o Premiere com o plugin (Window → Extensions) e faça login.' };
+        return { error: 'Abra o Premiere com o plugin Lion Workspace (Window → Extensions) e faça login.' };
     }
 });
 
