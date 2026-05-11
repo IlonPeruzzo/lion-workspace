@@ -2412,17 +2412,49 @@ function _lwScanPresetFolder(folder, parentPath, items, seen, depth) {
 // ═══════════════════════════════════════════════════════════════════
 // LION SEARCH — APPLY PRESET (drag .prfpset no clip selecionado)
 // ═══════════════════════════════════════════════════════════════════
+// Helper: escreve debug pra arquivo (apply preset)
+function _lwDbgPreset(msg) {
+    try {
+        var f = new File(Folder.temp.fsName + '/lion-search-apply-preset.txt');
+        if (f.open('a')) {
+            f.encoding = 'UTF-8';
+            f.write('[' + (new Date()).toString() + '] ' + msg + '\n');
+            f.close();
+        }
+    } catch(e) {}
+}
+
+// Helper: encontra um project item por nome no rootItem (busca recursiva)
+function _lwFindProjectItemByName(bin, targetName, depth) {
+    if (!bin || depth > 12) return null;
+    try {
+        if (!bin.children || bin.children.numItems === 0) return null;
+        for (var i = 0; i < bin.children.numItems; i++) {
+            var it = bin.children[i];
+            var nm = '';
+            try { nm = it.name || ''; } catch(eN) {}
+            if (nm === targetName) return it;
+            // Recurse em bins
+            var ch = null;
+            try { ch = it.children; } catch(eC) {}
+            if (ch && ch.numItems > 0) {
+                var found = _lwFindProjectItemByName(it, targetName, depth + 1);
+                if (found) return found;
+            }
+        }
+    } catch(e) {}
+    return null;
+}
+
 function _lwApplyPreset(presetIdentifier) {
     try {
+        _lwDbgPreset('=== Apply Preset: ' + presetIdentifier + ' ===');
         if (!presetIdentifier) return 'ERR:preset_id_empty';
         if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
         try { app.enableQE(); } catch(e0) {}
         if (typeof qe === 'undefined' || !qe.project) return 'ERR:qe_not_available';
 
-        // Identifier pode ser:
-        //   1) "C:/.../Lumetri Presets.prfpset#Cinematic Look 1" — container + preset
-        //   2) "C:/.../UserPreset.prfpset" — arquivo individual
-        //   3) "Cinematic Look 1" — só o nome
+        // Parse identifier
         var presetName = presetIdentifier;
         var presetPath = presetIdentifier;
         var hashIdx = presetIdentifier.indexOf('#');
@@ -2430,55 +2462,111 @@ function _lwApplyPreset(presetIdentifier) {
             presetPath = presetIdentifier.substring(0, hashIdx);
             presetName = presetIdentifier.substring(hashIdx + 1);
         } else if (!/\.prfpset$/i.test(presetIdentifier)) {
-            // Identifier não é caminho — é só o nome
             presetPath = '';
         }
+        _lwDbgPreset('  presetName=' + presetName + ' presetPath=' + presetPath);
 
         var qeSeq = qe.project.getActiveSequence();
         if (!qeSeq) return 'ERR:no_qe_sequence';
         var seq = app.project.activeSequence;
         var sel = _lwFindSelectedQEClips(qeSeq, true, seq);
-        if (sel.length === 0) sel = _lwFindSelectedQEClips(qeSeq, false, seq);
+        var selKind = 'video';
+        if (sel.length === 0) { sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio'; }
         if (sel.length === 0) return 'NO_CLIP_SELECTED';
+        _lwDbgPreset('  ' + sel.length + ' QE clips selected (' + selKind + ')');
+
+        // Pega a versão "standard API" do clip selecionado (necessário pra applyPreset que aceita ProjectItem)
+        var stdSel = [];
+        try {
+            var trackList = (selKind === 'video') ? seq.videoTracks : seq.audioTracks;
+            for (var ti = 0; ti < trackList.numTracks; ti++) {
+                var tk = trackList[ti];
+                for (var ci = 0; ci < tk.clips.numItems; ci++) {
+                    if (tk.clips[ci].isSelected()) stdSel.push(tk.clips[ci]);
+                }
+            }
+        } catch(eStd) { _lwDbgPreset('  err getting std clips: ' + eStd); }
+        _lwDbgPreset('  ' + stdSel.length + ' standard clips selected');
 
         var applied = 0;
-        var lastErrs = [];
+        var allErrs = [];
 
-        for (var i = 0; i < sel.length; i++) {
-            var ok = false;
-            // Estratégia 1: applyPresetByName(name) — só nome
-            if (!ok && presetName) {
-                try { sel[i].applyPresetByName(presetName); ok = true; } catch(e1) { lastErrs.push('applyPresetByName:' + e1.toString().slice(0, 50)); }
-            }
-            // Estratégia 2: applyPreset(name) — pode aceitar nome OU path
-            if (!ok && presetName) {
-                try { sel[i].applyPreset(presetName); ok = true; } catch(e2) { lastErrs.push('applyPreset(name):' + e2.toString().slice(0, 50)); }
-            }
-            // Estratégia 3: applyPreset(path) — path do arquivo (works pra individual .prfpset)
-            if (!ok && presetPath) {
-                try {
-                    var pf = new File(presetPath);
-                    if (pf.exists) {
-                        sel[i].applyPreset(presetPath);
-                        ok = true;
+        // ─── ESTRATÉGIA 1: importa container, acha preset por nome no bin, aplica via stdClip ───
+        if (presetPath && presetName && /\.prfpset$/i.test(presetPath)) {
+            _lwDbgPreset('  STRAT 1: import container + find preset');
+            try {
+                var pf = new File(presetPath);
+                if (pf.exists) {
+                    // Importa container — Premiere cria bin com presets dentro
+                    var beforeCount = app.project.rootItem.children.numItems;
+                    var importOk = false;
+                    try { importOk = app.project.importFiles([presetPath]); } catch(eI) { _lwDbgPreset('    importFiles err: ' + eI); }
+                    _lwDbgPreset('    importFiles=' + importOk + ' beforeCount=' + beforeCount + ' afterCount=' + app.project.rootItem.children.numItems);
+                    $.sleep(150);
+                    // Acha o preset por nome
+                    var presetItem = _lwFindProjectItemByName(app.project.rootItem, presetName, 0);
+                    _lwDbgPreset('    findByName(' + presetName + ')=' + (presetItem ? 'FOUND' : 'NOT FOUND'));
+                    if (presetItem) {
+                        for (var si = 0; si < stdSel.length; si++) {
+                            try {
+                                stdSel[si].applyPreset(presetItem);
+                                applied++;
+                                _lwDbgPreset('    stdClip[' + si + '].applyPreset(item) OK');
+                            } catch(eAp) {
+                                allErrs.push('s1.stdApplyItem:' + eAp.toString().slice(0, 60));
+                                _lwDbgPreset('    stdClip[' + si + '].applyPreset err: ' + eAp);
+                                // Tenta via QE clip também
+                                try { sel[si].applyEffectPreset(presetItem); applied++; _lwDbgPreset('    qeClip applyEffectPreset(item) OK'); }
+                                catch(eAq) { allErrs.push('s1.qeApplyItem:' + eAq.toString().slice(0, 60)); }
+                            }
+                        }
                     }
-                } catch(e3) { lastErrs.push('applyPreset(path):' + e3.toString().slice(0, 50)); }
-            }
-            // Estratégia 4: applyEffectPreset
-            if (!ok && presetPath) {
-                try {
-                    sel[i].applyEffectPreset(presetPath);
-                    ok = true;
-                } catch(e4) { lastErrs.push('applyEffectPreset:' + e4.toString().slice(0, 50)); }
-            }
-            if (ok) applied++;
+                }
+            } catch(eS1) { allErrs.push('s1:' + eS1.toString().slice(0, 60)); _lwDbgPreset('    s1 outer err: ' + eS1); }
         }
 
+        // ─── ESTRATÉGIA 2: applyEffectPreset(File) direto via QE — funciona pra preset individual ───
+        if (applied === 0 && presetPath && /\.prfpset$/i.test(presetPath)) {
+            _lwDbgPreset('  STRAT 2: qeClip.applyEffectPreset(File)');
+            try {
+                var pf2 = new File(presetPath);
+                if (pf2.exists) {
+                    for (var sj = 0; sj < sel.length; sj++) {
+                        try {
+                            sel[sj].applyEffectPreset(pf2);
+                            applied++;
+                            _lwDbgPreset('    qeClip[' + sj + '].applyEffectPreset(File) OK');
+                        } catch(eA2) { allErrs.push('s2.qeApplyFile:' + eA2.toString().slice(0, 60)); _lwDbgPreset('    qeClip err: ' + eA2); }
+                    }
+                }
+            } catch(eS2) { allErrs.push('s2:' + eS2.toString().slice(0, 60)); }
+        }
+
+        // ─── ESTRATÉGIA 3: stdClip.applyEffectPreset(filePath string) ───
+        if (applied === 0 && presetPath) {
+            _lwDbgPreset('  STRAT 3: stdClip.applyEffectPreset(path)');
+            for (var sk = 0; sk < stdSel.length; sk++) {
+                try { stdSel[sk].applyEffectPreset(presetPath); applied++; _lwDbgPreset('    OK'); }
+                catch(eA3) { allErrs.push('s3.stdApplyPath:' + eA3.toString().slice(0, 60)); }
+            }
+        }
+
+        // ─── ESTRATÉGIA 4: stdClip.applyPreset(filePath string) ───
+        if (applied === 0 && presetPath) {
+            _lwDbgPreset('  STRAT 4: stdClip.applyPreset(path)');
+            for (var sl = 0; sl < stdSel.length; sl++) {
+                try { stdSel[sl].applyPreset(presetPath); applied++; _lwDbgPreset('    OK'); }
+                catch(eA4) { allErrs.push('s4.stdApply:' + eA4.toString().slice(0, 60)); }
+            }
+        }
+
+        _lwDbgPreset('  RESULT: applied=' + applied + ' errs=' + allErrs.join(' | '));
         if (applied === 0) {
-            return 'ERR:preset_apply_unsupported:' + (lastErrs.length ? lastErrs[0] : 'all methods failed');
+            return 'ERR:preset_apply_unsupported:' + (allErrs.length ? allErrs.slice(0, 2).join(';') : 'all methods failed');
         }
         return 'OK:applied:' + applied;
     } catch (e) {
+        _lwDbgPreset('OUTER ERR: ' + e);
         return 'ERR:' + e.toString().slice(0, 200);
     }
 }
