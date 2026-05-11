@@ -2294,7 +2294,22 @@ ipcMain.on('lion-search:close', () => {
     try { if (lionSearchWin && !lionSearchWin.isDestroyed()) lionSearchWin.close(); } catch(e) {}
 });
 
-// IPC: mostra notificação nativa de erro (após apply otimista falhar)
+// IPC: mostra notificação nativa (sucesso ou erro do apply otimista)
+ipcMain.on('lion-search:notify', (event, payload) => {
+    try {
+        const { Notification } = require('electron');
+        if (Notification.isSupported()) {
+            const n = new Notification({
+                title: payload?.title || 'LION SEARCH',
+                body: payload?.body || '',
+                silent: payload?.success === true, // silent pra sucesso, com som pra erro
+                urgency: payload?.success ? 'low' : 'normal',
+            });
+            n.show();
+        }
+    } catch(e) { console.warn('[lion-search] notif fail:', e); }
+});
+// Backward compat com old name
 ipcMain.on('lion-search:show-error', (event, payload) => {
     try {
         const { Notification } = require('electron');
@@ -2302,12 +2317,10 @@ ipcMain.on('lion-search:show-error', (event, payload) => {
             const n = new Notification({
                 title: payload?.title || 'LION SEARCH',
                 body: payload?.body || 'Erro ao aplicar',
-                silent: false,
-                urgency: 'normal',
             });
             n.show();
         }
-    } catch(e) { console.warn('[lion-search] notif fail:', e); }
+    } catch(e) {}
 });
 
 // IPC: get current selection context (video/audio/none, playhead)

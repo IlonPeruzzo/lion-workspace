@@ -543,44 +543,49 @@ $results.addEventListener('mousemove', (e) => {
     }
 });
 
-// UI OTIMISTA — fecha janela IMEDIATAMENTE, aplica em background.
-// Se der erro, mostra notificação retroativa via IPC.
-// IMPORTANTE: NÃO faz pre-validation de "tem clip selecionado" — selCtx do boot
-// pode estar desatualizado, plus Premiere pode deselect quando LION SEARCH abre.
-// O plugin checa a seleção REAL no momento do apply.
+// UI OTIMISTA — toast breve, fecha janela, aplica em background.
+// Mostra notification nativa Windows com resultado (sucesso ou erro).
 async function apply() {
     if (busy) return;
     const it = flatList[selectedIdx];
     if (!it) return;
     busy = true;
 
-    // Fire-and-forget: dispara o apply, fecha imediatamente
+    // Toast curto pra dar feedback visual
+    const verb = it.kind === 'audio-source' ? 'Inserindo' : 'Aplicando';
+    showToast(verb + ' ' + it.name + '…');
+
+    // Fire-and-forget: dispara o apply em background
     ipcRenderer.invoke('lion-search:apply', {
         kind: it.kind, matchName: it.matchName, name: it.name,
     }).then(r => {
-        // Se deu erro, mostra notificação via IPC pra Lion Workspace mostrar
         const result = String(r?.result || '');
-        if (r?.error || (result && !result.startsWith('OK:'))) {
+        const succeeded = !r?.error && result.startsWith('OK:');
+
+        if (succeeded) {
+            // Notificação de sucesso
+            const successMsg = it.kind === 'audio-source' ? 'Inserido na timeline' : 'Aplicado no clip';
+            try { ipcRenderer.send('lion-search:notify', { title: '✓ ' + it.name, body: successMsg, success: true }); } catch(e) {}
+        } else {
             let msg = '';
             if (r?.error) msg = r.error;
             else if (result === 'NO_CLIP_SELECTED') msg = 'Selecione um clip na timeline primeiro';
             else if (result === 'NO_SEQUENCE') msg = 'Abra uma sequência no Premiere primeiro';
             else if (result.startsWith('ERR:transitions_not_implemented')) msg = 'Transições ainda não — arraste no plugin';
-            else if (result.startsWith('ERR:preset_apply_failed')) msg = 'Preset não pôde ser aplicado';
+            else if (result.startsWith('ERR:preset_apply_failed') || result.startsWith('ERR:preset_apply_unsupported')) msg = 'Preset não pôde ser aplicado nessa versão de Premiere';
             else if (result.startsWith('ERR:audio_source_not_found')) msg = 'Áudio não encontrado no projeto';
             else if (result.startsWith('ERR:could_not_create_audio_track')) msg = 'Não consegui criar nova audio track';
             else if (result === 'ERR:duplicate_project_id') msg = 'Premiere tem o mesmo projeto aberto duas vezes — feche o duplicado';
-            else if (result.startsWith('ERR:file_not_on_disk') || result.startsWith('ERR:sfx_file_not_on_disk')) msg = 'Arquivo não existe mais no disco — foi deletado ou movido?';
+            else if (result.startsWith('ERR:file_not_on_disk') || result.startsWith('ERR:sfx_file_not_on_disk')) msg = 'Arquivo não existe mais no disco';
             else msg = result || 'Erro ao aplicar';
-            // Envia notificação pro Lion Workspace (toast nativo)
-            try { ipcRenderer.send('lion-search:show-error', { title: 'LION SEARCH — ' + it.name, body: msg }); } catch(e) {}
+            try { ipcRenderer.send('lion-search:notify', { title: '✗ ' + it.name, body: msg, success: false }); } catch(e) {}
         }
     }).catch(e => {
-        try { ipcRenderer.send('lion-search:show-error', { title: 'LION SEARCH — ' + it.name, body: e.message || String(e) }); } catch(eS) {}
+        try { ipcRenderer.send('lion-search:notify', { title: '✗ ' + it.name, body: e.message || String(e), success: false }); } catch(eS) {}
     });
 
-    // Fecha imediatamente — UI otimista
-    close();
+    // Fecha após brief delay pro toast ser visível
+    setTimeout(close, 200);
 }
 
 $input.addEventListener('input', filter);
