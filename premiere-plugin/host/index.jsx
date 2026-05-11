@@ -2083,19 +2083,21 @@ function _lwScanForAudio(item, parentPath, items, seen, depth, projName) {
         // Dedup por file path (mesmo som em múltiplos projetos = 1 entrada só)
         var mediaPath = '';
         try { mediaPath = item.getMediaPath ? item.getMediaPath() : ''; } catch(eMp) {}
-        // Fallback dedup key: name+nodeId+proj se não tiver path
         var dedupKey = mediaPath || ((projName || '') + '|' + nodeId + '|' + name);
         if (hasAudio && !seen[dedupKey]) {
             seen[dedupKey] = 1;
-            // Categoria: [Projeto] / Bin / Subbin
             var categoryParts = [];
             if (projName) categoryParts.push(projName);
             if (parentPath) categoryParts.push(parentPath);
             else categoryParts.push(hasVideo ? 'Audio+Video' : 'Audio');
+            // matchName: prefere PATH (global unique, funciona em qualquer projeto).
+            // Fallback pra nodeId (só funciona no projeto onde o item existe).
+            // Prefixo "FS:" pro código de insert saber que é caminho de arquivo
+            var matchName = mediaPath ? ('FS:' + mediaPath) : nodeId;
             items.push({
                 kind: 'audio-source',
                 name: name || '(sem nome)',
-                matchName: nodeId,
+                matchName: matchName,
                 category: categoryParts.join(' / '),
                 projName: projName || '',
             });
@@ -2703,22 +2705,45 @@ function _lwApplyPreset(presetIdentifier) {
 // ═══════════════════════════════════════════════════════════════════
 // LION SEARCH — INSERT AUDIO SOURCE (gap finder + nova track se preciso)
 // ═══════════════════════════════════════════════════════════════════
+// Helper: escreve debug pra audio insert
+function _lwDbgAudio(msg) {
+    try {
+        var f = new File(Folder.temp.fsName + '/lion-search-audio-insert.txt');
+        if (f.open('a')) {
+            f.encoding = 'UTF-8';
+            f.write('[' + (new Date()).toString() + '] ' + msg + '\n');
+            f.close();
+        }
+    } catch(e) {}
+}
+
 function _lwInsertAudioSource(nodeIdOrName) {
     try {
+        _lwDbgAudio('═══ Insert Audio: ' + nodeIdOrName + ' ═══');
         if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
         var seq = app.project.activeSequence;
 
         var foundItem = null;
         var preImportedFromFs = false;
 
-        // Se for FS path (do SFX folder), importa direto
+        // Se for FS path (path do arquivo), importa direto ou busca no projeto ativo
         if (nodeIdOrName.indexOf('FS:') === 0) {
             var fsPath = nodeIdOrName.substr(3);
-            var fsFile = new File(fsPath);
-            if (!fsFile.exists) return 'ERR:sfx_file_not_found:' + fsPath;
-            // Verifica se já tá importado (busca por mediaPath)
-            function _findFsByPath(bin, target, holder) {
-                if (holder.found) return;
+            _lwDbgAudio('  FS path: ' + fsPath);
+
+            // Normaliza path pra comparação tolerante (URL-encoding, slashes)
+            function _normP(p) {
+                if (!p) return '';
+                var s = String(p).replace(/^file:\/+/, '').replace(/\\/g, '/').toLowerCase();
+                try { s = decodeURIComponent(s); } catch(e) {}
+                return s;
+            }
+            var fsPathNorm = _normP(fsPath);
+            _lwDbgAudio('  fsPathNorm: ' + fsPathNorm);
+
+            // Busca no projeto ativo PRIMEIRO (mais provável, já importado)
+            function _findFsByPath(bin, holder, depth) {
+                if (holder.found || depth > 12) return;
                 try {
                     if (!bin.children || bin.children.numItems === 0) return;
                     for (var ii = 0; ii < bin.children.numItems; ii++) {
@@ -2726,31 +2751,44 @@ function _lwInsertAudioSource(nodeIdOrName) {
                         var it = bin.children[ii];
                         var ch = null;
                         try { ch = it.children; } catch(eC) {}
-                        if (ch && ch.numItems > 0) { _findFsByPath(it, target, holder); }
+                        if (ch && ch.numItems > 0) { _findFsByPath(it, holder, depth + 1); }
                         else {
                             var p = '';
                             try { p = it.getMediaPath(); } catch(eM) {}
-                            if (p === target) { holder.found = it; return; }
+                            if (_normP(p) === fsPathNorm) { holder.found = it; return; }
                         }
                     }
                 } catch(e) {}
             }
             var holder = { found: null };
-            _findFsByPath(app.project.rootItem, fsPath, holder);
+            _findFsByPath(app.project.rootItem, holder, 0);
             if (holder.found) {
+                _lwDbgAudio('  found in active project (no import needed)');
                 foundItem = holder.found;
             } else {
+                _lwDbgAudio('  not in active project — importing');
                 // Check tolerante (URL-encoding etc)
                 var resolvedFsPath = _lwResolveExistingPath(fsPath);
-                if (!resolvedFsPath) return 'ERR:sfx_file_not_on_disk:' + fsPath;
+                if (!resolvedFsPath) {
+                    _lwDbgAudio('  RESOLVED PATH = null (arquivo não existe)');
+                    return 'ERR:sfx_file_not_on_disk:' + fsPath;
+                }
+                _lwDbgAudio('  resolvedPath: ' + resolvedFsPath);
                 fsPath = resolvedFsPath;
+                fsPathNorm = _normP(fsPath);
                 // Importa com suppressUI=true
                 var importOk = false;
-                try { importOk = app.project.importFiles([fsPath], true); } catch(eI) {}
+                try { importOk = app.project.importFiles([fsPath], true); } catch(eI) { _lwDbgAudio('  import err: ' + eI); }
+                _lwDbgAudio('  importFiles=' + importOk);
                 if (!importOk) return 'ERR:sfx_import_failed:' + fsPath;
+                $.sleep(150);
                 holder = { found: null };
-                _findFsByPath(app.project.rootItem, fsPath, holder);
-                if (!holder.found) return 'ERR:sfx_imported_not_found:' + fsPath;
+                _findFsByPath(app.project.rootItem, holder, 0);
+                if (!holder.found) {
+                    _lwDbgAudio('  imported but not found by path');
+                    return 'ERR:sfx_imported_not_found:' + fsPath;
+                }
+                _lwDbgAudio('  imported + found');
                 foundItem = holder.found;
                 preImportedFromFs = true;
             }
