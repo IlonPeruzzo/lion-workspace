@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -37,15 +37,29 @@
         .pc-cli{font-size:.66rem;color:#888;margin-top:2px}
         .pc-stage{display:inline-block;font-size:.56rem;padding:1px 7px;border-radius:8px;margin-top:3px;font-weight:600;letter-spacing:.2px}
 
-        .timer-display{font-size:2.1rem;font-weight:800;text-align:center;letter-spacing:-1px;color:#bef264;margin:4px 0;font-variant-numeric:tabular-nums}
+        .timer-display{font-size:1.65rem;font-weight:800;text-align:left;letter-spacing:-.5px;color:#bef264;margin:0;font-variant-numeric:tabular-nums;line-height:1.05}
         .timer-display.app-paused{color:#636363}
-        .timer-sub{text-align:center;font-size:.72rem;color:#888;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
+        .timer-sub{text-align:left;font-size:.62rem;color:#888;margin:1px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .timer-sub.app-paused{color:#f59e0b}
 
         .pomo-phase{text-align:center;margin-bottom:2px}
-        .phase-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.66rem;font-weight:700;letter-spacing:.3px}
-        .cycles{text-align:center;margin-top:5px;display:flex;gap:3px;justify-content:center}
-        .dot{width:7px;height:7px;border-radius:50%;background:#bef264}
+        .phase-badge{display:inline-block;padding:1px 8px;border-radius:8px;font-size:.55rem;font-weight:700;letter-spacing:.3px}
+        .cycles{text-align:left;display:flex;gap:3px;justify-content:flex-start}
+        .dot{width:5px;height:5px;border-radius:50%;background:#bef264}
+
+        /* Compact timer row: info esquerda + ícones direita */
+        .lw-timer-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0}
+        .lw-timer-info{display:flex;flex-direction:column;flex:1;min-width:0}
+        .lw-timer-ctrls{display:flex;gap:3px;flex-shrink:0}
+        .lw-ic{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;border-radius:7px;cursor:pointer;font-family:inherit;transition:all .12s;padding:0}
+        .lw-ic:active{transform:scale(.92)}
+        .lw-ic:disabled{opacity:.25;cursor:default;transform:none}
+        .lw-ic-go{background:#bef264;color:#0a0a0a}
+        .lw-ic-go:hover:not(:disabled){background:#d9f99d}
+        .lw-ic-pause{background:rgba(245,158,11,.1);color:#f59e0b}
+        .lw-ic-pause:hover:not(:disabled){background:rgba(245,158,11,.2)}
+        .lw-ic-stop{background:rgba(244,63,94,.1);color:#f43f5e}
+        .lw-ic-stop:hover:not(:disabled){background:rgba(244,63,94,.2)}
 
         .controls{display:flex;gap:5px;margin-top:8px}
         .btn{flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .12s;letter-spacing:-.2px}
@@ -122,6 +136,26 @@
         .ease-preset:hover .ep-dot, .ease-preset.active .ep-dot{fill:#bef264}
         .ease-preset .ep-label{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.46rem;color:#777;font-weight:600;letter-spacing:.2px;text-transform:uppercase;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.7)}
         .ease-preset:hover .ep-label, .ease-preset.active .ep-label{color:#bef264}
+        /* Easing — minimalist controls */
+        .ease-dir{flex:1;padding:4px 6px;border-radius:4px;background:transparent;border:none;color:#666;font-size:.58rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s ease;text-transform:uppercase;letter-spacing:.3px}
+        .ease-dir:hover{color:#aaa;background:rgba(255,255,255,.03)}
+        .ease-dir.active{background:rgba(190,242,100,.1);color:#bef264}
+        .ease-dir.gm{padding:4px 5px;flex:0 0 auto;line-height:0;display:flex;align-items:center;justify-content:center}
+        .ease-dir.gm svg{display:block}
+        #gmSpeed.active{background:rgba(247,222,82,.12);color:#f7de52}
+        #gmValue.active{background:rgba(190,242,100,.1);color:#bef264}
+        .ease-mini{padding:2px 5px;border-radius:4px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.05);color:#888;font-size:.5rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s ease;line-height:1}
+        .ease-mini:hover{background:rgba(190,242,100,.08);color:#bef264;border-color:rgba(190,242,100,.15)}
+        .ease-mini.active{background:rgba(190,242,100,.1);color:#bef264;border-color:rgba(190,242,100,.3)}
+        .ease-mini.scope{padding:5px;min-width:18px;text-align:center}
+        /* Apply row — scope inline + slim button */
+        .apply-row{display:flex;gap:1px;background:rgba(0,0,0,.3);border:1px solid rgba(190,242,100,.12);border-radius:6px;padding:1px;overflow:hidden}
+        .apply-scope{padding:5px 8px;background:transparent;border:none;color:#777;font-size:.56rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s ease;text-transform:uppercase;letter-spacing:.3px;border-radius:4px;white-space:nowrap}
+        .apply-scope:hover{color:#aaa;background:rgba(255,255,255,.03)}
+        .apply-scope.active{background:rgba(190,242,100,.08);color:#bef264}
+        .apply-go{flex:1;padding:5px 10px;background:#bef264;border:none;color:#0a0a0a;font-size:.66rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s ease;border-radius:4px;display:flex;align-items:center;justify-content:center;gap:4px;letter-spacing:.3px}
+        .apply-go:hover{background:#a3e635}
+        .apply-go:active{transform:scale(.98)}
         /* Focus toggle — switch moderno (compacto pro plugin) */
         .focus-toggle{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;background:linear-gradient(135deg,rgba(190,242,100,.05),rgba(190,242,100,.012));border:1px solid rgba(190,242,100,.1);cursor:pointer;user-select:none;transition:all .18s ease;margin-top:7px}
         .focus-toggle:hover{background:linear-gradient(135deg,rgba(190,242,100,.09),rgba(190,242,100,.025));border-color:rgba(190,242,100,.2)}
@@ -367,7 +401,7 @@
     <div class="logo">Lion <span>Workspace</span></div>
     <div class="status off" id="conn">Desconectado</div>
 
-    <!-- Timer -->
+    <!-- Timer (compact + inline icon buttons) -->
     <div class="section" id="sectionTimer">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('timerBody')">
             Timer do Projeto
@@ -375,12 +409,22 @@
         </div>
         <div id="timerBody">
             <div class="proj-list" id="projList"><div class="proj-empty">Nenhum servico ativo</div></div>
-            <div class="timer-display" id="tDisp">00:00:00</div>
-            <div class="timer-sub" id="tSub">Parado</div>
-            <div class="controls">
-                <button class="btn btn-go" id="tStart" onclick="timerStart()">Iniciar</button>
-                <button class="btn btn-pause" id="tPause" onclick="cmd('timer/pause')" disabled>Pausar</button>
-                <button class="btn btn-stop" id="tStop" onclick="cmd('timer/stop')" disabled>Parar</button>
+            <div class="lw-timer-row">
+                <div class="lw-timer-info">
+                    <div class="timer-display" id="tDisp">00:00:00</div>
+                    <div class="timer-sub" id="tSub">Parado</div>
+                </div>
+                <div class="lw-timer-ctrls">
+                    <button class="lw-ic lw-ic-go" id="tStart" onclick="timerStart()" title="Iniciar">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
+                    </button>
+                    <button class="lw-ic lw-ic-pause" id="tPause" onclick="cmd('timer/pause')" disabled title="Pausar">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    </button>
+                    <button class="lw-ic lw-ic-stop" id="tStop" onclick="cmd('timer/stop')" disabled title="Parar">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="1"/></svg>
+                    </button>
+                </div>
             </div>
             <!-- Pipeline -->
             <div class="pipe-section" id="pipeSection" style="display:none">
@@ -390,20 +434,30 @@
         </div>
     </div>
 
-    <!-- Pomodoro -->
+    <!-- Pomodoro (compact + inline icons) -->
     <div class="section" id="sectionPomo">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('pomoBody')">
             Pomodoro
             <svg id="pomoChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="pomoBody">
-            <div class="pomo-phase"><span class="phase-badge" id="pBadge" style="background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)">FOCO</span></div>
-            <div class="timer-display" id="pDisp">25:00</div>
-            <div class="cycles" id="pCyc"></div>
-            <div class="controls">
-                <button class="btn btn-go" id="pStart" onclick="pomoStart()">Iniciar</button>
-                <button class="btn btn-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled>Pausar</button>
-                <button class="btn btn-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled>Reset</button>
+            <div class="lw-timer-row">
+                <div class="lw-timer-info">
+                    <span class="phase-badge" id="pBadge" style="background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15);align-self:flex-start;margin-bottom:3px">FOCO</span>
+                    <div class="timer-display" id="pDisp">25:00</div>
+                    <div class="cycles" id="pCyc" style="margin-top:3px"></div>
+                </div>
+                <div class="lw-timer-ctrls">
+                    <button class="lw-ic lw-ic-go" id="pStart" onclick="pomoStart()" title="Iniciar">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
+                    </button>
+                    <button class="lw-ic lw-ic-pause" id="pPause" onclick="cmd('pomodoro/pause')" disabled title="Pausar">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    </button>
+                    <button class="lw-ic lw-ic-stop" id="pReset" onclick="cmd('pomodoro/reset')" disabled title="Reset">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 109-9"/><polyline points="3 3 3 9 9 9"/></svg>
+                    </button>
+                </div>
             </div>
             <label class="focus-toggle">
                 <span class="ft-icon">
@@ -563,59 +617,75 @@
             <svg id="easingChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="easingBody">
-            <!-- Curve canvas (limited to keep proportional even on wide panels) -->
-            <div style="position:relative;margin:0 auto 8px;max-width:260px;width:100%">
-                <canvas id="curveCanvas" width="240" height="240" style="display:block;width:100%;height:auto;aspect-ratio:1/1;border-radius:8px;background:#1a1a1a;border:1px solid rgba(190,242,100,.08);cursor:crosshair"></canvas>
-                <div style="position:absolute;bottom:6px;right:6px;display:flex;gap:3px">
-                    <button class="yt-q" onclick="curveFlipH()" title="Espelhar horizontal" style="font-size:.5rem;padding:1px 5px">↔</button>
-                    <button class="yt-q" onclick="curveFlipV()" title="Espelhar vertical" style="font-size:.5rem;padding:1px 5px">↕</button>
-                    <button class="yt-q" onclick="curveReset()" title="Resetar" style="font-size:.5rem;padding:1px 5px">⟲</button>
+            <!-- Direção (In/Out/InOut) + Graph mode toggle -->
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+                <div style="display:flex;gap:2px;padding:2px;background:rgba(255,255,255,.02);border-radius:6px;flex:1">
+                    <button class="ease-dir active" id="easeIn" onclick="setEaseDir('in')">In</button>
+                    <button class="ease-dir" id="easeOut" onclick="setEaseDir('out')">Out</button>
+                    <button class="ease-dir" id="easeInOut" onclick="setEaseDir('inout')">In-Out</button>
+                </div>
+                <!-- Graph mode: Value (current) vs Speed (AE-style) -->
+                <div style="display:flex;gap:2px;padding:2px;background:rgba(255,255,255,.02);border-radius:6px" title="Tipo de gráfico">
+                    <button class="ease-dir gm active" id="gmValue" onclick="setGraphMode('value')" title="Value graph">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 20C3 20 7 20 10 12C13 4 21 4 21 4"/>
+                        </svg>
+                    </button>
+                    <button class="ease-dir gm" id="gmSpeed" onclick="setGraphMode('speed')" title="Speed graph (AE)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 20 L8 6 L13 14 L18 8 L21 18"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
-            <!-- Easing type: In / Out / InOut -->
-            <div style="display:flex;gap:3px;margin-bottom:6px">
-                <button class="yt-q active" id="easeIn" onclick="setEaseDir('in')">Ease In</button>
-                <button class="yt-q" id="easeOut" onclick="setEaseDir('out')">Ease Out</button>
-                <button class="yt-q" id="easeInOut" onclick="setEaseDir('inout')">In-Out</button>
+            <!-- Canvas — Value ou Speed graph -->
+            <div style="position:relative;margin:0 auto 6px;max-width:200px;width:100%">
+                <canvas id="curveCanvas" width="180" height="160" style="display:block;width:100%;height:auto;aspect-ratio:9/8;border-radius:6px;background:#141414;border:1px solid rgba(190,242,100,.06);cursor:crosshair"></canvas>
+                <div style="position:absolute;top:4px;left:4px;font-size:.46rem;color:#666;letter-spacing:.5px;text-transform:uppercase;pointer-events:none" id="graphLabel">Value</div>
+                <div style="position:absolute;top:4px;right:4px;display:flex;gap:2px">
+                    <button class="ease-mini" onclick="curveFlipH()" title="Espelhar H">↔</button>
+                    <button class="ease-mini" onclick="curveFlipV()" title="Espelhar V">↕</button>
+                    <button class="ease-mini" onclick="curveReset()" title="Reset">⟲</button>
+                </div>
             </div>
 
-            <!-- Preset grid (estilo JerryFlow — SVG da curva por célula) -->
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:6px" id="presetBtns"></div>
+            <!-- Preset grid compacto (icons sem texto) -->
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin-bottom:6px" id="presetBtns"></div>
 
-            <!-- Coordinate display -->
-            <div style="display:flex;gap:6px;margin-bottom:6px;font-size:.54rem;color:#888;align-items:center">
-                <span>P1: (<span id="cp1x">0.25</span>, <span id="cp1y">0.10</span>)</span>
-                <span>P2: (<span id="cp2x">0.25</span>, <span id="cp2y">1.00</span>)</span>
-                <span style="flex:1"></span>
-                <span id="curveCSS" style="color:#555;cursor:pointer;font-size:.48rem" onclick="copyCurveCSS()" title="Copiar CSS">cubic-bezier()</span>
-            </div>
-
-            <!-- Saved presets -->
-            <div style="margin-bottom:6px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <span style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600">Meus Presets</span>
+            <!-- Saved presets (collapsed se vazio) -->
+            <div id="savedPresetsWrap" style="margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+                    <span style="font-size:.52rem;text-transform:uppercase;letter-spacing:.5px;color:#555;font-weight:600">Meus presets</span>
                     <div style="display:flex;gap:3px">
-                        <button class="yt-q" onclick="saveCurrentPreset()" title="Salvar preset atual" style="font-size:.5rem;padding:1px 6px;color:#bef264;border-color:rgba(190,242,100,.2)">+ Salvar</button>
-                        <button class="yt-q" id="presetEditBtn" onclick="togglePresetEdit()" title="Editar/deletar" style="font-size:.5rem;padding:1px 6px">Editar</button>
+                        <button class="ease-mini" onclick="saveCurrentPreset()" title="Salvar" style="color:#bef264">+</button>
+                        <button class="ease-mini" id="presetEditBtn" onclick="togglePresetEdit()" title="Editar">✎</button>
                     </div>
                 </div>
-                <div id="savedPresetsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(36px,1fr));gap:4px;max-height:120px;overflow-y:auto;padding:2px"></div>
-                <div id="noPresets" style="text-align:center;font-size:.54rem;color:#444;padding:8px 0">Nenhum preset salvo</div>
+                <div id="savedPresetsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(28px,1fr));gap:3px;max-height:80px;overflow-y:auto;padding:1px"></div>
+                <div id="noPresets" style="text-align:center;font-size:.5rem;color:#3a3a3a;padding:4px 0">—</div>
             </div>
 
-            <!-- Apply mode -->
-            <div style="display:flex;gap:3px;margin-bottom:6px">
-                <button class="yt-q active" id="applyBetween" onclick="setApplyMode('between')">Entre 2 keys</button>
-                <button class="yt-q" id="applyAll" onclick="setApplyMode('all')">Todos os keys</button>
+            <!-- Apply: scope inline + botão slim -->
+            <div class="apply-row">
+                <button class="apply-scope active" id="applyBetween" onclick="setApplyMode('between')" title="Aplica entre 2 keyframes selecionadas">Entre 2</button>
+                <button class="apply-scope" id="applyAll" onclick="setApplyMode('all')" title="Aplica em todos os keyframes">Todas</button>
+                <button class="apply-go" onclick="applyEasing()">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 20C3 20 7 20 10 12C13 4 21 4 21 4"/></svg>
+                    Aplicar
+                </button>
             </div>
 
-            <!-- Apply button -->
-            <button class="btn btn-go" onclick="applyEasing()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;display:flex;align-items:center;gap:5px">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M3 20C3 20 7 20 10 12C13 4 21 4 21 4"/><polyline points="15 4 21 4 21 10"/></svg>
-                Aplicar Easing
-            </button>
-            <div id="easingMsg" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px"></div>
+            <!-- Coord display + curve CSS (oculto, mostra ao expandir) -->
+            <details style="margin-top:6px">
+                <summary style="cursor:pointer;font-size:.5rem;color:#444;list-style:none;display:flex;align-items:center;gap:3px">▸ debug</summary>
+                <div style="display:flex;gap:6px;margin-top:4px;font-size:.5rem;color:#666;align-items:center;flex-wrap:wrap">
+                    <span>P1: (<span id="cp1x">0.25</span>, <span id="cp1y">0.10</span>)</span>
+                    <span>P2: (<span id="cp2x">0.25</span>, <span id="cp2y">1.00</span>)</span>
+                    <span id="curveCSS" style="color:#555;cursor:pointer;font-size:.46rem" onclick="copyCurveCSS()" title="Copiar CSS">cubic-bezier()</span>
+                </div>
+            </details>
+            <div id="easingMsg" style="text-align:center;font-size:.54rem;color:#555;margin-top:4px"></div>
         </div>
     </div>
 
@@ -791,23 +861,9 @@
 
             <div id="bgRemoveMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
 
-            <!-- ────── Rotoscope (SAM) — novo removedor de fundo de vídeo ────── -->
-            <div style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,0.07);min-width:0">
-                <button class="magic-cta" onclick="rotoscopeOpen()" id="rotoscopeBtn" style="background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(34,211,238,.05))" title="Remover fundo de vídeo com SAM — clica no sujeito e propaga">
-                    <span class="mc-icon">
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="23 7 16 12 23 17 23 7"/>
-                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                        </svg>
-                    </span>
-                    <span class="mc-text">
-                        <span class="mc-title">Remover fundo (vídeo)</span>
-                        <span class="mc-sub">SAM · click no sujeito + propaga</span>
-                    </span>
-                    <svg class="mc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-                <div id="rotoscopeMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
-            </div>
+            <!-- Removed: Rotoscope (SAM) - vídeo background removal removed per user request -->
+            <div id="rotoscopeMsg" style="display:none"></div>
+            <button id="rotoscopeBtn" style="display:none" onclick="rotoscopeOpen()"></button>
         </div>
     </div>
     <style>@keyframes bgr-spin{to{transform:rotate(360deg)}}</style>
@@ -861,6 +917,34 @@
                 <button class="yt-q" onclick="lsPlApplySuggestion('Control+Shift+P')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">Ctrl+Shift+P</button>
                 <button class="yt-q" onclick="lsPlApplySuggestion('F2')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">F2</button>
                 <button class="yt-q" onclick="lsPlApplySuggestion('Alt+Q')" style="font-size:.54rem;padding:3px 6px;font-family:monospace">Alt+Q</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Library -->
+    <div class="section" id="sectionAudioLib">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('audioLibBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                Biblioteca de Áudios
+            </span>
+            <svg id="audioLibChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="audioLibBody">
+            <div style="font-size:.58rem;color:#666;margin-bottom:8px;text-align:center;line-height:1.4">
+                Áudios que aparecem no LION SEARCH · gerencie pelo app principal
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 9px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.05);border-radius:5px;margin-bottom:5px">
+                <span style="font-size:.62rem;color:#ddd">Áudios na biblioteca</span>
+                <span id="plAudioLibCount" style="font-size:.7rem;color:#bef264;font-weight:700">0</span>
+            </div>
+            <button class="yt-q" onclick="plAudioLibRefresh()" style="width:100%;font-size:.58rem;padding:5px;margin-bottom:5px">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:3px"><path d="M23 4v6h-6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>
+                Atualizar contagem
+            </button>
+            <div id="plAudioLibList" style="display:flex;flex-direction:column;gap:3px;max-height:140px;overflow-y:auto"></div>
+            <div style="margin-top:6px;padding:6px 8px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1);border-radius:5px;font-size:.55rem;color:#aaa;line-height:1.5">
+                💡 Pra adicionar áudios, abra a aba <strong style="color:#bef264">Áudios</strong> no app principal.
             </div>
         </div>
     </div>
@@ -1080,6 +1164,7 @@
         { key: 'easing',   id: 'sectionEasing',    label: 'Easing / Curvas' },
         { key: 'anchor',   id: 'sectionAnchor',    label: 'Anchor Point Pro' },
         { key: 'lionSearch', id: 'sectionLionSearch', label: 'Lion Search' },
+        { key: 'audioLib', id: 'sectionAudioLib',  label: 'Biblioteca de Áudios' },
         { key: 'cp',       id: 'sectionCopyPaste', label: 'Copy / Paste' },
         { key: 'bgRemove', id: 'sectionBgRemove',  label: 'Remover Fundo' }
     ];
@@ -1592,15 +1677,19 @@
         var btnPause=document.getElementById('tPause');
         var btnStop=document.getElementById('tStop');
 
+        // Atualiza só disabled + tooltip — NÃO toca em textContent (mantém SVG dos ícones)
         if(t.paused){
-            btnStart.textContent='Retomar';btnStart.disabled=!selProj;
-            btnPause.disabled=true;btnStop.disabled=false;
+            btnStart.disabled=!selProj; btnStart.title='Retomar';
+            btnPause.disabled=true;
+            btnStop.disabled=false;
         } else if(t.running){
-            btnStart.textContent='Iniciar';btnStart.disabled=true;
-            btnPause.disabled=false;btnStop.disabled=false;
+            btnStart.disabled=true; btnStart.title='Iniciar';
+            btnPause.disabled=false;
+            btnStop.disabled=false;
         } else {
-            btnStart.textContent='Iniciar';btnStart.disabled=!selProj;
-            btnPause.disabled=true;btnStop.disabled=true;
+            btnStart.disabled=!selProj; btnStart.title='Iniciar';
+            btnPause.disabled=true;
+            btnStop.disabled=true;
         }
 
         // Pomodoro
@@ -1618,15 +1707,19 @@
         var pPause=document.getElementById('pPause');
         var pReset=document.getElementById('pReset');
 
+        // Mantém SVG dos ícones — só atualiza disabled + tooltip
         if(p.paused){
-            pStart.textContent='Retomar';pStart.disabled=false;
-            pPause.disabled=true;pReset.disabled=false;
+            pStart.disabled=false; pStart.title='Retomar';
+            pPause.disabled=true;
+            pReset.disabled=false;
         } else if(p.running){
-            pStart.textContent='Iniciar';pStart.disabled=true;
-            pPause.disabled=false;pReset.disabled=false;
+            pStart.disabled=true; pStart.title='Iniciar';
+            pPause.disabled=false;
+            pReset.disabled=false;
         } else {
-            pStart.textContent='Iniciar';pStart.disabled=false;
-            pPause.disabled=true;pReset.disabled=true;
+            pStart.disabled=false; pStart.title='Iniciar';
+            pPause.disabled=true;
+            pReset.disabled=true;
         }
 
         var dots='';for(var i=0;i<Math.min(p.cycle||0,8);i++)dots+='<span class="dot"></span>';
@@ -2111,7 +2204,7 @@
                             });
                         },500);
                     } else if(result&&result.indexOf('FILE_NOT_FOUND')===0){
-                        showMsg('Arquivo nao encontrado - tentando novamente...');
+                        showMsg('Arquivo não encontrado - tentando novamente...');
                         setTimeout(function(){
                             csInterface.evalScript(script,function(r2){
                                 if(r2&&r2.indexOf('OK:')===0){
@@ -2185,33 +2278,75 @@
     }
     setInterval(ytPluginPollProgress,1200);
 
-    /* ═══════ LION SEARCH — poll for pending commands from Lion Workspace ═══════ */
+    /* ═══════ LION SEARCH — long-polling for commands from Lion Workspace ═══════
+       Em vez de poll a cada 50ms (espera média 25ms por comando), usamos LONG-POLL:
+       servidor segura conexão até comando chegar e empurra na hora (~0ms latência).
+       Quando o long-poll volta (com ou sem comando), abre outro imediatamente. */
     var _lsBusy = false;
     function lsPollPendingCommands() {
         if (_lsBusy) return;
         _lsBusy = true;
-        LWHttp.get(API + '/lion-search/pop-pending', { timeout: 4000, retries: 0 }, function(err, st, body) {
+        // timeout 30s pra long-poll (servidor segura até 25s, +5s margem)
+        LWHttp.get(API + '/lion-search/pop-pending?wait=1', { timeout: 30000, retries: 0 }, function(err, st, body) {
             _lsBusy = false;
-            if (err || !body) return;
-            try {
-                var data = JSON.parse(body);
-                if (!data.commands || !data.commands.length) return;
-                for (var i = 0; i < data.commands.length; i++) {
-                    lsExecuteCommand(data.commands[i]);
-                }
-            } catch(e) {}
+            if (!err && body) {
+                try {
+                    var data = JSON.parse(body);
+                    if (data.commands && data.commands.length) {
+                        for (var i = 0; i < data.commands.length; i++) {
+                            lsExecuteCommand(data.commands[i]);
+                        }
+                    }
+                } catch(e) {}
+            }
+            // Reabre long-poll imediatamente — mantém conexão "pronta" pra próximo comando
+            setTimeout(lsPollPendingCommands, 10);
         });
     }
+    // Inicia long-poll loop (não precisa de setInterval — auto-reabre)
+    setTimeout(lsPollPendingCommands, 100);
 
     // Pega SFX folder da config + chama lwSearchListAllExtended com ela
+    // E busca a Audio Library do user (que substitui o scan se useLibraryOnly=true)
     function _lsCallExtended(callback) {
         LWHttp.get(API + '/lion-search/settings', { timeout: 3000, retries: 0 }, function(err, st, body) {
             var sfxFolder = '';
-            try { sfxFolder = (JSON.parse(body || '{}').sfxFolder || ''); } catch(e) {}
-            // Escapa pra string ExtendScript safe
-            var sfxArg = sfxFolder.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            var script = 'lwSearchListAllExtended("' + sfxArg + '")';
-            csInterface.evalScript(script, callback);
+            var useLibraryOnly = false;
+            try {
+                var parsed = JSON.parse(body || '{}');
+                sfxFolder = parsed.sfxFolder || '';
+                useLibraryOnly = parsed.useLibraryOnly !== false; // default ON
+            } catch(e) {}
+            // Pega Audio Library do app
+            LWHttp.get(API + '/lion-search/audio-library', { timeout: 3000, retries: 0 }, function(err2, st2, body2) {
+                var libItems = [];
+                try { libItems = JSON.parse(body2 || '{}').items || []; } catch(e2) {}
+                // Se useLibraryOnly=true: skip scan do PC, retorna SÓ lib + effects/presets do projeto
+                var sfxArg = (useLibraryOnly ? '' : sfxFolder).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                // Flag pra JSX: skip audio scan dos projetos (-1 = nem mesmo scan, só items vindos da lib)
+                var script = 'lwSearchListAllExtended("' + sfxArg + '"' + (useLibraryOnly ? ', /*skipAudioScan*/ true' : '') + ')';
+                csInterface.evalScript(script, function(result) {
+                    // Inject Audio Library items no resultado
+                    try {
+                        var parsed = JSON.parse(result || '{}');
+                        if (!parsed.items) parsed.items = [];
+                        libItems.forEach(function(lib) {
+                            parsed.items.push({
+                                kind: 'audio-source',
+                                name: lib.name || '(sem nome)',
+                                matchName: 'LIB:' + lib.id, // prefix LIB: pra JSX saber que é da Audio Library
+                                category: '🎵 Biblioteca',
+                                libPath: lib.path,
+                                libInSec: lib.inSec,
+                                libOutSec: lib.outSec,
+                            });
+                        });
+                        callback(JSON.stringify(parsed));
+                    } catch(eRes) {
+                        callback(result); // fallback se parse falhar
+                    }
+                });
+            });
         });
     }
 
@@ -2457,6 +2592,59 @@
             // (C:\Users\...) viram C:Users... porque \U etc são escape chars JS.
             var jsxKind = (p.kind || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
             var jsxMatch = (p.matchName || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+            // AUDIO LIBRARY: matchName="LIB:<id>" → busca item na biblioteca, troca
+            // matchName por "FS:<path>" e passa trim in/out separadamente pro JSX.
+            if (p.kind === 'audio-source' && (p.matchName || '').indexOf('LIB:') === 0) {
+                var libId = p.matchName.substring(4);
+                LWHttp.get(API + '/lion-search/audio-library', { timeout: 3000, retries: 0 }, function(eL, sL, bL) {
+                    var libItems = [];
+                    try { libItems = JSON.parse(bL || '{}').items || []; } catch(e) {}
+                    var libItem = libItems.find(function(x){ return x.id === libId; });
+                    if (!libItem) {
+                        LWHttp.post(API + '/lion-search/command-result', {
+                            commandId: commandId, type: cmd.type, result: 'ERR:lib_item_not_found:' + libId,
+                        }, { retries: 0 }, function(){});
+                        return;
+                    }
+                    var jsxPath = String(libItem.path).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    var inSec = (libItem.inSec != null) ? parseFloat(libItem.inSec) : -1;
+                    var outSec = (libItem.outSec != null) ? parseFloat(libItem.outSec) : -1;
+                    var volDb = (libItem.volumeDb != null) ? parseFloat(libItem.volumeDb) : 0;
+                    var script3 = 'lwInsertAudioWithTrim("' + jsxPath + '", ' + inSec + ', ' + outSec + ', ' + volDb + ')';
+                    csInterface.evalScript(script3, function(result) {
+                        LWHttp.post(API + '/lion-search/command-result', {
+                            commandId: commandId, type: cmd.type, result: String(result || ''),
+                        }, { retries: 0 }, function(){});
+                    });
+                });
+                return;
+            }
+
+            // PRESET: tenta ler dados parseados do Excalibur (se user tem) E usar lwApplyPresetData
+            // que aplica efeitos + valores + keyframes (não só addVideoEffect default)
+            if (p.kind === 'preset') {
+                var presetName = '';
+                var hashIdx = (p.matchName || '').indexOf('#');
+                if (hashIdx > 0) presetName = p.matchName.substring(hashIdx + 1);
+                var presetData = lsGetExcaliburPresetData(presetName);
+                if (presetData) {
+                    LWLog.info('lion-search', 'Aplicando preset "' + presetName + '" via Excalibur JSON (' + presetData.length + ' efeitos)');
+                    // Escapa o JSON pra string JSX
+                    var jsonStr = JSON.stringify(presetData);
+                    var jsxJson = jsonStr.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '');
+                    var jsxPresetName = presetName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    var script2 = 'lwApplyPresetData("' + jsxPresetName + '", "' + jsxJson + '")';
+                    csInterface.evalScript(script2, function(result) {
+                        LWHttp.post(API + '/lion-search/command-result', {
+                            commandId: commandId, type: cmd.type, result: String(result || ''),
+                        }, { retries: 0 }, function(){});
+                    });
+                    return;
+                }
+                LWLog.info('lion-search', 'Excalibur JSON sem dados pra "' + presetName + '" — usando fallback');
+            }
+
             var script = 'lwSearchApply("' + jsxKind + '", "' + jsxMatch + '")';
             csInterface.evalScript(script, function(result) {
                 LWHttp.post(API + '/lion-search/command-result', {
@@ -2466,7 +2654,100 @@
         }
     }
 
-    setInterval(lsPollPendingCommands, 200);
+    // ─── EXCALIBUR PRESET CACHE READER ─────────────────────────────────────
+    // Se o user tem Excalibur instalado, ele já tem um JSON com TODOS os presets
+    // parseados com efeitos + parâmetros + keyframes. Aproveitamos.
+    var _lsExcaliburCache = null;
+    var _lsExcaliburCacheAt = 0;
+    // ─── AUDIO LIBRARY (plugin) — apenas mostra contagem e lista enxuta ───
+    function plAudioLibRefresh() {
+        LWHttp.get(API + '/lion-search/audio-library', { timeout: 3000, retries: 0 }, function(err, st, body) {
+            var items = [];
+            try { items = JSON.parse(body || '{}').items || []; } catch(e) {}
+            var cnt = document.getElementById('plAudioLibCount');
+            var lst = document.getElementById('plAudioLibList');
+            if (cnt) cnt.textContent = items.length;
+            if (lst) {
+                if (items.length === 0) {
+                    lst.innerHTML = '<div style="font-size:.55rem;color:#555;text-align:center;padding:8px;border:1px dashed rgba(190,242,100,.08);border-radius:5px">Vazio</div>';
+                } else {
+                    lst.innerHTML = items.slice(0, 20).map(function(it) {
+                        var trimmed = (it.inSec != null || it.outSec != null);
+                        var inS = it.inSec != null ? it.inSec.toFixed(1) : '0';
+                        var outS = it.outSec != null ? it.outSec.toFixed(1) : '∞';
+                        return '<div style="display:flex;align-items:center;gap:5px;padding:4px 7px;background:rgba(255,255,255,.02);border-radius:4px;font-size:.55rem"><span style="flex:1;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (it.path || '').replace(/"/g, '&quot;') + '">' + (it.name || '?') + '</span>' + (trimmed ? '<span style="color:#bef264;font-size:.5rem">⊟' + inS + '→' + outS + 's</span>' : '') + '</div>';
+                    }).join('');
+                    if (items.length > 20) lst.innerHTML += '<div style="font-size:.5rem;color:#555;text-align:center;padding:3px">+' + (items.length - 20) + ' mais</div>';
+                }
+            }
+        });
+    }
+    // Refresh automático no carregamento + a cada 30s
+    setTimeout(plAudioLibRefresh, 1000);
+    setInterval(plAudioLibRefresh, 30000);
+
+    function lsLoadExcaliburCache() {
+        if (!_lsFs || !_lsPathL) return null;
+        try {
+            var excPath = _lsPathL.join(process.env.APPDATA || '', 'Knights of the Editing Table', 'excalibur', '.presetaction.json');
+            var stat = _lsFs.statSync(excPath);
+            if (_lsExcaliburCache && stat.mtimeMs <= _lsExcaliburCacheAt) return _lsExcaliburCache;
+            var data = _lsFs.readFileSync(excPath, 'utf8');
+            _lsExcaliburCache = JSON.parse(data);
+            _lsExcaliburCacheAt = stat.mtimeMs;
+            _lsParseDebug('Excalibur preset cache loaded: vp=' + Object.keys(_lsExcaliburCache.vp || {}).length + ' ap=' + Object.keys(_lsExcaliburCache.ap || {}).length);
+            return _lsExcaliburCache;
+        } catch(e) { return null; }
+    }
+    // Normaliza nome de preset pra match tolerante:
+    // - lowercase
+    // - colapsa whitespace múltiplo em um espaço
+    // - remove sufixo " N" (Excalibur às vezes adiciona " 1", " 2" pra deduplicar)
+    // - remove "--" vs "-" diferenças
+    function _lsNormPresetName(name) {
+        if (!name) return '';
+        return String(name)
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .replace(/\s+\d+$/, '')   // remove " 1", " 2" no fim
+            .replace(/--+/g, '-')
+            .replace(/\s*-\s*/g, '-') // normaliza espaços ao redor de hífen
+            .replace(/^\s+|\s+$/g, '');
+    }
+
+    // Recupera dados do preset pelo nome — exact, depois case-insensitive, depois normalizado
+    function lsGetExcaliburPresetData(presetName) {
+        var cache = lsLoadExcaliburCache();
+        if (!cache) return null;
+        // 1) Exact match
+        if (cache.vp && cache.vp[presetName]) return cache.vp[presetName];
+        if (cache.ap && cache.ap[presetName]) return cache.ap[presetName];
+        // 2) Case-insensitive
+        var lower = String(presetName).toLowerCase();
+        var maps = [cache.vp, cache.ap];
+        for (var mi = 0; mi < maps.length; mi++) {
+            if (!maps[mi]) continue;
+            for (var k in maps[mi]) {
+                if (String(k).toLowerCase() === lower) return maps[mi][k];
+            }
+        }
+        // 3) Normalizado (tolera " 1", "--" vs "-", espaços extras)
+        var norm = _lsNormPresetName(presetName);
+        for (var mi2 = 0; mi2 < maps.length; mi2++) {
+            if (!maps[mi2]) continue;
+            for (var k2 in maps[mi2]) {
+                if (_lsNormPresetName(k2) === norm) {
+                    return maps[mi2][k2];
+                }
+            }
+        }
+        return null;
+    }
+    // Pre-load no startup
+    setTimeout(lsLoadExcaliburCache, 500);
+
+    // Long-poll loop é iniciado acima (lsPollPendingCommands chama-se auto após cada resposta).
+    // setInterval antigo removido — long-poll é auto-sustentado.
 
     // Após login + premiere ready, envia catálogo de efeitos uma vez (popula cache do LW)
     var _lsCatalogRetries = 0;
@@ -2482,7 +2763,9 @@
             if (items.length === 0) {
                 _lsCatalogRetries++;
                 LWLog.warn('lion-search', 'Catálogo vazio (try ' + _lsCatalogRetries + ') · debug=' + dbg + ' · err=' + err);
-                if (_lsCatalogRetries < 6) setTimeout(lsSendCatalogOnce, 5000);
+                // Retry rápido: 500ms, 1s, 2s, 3s, 5s — agressivo no início, depois backoff
+                var retryDelay = [500, 1000, 2000, 3000, 5000, 8000][_lsCatalogRetries - 1] || 8000;
+                if (_lsCatalogRetries < 8) setTimeout(lsSendCatalogOnce, retryDelay);
                 LWHttp.post(API + '/lion-search/effects-update', { items: [], debug: dbg, error: err },
                     { retries: 0, timeout: 4000 }, function(){});
                 return;
@@ -2497,8 +2780,9 @@
             });
         });
     }
-    // Manda catálogo logo após bootstrap (QE costuma estar pronto em 1-2s)
-    setTimeout(lsSendCatalogOnce, 1500);
+    // Inicia AGRESSIVO: 200ms após plugin carregar (era 1500ms).
+    // QE não precisa estar 100% pronto — se falhar, retry exponencial busca de novo.
+    setTimeout(lsSendCatalogOnce, 200);
 
     /* ═══════ LION SEARCH — hotkey config UI no plugin ═══════ */
     var _lsPlCapturing = false;
@@ -2641,6 +2925,28 @@
     var curveApplyMode='between';
     var curveDragging=null; // 'cp1' or 'cp2'
     var curvePresetName='cubic';
+    var _graphMode='value'; // 'value' (current) ou 'speed' (AE-style)
+    function setGraphMode(mode){
+        _graphMode=mode;
+        document.getElementById('gmValue').classList.toggle('active',mode==='value');
+        document.getElementById('gmSpeed').classList.toggle('active',mode==='speed');
+        var lbl=document.getElementById('graphLabel');
+        if(lbl) lbl.textContent=mode==='speed' ? 'Speed' : 'Value';
+        drawCurve();
+    }
+
+    // Easing paramétrico (REAL bounce/elastic) — espelha o JSX pra preview no canvas
+    function _easeBounceOutC(t){if(t<1/2.75)return 7.5625*t*t;if(t<2/2.75){t-=1.5/2.75;return 7.5625*t*t+0.75}if(t<2.5/2.75){t-=2.25/2.75;return 7.5625*t*t+0.9375}t-=2.625/2.75;return 7.5625*t*t+0.984375}
+    function _easeBounceInC(t){return 1-_easeBounceOutC(1-t)}
+    function _easeBounceInOutC(t){return t<0.5?_easeBounceInC(t*2)*0.5:_easeBounceOutC(t*2-1)*0.5+0.5}
+    function _easeElasticOutC(t){if(t===0||t===1)return t;var c4=(2*Math.PI)/0.4;return Math.pow(2,-10*t)*Math.sin((t-0.1)*c4)+1}
+    function _easeElasticInC(t){if(t===0||t===1)return t;var c4=(2*Math.PI)/0.4;return -Math.pow(2,10*(t-1))*Math.sin((t-1-0.1)*c4)}
+    function _easeElasticInOutC(t){if(t===0||t===1)return t;var c5=(2*Math.PI)/0.45;if(t<0.5)return -(Math.pow(2,20*t-10)*Math.sin((20*t-11.125)*c5))/2;return (Math.pow(2,-20*t+10)*Math.sin((20*t-11.125)*c5))/2+1}
+    function _getParamEasingClient(preset, dir){
+        if (preset === 'bounce') return dir==='out' ? _easeBounceOutC : dir==='inout' ? _easeBounceInOutC : _easeBounceInC;
+        if (preset === 'elastic') return dir==='out' ? _easeElasticOutC : dir==='inout' ? _easeElasticInOutC : _easeElasticInC;
+        return null;
+    }
 
     // Easing presets (control points for ease-in variants)
     var easingPresets={
@@ -2663,17 +2969,33 @@
         var x2 = (cp2.x*100).toFixed(1), y2 = ((1-cp2.y)*100).toFixed(1);
         return 'M 0 100 C ' + x1 + ' ' + y1 + ', ' + x2 + ' ' + y2 + ', 100 0';
     }
+    // Path SVG sampleando uma função paramétrica (bounce/elastic) — 30 pontos
+    function _paramPathSVG(fn) {
+        var pts = ['M 0 100'];
+        for (var i = 1; i <= 30; i++) {
+            var x = i / 30;
+            var y = fn(x);
+            // Clampa Y mas permite overshoot moderado
+            if (y < -0.3) y = -0.3;
+            if (y > 1.3) y = 1.3;
+            pts.push('L ' + (x * 100).toFixed(1) + ' ' + ((1 - y) * 100).toFixed(1));
+        }
+        return pts.join(' ');
+    }
     function renderPresetGrid() {
         var el = document.getElementById('presetBtns');
         if (!el) return;
         el.innerHTML = PRESET_NAMES.map(function(name) {
             var preset = easingPresets[name];
             var path = '';
-            if (preset) {
+            // Pra bounce/elastic, usa função paramétrica REAL no preview
+            var paramFn = _getParamEasingClient(name, curveDir);
+            if (paramFn) {
+                path = _paramPathSVG(paramFn);
+            } else if (preset) {
                 var d = preset[curveDir] || preset['in'];
                 path = _curvePathSVG(d.cp1, d.cp2);
             } else if (name === 'custom') {
-                // Use current points pra custom
                 path = _curvePathSVG(curveCP1, curveCP2);
             }
             var isAct = name === curvePresetName;
@@ -2684,7 +3006,6 @@
                   '<circle class="ep-dot" cx="0" cy="100" r="3"/>' +
                   '<circle class="ep-dot" cx="100" cy="0" r="3"/>' +
                 '</svg>' +
-                '<span class="ep-label">' + name + '</span>' +
               '</div>';
         }).join('');
     }
@@ -2724,78 +3045,221 @@
         document.getElementById('applyAll').classList.toggle('active',mode==='all');
     }
 
+    // Sample do valor da curva atual (bezier ou paramétrica)
+    function _sampleCurveAt(t){
+        var pfn = _getParamEasingClient(curvePresetName, curveDir);
+        if (pfn) return pfn(t);
+        // bezier — usa evalBezier no client
+        return _evalBezierClient(t, curveCP1.x, curveCP1.y, curveCP2.x, curveCP2.y);
+    }
+    // Avaliação de bezier no client (mesma fórmula do JSX)
+    function _evalBezierClient(t, c1x, c1y, c2x, c2y){
+        // Newton-Raphson pra achar x = t aproximado, depois pega y
+        var x = t;
+        for (var i = 0; i < 8; i++) {
+            var bx = 3*(1-x)*(1-x)*x*c1x + 3*(1-x)*x*x*c2x + x*x*x;
+            var d = 3*(1-x)*(1-x)*c1x + 6*(1-x)*x*(c2x-c1x) + 3*x*x*(1-c2x);
+            if (d < 0.0001) break;
+            x -= (bx - t) / d;
+        }
+        return 3*(1-x)*(1-x)*x*c1y + 3*(1-x)*x*x*c2y + x*x*x;
+    }
+
     function drawCurve(){
         var canvas=document.getElementById('curveCanvas');
         if(!canvas) return;
         var ctx=canvas.getContext('2d');
         var w=canvas.width,h=canvas.height;
-        var pad=20;
+        var pad=18;
         var gw=w-2*pad,gh=h-2*pad;
 
         ctx.clearRect(0,0,w,h);
 
-        // Background grid
-        ctx.strokeStyle='rgba(190,242,100,.06)';
+        var isSpeed = (_graphMode === 'speed');
+
+        // ── BACKGROUND ── grid mais fino + axis labels estilo AE
+        ctx.strokeStyle = isSpeed ? 'rgba(247,222,82,.05)' : 'rgba(190,242,100,.05)';
         ctx.lineWidth=1;
-        for(var i=0;i<=4;i++){
-            var x=pad+gw*(i/4);
-            var y=pad+gh*(i/4);
+        // Grid 8x8 (mais fino, estilo AE)
+        for(var i=0;i<=8;i++){
+            var x=pad+gw*(i/8);
+            var y=pad+gh*(i/8);
             ctx.beginPath();ctx.moveTo(x,pad);ctx.lineTo(x,pad+gh);ctx.stroke();
             ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(pad+gw,y);ctx.stroke();
         }
-
-        // Diagonal reference line
-        ctx.strokeStyle='rgba(255,255,255,.08)';
-        ctx.setLineDash([4,4]);
+        // Border axis
+        ctx.strokeStyle='rgba(255,255,255,.12)';
         ctx.beginPath();
-        ctx.moveTo(pad,pad+gh);
-        ctx.lineTo(pad+gw,pad);
+        ctx.moveTo(pad,pad);ctx.lineTo(pad,pad+gh);ctx.lineTo(pad+gw,pad+gh);
         ctx.stroke();
-        ctx.setLineDash([]);
 
-        // Convert control points to canvas coords
         function toCanvas(p){return{x:pad+p.x*gw,y:pad+gh-p.y*gh}}
-        var start=toCanvas({x:0,y:0});
-        var end=toCanvas({x:1,y:1});
-        var c1=toCanvas(curveCP1);
-        var c2=toCanvas(curveCP2);
 
-        // Control point lines
-        ctx.strokeStyle='rgba(190,242,100,.3)';
-        ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.lineTo(c1.x,c1.y);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(end.x,end.y);ctx.lineTo(c2.x,c2.y);ctx.stroke();
+        if (isSpeed) {
+            // ── SPEED GRAPH (look AE) ──
+            // Sample numericamente: velocity = derivative do value
+            var samples = 100;
+            var values = [];
+            for (var s = 0; s <= samples; s++) values.push(_sampleCurveAt(s/samples));
+            // Velocidade ≈ diff finita
+            var velocities = [];
+            var maxAbsV = 0;
+            for (var v = 0; v < values.length - 1; v++) {
+                var dv = (values[v+1] - values[v]) * samples; // dy/dt em escala 0-1
+                velocities.push(dv);
+                if (Math.abs(dv) > maxAbsV) maxAbsV = Math.abs(dv);
+            }
+            if (maxAbsV < 0.1) maxAbsV = 1;
+            // Eixo y centrado: velocidade 0 no meio se houver negativa, senão usa 0-max
+            var hasNeg = false;
+            for (var vn = 0; vn < velocities.length; vn++) { if (velocities[vn] < -0.01) { hasNeg = true; break; } }
+            var yScale = hasNeg ? (gh / (2 * maxAbsV)) : (gh / maxAbsV);
+            var yZero = hasNeg ? (pad + gh/2) : (pad + gh);
 
-        // Bezier curve
-        ctx.strokeStyle='#bef264';
-        ctx.lineWidth=2.5;
-        ctx.beginPath();
-        ctx.moveTo(start.x,start.y);
-        ctx.bezierCurveTo(c1.x,c1.y,c2.x,c2.y,end.x,end.y);
-        ctx.stroke();
+            // Linha zero
+            if (hasNeg) {
+                ctx.strokeStyle = 'rgba(255,255,255,.15)';
+                ctx.setLineDash([2,3]);
+                ctx.beginPath();
+                ctx.moveTo(pad, yZero);
+                ctx.lineTo(pad+gw, yZero);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
 
-        // Start/end points
-        ctx.fillStyle='#fff';
-        ctx.beginPath();ctx.arc(start.x,start.y,3,0,Math.PI*2);ctx.fill();
-        ctx.beginPath();ctx.arc(end.x,end.y,3,0,Math.PI*2);ctx.fill();
+            // Área preenchida sob a curva
+            ctx.fillStyle = 'rgba(247,222,82,.08)';
+            ctx.beginPath();
+            ctx.moveTo(pad, yZero);
+            for (var vi = 0; vi < velocities.length; vi++) {
+                var vx = pad + (vi / velocities.length) * gw;
+                var vy = yZero - velocities[vi] * yScale;
+                ctx.lineTo(vx, vy);
+            }
+            ctx.lineTo(pad + gw, yZero);
+            ctx.closePath();
+            ctx.fill();
 
-        // Control point handles
-        // CP1 - green
-        ctx.fillStyle='#bef264';
-        ctx.strokeStyle='#fff';
-        ctx.lineWidth=1.5;
-        ctx.beginPath();ctx.arc(c1.x,c1.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+            // Curva de velocidade — amarela AE
+            ctx.strokeStyle = '#f7de52';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (var vi2 = 0; vi2 < velocities.length; vi2++) {
+                var vx2 = pad + (vi2 / velocities.length) * gw;
+                var vy2 = yZero - velocities[vi2] * yScale;
+                if (vi2 === 0) ctx.moveTo(vx2, vy2);
+                else ctx.lineTo(vx2, vy2);
+            }
+            ctx.stroke();
 
-        // CP2 - cyan
-        ctx.fillStyle='#22d3ee';
-        ctx.beginPath();ctx.arc(c2.x,c2.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+            // Keyframe markers (diamantes AE) em t=0 e t=1 (não editáveis - apenas indicadores)
+            function drawKfDiamond(cx, cy) {
+                ctx.fillStyle = '#f7de52';
+                ctx.strokeStyle = 'rgba(0,0,0,.5)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - 5);
+                ctx.lineTo(cx + 5, cy);
+                ctx.lineTo(cx, cy + 5);
+                ctx.lineTo(cx - 5, cy);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+            drawKfDiamond(pad, yZero - (velocities[0]||0) * yScale);
+            drawKfDiamond(pad + gw, yZero - (velocities[velocities.length-1]||0) * yScale);
 
-        // Labels
-        ctx.fillStyle='rgba(255,255,255,.3)';
-        ctx.font='9px sans-serif';
-        ctx.textAlign='left';
-        ctx.fillText('0',pad-3,pad+gh+12);
-        ctx.fillText('1',pad+gw-3,pad-5);
+            // ── HANDLES EDITÁVEIS (cp1, cp2) — mesma posição value-space dos handles do value mode ──
+            // No speed graph, ainda dá pra arrastar os mesmos pontos. Eles representam:
+            // - cp1 (out-tangent do start keyframe): controla velocidade saindo
+            // - cp2 (in-tangent do end keyframe): controla velocidade chegando
+            var c1s = toCanvas(curveCP1);
+            var c2s = toCanvas(curveCP2);
+
+            // Linhas tangentes (do diamante até o handle)
+            ctx.strokeStyle = 'rgba(247,222,82,.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(pad, yZero); ctx.lineTo(c1s.x, c1s.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(pad+gw, yZero); ctx.lineTo(c2s.x, c2s.y); ctx.stroke();
+
+            // Handle cp1 (verde-amarelado)
+            ctx.fillStyle = '#bef264';
+            ctx.strokeStyle = 'rgba(0,0,0,.6)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(c1s.x, c1s.y, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+            // Handle cp2 (cyan)
+            ctx.fillStyle = '#22d3ee';
+            ctx.beginPath(); ctx.arc(c2s.x, c2s.y, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+            // Labels eixos
+            ctx.fillStyle='rgba(255,255,255,.35)';
+            ctx.font='8px sans-serif';
+            ctx.textAlign='left';
+            ctx.fillText('speed', pad+2, pad-4);
+            ctx.fillText('t', pad+gw-6, pad+gh+10);
+        } else {
+            // ── VALUE GRAPH (modo current, com toques AE) ──
+            // Diagonal reference
+            ctx.strokeStyle='rgba(255,255,255,.06)';
+            ctx.setLineDash([4,4]);
+            ctx.beginPath();
+            ctx.moveTo(pad,pad+gh);
+            ctx.lineTo(pad+gw,pad);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            var start=toCanvas({x:0,y:0});
+            var end=toCanvas({x:1,y:1});
+            var c1=toCanvas(curveCP1);
+            var c2=toCanvas(curveCP2);
+
+            // Control point lines
+            ctx.strokeStyle='rgba(190,242,100,.3)';
+            ctx.lineWidth=1;
+            ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.lineTo(c1.x,c1.y);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(end.x,end.y);ctx.lineTo(c2.x,c2.y);ctx.stroke();
+
+            // Curva
+            ctx.strokeStyle='#bef264';
+            ctx.lineWidth=2.5;
+            ctx.beginPath();
+            var paramFn = _getParamEasingClient(curvePresetName, curveDir);
+            if (paramFn) {
+                ctx.moveTo(start.x,start.y);
+                for (var spi = 1; spi <= 80; spi++) {
+                    var sx = spi / 80;
+                    var sy = paramFn(sx);
+                    var cv = toCanvas({x: sx, y: sy});
+                    if (cv.y < 0) cv.y = 0;
+                    if (cv.y > h) cv.y = h;
+                    ctx.lineTo(cv.x, cv.y);
+                }
+            } else {
+                ctx.moveTo(start.x,start.y);
+                ctx.bezierCurveTo(c1.x,c1.y,c2.x,c2.y,end.x,end.y);
+            }
+            ctx.stroke();
+
+            // Start/end
+            ctx.fillStyle='#fff';
+            ctx.beginPath();ctx.arc(start.x,start.y,3,0,Math.PI*2);ctx.fill();
+            ctx.beginPath();ctx.arc(end.x,end.y,3,0,Math.PI*2);ctx.fill();
+
+            // CP handles
+            ctx.fillStyle='#bef264';
+            ctx.strokeStyle='#fff';
+            ctx.lineWidth=1.5;
+            ctx.beginPath();ctx.arc(c1.x,c1.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+            ctx.fillStyle='#22d3ee';
+            ctx.beginPath();ctx.arc(c2.x,c2.y,6,0,Math.PI*2);ctx.fill();ctx.stroke();
+
+            ctx.fillStyle='rgba(255,255,255,.3)';
+            ctx.font='9px sans-serif';
+            ctx.textAlign='left';
+            ctx.fillText('0',pad-3,pad+gh+12);
+            ctx.fillText('1',pad+gw-3,pad-5);
+        }
     }
 
     function updateCoords(){
@@ -2844,7 +3308,7 @@
     // Inicializa o grid no startup
     setTimeout(renderPresetGrid, 0);
 
-    // Mouse interaction on canvas — drag via document pra nao travar na borda
+    // Mouse interaction on canvas — drag via document pra não travar na borda
     (function(){
         var canvas=document.getElementById('curveCanvas');
         if(!canvas) return;
@@ -2913,15 +3377,18 @@
 
     function applyEasing(){
         if(!window.__adobe_cep__||typeof csInterface==='undefined'){
-            showEasingMsg('CEP indisponivel','#f43f5e');
+            showEasingMsg('CEP indisponível','#f43f5e');
             return;
         }
         var cp1x=curveCP1.x,cp1y=curveCP1.y,cp2x=curveCP2.x,cp2y=curveCP2.y;
         var mode=curveApplyMode; // 'between' or 'all'
+        // Passa nome do preset + direção pra JSX usar função paramétrica em bounce/elastic
+        // (bezier puro não bounce — precisa multi-oscillation)
+        var presetTag = (curvePresetName||'custom') + ':' + (curveDir||'in');
 
         showEasingMsg('Aplicando easing...','#f59e0b');
 
-        var script='applyBezierEasing('+cp1x.toFixed(4)+','+cp1y.toFixed(4)+','+cp2x.toFixed(4)+','+cp2y.toFixed(4)+',"'+mode+'")';
+        var script='applyBezierEasing('+cp1x.toFixed(4)+','+cp1y.toFixed(4)+','+cp2x.toFixed(4)+','+cp2y.toFixed(4)+',"'+mode+'","'+presetTag+'")';
         csInterface.evalScript(script,function(result){
             if(result&&result.indexOf('OK')===0){
                 var parts=result.split(':');
@@ -3186,7 +3653,7 @@
     function applyAnchor(){
         if(_ancBusy) return;
         if(!csInterface){
-            showAnchorMsg('CEP indisponivel','#f43f5e');
+            showAnchorMsg('CEP indisponível','#f43f5e');
             return;
         }
         var coords=anchorPosMap[anchorCurrent];
@@ -3350,7 +3817,8 @@
             var child_process = node.require('child_process');
             var Buf = node.require('buffer').Buffer;
             var b64 = Buf.from(psScript, 'utf16le').toString('base64');
-            child_process.exec('powershell -NoProfile -EncodedCommand ' + b64,
+            // -ExecutionPolicy Bypass evita bloqueio por GPO/política local
+            child_process.exec('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + b64,
                 { maxBuffer: 8 * 1024 * 1024, windowsHide: true, timeout: 15000 },
                 function(err, stdout, stderr) {
                     callback(err, String(stdout || ''), String(stderr || ''));
@@ -3413,8 +3881,9 @@
             'Add-Type -AssemblyName System.Drawing',
             dirLine,
             'if (-not (Test-Path $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $dir = $env:TEMP } }',
-            // Limpa arquivos lw-paste-* com mais de 1h pra evitar acúmulo
-            'try { Get-ChildItem -Path $dir -Filter "lw-paste-*.png" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddHours(-1) } | Remove-Item -Force -ErrorAction SilentlyContinue } catch {}',
+            // NUNCA limpar lw-paste-* — qualquer arquivo pode ainda ser referenciado por algum projeto.
+            // O cleanup automático causava clips offline ao reabrir projeto antigo.
+            // Usuário pode limpar manualmente o folder se quiser liberar espaço.
             '$srcs = @(' + pathsList + ')',
             '$results = @()',
             // Timestamp em MILLISSEGUNDOS (não segundos) — evita colisão de nomes
@@ -3573,6 +4042,22 @@
             '    $img.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)',
             '    Write-Output ("IMAGE:" + $outPath)',
             '    exit 0',
+            '  }',
+            '} catch {}',
+            // Fallback: clipboard tem TEXTO que pode ser path(s) de arquivo
+            'try {',
+            '  $txt = [System.Windows.Forms.Clipboard]::GetText()',
+            '  if ($txt -and $txt.Length -lt 32768) {',
+            '    $lines = $txt -split "[\\r\\n]+" | Where-Object { $_.Trim().Length -gt 0 }',
+            '    $valid = @()',
+            '    foreach ($line in $lines) {',
+            '      $clean = $line.Trim().Trim(\'"\')',
+            '      if (Test-Path -LiteralPath $clean -PathType Leaf) { $valid += $clean }',
+            '    }',
+            '    if ($valid.Count -gt 0) {',
+            '      Write-Output ("FILES:" + ($valid -join "|"))',
+            '      exit 0',
+            '    }',
             '  }',
             '} catch {}',
             'Write-Output "EMPTY"'
@@ -4247,8 +4732,8 @@
     }
 
     function cpDoCopy(){
-        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
-        if (!cpGetNode()) { cpShowStatus('Node.js nao disponivel no CEP', '#f43f5e'); return; }
+        if (!csInterface) { cpShowStatus('CEP indisponível', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js não disponível no CEP', '#f43f5e'); return; }
         var btn = document.getElementById('cpCopyBtn');
         if (btn) btn.disabled = true;
         cpShowStatus('Pegando arquivo do clip…', '#f59e0b');
@@ -4260,7 +4745,7 @@
                 else if (r === 'NO_SEQUENCE') cpShowStatus('Nenhuma sequence aberta', '#f43f5e');
                 else if (r === 'NO_PROJECT') cpShowStatus('Nenhum projeto aberto', '#f43f5e');
                 else if (r === 'NO_MEDIA') cpShowStatus('Clip sem arquivo de origem', '#f43f5e');
-                else if (r === 'FILE_NOT_FOUND') cpShowStatus('Arquivo nao existe no disco', '#f43f5e');
+                else if (r === 'FILE_NOT_FOUND') cpShowStatus('Arquivo não existe no disco', '#f43f5e');
                 else cpShowStatus(r || 'Erro', '#f43f5e');
                 return;
             }
@@ -4303,8 +4788,8 @@
     }
 
     function cpDoPaste(){
-        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
-        if (!cpGetNode()) { cpShowStatus('Node.js nao disponivel no CEP', '#f43f5e'); return; }
+        if (!csInterface) { cpShowStatus('CEP indisponível', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js não disponível no CEP', '#f43f5e'); return; }
         var btn = document.getElementById('cpPasteBtn');
         if (btn) btn.disabled = true;
         cpShowStatus('Lendo clipboard…', '#f59e0b');
@@ -4321,7 +4806,7 @@
             }
             if (res.type === 'empty') {
                 if (btn) btn.disabled = false;
-                cpShowStatus('Clipboard vazio. Copie um arquivo ou tire um print', '#f59e0b');
+                cpShowStatus('Clipboard vazio ou formato não suportado (copie arquivo, imagem ou path)', '#f59e0b');
                 return;
             }
             var paths = res.paths || [];

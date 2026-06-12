@@ -330,6 +330,28 @@ let bootError = null;
 function close() { ipcRenderer.send('lion-search:close'); }
 $closeBtn.onclick = close;
 
+// Listener pra reset state quando janela é re-mostrada (pré-criada + hide/show)
+ipcRenderer.on('lion-search:reset', () => {
+    try {
+        $input.value = '';
+        $typed.innerHTML = '<span class="caret"></span>';
+        selectedIdx = 0;
+        flatList = [];
+        filtered = [];
+        busy = false;
+        _lastTyping = null;
+        $palette.classList.remove('typing');
+        // Refetch context (selectionType pode ter mudado entre opens)
+        try { fetchContext(); } catch(e) {}
+        // Usa CACHE (não força refresh — TTL de 30s cobre renames recentes).
+        // setInterval em background ainda re-scan periodicamente.
+        ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: false }).then(r => _applyResult(r, false)).catch(()=>{});
+        // Re-foca o input
+        setTimeout(() => { try { $input.focus(); } catch(e) {} }, 30);
+        render();
+    } catch(e) { console.warn('reset err', e); }
+});
+
 function ensureFocus() {
     setTimeout(() => { try { $input.focus(); } catch(e) {} }, 0);
 }
@@ -400,11 +422,18 @@ function isCompatibleWithSelection(item) {
     return true;
 }
 
+// Normaliza string pra busca: minúsculo + trata _ e - como espaço
+// (assim "kiply pov" casa com "kiply_pov", "kiply-pov", "Kiply POV")
+function _normSearch(s) {
+    if (!s) return '';
+    return String(s).toLowerCase().replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function score(item, query) {
     if (!query) return 1;
-    const q = query.toLowerCase();
-    const name = (item.name || '').toLowerCase();
-    const cat = (item.category || '').toLowerCase();
+    const q = _normSearch(query);
+    const name = _normSearch(item.name || '');
+    const cat = _normSearch(item.category || '');
     if (name === q) return 1000;
     if (name.startsWith(q)) return 500 - (name.length - q.length);
     if (name.includes(q)) return 200;
@@ -584,8 +613,8 @@ async function apply() {
         try { ipcRenderer.send('lion-search:notify', { title: '✗ ' + it.name, body: e.message || String(e), success: false }); } catch(eS) {}
     });
 
-    // Fecha após brief delay pro toast ser visível
-    setTimeout(close, 200);
+    // Fecha quase instantâneo — notificação nativa cobre o feedback completo
+    setTimeout(close, 60);
 }
 
 $input.addEventListener('input', filter);
@@ -674,20 +703,24 @@ async function boot() {
     bootAttempts++;
     updateBadge();
     fetchContext();
-    // 1) Pega cache imediato (rápido)
+    // Estratégia: 1) cache (instantâneo se existir). 2) Se cache vazio, força refresh.
+    // Refresh "barato" (renames de projeto) fica pro setInterval em background.
     try {
         const cached = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: false });
         await _applyResult(cached, false);
+        // Se cache estava vazio, força refresh agora
+        if (!cached.items || cached.items.length === 0) {
+            try {
+                const fresh = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true });
+                await _applyResult(fresh, true);
+            } catch (eF) {
+                if (bootAttempts >= 3) bootError = eF.message || String(eF);
+                updateBadge();
+            }
+        }
     } catch (e) {
         if (bootAttempts >= 3) bootError = e.message || String(e);
         updateBadge();
-    }
-    // 2) Força refresh em background (re-scan do Premiere — capta sfx novos, project changes, etc)
-    try {
-        const fresh = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true });
-        await _applyResult(fresh, true);
-    } catch (e) {
-        // Cached já foi aplicado, ignore fresh err
     }
 }
 boot();

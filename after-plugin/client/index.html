@@ -1858,7 +1858,7 @@
                             });
                         },500);
                     } else if(result&&result.indexOf('FILE_NOT_FOUND')===0){
-                        showMsg('Arquivo nao encontrado - tentando novamente...');
+                        showMsg('Arquivo não encontrado - tentando novamente...');
                         setTimeout(function(){
                             csInterface.evalScript(script,function(r2){
                                 if(r2&&r2.indexOf('OK:')===0){
@@ -2106,7 +2106,7 @@
         document.getElementById('presetCustomBtn').classList.add('active');
     }
 
-    // Mouse interaction on canvas — drag via document pra nao travar na borda
+    // Mouse interaction on canvas — drag via document pra não travar na borda
     (function(){
         var canvas=document.getElementById('curveCanvas');
         if(!canvas) return;
@@ -2175,7 +2175,7 @@
 
     function applyEasing(){
         if(!window.__adobe_cep__||typeof csInterface==='undefined'){
-            showEasingMsg('CEP indisponivel','#f43f5e');
+            showEasingMsg('CEP indisponível','#f43f5e');
             return;
         }
         var cp1x=curveCP1.x,cp1y=curveCP1.y,cp2x=curveCP2.x,cp2y=curveCP2.y;
@@ -2448,7 +2448,7 @@
     function applyAnchor(){
         if(_ancBusy) return;
         if(!csInterface){
-            showAnchorMsg('CEP indisponivel','#f43f5e');
+            showAnchorMsg('CEP indisponível','#f43f5e');
             return;
         }
         var coords=anchorPosMap[anchorCurrent];
@@ -2853,8 +2853,8 @@
     }
 
     function cpDoCopy(){
-        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
-        if (!cpGetNode()) { cpShowStatus('Node.js nao disponivel no CEP', '#f43f5e'); return; }
+        if (!csInterface) { cpShowStatus('CEP indisponível', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js não disponível no CEP', '#f43f5e'); return; }
         var btn = document.getElementById('cpCopyBtn');
         if (btn) btn.disabled = true;
         cpShowStatus('Pegando arquivo do clip…', '#f59e0b');
@@ -2866,7 +2866,7 @@
                 else if (r === 'NO_SEQUENCE') cpShowStatus('Nenhuma sequence aberta', '#f43f5e');
                 else if (r === 'NO_PROJECT') cpShowStatus('Nenhum projeto aberto', '#f43f5e');
                 else if (r === 'NO_MEDIA') cpShowStatus('Clip sem arquivo de origem', '#f43f5e');
-                else if (r === 'FILE_NOT_FOUND') cpShowStatus('Arquivo nao existe no disco', '#f43f5e');
+                else if (r === 'FILE_NOT_FOUND') cpShowStatus('Arquivo não existe no disco', '#f43f5e');
                 else cpShowStatus(r || 'Erro', '#f43f5e');
                 return;
             }
@@ -2886,8 +2886,8 @@
     }
 
     function cpDoPaste(){
-        if (!csInterface) { cpShowStatus('CEP indisponivel', '#f43f5e'); return; }
-        if (!cpGetNode()) { cpShowStatus('Node.js nao disponivel no CEP', '#f43f5e'); return; }
+        if (!csInterface) { cpShowStatus('CEP indisponível', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js não disponível no CEP', '#f43f5e'); return; }
         var btn = document.getElementById('cpPasteBtn');
         if (btn) btn.disabled = true;
         cpShowStatus('Lendo clipboard…', '#f59e0b');

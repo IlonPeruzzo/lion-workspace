@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, screen, powerMonitor, Menu, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, powerMonitor, Menu, globalShortcut } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -247,7 +247,7 @@ function createWindow() {
     mainWin.loadFile('index.html');
     mainWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-    // When main window closes, kill focus mode so overlays don't keep the app alive
+    // When main window closes, kill focus mode só overlays don't keep the app alive
     mainWin.on('close', () => {
         if (focusActive) {
             focusActive = false;
@@ -564,7 +564,7 @@ ipcMain.handle('launch-app', (event, appName) => {
             'figma': 'open -a "Figma" 2>/dev/null',
             'obs': 'open -a "OBS" 2>/dev/null || open -a "OBS Studio" 2>/dev/null',
             'audacity': 'open -a "Audacity" 2>/dev/null',
-            'vegas': 'echo "Vegas Pro nao disponivel no macOS"',
+            'vegas': 'echo "Vegas Pro não disponível no macOS"',
             'gimp': 'open -a "GIMP-2.10" 2>/dev/null || open -a "GIMP" 2>/dev/null',
             'inkscape': 'open -a "Inkscape" 2>/dev/null',
             'krita': 'open -a "Krita" 2>/dev/null',
@@ -2013,18 +2013,21 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
         args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0');
     } else if (hasFfmpeg) {
         // ffmpeg available — separate video+audio streams + merge to mp4.
-        // 4K em geral só vem em VP9/AV1 no YouTube; H.264 raramente existe acima de 1080p.
-        // Por isso pra 4K pulamos o filtro avc1 e deixamos pegar o melhor disponível.
+        // IMPORTANTE: pra "best" NUNCA restringe codec. H.264 no YouTube costuma capar em 720p ou 1080p;
+        // resoluções maiores (1440p/4K) só vêm em VP9/AV1. Filtro avc1 forçava cap em 720p/1080p.
+        // Solução: filtro pega o melhor independente de codec; sort (-S) prefere H.264 SE existir
+        // na mesma resolução, mas não exige.
         if (format === '4k') {
             args.push('-f', 'bestvideo[height<=2160]+bestaudio/best[height<=2160]/bestvideo+bestaudio/best');
         } else if (format === '1080') {
-            args.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best');
+            args.push('-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo+bestaudio/best');
         } else if (format === '720') {
-            args.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best');
+            args.push('-f', 'bestvideo[height<=720]+bestaudio/best[height<=720]/bestvideo+bestaudio/best');
         } else {
-            args.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best/best');
+            // best = SEM cap de resolução, SEM cap de codec — yt-dlp pega 4K se existir
+            args.push('-f', 'bestvideo+bestaudio/best');
         }
-        // Sort prefers H.264 quando disponível, mas não exige
+        // Sort: prefere H.264/m4a quando MESMA resolução disponível, mas não filtra
         args.push('-S', 'res,codec:h264:m4a,br', '--merge-output-format', 'mp4');
     } else {
         // No ffmpeg — single stream (no merge needed). Note: 4K geralmente NÃO existe como single file.
@@ -2170,7 +2173,7 @@ ipcMain.handle('yt-open-folder', (event, folderPath) => {
 const SYNC_PORT = 9847;
 let cachedState = { timer: { running: false }, pomodoro: { running: false }, projects: [] };
 
-// Plugin auth tokens (persisted to disk so they survive app restarts)
+// Plugin auth tokens (persisted to disk só they survive app restarts)
 const pluginSessions = new Map(); // token -> { userId, email, plan, expiresAt }
 const sessionsFile = path.join(currentUD, 'plugin-sessions.json');
 
@@ -2195,6 +2198,23 @@ loadPluginSessions(); // Restore sessions on startup
 
 // ═══════ LION SEARCH state ═══════
 const pendingPluginCommands = [];
+// Long-polling: requests aguardando comando chegar.
+// Em vez do plugin fazer poll a cada 50ms, ele mantém uma conexão aberta
+// que o servidor responde NA HORA que um comando entrar no queue.
+// Latência de comando: ~0ms (versus 25ms avg do poll de 50ms).
+const lionLongPollWaiters = [];
+function _notifyLongPollWaiters() {
+    // Se tem comando pendente E tem waiter, responde imediatamente
+    while (pendingPluginCommands.length > 0 && lionLongPollWaiters.length > 0) {
+        const waiter = lionLongPollWaiters.shift();
+        try {
+            const cmds = pendingPluginCommands.splice(0, pendingPluginCommands.length);
+            clearTimeout(waiter.timeoutHandle);
+            waiter.res.writeHead(200, { 'Content-Type': 'application/json' });
+            waiter.res.end(JSON.stringify({ commands: cmds }));
+        } catch(e) {}
+    }
+}
 let lionSearchEffectsCache = [];
 let lionSearchEffectsCachedAt = 0;
 let lionSearchCatalogDebug = '';
@@ -2245,28 +2265,47 @@ function queuePluginCommand(type, payload, timeoutMs = 15000) {
         }, timeoutMs);
         lionSearchPendingResults.set(commandId, { resolve, reject, timeout });
         pendingPluginCommands.push({ id: commandId, type, payload: payload || {} });
+        // Acorda qualquer long-poll esperando — comando vai chegar no plugin em ~0ms
+        _notifyLongPollWaiters();
     });
 }
+
+// Dedup: se um list-effects está em andamento, próximas calls await a mesma promise
+let _lionListEffectsInFlight = null;
 
 // IPC pra lion-search.html chamar: lista efeitos
 ipcMain.handle('lion-search:list-effects', async (event, opts) => {
     const opts2 = opts || {};
-    const ageOk = lionSearchEffectsCachedAt && (Date.now() - lionSearchEffectsCachedAt) < 5 * 60 * 1000;
-    if (ageOk && lionSearchEffectsCache.length > 0 && !opts2.forceRefresh) {
+    // Cache do disco SEMPRE serve resposta imediata (mesmo se forceRefresh):
+    // - Não-force: retorna cache, ZERO espera
+    // - Force: retorna cache + dispara refresh em background pro setInterval pegar
+    if (!opts2.forceRefresh && lionSearchEffectsCache.length > 0) {
         return { items: lionSearchEffectsCache, fromCache: true, debug: lionSearchCatalogDebug, jsxError: lionSearchCatalogError };
     }
-    // Se já tem cache do plugin (mesmo vazio com erro), retorna direto
-    if (lionSearchEffectsCachedAt > 0 && !opts2.forceRefresh) {
-        return {
-            items: lionSearchEffectsCache,
-            fromCache: true,
-            debug: lionSearchCatalogDebug,
-            jsxError: lionSearchCatalogError,
-        };
+    // Se forceRefresh MAS tem cache, retorna cache imediatamente E dispara refresh assíncrono
+    if (opts2.forceRefresh && lionSearchEffectsCache.length > 0) {
+        // Background refresh — não bloqueia resposta
+        setImmediate(() => {
+            if (_lionListEffectsInFlight) return; // já tem outro em andamento
+            _lionListEffectsInFlight = queuePluginCommand('list-effects', {}, 30000);
+            _lionListEffectsInFlight.then(() => { _lionListEffectsInFlight = null; }).catch(() => { _lionListEffectsInFlight = null; });
+        });
+        return { items: lionSearchEffectsCache, fromCache: true, refreshing: true, debug: lionSearchCatalogDebug, jsxError: lionSearchCatalogError };
+    }
+    // Se já tem um scan em andamento, await ele em vez de disparar outro
+    if (_lionListEffectsInFlight) {
+        try {
+            const result = await _lionListEffectsInFlight;
+            return { items: result.items || [], fromCache: false, debug: result.debug || '', jsxError: result.error || '' };
+        } catch(e) {}
     }
     try {
-        // Timeout reduzido pra 3s — feedback mais rápido se plugin não tá rodando
-        const result = await queuePluginCommand('list-effects', {}, 3000);
+        // Timeout adaptativo: forceRefresh = 30s (scan completo pode ser lento),
+        // não-force = 3s (feedback rápido se plugin não tá rodando).
+        const timeout = opts2.forceRefresh ? 30000 : 3000;
+        _lionListEffectsInFlight = queuePluginCommand('list-effects', {}, timeout);
+        const result = await _lionListEffectsInFlight;
+        _lionListEffectsInFlight = null;
         return {
             items: result.items || [],
             fromCache: false,
@@ -2274,6 +2313,7 @@ ipcMain.handle('lion-search:list-effects', async (event, opts) => {
             jsxError: result.error || '',
         };
     } catch (e) {
+        _lionListEffectsInFlight = null;
         if (lionSearchEffectsCache.length > 0) {
             return { items: lionSearchEffectsCache, fromCache: true, staleError: e.message };
         }
@@ -2283,20 +2323,37 @@ ipcMain.handle('lion-search:list-effects', async (event, opts) => {
 
 // IPC pra lion-search.html chamar: aplica efeito
 ipcMain.handle('lion-search:apply', async (event, payload) => {
+    _isApplyInProgress = true;
     try {
         const result = await queuePluginCommand('apply-effect', payload, 15000);
         return result;
     } catch (e) { return { error: e.message }; }
+    finally {
+        // Mantém flag um pouco após apply pra cobrir notificação
+        setTimeout(() => { _isApplyInProgress = false; }, 2000);
+    }
 });
 
-// IPC pra fechar janela
+// IPC pra "fechar" janela — usa hide() pra preservar janela pré-criada (próximo open é instantâneo)
 ipcMain.on('lion-search:close', () => {
-    try { if (lionSearchWin && !lionSearchWin.isDestroyed()) lionSearchWin.close(); } catch(e) {}
+    try {
+        if (lionSearchWin && !lionSearchWin.isDestroyed()) {
+            lionSearchWin.hide();
+            // Reset state pra próximo open (limpa input + resultados)
+            try { lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
+        }
+    } catch(e) {}
 });
+
+// Flag pra evitar que notificação/IPC apply traga mainWin pra frente no Mac
+let _isApplyInProgress = false;
+let _isNotifying = false;
 
 // IPC: mostra notificação nativa (sucesso ou erro do apply otimista)
 ipcMain.on('lion-search:notify', (event, payload) => {
     try {
+        _isNotifying = true;
+        setTimeout(() => { _isNotifying = false; }, 1500);
         const { Notification } = require('electron');
         if (Notification.isSupported()) {
             const n = new Notification({
@@ -2577,18 +2634,50 @@ function startSyncServer() {
                 hotkey: _lionSettings.hotkey,
                 enabled: _lionSettings.enabled,
                 sfxFolder: _lionSettings.sfxFolder || '',
+                useLibraryOnly: _lionSettings.useLibraryOnly !== false, // default ON pra nova UX
                 registered: _registeredLionHotkey,
             }));
+            return;
+        }
+
+        // ═══════ Audio Library — GET (plugin lê pra alimentar LION SEARCH) ═══════
+        if (req.method === 'GET' && req.url === '/lion-search/audio-library') {
+            const lib = loadAudioLibrary();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ items: lib }));
             return;
         }
 
         // ═══════ LION SEARCH — pending commands queue ═══════
         // Plugin polls pra pegar comandos vindos do LW (ex: "list effects",
         // "apply effect X"). Plugin executa via JSX e POSTa de volta o resultado.
-        if (req.method === 'GET' && req.url === '/lion-search/pop-pending') {
-            const cmds = pendingPluginCommands.splice(0, pendingPluginCommands.length);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ commands: cmds }));
+        if (req.method === 'GET' && req.url.indexOf('/lion-search/pop-pending') === 0) {
+            // Long-polling: ?wait=1 segura a resposta até comando chegar (max 25s)
+            // Fallback rápido se não tiver ?wait — comportamento antigo
+            const u = new URL(req.url, 'http://localhost');
+            const wait = u.searchParams.get('wait') === '1';
+            if (!wait || pendingPluginCommands.length > 0) {
+                const cmds = pendingPluginCommands.splice(0, pendingPluginCommands.length);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ commands: cmds }));
+                return;
+            }
+            // Long-poll: aguarda até 25s por comando — server PUSH-A quando _notifyLongPollWaiters dispara
+            const timeoutHandle = setTimeout(() => {
+                const idx = lionLongPollWaiters.findIndex(w => w.res === res);
+                if (idx >= 0) lionLongPollWaiters.splice(idx, 1);
+                try {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ commands: [] }));
+                } catch(e) {}
+            }, 25000);
+            lionLongPollWaiters.push({ res, timeoutHandle });
+            // Cleanup se cliente desconectar antes
+            req.on('close', () => {
+                clearTimeout(timeoutHandle);
+                const idx = lionLongPollWaiters.findIndex(w => w.res === res);
+                if (idx >= 0) lionLongPollWaiters.splice(idx, 1);
+            });
             return;
         }
         if (req.method === 'GET' && req.url === '/lion-search/effects-cache') {
@@ -2803,11 +2892,12 @@ function startSyncServer() {
                         const hasFf = ffmpegReady();
                         if (fmt === 'mp3') { dlArgs.push('-x', '--audio-format', 'mp3', '--audio-quality', '0'); }
                         else if (hasFf) {
-                            // 4K raramente vem em H.264 — não exigir avc1 ou falha em maioria das plataformas
+                            // "best" e capped: NÃO filtra codec. H.264 cap em 720/1080p é cap real do YT.
+                            // Sort (-S) ainda prefere H.264 quando disponível na mesma res.
                             if (fmt === '4k') dlArgs.push('-f', 'bestvideo[height<=2160]+bestaudio/best[height<=2160]/bestvideo+bestaudio/best');
-                            else if (fmt === '1080') dlArgs.push('-f', 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best');
-                            else if (fmt === '720') dlArgs.push('-f', 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best');
-                            else dlArgs.push('-f', 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best/best');
+                            else if (fmt === '1080') dlArgs.push('-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo+bestaudio/best');
+                            else if (fmt === '720') dlArgs.push('-f', 'bestvideo[height<=720]+bestaudio/best[height<=720]/bestvideo+bestaudio/best');
+                            else dlArgs.push('-f', 'bestvideo+bestaudio/best');
                             dlArgs.push('-S', 'res,codec:h264:m4a,br', '--merge-output-format', 'mp4');
                         } else {
                             if (fmt === '4k') dlArgs.push('-f', 'best[height<=2160][ext=mp4]/best[height<=2160]/best[ext=mp4]/best');
@@ -3221,7 +3311,7 @@ function startSyncServer() {
         res.end('Not found');
     });
 
-    // Leak prevention: close idle sockets so the plugin reconnecting doesn't accumulate them
+    // Leak prevention: close idle sockets só the plugin reconnecting doesn't accumulate them
     server.keepAliveTimeout = 30000;   // 30s
     server.headersTimeout = 35000;     // must be > keepAliveTimeout
     server.requestTimeout = 60000;     // reject requests that hang >60s
@@ -3673,15 +3763,16 @@ ipcMain.handle('detect-premiere', async () => {
 
         // Check if our plugin is already installed
         const pluginInstalled = fs.existsSync(path.join(cepDir, 'com.lionworkspace.premiere', 'host', 'index.jsx'));
+        const aePluginInstalled = fs.existsSync(path.join(cepDir, 'com.lionworkspace.after', 'host', 'index.jsx'));
 
-        return { adobeInstalled, pluginInstalled };
+        return { adobeInstalled, pluginInstalled, aePluginInstalled };
     } catch {
-        return { adobeInstalled: false, pluginInstalled: false };
+        return { adobeInstalled: false, pluginInstalled: false, aePluginInstalled: false };
     }
 });
 
-// IPC: Install the Premiere plugin now
-ipcMain.handle('install-premiere-plugin', async () => {
+// IPC: Install plugins selectively. Receives { premiere: bool, ae: bool }
+ipcMain.handle('install-premiere-plugin', async (event, opts) => {
     try {
         // Server-side license check before installing plugin
         const { data: { user } } = await supabase.auth.getUser();
@@ -3697,8 +3788,21 @@ ipcMain.handle('install-premiere-plugin', async () => {
 
         if (!sub) return { success: false, error: 'no_subscription' };
 
-        autoInstallPremierePlugin();
-        return { success: true };
+        // Compat: se opts não vier, instala ambos (comportamento antigo)
+        const installPr = !opts || opts.premiere !== false;
+        const installAe = !opts || opts.ae !== false;
+        let installed = { premiere: false, ae: false };
+        if (installPr) installed.premiere = autoInstallCepPlugin('premiere-plugin', 'com.lionworkspace.premiere');
+        if (installAe) installed.ae = autoInstallCepPlugin('after-plugin', 'com.lionworkspace.after');
+        // Enable CEP debug mode (covers both plugins)
+        if (installPr || installAe) {
+            if (isMac) {
+                for (let v = 9; v <= 14; v++) exec(`defaults write com.adobe.CSXS.${v} PlayerDebugMode 1`, () => {});
+            } else {
+                for (let v = 9; v <= 14; v++) exec(`reg add "HKCU\\SOFTWARE\\Adobe\\CSXS.${v}" /v PlayerDebugMode /t REG_SZ /d 1 /f`, () => {});
+            }
+        }
+        return { success: true, installed };
     } catch (err) {
         return { success: false, error: err.message };
     }
@@ -3746,7 +3850,7 @@ app.on('before-quit', () => {
     app.isQuitting = true;
     stopFgDaemon();
     stopHeartbeat();
-    // ── Clean up focus mode so it doesn't run forever ──
+    // ── Clean up focus mode só it doesn't run forever ──
     if (focusActive) {
         focusActive = false;
         focusExternal = false;
@@ -3756,7 +3860,7 @@ app.on('before-quit', () => {
 });
 
 app.whenReady().then(() => {
-    // Set up Edit menu so Ctrl+V / Cmd+V works in all input fields
+    // Set up Edit menu só Ctrl+V / Cmd+V works in all input fields
     const menuTemplate = [
         ...(isMac ? [{ role: 'appMenu' }] : []),
         {
@@ -3883,6 +3987,19 @@ app.on('window-all-closed', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 const LION_SEARCH_SETTINGS_FILE = path.join(currentUD, 'lion-search-settings.json');
+// Audio Library — user-curated audio list (replaces PC scan when enabled)
+const AUDIO_LIBRARY_FILE = path.join(currentUD, 'audio-library.json');
+function loadAudioLibrary() {
+    try {
+        const raw = fs.readFileSync(AUDIO_LIBRARY_FILE, 'utf8');
+        const j = JSON.parse(raw);
+        return Array.isArray(j) ? j : [];
+    } catch(e) { return []; }
+}
+function saveAudioLibrary(lib) {
+    try { fs.writeFileSync(AUDIO_LIBRARY_FILE, JSON.stringify(lib, null, 2), 'utf8'); return true; }
+    catch(e) { return false; }
+}
 const DEFAULT_LION_HOTKEY = 'Control+Shift+L';
 
 function loadLionSearchSettings() {
@@ -3898,9 +4015,10 @@ function loadLionSearchSettings() {
             hotkey,
             enabled: j.enabled !== false,
             sfxFolder: j.sfxFolder || '',
+            useLibraryOnly: j.useLibraryOnly !== false, // default TRUE
         };
     } catch (e) {
-        return { hotkey: DEFAULT_LION_HOTKEY, enabled: true, sfxFolder: '' };
+        return { hotkey: DEFAULT_LION_HOTKEY, enabled: true, sfxFolder: '', useLibraryOnly: true };
     }
 }
 function saveLionSearchSettings(s) {
@@ -3942,32 +4060,12 @@ function isPremiereForeground() {
     return /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
 }
 
-function openLionSearch(forceOpen) {
-    if (lionSearchWin && !lionSearchWin.isDestroyed()) {
-        try { lionSearchWin.focus(); } catch(e) {}
-        return;
-    }
-    if (!forceOpen) {
-        if (!isPremiereForeground()) {
-            console.log('[lion-search] hotkey ignorado — foreground não é Premiere:', getFgProcSync());
-            return;
-        }
-    }
-    // Flag pra activate handler do Mac NÃO criar mainWin enquanto abrimos LION SEARCH
-    _isOpeningLionSearch = true;
-    setTimeout(() => { _isOpeningLionSearch = false; }, 1500);
-    // Tamanho compacto centralizado na tela ativa (cursor)
-    let display;
-    try { display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); }
-    catch(e) { display = screen.getPrimaryDisplay(); }
-    const wbounds = display.workArea;
-    // Tamanho compacto (estado vazio) — cresce ao digitar via lion-search:resize
+// Pre-cria janela escondida no boot — abertura via hotkey é INSTANTÂNEA (não cria mais BrowserWindow)
+function preloadLionSearchWindow() {
+    if (lionSearchWin && !lionSearchWin.isDestroyed()) return;
     const width = 440, height = 88;
-    const x = Math.round(wbounds.x + (wbounds.width - width) / 2);
-    const y = Math.round(wbounds.y + wbounds.height / 4); // ~25% do topo
-
     lionSearchWin = new BrowserWindow({
-        width, height, x, y,
+        width, height,
         frame: false,
         transparent: true,
         backgroundColor: '#00000000',
@@ -3983,19 +4081,53 @@ function openLionSearch(forceOpen) {
     });
     lionSearchWin.setMenuBarVisibility(false);
     lionSearchWin.loadFile(path.join(__dirname, 'lion-search.html'));
-    lionSearchWin.once('ready-to-show', () => {
-        lionSearchWin.show();
-        lionSearchWin.focus();
-    });
+    // 'closed' só dispara em close() real — não em hide()
     lionSearchWin.on('closed', () => { lionSearchWin = null; });
     // Fecha em blur (mas precisa fix pq dev tools tira foco também — checa após pequeno delay)
     lionSearchWin.on('blur', () => {
         setTimeout(() => {
-            if (lionSearchWin && !lionSearchWin.isDestroyed() && !lionSearchWin.isFocused()) {
-                lionSearchWin.close();
+            if (lionSearchWin && !lionSearchWin.isDestroyed() && !lionSearchWin.isFocused() && lionSearchWin.isVisible()) {
+                try { lionSearchWin.hide(); lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
             }
         }, 150);
     });
+}
+
+function openLionSearch(forceOpen) {
+    // Garante janela existe (pré-criada no boot, mas se foi destruída por algum motivo, recria)
+    if (!lionSearchWin || lionSearchWin.isDestroyed()) {
+        preloadLionSearchWindow();
+    }
+    if (!forceOpen) {
+        if (!isPremiereForeground()) {
+            console.log('[lion-search] hotkey ignorado — foreground não é Premiere:', getFgProcSync());
+            return;
+        }
+    }
+    // Flag pra activate handler do Mac NÃO criar mainWin enquanto abrimos LION SEARCH
+    _isOpeningLionSearch = true;
+    setTimeout(() => { _isOpeningLionSearch = false; }, 1500);
+    // Recalcula posição com cursor atual (em caso de monitor mudou)
+    let display;
+    try { display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()); }
+    catch(e) { display = screen.getPrimaryDisplay(); }
+    const wbounds = display.workArea;
+    const width = 440, height = 88;
+    const x = Math.round(wbounds.x + (wbounds.width - width) / 2);
+    const y = Math.round(wbounds.y + wbounds.height / 4); // ~25% do topo
+    try {
+        lionSearchWin.setBounds({ x, y, width, height });
+        // Reset state da página (limpa input + resultados) antes de mostrar
+        try { lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
+        lionSearchWin.show();
+        lionSearchWin.focus();
+    } catch(e) {
+        // Fallback: janela pode estar em estado ruim — recria do zero
+        try { lionSearchWin.destroy(); } catch(eD) {}
+        lionSearchWin = null;
+        preloadLionSearchWindow();
+        setTimeout(() => openLionSearch(forceOpen), 50);
+    }
 }
 
 let _lionSettings = loadLionSearchSettings();
@@ -4088,6 +4220,10 @@ app.whenReady().then(() => {
     if (_lionSettings.enabled) startHotkeyFgWatcher();
     // Mac: warm up fg cache imediato
     if (isMac) _macFgPoll();
+    // Pré-cria janela LION SEARCH (escondida) — hotkey abre INSTANTÂNEO sem criar BrowserWindow
+    setTimeout(() => {
+        try { preloadLionSearchWindow(); } catch(e) { console.warn('[lion-search] preload err:', e); }
+    }, 800); // delay pequeno pra não competir com main window load
 });
 app.on('will-quit', () => {
     stopHotkeyFgWatcher();
@@ -4102,6 +4238,7 @@ ipcMain.handle('lion-search:set-settings', (event, settings) => {
         hotkey: settings?.hotkey || DEFAULT_LION_HOTKEY,
         enabled: settings?.enabled !== false,
         sfxFolder: settings?.sfxFolder !== undefined ? String(settings.sfxFolder || '') : (_lionSettings.sfxFolder || ''),
+        useLibraryOnly: settings?.useLibraryOnly !== undefined ? !!settings.useLibraryOnly : (_lionSettings.useLibraryOnly !== false),
     };
     saveLionSearchSettings(_lionSettings);
     // SEMPRE força unregister do antigo quando muda settings — evita hotkey órfão
@@ -4119,6 +4256,85 @@ ipcMain.handle('lion-search:set-settings', (event, settings) => {
         stopHotkeyFgWatcher();
     }
     return { ok: true, settings: _lionSettings };
+});
+
+// Invalida cache LION SEARCH automaticamente quando lib muda
+function _invalidateLionCatalogAfterChange() {
+    try {
+        // Reset cache em memória → próxima list-effects vai disparar refresh
+        lionSearchEffectsCache = [];
+        lionSearchEffectsCachedAt = 0;
+        try { fs.unlinkSync(LION_CATALOG_FILE); } catch(e) {}
+    } catch(e) {}
+}
+
+// ═══════ Audio Library — IPC pra UI ═══════
+ipcMain.handle('audio-library:get', () => loadAudioLibrary());
+ipcMain.handle('audio-library:add', (event, item) => {
+    if (!item || !item.path) return { ok: false, error: 'missing_path' };
+    const lib = loadAudioLibrary();
+    const id = (item.id) || ('aud_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6));
+    const entry = {
+        id: id,
+        path: String(item.path),
+        name: String(item.name || item.path.split(/[\\/]/).pop() || 'audio'),
+        inSec: (item.inSec != null && !isNaN(item.inSec)) ? parseFloat(item.inSec) : null,
+        outSec: (item.outSec != null && !isNaN(item.outSec)) ? parseFloat(item.outSec) : null,
+        durationSec: item.durationSec ? parseFloat(item.durationSec) : null,
+        volumeDb: (item.volumeDb != null && !isNaN(parseFloat(item.volumeDb))) ? parseFloat(item.volumeDb) : null,
+        addedAt: Date.now(),
+    };
+    lib.push(entry);
+    saveAudioLibrary(lib);
+    _invalidateLionCatalogAfterChange();
+    return { ok: true, item: entry };
+});
+ipcMain.handle('audio-library:update', (event, item) => {
+    if (!item || !item.id) return { ok: false, error: 'missing_id' };
+    const lib = loadAudioLibrary();
+    const idx = lib.findIndex(x => x.id === item.id);
+    if (idx < 0) return { ok: false, error: 'not_found' };
+    // Trata null explicitamente pra trims (não pega undefined)
+    const upd = Object.assign({}, lib[idx]);
+    if (item.name !== undefined) upd.name = String(item.name);
+    if (item.inSec !== undefined) upd.inSec = item.inSec === null ? null : parseFloat(item.inSec);
+    if (item.outSec !== undefined) upd.outSec = item.outSec === null ? null : parseFloat(item.outSec);
+    if (item.path !== undefined) upd.path = String(item.path);
+    if (item.volumeDb !== undefined) upd.volumeDb = item.volumeDb === null ? null : parseFloat(item.volumeDb);
+    if (item.durationSec !== undefined) upd.durationSec = item.durationSec === null ? null : parseFloat(item.durationSec);
+    lib[idx] = upd;
+    saveAudioLibrary(lib);
+    _invalidateLionCatalogAfterChange();
+    return { ok: true, item: lib[idx] };
+});
+ipcMain.handle('audio-library:remove', (event, id) => {
+    if (!id) return { ok: false, error: 'missing_id' };
+    const lib = loadAudioLibrary();
+    const next = lib.filter(x => x.id !== id);
+    saveAudioLibrary(next);
+    _invalidateLionCatalogAfterChange();
+    return { ok: true, count: next.length };
+});
+// Lê arquivo como ArrayBuffer (pra renderer fazer waveform/decode no AudioContext)
+ipcMain.handle('audio-library:read-buffer', async (event, filePath) => {
+    try {
+        if (!filePath) return null;
+        const buf = fs.readFileSync(filePath);
+        // Retorna Uint8Array — Electron clona via structured clone
+        return new Uint8Array(buf).buffer;
+    } catch(e) { return null; }
+});
+
+// File picker pra adicionar áudios
+ipcMain.handle('audio-library:pick-files', async () => {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog({
+        title: 'Selecionar áudios',
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Áudios', extensions: ['mp3','wav','aac','m4a','flac','ogg','aif','aiff','wma','opus'] }],
+    });
+    if (result.canceled) return { ok: false, canceled: true };
+    return { ok: true, paths: result.filePaths || [] };
 });
 
 // IPC: dialog pra selecionar SFX folder
@@ -4161,7 +4377,12 @@ if (isMac) {
     app.on('activate', () => {
         // Skip se LION SEARCH foi acabou de ser disparada via hotkey
         if (_isOpeningLionSearch) return;
-        if (lionSearchWin && !lionSearchWin.isDestroyed()) return; // LION SEARCH aberta
+        // Skip se está em meio a um apply de LION SEARCH (audio/preset)
+        if (_isApplyInProgress) return;
+        // Skip se está mostrando notificação (notificação ativa o app automaticamente)
+        if (_isNotifying) return;
+        // Skip se LION SEARCH VISÍVEL (não só pre-criada)
+        if (lionSearchWin && !lionSearchWin.isDestroyed() && lionSearchWin.isVisible()) return;
         // Só recria mainWin se foi explicitamente fechada E user clicou no dock
         if (mainWin && !mainWin.isDestroyed() && !mainWin.isVisible()) {
             mainWin.show();

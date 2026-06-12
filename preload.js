@@ -57,6 +57,22 @@ contextBridge.exposeInMainWorld('auth', {
 
 contextBridge.exposeInMainWorld('setup', {
     detectPremiere: () => ipcRenderer.invoke('detect-premiere'),
-    installPlugin: () => ipcRenderer.invoke('install-premiere-plugin'),
+    installPlugin: (opts) => ipcRenderer.invoke('install-premiere-plugin', opts),
     skipPlugin: () => ipcRenderer.invoke('skip-premiere-plugin')
+});
+
+contextBridge.exposeInMainWorld('audioLibrary', {
+    get: () => ipcRenderer.invoke('audio-library:get'),
+    add: (item) => ipcRenderer.invoke('audio-library:add', item),
+    update: (item) => ipcRenderer.invoke('audio-library:update', item),
+    remove: (id) => ipcRenderer.invoke('audio-library:remove', id),
+    pickFiles: () => ipcRenderer.invoke('audio-library:pick-files'),
+    // Lê via IPC (async) — renderer não consegue fetch file://
+    readFileBuffer: (filePath) => ipcRenderer.invoke('audio-library:read-buffer', filePath),
+});
+
+contextBridge.exposeInMainWorld('lionSearch', {
+    getSettings: () => ipcRenderer.invoke('lion-search:get-settings'),
+    setSettings: (s) => ipcRenderer.invoke('lion-search:set-settings', s),
+    invalidateCatalog: () => ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true }),
 });

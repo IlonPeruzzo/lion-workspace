@@ -1,4 +1,4 @@
-﻿// ExtendScript for Adobe Premiere Pro — Lion Workspace Plugin
+// ExtendScript for Adobe Premiere Pro — Lion Workspace Plugin
 
 // Get current project folder path
 function getProjectFolder() {
@@ -199,7 +199,55 @@ function forceUIRefresh() {
     } catch (e) {}
 }
 
-function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
+// ── Easing functions paramétricas (REAL bounce/elastic, não bezier) ──
+// Bezier não bounce porque é monotônico no eixo Y. Pra REAL bounce/elastic
+// (múltiplas oscilações), usamos funções matemáticas clássicas (Robert Penner).
+function _easeBounceOut(t) {
+    if (t < 1/2.75) return 7.5625 * t * t;
+    if (t < 2/2.75) { t -= 1.5/2.75; return 7.5625 * t * t + 0.75; }
+    if (t < 2.5/2.75) { t -= 2.25/2.75; return 7.5625 * t * t + 0.9375; }
+    t -= 2.625/2.75; return 7.5625 * t * t + 0.984375;
+}
+function _easeBounceIn(t) { return 1 - _easeBounceOut(1 - t); }
+function _easeBounceInOut(t) {
+    if (t < 0.5) return _easeBounceIn(t * 2) * 0.5;
+    return _easeBounceOut(t * 2 - 1) * 0.5 + 0.5;
+}
+function _easeElasticOut(t) {
+    if (t === 0 || t === 1) return t;
+    var c4 = (2 * Math.PI) / 0.4;  // period
+    return Math.pow(2, -10 * t) * Math.sin((t - 0.1) * c4) + 1;
+}
+function _easeElasticIn(t) {
+    if (t === 0 || t === 1) return t;
+    var c4 = (2 * Math.PI) / 0.4;
+    return -Math.pow(2, 10 * (t - 1)) * Math.sin((t - 1 - 0.1) * c4);
+}
+function _easeElasticInOut(t) {
+    if (t === 0 || t === 1) return t;
+    var c5 = (2 * Math.PI) / 0.45;
+    if (t < 0.5) return -(Math.pow(2, 20 * t - 10) * Math.sin((20 * t - 11.125) * c5)) / 2;
+    return (Math.pow(2, -20 * t + 10) * Math.sin((20 * t - 11.125) * c5)) / 2 + 1;
+}
+// Retorna função paramétrica pra (preset, dir) ou null se deve usar bezier normal
+function _getParametricEasing(presetTag) {
+    if (!presetTag) return null;
+    var parts = String(presetTag).split(':');
+    var preset = parts[0]; var dir = parts[1] || 'in';
+    if (preset === 'bounce') {
+        if (dir === 'out') return _easeBounceOut;
+        if (dir === 'inout') return _easeBounceInOut;
+        return _easeBounceIn;
+    }
+    if (preset === 'elastic') {
+        if (dir === 'out') return _easeElasticOut;
+        if (dir === 'inout') return _easeElasticInOut;
+        return _easeElasticIn;
+    }
+    return null;
+}
+
+function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode, presetTag) {
     try {
         if (!app.project) return 'NO_PROJECT';
         var seq = app.project.activeSequence;
@@ -211,7 +259,10 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
         var totalApplied = 0;
         var totalKeys = 0;
         var errors = [];
-        var STEPS = 10;
+        // Bounce/elastic precisam de MAIS amostras (oscilações múltiplas)
+        // Bezier comum: 10 steps é suficiente; bounce: 40 pra capturar os pulos.
+        var paramFn = _getParametricEasing(presetTag);
+        var STEPS = paramFn ? 40 : 10;
 
         for (var ci = 0; ci < clips.length; ci++) {
             var clip = clips[ci];
@@ -252,7 +303,10 @@ function applyBezierEasing(cp1x, cp1y, cp2x, cp2y, mode) {
                                 var newKeys = [];
                                 for (var s = 1; s < STEPS; s++) {
                                     var fraction = s / STEPS;
-                                    var easedFraction = evalBezierCurve(fraction, cp1x, cp1y, cp2x, cp2y);
+                                    // Usa função paramétrica (bounce/elastic) ou bezier
+                                    var easedFraction = paramFn
+                                        ? paramFn(fraction)
+                                        : evalBezierCurve(fraction, cp1x, cp1y, cp2x, cp2y);
                                     var midTicks = ticksA + durationTicks * fraction;
 
                                     var midVal;
@@ -1124,7 +1178,7 @@ function lwBgGetSelected() {
 }
 
 // Importa o PNG e insere no timeline na MESMA posicao do clip original,
-// numa track ACIMA (cria nova track se preciso). Se origem nao e timeline,
+// numa track ACIMA (cria nova track se preciso). Se origem não e timeline,
 // soh importa pra raiz do projeto.
 function lwBgImportAndPlace(filePath, srcInfoJson) {
     try {
@@ -1745,7 +1799,307 @@ function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
 // Aplica um effect/transition num clip selecionado.
 // kind = "video-fx" | "audio-fx" | "video-tx" | "audio-tx"
 // matchName = nome do effect (em PR 2024+, é o display name retornado por getVideoEffectList)
+// ═══════════════════════════════════════════════════════════════════
+// LION SEARCH — APPLY PRESET WITH FULL DATA (effects + props + keyframes)
+// Inspired by Excalibur's approach: receives parsed JSON from plugin client,
+// applies each effect via addVideoEffect + setValue/addKey.
+// ═══════════════════════════════════════════════════════════════════
+function lwApplyPresetData(presetName, dataJsonStr) {
+    try {
+        _lwDbgPreset('═══ ApplyData: ' + presetName + ' ═══');
+        if (!dataJsonStr) return 'ERR:no_data';
+        var data;
+        try { data = JSON.parse(dataJsonStr); }
+        catch(eJ) { _lwDbgPreset('  JSON parse err: ' + eJ); return 'ERR:json_parse:' + eJ; }
+        if (!data || !data.length) { _lwDbgPreset('  empty data'); return 'ERR:empty_data'; }
+        _lwDbgPreset('  data has ' + data.length + ' effects');
+
+        if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
+        var seq = app.project.activeSequence;
+        try { app.enableQE(); } catch(eQE) {}
+        if (typeof qe === 'undefined' || !qe.project) return 'ERR:qe_not_available';
+        var qeSeq = qe.project.getActiveSequence();
+        if (!qeSeq) return 'ERR:no_qe_sequence';
+
+        // Acha selection — com recovery via snapshot
+        var sel = _lwFindSelectedQEClips(qeSeq, true, seq);
+        var selKind = 'video';
+        if (sel.length === 0) { sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio'; }
+        var stdSel = [];
+        if (sel.length === 0) {
+            var rec = _lwRecoverFromSnapshot(seq, qeSeq);
+            if (rec.qeClips.length > 0) {
+                sel = rec.qeClips;
+                stdSel = rec.stdClips;
+                selKind = rec.kind;
+                _lwDbgPreset('  recovery: ' + sel.length + ' clips');
+            } else {
+                return 'NO_CLIP_SELECTED';
+            }
+        }
+        if (stdSel.length === 0) {
+            var trackList = (selKind === 'video') ? seq.videoTracks : seq.audioTracks;
+            for (var ti = 0; ti < trackList.numTracks; ti++) {
+                var tk = trackList[ti];
+                for (var ci = 0; ci < tk.clips.numItems; ci++) {
+                    if (tk.clips[ci].isSelected()) stdSel.push(tk.clips[ci]);
+                }
+            }
+        }
+        _lwDbgPreset('  ' + sel.length + ' QE + ' + stdSel.length + ' std (kind=' + selKind + ')');
+
+        // ── HELPERS ──
+        // Built-in components que TODO clip de vídeo tem (não chamar addVideoEffect — já existem)
+        var builtinMatches = {
+            'AE.ADBE Motion': 'Motion',
+            'AE.ADBE Opacity': 'Opacity',
+            'AE.ADBE Timecode': 'Time Remapping',
+            'AE.ADBE MarkerParam': 'Marker'
+        };
+
+        // Acha component existente no clip por matchName ou displayName
+        function _findComponent(clip, matchName, displayName) {
+            try {
+                var comps = clip.components;
+                if (!comps) return null;
+                for (var i = 0; i < comps.numItems; i++) {
+                    var c = comps[i];
+                    var mn = ''; var dn = '';
+                    try { mn = String(c.matchName || ''); } catch(e1) {}
+                    try { dn = String(c.displayName || ''); } catch(e2) {}
+                    if (matchName && mn === matchName) return c;
+                    if (displayName && dn === displayName) return c;
+                }
+            } catch(e) {}
+            return null;
+        }
+
+        // Acha property no component por displayName
+        function _findProp(component, propName) {
+            try {
+                var props = component.properties;
+                if (!props) return null;
+                for (var i = 0; i < props.numItems; i++) {
+                    var p = props[i];
+                    var pn = '';
+                    try { pn = String(p.displayName || p.name || ''); } catch(e) {}
+                    if (pn === propName) return p;
+                }
+            } catch(e) {}
+            return null;
+        }
+
+        // Parse keyframe value baseado em ParameterControlType
+        // type 2/3 = float, 4 = bool, 6 = point (x:y), 7 = enum
+        function _parseVal(rawVal, ptype) {
+            if (ptype === 4) return (String(rawVal).toLowerCase() === 'true');
+            if (ptype === 6) {
+                // Format "x:y" → array
+                var parts = String(rawVal).split(':');
+                return [parseFloat(parts[0]), parseFloat(parts[1] || 0)];
+            }
+            if (ptype === 7) return parseInt(rawVal, 10);
+            return parseFloat(rawVal);
+        }
+
+        // Ticks → seconds (Premiere usa 254016000000 ticks/sec)
+        var TICKS_PER_SEC = 254016000000;
+        function _ticksToSec(ticks) {
+            return parseFloat(ticks) / TICKS_PER_SEC;
+        }
+
+        // ── APLICA cada efeito ──
+        var totalApplied = 0;
+        var errors = [];
+        for (var fxi = 0; fxi < data.length; fxi++) {
+            var effect = data[fxi];
+            if (!effect) continue;
+            var mn = effect.matchName || '';
+            var nm = effect.name || '';
+            var props = effect.props || [];
+            _lwDbgPreset('  fx[' + fxi + ']: ' + mn + ' (' + nm + ') props=' + props.length);
+
+            var isBuiltin = !!builtinMatches[mn];
+            var displayName = builtinMatches[mn] || nm;
+
+            // Aplica em CADA clip selecionado
+            for (var ci2 = 0; ci2 < stdSel.length; ci2++) {
+                var clip = stdSel[ci2];
+                var qeClip = sel[ci2];
+                var targetComp = null;
+
+                if (isBuiltin) {
+                    // Built-in: usa component existente (NÃO addVideoEffect)
+                    targetComp = _findComponent(clip, mn, displayName);
+                    if (!targetComp) {
+                        // Tenta variations
+                        var altNames = ['Motion','Opacity','Time Remapping','Velocidade','Movimento','Opacidade'];
+                        for (var an = 0; an < altNames.length && !targetComp; an++) {
+                            targetComp = _findComponent(clip, '', altNames[an]);
+                        }
+                    }
+                    if (!targetComp) { _lwDbgPreset('    NO_BUILTIN_COMP for ' + mn); continue; }
+                    _lwDbgPreset('    builtin component found: ' + (function(){try{return targetComp.displayName;}catch(e){return '?';}})());
+                } else {
+                    // Custom effect: addVideoEffect
+                    var fxObj = null;
+                    var lookups = ['getVideoEffectByName', 'getVideoEffectByMatchName'];
+                    for (var lk = 0; lk < lookups.length && !fxObj; lk++) {
+                        try {
+                            if (typeof qe.project[lookups[lk]] === 'function') {
+                                fxObj = qe.project[lookups[lk]](nm);
+                                if (!fxObj) fxObj = qe.project[lookups[lk]](mn);
+                            }
+                        } catch(eLk) {}
+                    }
+                    if (!fxObj) { _lwDbgPreset('    NO_FX_OBJ: ' + mn); errors.push('no_fx:' + mn); continue; }
+                    // Count antes
+                    var beforeN = 0;
+                    try { beforeN = clip.components.numItems; } catch(eC) {}
+                    // Adiciona
+                    try {
+                        if (selKind === 'audio') qeClip.addAudioEffect(fxObj);
+                        else qeClip.addVideoEffect(fxObj);
+                    } catch(eAdd) { _lwDbgPreset('    addEffect ERR: ' + eAdd); errors.push('addEffect:' + eAdd); continue; }
+
+                    // Espera Premiere registrar o novo component (pode demorar)
+                    var afterN = beforeN;
+                    for (var poll = 0; poll < 10; poll++) {
+                        try { afterN = clip.components.numItems; } catch(ePN) {}
+                        if (afterN > beforeN) break;
+                        $.sleep(30);
+                    }
+                    _lwDbgPreset('    components: before=' + beforeN + ' after=' + afterN);
+
+                    // ACHA o component recém-adicionado por MATCHNAME, não só "último idx"
+                    // (Premiere pode reordenar ou adicionar em posição inesperada)
+                    targetComp = null;
+                    try {
+                        // Dump dos components pra debug + busca por matchName
+                        for (var ck = 0; ck < clip.components.numItems; ck++) {
+                            var cmp = clip.components[ck];
+                            var cmn = ''; var cdn = '';
+                            try { cmn = String(cmp.matchName || ''); } catch(eMn) {}
+                            try { cdn = String(cmp.displayName || ''); } catch(eDn) {}
+                            _lwDbgPreset('      comp[' + ck + ']: matchName=' + cmn + ' displayName=' + cdn);
+                            // Match por matchName (mais confiável)
+                            if (!targetComp && cmn === mn) targetComp = cmp;
+                            // Match por displayName
+                            if (!targetComp && cdn && cdn === nm) targetComp = cmp;
+                        }
+                    } catch(eDump) { _lwDbgPreset('      dump err: ' + eDump); }
+
+                    // Fallback: pega o último (provavelmente correto)
+                    if (!targetComp && clip.components.numItems > beforeN) {
+                        targetComp = clip.components[clip.components.numItems - 1];
+                        _lwDbgPreset('    fallback: usando ultimo component idx=' + (clip.components.numItems - 1));
+                    }
+
+                    if (!targetComp) { _lwDbgPreset('    NO_NEW_COMP after addVideoEffect'); continue; }
+                    _lwDbgPreset('    target component: matchName=' + (function(){try{return targetComp.matchName;}catch(e){return '?';}})() + ' displayName=' + (function(){try{return targetComp.displayName;}catch(e){return '?';}})());
+
+                    // Dump das properties do target component pra ver nomes reais
+                    // CRITICAL: NÃO usar 'var props' aqui — ES3 hoisting sobrescreveria
+                    // a variável effect.props da função outer e quebraria o loop abaixo!
+                    try {
+                        var compProps = targetComp.properties;
+                        if (compProps && compProps.numItems) {
+                            _lwDbgPreset('    component has ' + compProps.numItems + ' properties:');
+                            for (var pi3 = 0; pi3 < Math.min(15, compProps.numItems); pi3++) {
+                                var pName = '';
+                                try { pName = String(compProps[pi3].displayName || compProps[pi3].name || '?'); } catch(eN) {}
+                                _lwDbgPreset('      prop[' + pi3 + ']: ' + pName);
+                            }
+                        } else {
+                            _lwDbgPreset('    component has NO properties or compProps.numItems=0');
+                        }
+                    } catch(ePropsDump) { _lwDbgPreset('    properties dump err: ' + ePropsDump); }
+                }
+
+                // ── SETA cada propriedade ──
+                // CRÍTICO: tempos no JSON do Excalibur são ABSOLUTOS (do clip onde preset foi salvo).
+                // _anchor.AnchorInPoint marca o INÍCIO desse clip-fonte.
+                // Pra aplicar no clip atual, convertemos pra tempo CLIP-RELATIVO (0 = início do clip).
+                var anchorInTicks = 0;
+                try {
+                    if (effect._anchor && effect._anchor.AnchorInPoint) {
+                        anchorInTicks = parseFloat(effect._anchor.AnchorInPoint);
+                    }
+                } catch(eAnc) {}
+                _lwDbgPreset('    anchorInTicks=' + anchorInTicks + ' (' + _ticksToSec(anchorInTicks).toFixed(3) + 's)');
+
+                for (var pi = 0; pi < props.length; pi++) {
+                    var prop = props[pi];
+                    if (!prop || !prop.Name) continue;
+                    var ppObj = _findProp(targetComp, prop.Name);
+                    if (!ppObj) { _lwDbgPreset('      NO_PROP: ' + prop.Name); continue; }
+
+                    try {
+                        if (prop.IsTimeVarying && prop.Keyframes) {
+                            // KEYFRAMES
+                            try { ppObj.setTimeVarying(true); } catch(eTv) {}
+                            // Parse "time,value,...;time,value,...;"
+                            var kfStrs = String(prop.Keyframes).split(';');
+                            var kfCount = 0;
+                            for (var ki = 0; ki < kfStrs.length; ki++) {
+                                var kfS = kfStrs[ki];
+                                if (!kfS) continue;
+                                var fields = kfS.split(',');
+                                if (fields.length < 2) continue;
+                                var ticks = parseFloat(fields[0]);
+                                // CONVERTE pra tempo RELATIVO ao clip atual (0 = início do clip)
+                                var relativeTicks = ticks - anchorInTicks;
+                                var sec = _ticksToSec(relativeTicks);
+                                if (sec < 0) sec = 0; // safety
+                                var val = _parseVal(fields[1], prop.ParameterControlType);
+                                try {
+                                    ppObj.addKey(sec);
+                                    ppObj.setValueAtKey(sec, val, true);
+                                    kfCount++;
+                                    _lwDbgPreset('        kf@' + sec.toFixed(3) + 's = ' + val);
+                                } catch(eKf) { _lwDbgPreset('      kf err: ' + eKf); }
+                            }
+                            _lwDbgPreset('      ✓ ' + prop.Name + ' = TimeVarying (' + kfCount + ' kfs)');
+                        } else if (prop.CurrentValue !== null && prop.CurrentValue !== undefined) {
+                            // STATIC VALUE
+                            var val = _parseVal(prop.CurrentValue, prop.ParameterControlType);
+                            try { ppObj.setValue(val, true); } catch(eSv) {
+                                // Fallback sem segundo arg
+                                try { ppObj.setValue(val); } catch(eSv2) { _lwDbgPreset('      setVal err: ' + eSv2); }
+                            }
+                            _lwDbgPreset('      ✓ ' + prop.Name + ' = ' + prop.CurrentValue);
+                        } else if (prop.StartKeyframe) {
+                            // Tenta extrair valor do StartKeyframe (formato "ticks,value,...")
+                            var skFields = String(prop.StartKeyframe).split(',');
+                            if (skFields.length >= 2) {
+                                var skVal = _parseVal(skFields[1], prop.ParameterControlType);
+                                try { ppObj.setValue(skVal, true); _lwDbgPreset('      ✓ ' + prop.Name + ' = (start) ' + skFields[1]); }
+                                catch(eSk) { _lwDbgPreset('      setVal (start) err: ' + eSk); }
+                            }
+                        }
+                    } catch(eOuter) { _lwDbgPreset('      prop err: ' + eOuter); }
+                }
+                totalApplied++;
+            }
+        }
+        _lwDbgPreset('═══ DONE: applied ' + totalApplied + ' effects to ' + stdSel.length + ' clips ═══');
+        return 'OK:applied:' + totalApplied;
+    } catch(eAll) {
+        _lwDbgPreset('OUTER ERR: ' + eAll);
+        return 'ERR:apply_preset_data:' + eAll;
+    }
+}
+
 function lwSearchApply(kind, matchName) {
+    // Debug top-level: registra TODO call que chega no host (independente do kind)
+    try {
+        var _fApply = new File(Folder.desktop.fsName + '/lion-apply-trace.txt');
+        if (_fApply.open('a')) {
+            _fApply.encoding = 'UTF-8';
+            _fApply.write('[' + (new Date()).toString() + '] lwSearchApply kind="' + kind + '" matchName="' + String(matchName).slice(0,200) + '"\n');
+            _fApply.close();
+        }
+    } catch(eDbg) {}
     try {
         if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
         var seq = app.project.activeSequence;
@@ -1755,8 +2109,12 @@ function lwSearchApply(kind, matchName) {
         if (!qeSeq) return 'ERR:no_qe_sequence';
 
         if (kind === 'video-fx') {
-            // Acha QE clips selecionados (video)
+            // Acha QE clips selecionados (video) — com recovery via snapshot
             var selVideoClips = _lwFindSelectedQEClips(qeSeq, true, seq);
+            if (selVideoClips.length === 0) {
+                var rcV = _lwRecoverFromSnapshot(seq, qeSeq);
+                if (rcV.qeClips.length > 0 && rcV.kind === 'video') selVideoClips = rcV.qeClips;
+            }
             if (selVideoClips.length === 0) return 'NO_CLIP_SELECTED';
             // Pega o effect object pelo nome
             var fxObj = null;
@@ -1771,6 +2129,10 @@ function lwSearchApply(kind, matchName) {
             return 'OK:applied:' + appliedV;
         } else if (kind === 'audio-fx') {
             var selAudioClips = _lwFindSelectedQEClips(qeSeq, false, seq);
+            if (selAudioClips.length === 0) {
+                var rcA = _lwRecoverFromSnapshot(seq, qeSeq);
+                if (rcA.qeClips.length > 0 && rcA.kind === 'audio') selAudioClips = rcA.qeClips;
+            }
             if (selAudioClips.length === 0) return 'NO_AUDIO_CLIP_SELECTED';
             var afxObj = null;
             try { afxObj = qe.project.getAudioEffectByName(matchName); } catch(e2) {}
@@ -1798,6 +2160,62 @@ function lwSearchApply(kind, matchName) {
 // ═══════════════════════════════════════════════════════════════════
 // LION SEARCH — GET CONTEXT (tipo do clip selecionado, playhead, etc)
 // ═══════════════════════════════════════════════════════════════════
+// GLOBAL: snapshot da última selection capturada (sobrevive perda de foco do Premiere)
+// Quando LION SEARCH abre, foco vai pra ela → Premiere às vezes "perde" a selection.
+// Snapshot permite reaplicar o efeito mesmo se getSelection() retornar vazio.
+var _lwSelectionSnapshot = { clips: [], capturedAt: 0, seqRef: null };
+
+// Recupera clips do snapshot se selection atual está vazia (snapshot < 60s).
+// Retorna { stdClips: [...], qeClips: [...], kind: 'video'|'audio'|null }
+function _lwRecoverFromSnapshot(seq, qeSeq) {
+    if (!_lwSelectionSnapshot || !_lwSelectionSnapshot.clips || _lwSelectionSnapshot.clips.length === 0) {
+        return { stdClips: [], qeClips: [], kind: null };
+    }
+    // Snapshot precisa ser RECENTE (60s) e MESMA sequência
+    var ageSec = ((new Date()).getTime() - _lwSelectionSnapshot.capturedAt) / 1000;
+    if (ageSec > 60) return { stdClips: [], qeClips: [], kind: null };
+    // Determina kind do snapshot
+    var kindCount = { video: 0, audio: 0 };
+    for (var sci = 0; sci < _lwSelectionSnapshot.clips.length; sci++) kindCount[_lwSelectionSnapshot.clips[sci].kind]++;
+    var kind = kindCount.video >= kindCount.audio ? 'video' : 'audio';
+    var trackList = (kind === 'video') ? seq.videoTracks : seq.audioTracks;
+    var stdClips = [];
+    var qeClips = [];
+    // Match por nodeId + start time (segurança)
+    for (var ti = 0; ti < trackList.numTracks; ti++) {
+        var tk = trackList[ti];
+        for (var ci = 0; ci < tk.clips.numItems; ci++) {
+            var c = tk.clips[ci];
+            try {
+                var cNodeId = '';
+                try { cNodeId = String(c.nodeId || ''); } catch(eN) {}
+                var cStart = 0;
+                try { cStart = parseFloat(c.start.seconds); } catch(eS) {}
+                for (var sn = 0; sn < _lwSelectionSnapshot.clips.length; sn++) {
+                    var snap = _lwSelectionSnapshot.clips[sn];
+                    if (snap.kind !== kind) continue;
+                    // Match por nodeId (mais confiável) ou start+name (fallback)
+                    if ((cNodeId && cNodeId === snap.nodeId) ||
+                        (Math.abs(cStart - snap.startSec) < 0.05 && ti === snap.trackIdx)) {
+                        stdClips.push(c);
+                        // Acha QE clip correspondente (mesmo index)
+                        try {
+                            var qeTrackList = (kind === 'video') ? qeSeq : qeSeq;
+                            var qeT = (kind === 'video') ? qeSeq.getVideoTrackAt(ti) : qeSeq.getAudioTrackAt(ti);
+                            if (qeT) {
+                                var qeC = qeT.getItemAt(ci);
+                                if (qeC) qeClips.push(qeC);
+                            }
+                        } catch(eQE) {}
+                        break;
+                    }
+                }
+            } catch(eC) {}
+        }
+    }
+    return { stdClips: stdClips, qeClips: qeClips, kind: kind };
+}
+
 function lwSearchGetContext() {
     try {
         var ctx = {
@@ -1812,19 +2230,54 @@ function lwSearchGetContext() {
         var seq = app.project.activeSequence;
         ctx.hasSequence = true;
 
-        // Conta clips selecionados
+        // Snapshot pra reaplicar caso foco do LION SEARCH derrube selection
+        var snapClips = [];
+
+        // Conta clips selecionados E captura snapshot
         var i, j, tk;
         for (i = 0; i < seq.videoTracks.numTracks; i++) {
             tk = seq.videoTracks[i];
             for (j = 0; j < tk.clips.numItems; j++) {
-                try { if (tk.clips[j].isSelected()) ctx.videoSelected++; } catch(e) {}
+                try {
+                    if (tk.clips[j].isSelected()) {
+                        ctx.videoSelected++;
+                        try {
+                            snapClips.push({
+                                kind: 'video',
+                                trackIdx: i,
+                                nodeId: tk.clips[j].nodeId || '',
+                                startSec: parseFloat(tk.clips[j].start.seconds),
+                                endSec: parseFloat(tk.clips[j].end.seconds),
+                                name: String(tk.clips[j].name || '')
+                            });
+                        } catch(eSn) {}
+                    }
+                } catch(e) {}
             }
         }
         for (i = 0; i < seq.audioTracks.numTracks; i++) {
             tk = seq.audioTracks[i];
             for (j = 0; j < tk.clips.numItems; j++) {
-                try { if (tk.clips[j].isSelected()) ctx.audioSelected++; } catch(e) {}
+                try {
+                    if (tk.clips[j].isSelected()) {
+                        ctx.audioSelected++;
+                        try {
+                            snapClips.push({
+                                kind: 'audio',
+                                trackIdx: i,
+                                nodeId: tk.clips[j].nodeId || '',
+                                startSec: parseFloat(tk.clips[j].start.seconds),
+                                endSec: parseFloat(tk.clips[j].end.seconds),
+                                name: String(tk.clips[j].name || '')
+                            });
+                        } catch(eSn) {}
+                    }
+                } catch(e) {}
             }
+        }
+        // Salva snapshot só se tem selection (senão preserva o anterior)
+        if (snapClips.length > 0) {
+            _lwSelectionSnapshot = { clips: snapClips, capturedAt: (new Date()).getTime(), seqRef: seq };
         }
         if (ctx.videoSelected > 0 && ctx.audioSelected > 0) ctx.selectionType = 'mixed';
         else if (ctx.videoSelected > 0) ctx.selectionType = 'video';
@@ -2081,19 +2534,90 @@ function _lwScanForAudio(item, parentPath, items, seen, depth, projName) {
         } catch(eV) {}
 
         // Dedup por file path (mesmo som em múltiplos projetos = 1 entrada só)
+        // Tenta MÚLTIPLAS APIs pra obter o path — algumas falham silenciosamente
         var mediaPath = '';
-        try { mediaPath = item.getMediaPath ? item.getMediaPath() : ''; } catch(eMp) {}
+        try { if (item.getMediaPath) mediaPath = item.getMediaPath() || ''; } catch(eMp1) {}
+        if (!mediaPath) { try { mediaPath = item.canonicalUri || ''; } catch(eMp2) {} }
+        if (!mediaPath) { try { mediaPath = item.path || ''; } catch(eMp3) {} }
+        // canonicalUri vem como "file:///C:/..." — normaliza
+        if (mediaPath && mediaPath.indexOf('file:') === 0) {
+            try { mediaPath = decodeURIComponent(mediaPath.replace(/^file:\/+/, '')); } catch(eD) {}
+        }
         var dedupKey = mediaPath || ((projName || '') + '|' + nodeId + '|' + name);
         if (hasAudio && !seen[dedupKey]) {
+            // FILTRO OFFLINE: pula items cujo arquivo não existe no disco.
+            // Items sem mediaPath OU com mediaPath inválido → pula.
+            if (!mediaPath) {
+                try { _lwDbgAudio('  scan skip (no path): ' + name); } catch(eDl) {}
+                return;
+            }
+            var fileExists = false;
+            var triedPaths = [];
+            // Tenta o path direto
+            try {
+                triedPaths.push(mediaPath);
+                var ff = new File(mediaPath);
+                fileExists = ff.exists;
+            } catch(eFE) {}
+            // URL-decoded
+            if (!fileExists) {
+                try {
+                    var decoded = decodeURIComponent(mediaPath);
+                    if (decoded !== mediaPath) {
+                        triedPaths.push(decoded);
+                        var ff2 = new File(decoded);
+                        fileExists = ff2.exists;
+                    }
+                } catch(eD) {}
+            }
+            // Sem prefixo file://
+            if (!fileExists && mediaPath.indexOf('file:') === 0) {
+                try {
+                    var noPrefix = mediaPath.replace(/^file:\/+/, '');
+                    triedPaths.push(noPrefix);
+                    var ff3 = new File(noPrefix);
+                    fileExists = ff3.exists;
+                } catch(eF) {}
+            }
+            // Mac: tenta com slashes invertidos (path windows com mediaPath linux?)
+            if (!fileExists && mediaPath.indexOf('/') >= 0) {
+                try {
+                    var swapped = mediaPath.replace(/\//g, '\\');
+                    if (swapped !== mediaPath) {
+                        triedPaths.push(swapped);
+                        var ff4 = new File(swapped);
+                        fileExists = ff4.exists;
+                    }
+                } catch(eS) {}
+            }
+            if (!fileExists) {
+                try { _lwDbgAudio('  scan SKIP OFFLINE: ' + name + ' | path=' + mediaPath + ' | tried=' + triedPaths.length); } catch(eDl2) {}
+                return;
+            }
+
+            // FILTRO DURAÇÃO: precisa ter in/out points válidos pra ser inserível
+            // Items sem duração (clipes vazios, marcadores) não fazem sentido no LION SEARCH
+            var hasValidDuration = false;
+            try {
+                var outP = null;
+                // Tenta audio (4), video (1), both (0) — qualquer um com out > 0 vale
+                for (var mtt = 0; mtt < 3 && !hasValidDuration; mtt++) {
+                    try {
+                        var op = item.getOutPoint([4,1,0][mtt]);
+                        if (op && parseFloat(op.seconds) > 0) hasValidDuration = true;
+                    } catch(eDD) {}
+                }
+            } catch(eDur) {}
+            if (!hasValidDuration) { return; } // pula items sem duração inserível
+
             seen[dedupKey] = 1;
             var categoryParts = [];
             if (projName) categoryParts.push(projName);
             if (parentPath) categoryParts.push(parentPath);
             else categoryParts.push(hasVideo ? 'Audio+Video' : 'Audio');
             // matchName: prefere PATH (global unique, funciona em qualquer projeto).
-            // Fallback pra nodeId (só funciona no projeto onde o item existe).
             // Prefixo "FS:" pro código de insert saber que é caminho de arquivo
-            var matchName = mediaPath ? ('FS:' + mediaPath) : nodeId;
+            var matchName = 'FS:' + mediaPath;
             items.push({
                 kind: 'audio-source',
                 name: name || '(sem nome)',
@@ -2574,20 +3098,37 @@ function _lwApplyPreset(presetIdentifier) {
         var sel = _lwFindSelectedQEClips(qeSeq, true, seq);
         var selKind = 'video';
         if (sel.length === 0) { sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio'; }
-        if (sel.length === 0) return 'NO_CLIP_SELECTED';
+
+        // RECOVERY: se selection volta vazia (Premiere perdeu por causa do foco do LION SEARCH),
+        // usa snapshot capturado em lwSearchGetContext (que rodou ANTES da janela tirar foco)
+        var stdSel = [];
+        if (sel.length === 0) {
+            _lwDbgPreset('  selection vazia — tentando recovery via snapshot');
+            var rec = _lwRecoverFromSnapshot(seq, qeSeq);
+            if (rec.qeClips.length > 0) {
+                sel = rec.qeClips;
+                stdSel = rec.stdClips;
+                selKind = rec.kind;
+                _lwDbgPreset('  recovery: ' + sel.length + ' qe + ' + stdSel.length + ' std (kind=' + selKind + ', snapshot age=' + (((new Date()).getTime() - _lwSelectionSnapshot.capturedAt)/1000).toFixed(1) + 's)');
+            } else {
+                _lwDbgPreset('  recovery falhou — snapshot vazio ou stale');
+                return 'NO_CLIP_SELECTED';
+            }
+        }
         _lwDbgPreset('  ' + sel.length + ' QE clips (' + selKind + ')');
 
-        // Pega standard API clips (alguns métodos só funcionam aqui)
-        var stdSel = [];
-        try {
-            var trackList = (selKind === 'video') ? seq.videoTracks : seq.audioTracks;
-            for (var ti = 0; ti < trackList.numTracks; ti++) {
-                var tk = trackList[ti];
-                for (var ci = 0; ci < tk.clips.numItems; ci++) {
-                    if (tk.clips[ci].isSelected()) stdSel.push(tk.clips[ci]);
+        // Pega standard API clips (alguns métodos só funcionam aqui) — só se recovery não populou
+        if (stdSel.length === 0) {
+            try {
+                var trackList = (selKind === 'video') ? seq.videoTracks : seq.audioTracks;
+                for (var ti = 0; ti < trackList.numTracks; ti++) {
+                    var tk = trackList[ti];
+                    for (var ci = 0; ci < tk.clips.numItems; ci++) {
+                        if (tk.clips[ci].isSelected()) stdSel.push(tk.clips[ci]);
+                    }
                 }
-            }
-        } catch(eStd) {}
+            } catch(eStd) {}
+        }
         _lwDbgPreset('  ' + stdSel.length + ' std clips');
 
         // Inspeciona métodos do clip pra debug (apesar de for-in não mostrar nativos)
@@ -2614,23 +3155,489 @@ function _lwApplyPreset(presetIdentifier) {
             } catch(eF) { _lwDbgPreset('  File obj err: ' + eF); }
         }
 
-        // ─── Importa container pra Premiere ter o preset registrado internamente ───
-        var importedProjectItem = null;
+        // ═══════════════════════════════════════════════════════════════════
+        // ESTRATÉGIA: REGEX scan (1000x mais rápido que XML() em arquivo 22MB)
+        // ExtendScript XML class demora 46s+ pra parsear arquivo grande — inútil.
+        // Em vez disso: indexOf da presetName, extrai janela ao redor, regex.
+        // ═══════════════════════════════════════════════════════════════════
         if (pf && presetName) {
             try {
-                // Verifica que arquivo existe — evita dialog Premiere
-                if (!pf.exists) {
-                    _lwDbgPreset('  SKIP import — preset file não existe: ' + presetPath);
+                var t0 = (new Date()).getTime();
+                _lwDbgPreset('  → REGEX scan strategy');
+                pf.encoding = 'UTF-8';
+                if (pf.open('r')) {
+                    var xmlRaw = pf.read();
+                    pf.close();
+                    _lwDbgPreset('  read ' + xmlRaw.length + ' chars in ' + ((new Date()).getTime() - t0) + 'ms');
+
+                    // Gzip check: 0x1f 0x8b
+                    var firstByte = xmlRaw.length > 0 ? xmlRaw.charCodeAt(0) : 0;
+                    if (firstByte === 0x1f) {
+                        _lwDbgPreset('  ✗ file is gzipped — JSX cannot decompress; needs plugin Node.js side');
+                    } else {
+                        // ─── ESTRATÉGIA NOVA: regex direto, sem XML() ───
+                        var tFind = (new Date()).getTime();
+                        // Escapa caracteres especiais no nome do preset pro regex
+                        var escName = String(presetName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        // Procura <Name>presetName</Name> (com whitespace tolerante)
+                        var nameTagRe = new RegExp('<Name[^>]*>\\s*' + escName + '\\s*</Name>', 'i');
+                        var nameMatch = nameTagRe.exec(xmlRaw);
+                        if (!nameMatch) {
+                            // Tenta encoding alternativo: pode ter & encoded
+                            var escNameXml = String(presetName).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            var escNameXml2 = escNameXml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            var nameTagRe2 = new RegExp('<Name[^>]*>\\s*' + escNameXml2 + '\\s*</Name>', 'i');
+                            nameMatch = nameTagRe2.exec(xmlRaw);
+                        }
+                        _lwDbgPreset('  regex find name: ' + ((new Date()).getTime() - tFind) + 'ms, match=' + (nameMatch ? 'YES @ pos=' + nameMatch.index : 'NO'));
+
+                        if (!nameMatch) {
+                            // Debug: lista alguns Names próximos ao primeiro <Name> pra ver formato
+                            _lwDbgPreset('  presetName "' + presetName + '" NOT in XML — listando primeiros 20 Names:');
+                            var allNamesRe = /<Name[^>]*>([^<]+)<\/Name>/g;
+                            var anm; var nameCount = 0;
+                            while ((anm = allNamesRe.exec(xmlRaw)) !== null && nameCount < 20) {
+                                _lwDbgPreset('    Name[' + nameCount + ']: ' + anm[1].substr(0, 80));
+                                nameCount++;
+                            }
+                        } else {
+                            // DUMP: 800 chars logo após o <Name> match pra ver estrutura
+                            var afterDump = xmlRaw.substring(nameMatch.index, Math.min(xmlRaw.length, nameMatch.index + 800));
+                            _lwDbgPreset('  XML dump após match (800 chars):');
+                            // Quebra em pedaços de 200 chars
+                            for (var dd = 0; dd < afterDump.length; dd += 200) {
+                                _lwDbgPreset('    >> ' + afterDump.substr(dd, 200).replace(/\r?\n/g, ' '));
+                            }
+
+                            // Procura ObjectRef próximo do Name pra saber onde está o EffectPreset
+                            // Padrão Adobe: BinTreeItem com Name → Ref pra EffectPreset com EffectAppliedList
+                            var refRe = /<Ref\s+ObjectRef="(\d+)"/g;
+                            var refSearch = xmlRaw.substring(nameMatch.index, Math.min(xmlRaw.length, nameMatch.index + 2000));
+                            var refs = [];
+                            var refM;
+                            while ((refM = refRe.exec(refSearch)) !== null) refs.push(refM[1]);
+                            _lwDbgPreset('  refs found near preset: ' + refs.slice(0, 5).join(','));
+
+                            // Acha o ObjectID logo antes do Name (este é o BinTreeItem do preset)
+                            var beforeName = xmlRaw.substring(Math.max(0, nameMatch.index - 500), nameMatch.index);
+                            var ownIdMatch = /<\w+\s+ObjectID="(\d+)"[^>]*>(?:(?!<\w+\s+ObjectID).)*$/m.exec(beforeName);
+                            var ownId = ownIdMatch ? ownIdMatch[1] : '';
+                            _lwDbgPreset('  preset BinTreeItem ObjectID=' + ownId);
+
+                            // Estratégia 1: janela GRANDE (100KB cada lado = 200KB total)
+                            var startPos = Math.max(0, nameMatch.index - 100000);
+                            var endPos = Math.min(xmlRaw.length, nameMatch.index + 100000);
+                            var window = xmlRaw.substring(startPos, endPos);
+                            _lwDbgPreset('  extracted ' + window.length + ' chars window (200KB)');
+
+                            // Coleta TODOS os MatchName na janela
+                            var matchNames = [];
+                            var mnSeen = {};
+                            var mnRe = /<MatchName[^>]*>([^<]+)<\/MatchName>/g;
+                            var mnm;
+                            while ((mnm = mnRe.exec(window)) !== null) {
+                                var mnv = String(mnm[1]).replace(/^\s+|\s+$/g, '');
+                                if (mnv && !mnSeen[mnv]) { mnSeen[mnv] = 1; matchNames.push(mnv); }
+                            }
+                            _lwDbgPreset('  found ' + matchNames.length + ' MatchNames in window');
+
+                            // Estratégia 2: Se janela não acha, busca via ObjectRef
+                            // Se achamos refs perto do Name, cada ref aponta pra um EffectApplied
+                            // que contém ObjectRef → Effect com MatchName
+                            if (matchNames.length === 0 && refs.length > 0) {
+                                _lwDbgPreset('  fallback: seguindo ObjectRefs');
+                                for (var ri = 0; ri < refs.length; ri++) {
+                                    // Procura <... ObjectID="REF"> no arquivo
+                                    var refIdRe = new RegExp('<\\w+\\s+ObjectID="' + refs[ri] + '"[^>]*>', 'g');
+                                    var refIdMatch = refIdRe.exec(xmlRaw);
+                                    if (refIdMatch) {
+                                        // Pega 5KB após esse ObjectID — deve conter MatchNames
+                                        var refSection = xmlRaw.substring(refIdMatch.index, Math.min(xmlRaw.length, refIdMatch.index + 5000));
+                                        _lwDbgPreset('    ref ' + refs[ri] + ' found @ pos=' + refIdMatch.index);
+                                        var refMnRe = /<MatchName[^>]*>([^<]+)<\/MatchName>/g;
+                                        var refMnm;
+                                        while ((refMnm = refMnRe.exec(refSection)) !== null) {
+                                            var refMnv = String(refMnm[1]).replace(/^\s+|\s+$/g, '');
+                                            if (refMnv && !mnSeen[refMnv]) { mnSeen[refMnv] = 1; matchNames.push(refMnv); }
+                                        }
+                                    }
+                                }
+                                _lwDbgPreset('  after ObjectRef chase: ' + matchNames.length + ' MatchNames');
+                            }
+
+                            for (var mi = 0; mi < Math.min(20, matchNames.length); mi++) {
+                                _lwDbgPreset('    fx[' + mi + ']: ' + matchNames[mi]);
+                            }
+
+                            // Aplica cada efeito via qe.project.getVideoEffectByName/MatchName
+                            // Mudança: NÃO pula Motion/Opacity — tenta aplicar valores via clip.components
+                            var addedCount = 0;
+                            var motionApplied = false;
+                            for (var mi2 = 0; mi2 < matchNames.length; mi2++) {
+                                var mn2 = matchNames[mi2];
+                                var fxObj = null;
+                                // Tenta múltiplos métodos
+                                var lookups = ['getVideoEffectByMatchName', 'getVideoEffectByName'];
+                                for (var lkp = 0; lkp < lookups.length && !fxObj; lkp++) {
+                                    try {
+                                        if (typeof qe.project[lookups[lkp]] === 'function') {
+                                            fxObj = qe.project[lookups[lkp]](mn2);
+                                        }
+                                    } catch(eLk) {}
+                                }
+                                if (!fxObj) {
+                                    // Tenta nome humanizado (remove "AE.ADBE " prefix)
+                                    var human = mn2.replace(/^AE\.ADBE\s*/, '').replace(/^ADBE\s*/, '');
+                                    try { fxObj = qe.project.getVideoEffectByName(human); } catch(eH) {}
+                                    if (fxObj) _lwDbgPreset('    found via humanized: ' + human);
+                                }
+                                if (!fxObj) { _lwDbgPreset('    NO_FX: ' + mn2); continue; }
+                                for (var sci = 0; sci < sel.length; sci++) {
+                                    try {
+                                        sel[sci].addVideoEffect(fxObj);
+                                        addedCount++;
+                                        if (mn2 === 'AE.ADBE Motion') motionApplied = true;
+                                    } catch(eAdd) {
+                                        _lwDbgPreset('    addEffect err for ' + mn2 + ': ' + eAdd);
+                                    }
+                                }
+                                _lwDbgPreset('    ✓ added: ' + mn2);
+                            }
+
+                            // ─── PARSE VALORES: pra cada componente, tenta extrair e setar valores ───
+                            // Premiere preset tem <Properties> com valores serializados.
+                            // Pra clip.components[0] (Motion built-in), aplica params do preset XML.
+                            if (stdSel.length > 0) {
+                                _lwDbgPreset('  → tentando aplicar VALORES do preset (Motion/builtin)');
+                                try {
+                                    // Procura por <ScaleH>, <Position>, etc no preset window
+                                    var paramPatterns = {
+                                        'Scale': /<Scale[^>]*>([\d.\-eE]+)<\/Scale>/,
+                                        'ScaleX': /<ScaleX[^>]*>([\d.\-eE]+)<\/ScaleX>/,
+                                        'ScaleY': /<ScaleY[^>]*>([\d.\-eE]+)<\/ScaleY>/,
+                                        'Rotation': /<Rotation[^>]*>([\d.\-eE]+)<\/Rotation>/,
+                                        'Anchor': /<Anchor[^>]*>([\d.,\-eE\s]+)<\/Anchor>/,
+                                        'Position': /<Position[^>]*>([\d.,\-eE\s]+)<\/Position>/,
+                                        'Opacity': /<Opacity[^>]*>([\d.\-eE]+)<\/Opacity>/,
+                                    };
+                                    var foundParams = {};
+                                    for (var pn in paramPatterns) {
+                                        var pm = paramPatterns[pn].exec(window);
+                                        if (pm) {
+                                            foundParams[pn] = pm[1];
+                                            _lwDbgPreset('    param ' + pn + ' = ' + pm[1]);
+                                        }
+                                    }
+
+                                    // Aplica em cada clip selecionado
+                                    if (Object.keys ? Object.keys(foundParams).length > 0 : true) {
+                                        for (var sti = 0; sti < stdSel.length; sti++) {
+                                            try {
+                                                var c0 = stdSel[sti].components;
+                                                if (!c0 || !c0.numItems) continue;
+                                                _lwDbgPreset('    clip[' + sti + '] has ' + c0.numItems + ' components');
+                                                // Lista components
+                                                for (var ci3 = 0; ci3 < c0.numItems; ci3++) {
+                                                    var cmp = c0[ci3];
+                                                    var cmpName = '';
+                                                    try { cmpName = cmp.displayName || cmp.matchName || '?'; } catch(eCn) {}
+                                                    _lwDbgPreset('      cmp[' + ci3 + ']: ' + cmpName);
+                                                    // Lista properties do component
+                                                    try {
+                                                        var props = cmp.properties;
+                                                        if (props && props.numItems) {
+                                                            for (var pi = 0; pi < Math.min(8, props.numItems); pi++) {
+                                                                var pp = props[pi];
+                                                                var ppn = '';
+                                                                try { ppn = pp.displayName || pp.name || '?'; } catch(ePpn) {}
+                                                                _lwDbgPreset('        prop[' + pi + ']: ' + ppn);
+                                                            }
+                                                        }
+                                                    } catch(ePps) {}
+                                                }
+                                            } catch(eCC) { _lwDbgPreset('    components inspect err: ' + eCC); }
+                                        }
+                                    }
+                                } catch(eParam) { _lwDbgPreset('  param parse err: ' + eParam); }
+                            }
+
+                            if (addedCount > 0) {
+                                applied = sel.length;
+                                _lwDbgPreset('  ✓ REGEX strategy DONE: addedCount=' + addedCount + ' on ' + sel.length + ' clips, total=' + ((new Date()).getTime() - t0) + 'ms');
+                            } else {
+                                _lwDbgPreset('  ✗ Nenhum efeito custom — preset só altera builtin (Motion). Valores precisam ser aplicados manualmente por enquanto.');
+                            }
+                        }
+                        // SKIP o XML() parse antigo (era muito lento)
+                        var SKIP_OLD_XML = true;
+                        if (SKIP_OLD_XML) { /* old code abaixo dentro de else inalcançável */ } else {
+                        // Remove a declaração <?xml ...?> e BOM se houver
+                        var xmlClean = xmlRaw.replace(/^﻿/, '').replace(/^\s*<\?xml[^?]+\?>\s*/, '');
+                        var xmlObj = null;
+                        try { xmlObj = new XML(xmlClean); } catch(eX) {
+                            _lwDbgPreset('  XML parse err: ' + (eX.toString ? eX.toString() : eX));
+                        }
+
+                        if (xmlObj) {
+                            // Procura nó com <Name>presetName</Name> dentro do XML.
+                            // Estrutura varia (EffectPresetItem, BinTreeItem com tipo, etc).
+                            // Vamos walk recursivo e achar TODOS os MatchName dentro do nó com Name match.
+                            var foundPresetNode = null;
+                            function _walkFindPreset(node, depth) {
+                                if (foundPresetNode || depth > 20) return;
+                                try {
+                                    // Check Name child do node
+                                    var nameProp = node.Name;
+                                    if (nameProp && nameProp.length() > 0) {
+                                        var nameStr = String(nameProp);
+                                        if (nameStr === presetName) {
+                                            foundPresetNode = node;
+                                            return;
+                                        }
+                                    }
+                                    // Tenta @ Name attribute também
+                                    try {
+                                        var nameAttr = node.attribute('Name');
+                                        if (nameAttr && nameAttr.length() > 0 && String(nameAttr) === presetName) {
+                                            foundPresetNode = node;
+                                            return;
+                                        }
+                                    } catch(eNA) {}
+                                    var children = node.children();
+                                    var nch = children.length();
+                                    for (var i = 0; i < nch && !foundPresetNode; i++) {
+                                        _walkFindPreset(children[i], depth + 1);
+                                    }
+                                } catch(eW) {}
+                            }
+                            _walkFindPreset(xmlObj, 0);
+                            _lwDbgPreset('  presetNode found in XML: ' + (foundPresetNode ? 'YES' : 'NO'));
+
+                            // Se não achou pelo Name child, tenta full-text search por presetName
+                            // e usa o container pai como nó do preset
+                            if (!foundPresetNode) {
+                                _lwDbgPreset('  fallback: scanning XML for preset name text...');
+                                // Walk tudo, registra todos os <Name> que tem valor parecido (debug)
+                                var allNames = [];
+                                function _collectNames(node, depth) {
+                                    if (depth > 20) return;
+                                    try {
+                                        var nameProp = node.Name;
+                                        if (nameProp && nameProp.length() > 0) {
+                                            var ns = String(nameProp);
+                                            if (ns) allNames.push(ns);
+                                        }
+                                        var children = node.children();
+                                        var nch = children.length();
+                                        for (var i = 0; i < nch; i++) _collectNames(children[i], depth + 1);
+                                    } catch(eN) {}
+                                }
+                                _collectNames(xmlObj, 0);
+                                _lwDbgPreset('  total <Name> values in XML: ' + allNames.length);
+                                // Mostra os primeiros 10
+                                for (var nai = 0; nai < Math.min(10, allNames.length); nai++) {
+                                    _lwDbgPreset('    Name[' + nai + ']: ' + allNames[nai]);
+                                }
+                                // Tenta match insensitive ou parcial
+                                var presetNameLower = String(presetName).toLowerCase();
+                                function _walkFindPresetLoose(node, depth) {
+                                    if (foundPresetNode || depth > 20) return;
+                                    try {
+                                        var nameProp = node.Name;
+                                        if (nameProp && nameProp.length() > 0) {
+                                            var ns = String(nameProp).toLowerCase();
+                                            if (ns === presetNameLower) {
+                                                foundPresetNode = node;
+                                                return;
+                                            }
+                                        }
+                                        var children = node.children();
+                                        var nch = children.length();
+                                        for (var i = 0; i < nch && !foundPresetNode; i++) {
+                                            _walkFindPresetLoose(children[i], depth + 1);
+                                        }
+                                    } catch(eL) {}
+                                }
+                                _walkFindPresetLoose(xmlObj, 0);
+                                _lwDbgPreset('  loose match: ' + (foundPresetNode ? 'YES' : 'NO'));
+                            }
+
+                            if (foundPresetNode) {
+                                // DUMP: estrutura do preset node pra entender XML schema do .prfpset
+                                try {
+                                    var dumpXml = String(foundPresetNode.toXMLString ? foundPresetNode.toXMLString() : foundPresetNode);
+                                    _lwDbgPreset('  presetNode XML (1500 chars):');
+                                    // Quebra em pedaços de 200 chars pra log
+                                    for (var dx = 0; dx < Math.min(1500, dumpXml.length); dx += 200) {
+                                        _lwDbgPreset('    >> ' + dumpXml.substr(dx, 200));
+                                    }
+                                } catch(eDmp) { _lwDbgPreset('  dump err: ' + eDmp); }
+
+                                // Coleta TODOS os valores de texto que parecem identificadores de efeito.
+                                // .prfpset XML usa schemas variados — não dá pra confiar em <MatchName> só.
+                                // Estratégia: coleta TODO leaf de texto, e detecta padrões de matchName.
+                                var effectMatchNames = [];
+                                var effectDisplayNames = [];
+                                var allTexts = []; // pra debug
+                                var elementNameCounts = {}; // pra ver schema
+
+                                function _collectFxNames(node, depth) {
+                                    if (depth > 30) return;
+                                    try {
+                                        var elName = '';
+                                        try { elName = node.name() ? String(node.name()) : ''; } catch(eNm) {}
+                                        // Conta elementos pra entender schema
+                                        if (elName) elementNameCounts[elName] = (elementNameCounts[elName] || 0) + 1;
+
+                                        // Se for um text node ou element folha com texto
+                                        var children = node.children();
+                                        var nch = children.length();
+                                        if (nch === 0 || (nch === 1 && String(children[0].name()) === '')) {
+                                            // Leaf — pega valor
+                                            var val = String(node);
+                                            if (val && val.length < 200) {
+                                                allTexts.push({el: elName, val: val});
+                                                // Detecta padrão de matchName: "AE.ADBE..." ou "ADBE..." ou contém "AE."
+                                                if (/^AE\.|^ADBE |^AE_|ADBE/.test(val)) {
+                                                    effectMatchNames.push(val);
+                                                }
+                                                // Heurística: nome de efeito é tipicamente curto sem "AE." prefix
+                                                // Vamos guardar nomes potenciais — qualquer string que pareça nome de efeito
+                                                if (/^(EffectName|Name|Title|DisplayName)$/i.test(elName)) {
+                                                    if (val && val !== presetName) effectDisplayNames.push(val);
+                                                }
+                                            }
+                                        }
+                                        for (var i = 0; i < nch; i++) _collectFxNames(children[i], depth + 1);
+                                    } catch(eC) {}
+                                }
+                                _collectFxNames(foundPresetNode, 0);
+                                // Log do schema descoberto
+                                var schemaStr = '';
+                                for (var ek in elementNameCounts) schemaStr += ek + '=' + elementNameCounts[ek] + ' ';
+                                _lwDbgPreset('  preset elements schema: ' + schemaStr.substr(0, 400));
+                                _lwDbgPreset('  preset has matchNames=' + effectMatchNames.length + ' displayNames=' + effectDisplayNames.length + ' totalTexts=' + allTexts.length);
+                                for (var fmi = 0; fmi < Math.min(20, effectMatchNames.length); fmi++) {
+                                    _lwDbgPreset('    fx mn[' + fmi + ']: ' + effectMatchNames[fmi]);
+                                }
+                                for (var fdi = 0; fdi < Math.min(20, effectDisplayNames.length); fdi++) {
+                                    _lwDbgPreset('    fx dn[' + fdi + ']: ' + effectDisplayNames[fdi]);
+                                }
+                                // Mostra primeiros 10 texts pra ver outros campos
+                                for (var ti10 = 0; ti10 < Math.min(15, allTexts.length); ti10++) {
+                                    _lwDbgPreset('    text[' + allTexts[ti10].el + ']: ' + allTexts[ti10].val.substr(0, 80));
+                                }
+
+                                // ═══ Mapeia matchName → display name conhecidos ═══
+                                // Premiere expõe efeitos por nome local (português, inglês...) — getVideoEffectByName usa display
+                                var fxNames = effectDisplayNames.concat(effectMatchNames);
+                                // Dedup
+                                var seen = {};
+                                var fxUnique = [];
+                                for (var fu = 0; fu < fxNames.length; fu++) {
+                                    if (!seen[fxNames[fu]]) { seen[fxNames[fu]] = 1; fxUnique.push(fxNames[fu]); }
+                                }
+
+                                // Efeitos "builtin" do clip (Motion, Opacity, Time Remapping) NÃO precisam ser adicionados — já existem
+                                var builtinSkip = {'Motion':1, 'Opacity':1, 'Time Remapping':1, 'AE.ADBE Motion':1, 'AE.ADBE Opacity':1, 'AE.ADBE Timecode':1, 'AE.ADBE MarkerParam':1};
+
+                                var addedCount = 0;
+                                for (var fxi = 0; fxi < fxUnique.length; fxi++) {
+                                    var fxName = fxUnique[fxi];
+                                    if (builtinSkip[fxName]) { _lwDbgPreset('    skip builtin: ' + fxName); continue; }
+                                    var fxObj = null;
+                                    // Tenta múltiplos métodos de lookup (alguns aceitam matchName, outros displayName)
+                                    var lookupMethods = ['getVideoEffectByName', 'getVideoEffectByMatchName', 'getVideoEffectByDisplayName'];
+                                    for (var lmi = 0; lmi < lookupMethods.length && !fxObj; lmi++) {
+                                        try {
+                                            if (typeof qe.project[lookupMethods[lmi]] === 'function') {
+                                                fxObj = qe.project[lookupMethods[lmi]](fxName);
+                                                if (fxObj) _lwDbgPreset('    fx found via qe.project.' + lookupMethods[lmi] + '("' + fxName + '")');
+                                            }
+                                        } catch(eLM) {}
+                                    }
+                                    if (!fxObj && selKind === 'audio') {
+                                        try { fxObj = qe.project.getAudioEffectByName(fxName); } catch(eGA) {}
+                                    }
+                                    if (!fxObj) { _lwDbgPreset('    NO_FX_OBJ for: ' + fxName); continue; }
+                                    // Aplica em todos os clips selecionados
+                                    for (var sci = 0; sci < sel.length; sci++) {
+                                        try {
+                                            if (selKind === 'audio') sel[sci].addAudioEffect(fxObj);
+                                            else sel[sci].addVideoEffect(fxObj);
+                                            addedCount++;
+                                        } catch(eAdd) { _lwDbgPreset('    addEffect err: ' + eAdd); }
+                                    }
+                                    _lwDbgPreset('    ✓ added: ' + fxName);
+                                }
+                                if (addedCount > 0) {
+                                    applied = sel.length;
+                                    _lwDbgPreset('  ✓ XML strategy: addedCount=' + addedCount + ' on ' + sel.length + ' clip(s)');
+                                } else {
+                                    _lwDbgPreset('  ✗ XML strategy: no effects could be added');
+                                }
+                            }
+                        }
+                        } // close else do SKIP_OLD_XML
+                    }
                 } else {
-                    var beforeCount = app.project.rootItem.children.numItems;
-                    // suppressUI=true (segundo arg) — não mostra dialog se falhar
-                    var importOk = app.project.importFiles([presetPath], true);
-                    $.sleep(200);
-                    _lwDbgPreset('  importFiles=' + importOk + ' before=' + beforeCount + ' after=' + app.project.rootItem.children.numItems);
-                    importedProjectItem = _lwFindProjectItemByName(app.project.rootItem, presetName, 0);
-                    _lwDbgPreset('  importedItem(' + presetName + ')=' + (importedProjectItem ? 'FOUND' : 'NOT FOUND'));
+                    _lwDbgPreset('  could not open preset file for read');
                 }
-            } catch(eImp) { _lwDbgPreset('  import err: ' + eImp); }
+            } catch(eXmlAll) {
+                _lwDbgPreset('  XML strategy outer err: ' + eXmlAll);
+            }
+        }
+
+        // Se XML strategy aplicou, retorna sucesso
+        if (applied > 0) {
+            _lwDbgPreset('═══ DONE: applied=' + applied + ' (via XML parse) ═══');
+            return 'OK:applied:' + applied;
+        }
+
+        // ─── Procura item já existente no projeto (NÃO importa, evita dialog "File format not supported") ───
+        // Containers .prfpset NÃO podem ser importados via importFiles() — sempre dão erro.
+        // Em vez disso: procura entre items já no projeto, OU usa QE pra buscar o preset internamente.
+        var importedProjectItem = null;
+        if (presetName) {
+            try {
+                importedProjectItem = _lwFindProjectItemByName(app.project.rootItem, presetName, 0);
+                _lwDbgPreset('  projItem search by name "' + presetName + '" = ' + (importedProjectItem ? 'FOUND' : 'not in project'));
+            } catch(eF) { _lwDbgPreset('  find err: ' + eF); }
+        }
+
+        // ─── Inspeção QE: dump métodos pra descobrir API de preset ───
+        var qePresetObj = null;
+        try {
+            var qeKeys = '';
+            for (var qk in qe.project) qeKeys += qk + ',';
+            _lwDbgPreset('  qe.project keys: ' + qeKeys.substr(0, 400));
+        } catch(eQK) { _lwDbgPreset('  qe keys err: ' + eQK); }
+
+        // Tenta APIs conhecidas de QE pra obter o preset object
+        var qePresetMethods = [
+            'getEffectPresetByName',
+            'getPresetByName',
+            'getVideoEffectPresetByName',
+            'getAudioEffectPresetByName',
+            'getMotionPresetByName',
+        ];
+        for (var qpm = 0; qpm < qePresetMethods.length; qpm++) {
+            try {
+                if (typeof qe.project[qePresetMethods[qpm]] === 'function') {
+                    var qpRes = qe.project[qePresetMethods[qpm]](presetName);
+                    _lwDbgPreset('  qe.project.' + qePresetMethods[qpm] + '("' + presetName + '") = ' + (qpRes ? 'OBJECT' : 'null'));
+                    if (qpRes && !qePresetObj) qePresetObj = qpRes;
+                }
+            } catch(eQpm) { _lwDbgPreset('  qe.' + qePresetMethods[qpm] + ' err: ' + eQpm); }
+        }
+
+        // Dump métodos do primeiro QE clip pra ver opções de preset
+        if (sel.length > 0) {
+            try {
+                var qcKeys = '';
+                for (var qck in sel[0]) qcKeys += qck + ',';
+                _lwDbgPreset('  qe clip[0] keys: ' + qcKeys.substr(0, 400));
+            } catch(eQCK) {}
         }
 
         // ─── Tenta TODAS as combinações de método × tipo de argumento × tipo de clip ───
@@ -2650,10 +3657,25 @@ function _lwApplyPreset(presetIdentifier) {
         ];
 
         var argSets = [];
+        if (qePresetObj) argSets.push({ args: [qePresetObj], label: 'qePresetObj' });
         if (importedProjectItem) argSets.push({ args: [importedProjectItem], label: 'projectItem' });
         if (pf) argSets.push({ args: [pf], label: 'File' });
         if (presetPath) argSets.push({ args: [presetPath], label: 'pathStr' });
         if (presetName) argSets.push({ args: [presetName], label: 'nameStr' });
+        // Adiciona métodos QE-específicos pra cobrir addEffectPreset + similares
+        var methodNamesExtended = [
+            'applyEffectPreset',
+            'applyPreset',
+            'applyPresetByName',
+            'loadEffectPreset',
+            'addEffectPreset',
+            'setEffectPreset',
+            'applyEffectPresetByName',
+            'addVideoEffectPreset',
+            'addAudioEffectPreset',
+            'addPreset',
+        ];
+        methodNames = methodNamesExtended;
 
         for (var ti2 = 0; ti2 < clipTargets.length && applied === 0; ti2++) {
             var target = clipTargets[ti2];
@@ -2705,19 +3727,61 @@ function _lwApplyPreset(presetIdentifier) {
 // ═══════════════════════════════════════════════════════════════════
 // LION SEARCH — INSERT AUDIO SOURCE (gap finder + nova track se preciso)
 // ═══════════════════════════════════════════════════════════════════
-// Helper: escreve debug pra audio insert
+// Helper: BUFFERED debug — acumula em array, flush 1x no final (era 20+ I/Os = ~500ms perdidos)
+var _lwAudioDbgBuf = [];
 function _lwDbgAudio(msg) {
+    _lwAudioDbgBuf.push('[' + (new Date()).toString() + '] ' + msg);
+}
+function _lwFlushAudioDbg() {
+    if (_lwAudioDbgBuf.length === 0) return;
+    var blob = _lwAudioDbgBuf.join('\n') + '\n';
+    _lwAudioDbgBuf = [];
     try {
         var f = new File(Folder.temp.fsName + '/lion-search-audio-insert.txt');
-        if (f.open('a')) {
-            f.encoding = 'UTF-8';
-            f.write('[' + (new Date()).toString() + '] ' + msg + '\n');
-            f.close();
-        }
+        if (f.open('a')) { f.encoding = 'UTF-8'; f.write(blob); f.close(); }
     } catch(e) {}
+    try {
+        var fd = new File(Folder.desktop.fsName + '/lion-audio-debug.txt');
+        if (fd.open('a')) { fd.encoding = 'UTF-8'; fd.write(blob); fd.close(); }
+    } catch(eD) {}
 }
 
+// Nova função: insere áudio da Audio Library com trim + volume dB opcionais.
+// inSec/outSec = -1 → usa duração total. volumeDb = 0 → sem ajuste.
+function lwInsertAudioWithTrim(filePath, inSec, outSec, volumeDb) {
+    try {
+        var nodeIdOrName = 'FS:' + filePath;
+        _lwLibTrimIn = (inSec != null && inSec >= 0) ? parseFloat(inSec) : null;
+        _lwLibTrimOut = (outSec != null && outSec >= 0) ? parseFloat(outSec) : null;
+        _lwLibVolumeDb = (volumeDb != null && !isNaN(parseFloat(volumeDb)) && Math.abs(parseFloat(volumeDb)) >= 0.01) ? parseFloat(volumeDb) : null;
+        var result = _lwInsertAudioSource(nodeIdOrName);
+        _lwLibTrimIn = null;
+        _lwLibTrimOut = null;
+        _lwLibVolumeDb = null;
+        return result;
+    } catch(eW) {
+        _lwLibTrimIn = null; _lwLibTrimOut = null; _lwLibVolumeDb = null;
+        return 'ERR:lib_insert:' + eW.toString().slice(0, 200);
+    }
+}
+// Globals pra passar trim/volume do entrypoint pra _lwInsertAudioSourceImpl sem mudar assinatura
+var _lwLibTrimIn = null;
+var _lwLibTrimOut = null;
+var _lwLibVolumeDb = null;
+
+// Wrapper que SEMPRE flusha debug no final (sucesso ou erro) — 1 I/O em vez de ~20
 function _lwInsertAudioSource(nodeIdOrName) {
+    var result;
+    try {
+        result = _lwInsertAudioSourceImpl(nodeIdOrName);
+    } catch(eW) {
+        result = 'ERR:wrapper:' + eW.toString().slice(0, 200);
+    }
+    try { _lwFlushAudioDbg(); } catch(eF) {}
+    return result;
+}
+
+function _lwInsertAudioSourceImpl(nodeIdOrName) {
     try {
         _lwDbgAudio('═══ Insert Audio: ' + nodeIdOrName + ' ═══');
         if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
@@ -2760,11 +3824,22 @@ function _lwInsertAudioSource(nodeIdOrName) {
                     }
                 } catch(e) {}
             }
+            // SEMPRE verifica que arquivo existe no disco ANTES de tentar inserir
+            // (mesmo que item esteja no projeto, file pode estar offline → insere offline)
+            var fsResolved = _lwResolveExistingPath(fsPath);
+            if (!fsResolved) {
+                _lwDbgAudio('  ✗ FILE OFFLINE — arquivo não existe no disco: ' + fsPath);
+                return 'ERR:sfx_file_not_on_disk:' + fsPath;
+            }
+            fsPath = fsResolved;
+            fsPathNorm = _normP(fsPath);
+
             var holder = { found: null };
             _findFsByPath(app.project.rootItem, holder, 0);
             if (holder.found) {
                 _lwDbgAudio('  found in active project (no import needed)');
                 foundItem = holder.found;
+                preImportedFromFs = true; // já está no projeto ativo, pula walk de parent
             } else {
                 _lwDbgAudio('  not in active project — importing');
                 // Check tolerante (URL-encoding etc)
@@ -2781,17 +3856,53 @@ function _lwInsertAudioSource(nodeIdOrName) {
                 try { importOk = app.project.importFiles([fsPath], true); } catch(eI) { _lwDbgAudio('  import err: ' + eI); }
                 _lwDbgAudio('  importFiles=' + importOk);
                 if (!importOk) return 'ERR:sfx_import_failed:' + fsPath;
-                $.sleep(150);
+                // Polling progressivo — fast inicial, slow se demorar (até 1.5s total)
+                // Premiere às vezes leva 300-800ms pra processar import de arquivo grande.
                 holder = { found: null };
-                _findFsByPath(app.project.rootItem, holder, 0);
+                var pollT0 = (new Date()).getTime();
+                // 5 fast tries (10ms) + 15 medium (40ms) + 10 slow (60ms) = total ~1.25s
+                var pollSchedule = [10,10,10,10,10, 40,40,40,40,40,40,40,40,40,40, 60,60,60,60,60,60,60,60,60,60];
+                for (var pollN = 0; pollN < pollSchedule.length; pollN++) {
+                    _findFsByPath(app.project.rootItem, holder, 0);
+                    if (holder.found) break;
+                    $.sleep(pollSchedule[pollN]);
+                }
+                _lwDbgAudio('  poll: ' + ((new Date()).getTime() - pollT0) + 'ms, tries=' + (pollN+1) + ' found=' + (holder.found ? 'YES' : 'NO'));
                 if (!holder.found) {
-                    _lwDbgAudio('  imported but not found by path');
-                    return 'ERR:sfx_imported_not_found:' + fsPath;
+                    // Última tentativa com fallback: pega o último leaf adicionado (newest)
+                    _lwDbgAudio('  fallback: looking for newest leaf in project');
+                    var newest = null;
+                    function _getLastLeafFs(bin, depth) {
+                        if (!bin || depth > 12 || newest) return;
+                        try {
+                            if (!bin.children || bin.children.numItems === 0) return;
+                            for (var li = bin.children.numItems - 1; li >= 0 && !newest; li--) {
+                                var it5 = bin.children[li];
+                                var ch5 = null;
+                                try { ch5 = it5.children; } catch(eCh5) {}
+                                if (ch5 && ch5.numItems > 0) _getLastLeafFs(it5, depth + 1);
+                                else { newest = it5; return; }
+                            }
+                        } catch(e) {}
+                    }
+                    _getLastLeafFs(app.project.rootItem, 0);
+                    if (newest) {
+                        _lwDbgAudio('  fallback found newest leaf: ' + (function(){try{return newest.name;}catch(e){return '?';}})());
+                        holder.found = newest;
+                    } else {
+                        _lwDbgAudio('  imported but not found by path AND no leaves');
+                        return 'ERR:sfx_imported_not_found:' + fsPath;
+                    }
                 }
                 _lwDbgAudio('  imported + found');
                 foundItem = holder.found;
                 preImportedFromFs = true;
             }
+        }
+
+        // ─── nodeId/name path: identifier NÃO é FS path ───
+        if (!foundItem) {
+            _lwDbgAudio('  → nodeId search (não-FS): "' + nodeIdOrName + '"');
         }
 
         // Se não veio de FS, acha o project item — procura em TODOS os projetos abertos
@@ -2841,8 +3952,11 @@ function _lwInsertAudioSource(nodeIdOrName) {
         } catch(eP) {}
         if (projects.length === 0) projects.push(app.project); // fallback
 
+        _lwDbgAudio('  found ' + projects.length + ' open projects');
+
         // Procura primeiro no projeto ativo (mais provável + insertClip funciona)
         try { _findInBin(app.project.rootItem); } catch(eA) {}
+        _lwDbgAudio('  search in active project: ' + (foundItem ? 'FOUND' : 'not found'));
 
         // Se não achou, tenta nos outros projetos
         if (!foundItem) {
@@ -2850,23 +3964,32 @@ function _lwInsertAudioSource(nodeIdOrName) {
                 var pr2 = projects[pp];
                 if (pr2 === app.project) continue; // já tentou
                 try { _findInBin(pr2.rootItem); } catch(eB) {}
+                _lwDbgAudio('  search in proj[' + pp + ']: ' + (foundItem ? 'FOUND' : 'not found'));
             }
         }
 
-        if (!foundItem) return 'ERR:audio_source_not_found:' + nodeIdOrName;
+        if (!foundItem) {
+            _lwDbgAudio('  ✗ audio_source_not_found: nodeId="' + nodeIdOrName + '" — catalog stale? try reabrir LION SEARCH');
+            return 'ERR:audio_source_not_found:' + nodeIdOrName;
+        }
+        _lwDbgAudio('  itemName=' + (function(){try{return foundItem.name;}catch(e){return '?';}})());
 
-        // Se o item não pertence ao projeto ativo, IMPORTA o arquivo pro projeto ativo
-        // pra poder fazer track.insertClip (que requer item do mesmo projeto).
-        var itemBelongsToActive = false;
-        try {
-            // Walk up parents — se chegar no rootItem do app.project, pertence
-            var p = foundItem;
-            for (var pw = 0; pw < 20 && p; pw++) {
-                if (p === app.project.rootItem) { itemBelongsToActive = true; break; }
-                try { p = p.parent; } catch(eP) { break; }
-                if (!p) break;
-            }
-        } catch(eBel) {}
+        // Se o item já foi achado via FS path no projeto ativo (preImportedFromFs)
+        // OU veio do projeto ativo via nodeId search, PULA o walk de parent (que trava em offline).
+        // Pra item de OUTRO projeto (preImportedFromFs=false e veio de outro project), faz import.
+        var itemBelongsToActive = preImportedFromFs; // FS no projeto ativo já confirma pertence
+        if (!itemBelongsToActive) {
+            try {
+                // Walk up parents — se chegar no rootItem do app.project, pertence
+                var p = foundItem;
+                for (var pw = 0; pw < 20 && p; pw++) {
+                    if (p === app.project.rootItem) { itemBelongsToActive = true; break; }
+                    try { p = p.parent; } catch(eP) { break; }
+                    if (!p) break;
+                }
+            } catch(eBel) {}
+        }
+        _lwDbgAudio('  itemBelongsToActive=' + itemBelongsToActive + ' (preImportedFromFs=' + preImportedFromFs + ')');
 
         if (!itemBelongsToActive) {
             var mediaPath = '';
@@ -2928,8 +4051,15 @@ function _lwInsertAudioSource(nodeIdOrName) {
                 } catch(eImp2) { return 'ERR:import_failed:' + eImp2.toString().slice(0, 100); }
             }
 
-            // Aguarda Premiere processar o import
-            try { $.sleep(80); } catch(eSl) {}
+            // Poll rápido em vez de sleep fixo — quebra assim que Premiere processou
+            var preLeaves = leavesBefore;
+            for (var pN = 0; pN < 10; pN++) {
+                try {
+                    var nowLeaves = _countLeaves(app.project.rootItem, 0);
+                    if (nowLeaves > preLeaves) break;
+                } catch(eL) {}
+                $.sleep(20);
+            }
 
             // Busca o item — 3 estratégias
             var newItem = null;
@@ -3017,6 +4147,8 @@ function _lwInsertAudioSource(nodeIdOrName) {
             foundItem = newItem;
         }
 
+        _lwDbgAudio('  → foundItem ready, name=' + (function(){try{return foundItem.name;}catch(e){return '?';}})() + ' type=' + (function(){try{return foundItem.type;}catch(e){return '?';}})());
+
         // Calcula duração — respeita in/out se setados
         var insertDurationSec = 0;
         var hasInOut = false;
@@ -3029,29 +4161,57 @@ function _lwInsertAudioSource(nodeIdOrName) {
                 try {
                     var ip = foundItem.getInPoint(mediaTypes[mt]);
                     var op = foundItem.getOutPoint(mediaTypes[mt]);
-                    if (ip && op) { inPt = ip; outPt = op; break; }
+                    if (ip && op) { inPt = ip; outPt = op; _lwDbgAudio('  inOut found via mediaType=' + mediaTypes[mt]); break; }
                 } catch(eMT) {}
             }
             if (inPt && outPt) {
                 inSec = parseFloat(inPt.seconds);
                 outSec = parseFloat(outPt.seconds);
+                _lwDbgAudio('  in/out seconds: ' + inSec + ' / ' + outSec);
                 if (outSec > inSec) {
                     insertDurationSec = outSec - inSec;
                     hasInOut = true;
                 }
+            } else {
+                _lwDbgAudio('  no in/out points found');
             }
-        } catch(eIO) {}
+        } catch(eIO) { _lwDbgAudio('  in/out err: ' + eIO); }
 
         // Se não tem in/out válido, usa duração total
         if (insertDurationSec <= 0) {
             try {
                 var dur = foundItem.getOutPoint(0); // tenta full duration
                 if (dur && dur.seconds > 0) insertDurationSec = parseFloat(dur.seconds);
-            } catch(eD) {}
+                _lwDbgAudio('  fallback duration via getOutPoint(0): ' + insertDurationSec);
+            } catch(eD) { _lwDbgAudio('  fallback duration err: ' + eD); }
         }
         if (insertDurationSec <= 0) {
             // Fallback: tenta via clip projecting.. assume 5s mínimo
             insertDurationSec = 5;
+            _lwDbgAudio('  using 5s default duration');
+        }
+        _lwDbgAudio('  insertDurationSec=' + insertDurationSec + ' hasInOut=' + hasInOut);
+
+        // OVERRIDE da Audio Library: se user definiu trim in/out (start/end seconds),
+        // aplica setInPoint/setOutPoint no item DO PROJECT (não no clip) pra cortar.
+        if (_lwLibTrimIn != null || _lwLibTrimOut != null) {
+            var libIn = (_lwLibTrimIn != null && _lwLibTrimIn >= 0) ? _lwLibTrimIn : 0;
+            var libOut = (_lwLibTrimOut != null && _lwLibTrimOut > 0) ? _lwLibTrimOut : insertDurationSec;
+            _lwDbgAudio('  AudioLib trim: in=' + libIn + 's out=' + libOut + 's');
+            try {
+                // Cria Time objects pra set in/out — 1 sec = 254016000000 ticks
+                var TICKS_PER_SEC = 254016000000;
+                var inTime = new Time();
+                inTime.ticks = String(Math.round(libIn * TICKS_PER_SEC));
+                var outTime = new Time();
+                outTime.ticks = String(Math.round(libOut * TICKS_PER_SEC));
+                // Aplica em audio (4)
+                try { foundItem.setInPoint(inTime, 4); _lwDbgAudio('    setInPoint OK'); } catch(eSI) { _lwDbgAudio('    setInPoint err: ' + eSI); }
+                try { foundItem.setOutPoint(outTime, 4); _lwDbgAudio('    setOutPoint OK'); } catch(eSO) { _lwDbgAudio('    setOutPoint err: ' + eSO); }
+                insertDurationSec = libOut - libIn;
+                hasInOut = true;
+                _lwDbgAudio('  trim applied: insertDurationSec=' + insertDurationSec);
+            } catch(eLibTrim) { _lwDbgAudio('  AudioLib trim outer err: ' + eLibTrim); }
         }
 
         // Posição playhead
@@ -3059,8 +4219,12 @@ function _lwInsertAudioSource(nodeIdOrName) {
         try {
             var pp = seq.getPlayerPosition();
             if (pp) insertStartSec = parseFloat(pp.seconds);
-        } catch(ePh) {}
+        } catch(ePh) { _lwDbgAudio('  playhead err: ' + ePh); }
         var insertEndSec = insertStartSec + insertDurationSec;
+        _lwDbgAudio('  playhead=' + insertStartSec + 's | window=[' + insertStartSec + ',' + insertEndSec + ']');
+
+        // Sequence info
+        _lwDbgAudio('  seq.audioTracks.numTracks=' + seq.audioTracks.numTracks);
 
         // Encontra audio track sem overlap
         var targetTrackIdx = -1;
@@ -3068,24 +4232,38 @@ function _lwInsertAudioSource(nodeIdOrName) {
         for (var ti = 0; ti < seq.audioTracks.numTracks; ti++) {
             var atk = seq.audioTracks[ti];
             var hasOverlap = false;
-            for (var ci = 0; ci < atk.clips.numItems; ci++) {
+            var clipCount = 0;
+            try { clipCount = atk.clips.numItems; } catch(eCN) {}
+            for (var ci = 0; ci < clipCount; ci++) {
                 var c = atk.clips[ci];
                 var cStart = 0, cEnd = 0;
                 try { cStart = parseFloat(c.start.seconds); cEnd = parseFloat(c.end.seconds); } catch(eC) {}
                 // Overlap se [cStart, cEnd) intersecta [insertStartSec, insertEndSec)
                 if (cStart < insertEndSec - EPS && cEnd > insertStartSec + EPS) { hasOverlap = true; break; }
             }
+            _lwDbgAudio('    track A' + (ti+1) + ': clips=' + clipCount + ' overlap=' + hasOverlap);
             if (!hasOverlap) { targetTrackIdx = ti; break; }
         }
+        _lwDbgAudio('  targetTrackIdx (after scan) = ' + targetTrackIdx);
 
         // Se nenhuma track livre, cria nova audio track
         if (targetTrackIdx < 0) {
+            _lwDbgAudio('  no free track — creating new');
+            var beforeNumTracks = 0;
+            try { beforeNumTracks = seq.audioTracks.numTracks; } catch(eBN) {}
             try {
                 // addTracks(numVid, vidIdx, numAudio, audioChType, audioIdx)
                 // audioChType: 0=Mono, 1=Stereo, 2=5.1, 3=Adaptive
                 seq.addTracks(0, 0, 1, 1, -1); // 1 stereo audio no final
+                // Premiere pode demorar um pouco pra registrar nova track — poll rápido
+                for (var pt = 0; pt < 8; pt++) {
+                    if (seq.audioTracks.numTracks > beforeNumTracks) break;
+                    $.sleep(20);
+                }
                 targetTrackIdx = seq.audioTracks.numTracks - 1;
+                _lwDbgAudio('  addTracks OK, new idx=' + targetTrackIdx + ' (was ' + beforeNumTracks + ' tracks)');
             } catch(eAdd) {
+                _lwDbgAudio('  addTracks err: ' + eAdd);
                 // Fallback via QE
                 try {
                     app.enableQE();
@@ -3093,38 +4271,127 @@ function _lwInsertAudioSource(nodeIdOrName) {
                     if (qSeq && qSeq.addAudioTrack) {
                         qSeq.addAudioTrack();
                         targetTrackIdx = seq.audioTracks.numTracks - 1;
+                        _lwDbgAudio('  QE addAudioTrack OK, idx=' + targetTrackIdx);
                     }
-                } catch(eQA) { return 'ERR:could_not_create_audio_track:' + eAdd.toString().slice(0, 80); }
+                } catch(eQA) { _lwDbgAudio('  QE addAudioTrack err: ' + eQA); return 'ERR:could_not_create_audio_track:' + eAdd.toString().slice(0, 80); }
             }
         }
-        if (targetTrackIdx < 0) return 'ERR:no_track_available';
+        if (targetTrackIdx < 0) { _lwDbgAudio('  → no_track_available'); return 'ERR:no_track_available'; }
+        _lwDbgAudio('  final targetTrackIdx=' + targetTrackIdx);
 
         // Insere o clip no playhead
         try {
             var targetTrack = seq.audioTracks[targetTrackIdx];
-            var beforeCount = targetTrack.clips.numItems;
+            var beforeCount = 0;
+            try { beforeCount = targetTrack.clips.numItems; } catch(eBC) {}
+            _lwDbgAudio('  targetTrack got, clips before=' + beforeCount);
+
+            // Sanity check: is targetTrack locked?
+            try {
+                var isLocked = targetTrack.isLocked ? targetTrack.isLocked() : '?';
+                _lwDbgAudio('  targetTrack.isLocked=' + isLocked);
+            } catch(eLk) {}
+
+            // Snapshot do total de clips em TODAS as audio tracks (pra detectar insert em outra track)
+            function _totalAudioClips() {
+                var total = 0;
+                try {
+                    for (var ti3 = 0; ti3 < seq.audioTracks.numTracks; ti3++) {
+                        try { total += seq.audioTracks[ti3].clips.numItems; } catch(eT) {}
+                    }
+                } catch(eTT) {}
+                return total;
+            }
+            var totalBefore = _totalAudioClips();
+            _lwDbgAudio('  total audio clips before=' + totalBefore);
 
             // Tenta insertClip primeiro
             var insertOk = false;
             var lastInsertErr = '';
             try {
+                _lwDbgAudio('  trying insertClip(foundItem, ' + insertStartSec + ')...');
                 targetTrack.insertClip(foundItem, insertStartSec);
                 insertOk = true;
+                _lwDbgAudio('  insertClip OK (no throw)');
             } catch (eIns) {
                 lastInsertErr = eIns.toString();
+                _lwDbgAudio('  insertClip THREW: ' + lastInsertErr);
+            }
+
+            // Premiere pode demorar 50-200ms pra atualizar clips.numItems — poll
+            var afterCount = beforeCount;
+            var totalAfter = totalBefore;
+            for (var rc = 0; rc < 10; rc++) {
+                try { afterCount = targetTrack.clips.numItems; } catch(eAC) {}
+                totalAfter = _totalAudioClips();
+                if (afterCount > beforeCount || totalAfter > totalBefore) break;
+                $.sleep(20);
+            }
+            _lwDbgAudio('  clips after insertClip target=' + afterCount + '/' + beforeCount + ' total=' + totalAfter + '/' + totalBefore);
+
+            // Trust: se TOTAL aumentou (mesmo que target track count não), insert deu certo em algum lugar
+            if (insertOk && afterCount === beforeCount && totalAfter === totalBefore) {
+                _lwDbgAudio('  insertClip claimed OK but NEITHER target NOR total increased — treating as fail');
+                insertOk = false;
+                lastInsertErr = 'silent_fail (no clip count increased anywhere)';
+            } else if (insertOk && afterCount === beforeCount && totalAfter > totalBefore) {
+                _lwDbgAudio('  insertClip went to DIFFERENT track but worked (total increased)');
             }
 
             // Fallback 1: overwriteClip (não conflita com IDs em alguns casos)
             if (!insertOk) {
                 try {
+                    _lwDbgAudio('  trying overwriteClip(foundItem, ' + insertStartSec + ')...');
                     targetTrack.overwriteClip(foundItem, insertStartSec);
                     insertOk = true;
+                    _lwDbgAudio('  overwriteClip OK');
                 } catch (eOw) {
                     lastInsertErr += ' | overwrite: ' + eOw.toString();
+                    _lwDbgAudio('  overwriteClip THREW: ' + eOw);
+                }
+                var afterCount2 = 0;
+                try { afterCount2 = targetTrack.clips.numItems; } catch(eAC2) {}
+                _lwDbgAudio('  clips after overwriteClip=' + afterCount2);
+                if (insertOk && afterCount2 === beforeCount) {
+                    _lwDbgAudio('  overwriteClip claimed OK but clip count unchanged');
+                    insertOk = false;
+                    lastInsertErr += ' | overwrite_silent_fail';
                 }
             }
 
+            // Fallback 2: QE-based insertion
             if (!insertOk) {
+                _lwDbgAudio('  trying QE-based insertion...');
+                try {
+                    app.enableQE();
+                    var qSeq2 = qe.project.getActiveSequence();
+                    var qTrack = qSeq2.getAudioTrackAt(targetTrackIdx);
+                    if (qTrack && qTrack.insert) {
+                        // QE insert needs timecode string
+                        var tc = '00:00:00:00';
+                        try {
+                            var fps = seq.timebase ? (254016000000 / parseFloat(seq.timebase)) : 30;
+                            var totalFrames = Math.floor(insertStartSec * fps);
+                            var hh = Math.floor(totalFrames / (fps*3600));
+                            var mm = Math.floor((totalFrames % (fps*3600)) / (fps*60));
+                            var ss = Math.floor((totalFrames % (fps*60)) / fps);
+                            var ff = Math.floor(totalFrames % fps);
+                            tc = (hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss+':'+(ff<10?'0':'')+ff;
+                        } catch(eTc) {}
+                        _lwDbgAudio('  QE.insert tc=' + tc);
+                        qTrack.insert(foundItem.getProjectItemViewPreset ? foundItem.getProjectItemViewPreset() : foundItem, tc);
+                        var afterCount3 = 0;
+                        try { afterCount3 = targetTrack.clips.numItems; } catch(eAC3) {}
+                        _lwDbgAudio('  clips after QE insert=' + afterCount3);
+                        if (afterCount3 > beforeCount) insertOk = true;
+                    } else {
+                        _lwDbgAudio('  QE track or insert not available');
+                    }
+                } catch(eQI) { _lwDbgAudio('  QE insert THREW: ' + eQI); lastInsertErr += ' | qe: ' + eQI; }
+            }
+
+            if (!insertOk) {
+                _lwDbgAudio('  ALL methods failed: ' + lastInsertErr);
                 // Detecta erro de "multiple projects with the same ID" e dá mensagem clara
                 if (/same id|multiple projects/i.test(lastInsertErr)) {
                     return 'ERR:duplicate_project_id';
@@ -3133,21 +4400,139 @@ function _lwInsertAudioSource(nodeIdOrName) {
             }
 
             // Se tinha in/out e o clip inserido pegou tudo, ajusta o end
-            if (hasInOut) {
-                var newClip = null;
+            // Aproveita pra capturar o newClip pra aplicar volume dB também
+            var newClipRef = null;
+            if (hasInOut || _lwLibVolumeDb != null) {
                 for (var nci = targetTrack.clips.numItems - 1; nci >= 0; nci--) {
                     var nc = targetTrack.clips[nci];
                     var ncStart = 0;
                     try { ncStart = parseFloat(nc.start.seconds); } catch(eNS) {}
-                    if (Math.abs(ncStart - insertStartSec) < 0.5) { newClip = nc; break; }
+                    if (Math.abs(ncStart - insertStartSec) < 0.5) { newClipRef = nc; break; }
                 }
-                if (newClip) {
-                    try { newClip.end = insertStartSec + insertDurationSec; } catch(eEd) {}
+                if (newClipRef && hasInOut) {
+                    try { newClipRef.end = insertStartSec + insertDurationSec; _lwDbgAudio('  trimmed clip end to ' + (insertStartSec + insertDurationSec)); } catch(eEd) { _lwDbgAudio('  trim err: ' + eEd); }
                 }
             }
 
+            // VOLUME dB: aplica no Audio Volume component do clip recém-inserido
+            // Premiere usa unidade interna ~15 (0dB) - vez disso usamos conversão dB→gain.
+            // Audio clip "Volume" component tem property "Level" cujo valor é 0-1 (gain linear, 1.0 = 0dB).
+            // Pra setValue em dB → converte: gain = 10^(dB/20), depois multiplicado por escala interna.
+            if (_lwLibVolumeDb != null && newClipRef) {
+                _lwDbgAudio('  applying volumeDb=' + _lwLibVolumeDb);
+                try {
+                    var comps = newClipRef.components;
+                    var compsN = 0;
+                    try { compsN = comps.numItems; } catch(eN) {}
+                    _lwDbgAudio('  newClip has ' + compsN + ' components');
+                    // Dump nomes pra debug
+                    for (var dI = 0; dI < compsN; dI++) {
+                        try {
+                            var dc = comps[dI];
+                            var dn = '';
+                            try { dn = String(dc.displayName || ''); } catch(eD1) {}
+                            var dmn = '';
+                            try { dmn = String(dc.matchName || ''); } catch(eD2) {}
+                            _lwDbgAudio('    comp[' + dI + '] displayName="' + dn + '" matchName="' + dmn + '"');
+                        } catch(eD) {}
+                    }
+                    // Convert dB pra gain LINEAR (0-1 onde 1 = 0dB)
+                    // Mas Premiere Volume usa float onde 0dB = 1.0, +6dB ≈ 2.0, -6dB ≈ 0.5
+                    var gainLinear = Math.pow(10, _lwLibVolumeDb / 20);
+                    _lwDbgAudio('  gainLinear = ' + gainLinear + ' (from ' + _lwLibVolumeDb + 'dB)');
+
+                    // Procura component "Volume" (matchName "AE.ADBE Fixed Volume" ou "ADBE Volume")
+                    var volComp = null;
+                    for (var cI = 0; cI < compsN && !volComp; cI++) {
+                        try {
+                            var cmp = comps[cI];
+                            var cmpName = '';
+                            var cmpMatch = '';
+                            try { cmpName = String(cmp.displayName || ''); } catch(eDn) {}
+                            try { cmpMatch = String(cmp.matchName || ''); } catch(eMn) {}
+                            if (/^volume$|Audio Levels|Channel Volume|ADBE Volume|ADBE Audio Levels/i.test(cmpName) ||
+                                /Volume|AudioLevels/i.test(cmpMatch)) {
+                                volComp = cmp;
+                                _lwDbgAudio('    matched volume component: ' + cmpName + ' / ' + cmpMatch);
+                            }
+                        } catch(eCm) {}
+                    }
+                    // Fallback: primeiro component que tenha prop chamada "Level"
+                    if (!volComp) {
+                        for (var cI2 = 0; cI2 < compsN && !volComp; cI2++) {
+                            try {
+                                var cmp2 = comps[cI2];
+                                var pps = cmp2.properties;
+                                if (pps && pps.numItems > 0) {
+                                    for (var pj = 0; pj < pps.numItems; pj++) {
+                                        var pn = '';
+                                        try { pn = String(pps[pj].displayName || ''); } catch(ePj) {}
+                                        if (/^Level$|Volume Level|Channel Volume/i.test(pn)) {
+                                            volComp = cmp2;
+                                            _lwDbgAudio('    fallback match via prop name: ' + pn);
+                                            break;
+                                        }
+                                    }
+                                }
+                            } catch(eFb) {}
+                        }
+                    }
+
+                    if (volComp) {
+                        var props = volComp.properties;
+                        var propsN = 0;
+                        try { propsN = props.numItems; } catch(ePN) {}
+                        _lwDbgAudio('    vol component has ' + propsN + ' properties');
+                        var levelProp = null;
+                        for (var pI = 0; pI < propsN; pI++) {
+                            try {
+                                var pp = props[pI];
+                                var pName = '';
+                                try { pName = String(pp.displayName || ''); } catch(ePnE) {}
+                                _lwDbgAudio('      prop[' + pI + '] name="' + pName + '"');
+                                if (/^Level$|Volume Level|Audio Level/i.test(pName)) {
+                                    levelProp = pp;
+                                    break;
+                                }
+                            } catch(ePI) {}
+                        }
+                        // Se não achou pelo nome, usa o primeiro (Premiere "Volume" comp tem Level no idx 1 ou 0)
+                        if (!levelProp && propsN > 0) {
+                            try { levelProp = props[propsN >= 2 ? 1 : 0]; _lwDbgAudio('    using prop idx fallback'); } catch(eIdx) {}
+                        }
+                        if (levelProp) {
+                            // Tenta múltiplas escalas — diferentes versões de Premiere usam unidades diferentes
+                            // 1. dB direto (ex: -3, +6)
+                            // 2. gain linear (ex: 0.7079, 2.0)
+                            // 3. Premiere "Audio Levels" custom: 0-... onde 15 ≈ 0dB
+                            var attempts = [
+                                { val: _lwLibVolumeDb, label: 'dB direct' },
+                                { val: gainLinear, label: 'gain linear' },
+                                { val: gainLinear * 15, label: 'gain * 15 (Premiere internal)' }
+                            ];
+                            var applied = false;
+                            for (var ai = 0; ai < attempts.length && !applied; ai++) {
+                                try {
+                                    levelProp.setValue(attempts[ai].val, true);
+                                    applied = true;
+                                    _lwDbgAudio('    ✓ setValue OK using ' + attempts[ai].label + ' = ' + attempts[ai].val);
+                                } catch(eSv) {
+                                    _lwDbgAudio('    setValue err (' + attempts[ai].label + '): ' + eSv);
+                                }
+                            }
+                        } else {
+                            _lwDbgAudio('    ✗ no level property found');
+                        }
+                    } else {
+                        _lwDbgAudio('  ✗ no volume component found in clip');
+                    }
+                } catch(eVol) { _lwDbgAudio('  volume apply outer err: ' + eVol); }
+            }
+
+            _lwDbgAudio('  ═══ OK:inserted:track' + (targetTrackIdx + 1) + ':' + insertDurationSec.toFixed(2) + 's ═══');
             return 'OK:inserted:track' + (targetTrackIdx + 1) + ':' + insertDurationSec.toFixed(2) + 's';
         } catch (eOuter) {
+            _lwDbgAudio('  OUTER catch: ' + eOuter);
             return 'ERR:insert_failed:' + eOuter.toString().slice(0, 200);
         }
     } catch (eAll) {
