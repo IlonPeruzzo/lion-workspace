@@ -3309,11 +3309,32 @@ function toggleLoop(){
                     res.end(JSON.stringify({ ok: true }));
                     return;
                 }
-                // ═══════ Motion Tracker — KLT via OpenCV.js (WASM) ═══════
+                // ═══════ Motion Tracker — Python + cv2 nativo ═══════
                 if (command === 'motion-tracker/probe' && data.filePath) {
                     try {
-                        const mt = require('./motion-tracker');
-                        const meta = await mt.probeVideo(data.filePath, ffprobeBin);
+                        // Probe via ffprobe — substitui o antigo motion-tracker.js
+                        const args = ['-v', 'error', '-select_streams', 'v:0',
+                            '-show_entries', 'stream=width,height,r_frame_rate,nb_frames,duration',
+                            '-of', 'json', data.filePath];
+                        const out = await new Promise((resolve, reject) => {
+                            const proc = spawn(ffprobeBin, args, { windowsHide: true });
+                            let stdout = '', stderr = '';
+                            proc.stdout.on('data', d => { stdout += d.toString(); });
+                            proc.stderr.on('data', d => { stderr += d.toString(); });
+                            proc.on('error', reject);
+                            proc.on('close', code => code === 0 ? resolve(stdout) : reject(new Error(`ffprobe exit ${code}: ${stderr}`)));
+                        });
+                        const j = JSON.parse(out);
+                        const s = (j.streams && j.streams[0]) || {};
+                        const fr = (s.r_frame_rate || '30/1').split('/');
+                        const fps = (parseFloat(fr[0]) || 30) / (parseFloat(fr[1]) || 1);
+                        const meta = {
+                            width: parseInt(s.width) || 0,
+                            height: parseInt(s.height) || 0,
+                            fps: fps,
+                            frameCount: parseInt(s.nb_frames) || Math.round((parseFloat(s.duration) || 0) * fps),
+                            duration: parseFloat(s.duration) || 0,
+                        };
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ ok: true, ...meta }));
                     } catch (e) {
