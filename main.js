@@ -4557,6 +4557,7 @@ function isPremiereForeground() {
 }
 
 // Pre-cria janela escondida no boot — abertura via hotkey é INSTANTÂNEA (não cria mais BrowserWindow)
+let _lionSearchShownAt = 0; // timestamp do ultimo show() — usado pra ignorar blur que dispara durante focus race no Mac
 function preloadLionSearchWindow() {
     if (lionSearchWin && !lionSearchWin.isDestroyed()) return;
     const width = 440, height = 88;
@@ -4579,8 +4580,20 @@ function preloadLionSearchWindow() {
     lionSearchWin.loadFile(path.join(__dirname, 'lion-search.html'));
     // 'closed' só dispara em close() real — não em hide()
     lionSearchWin.on('closed', () => { lionSearchWin = null; });
-    // Fecha em blur (mas precisa fix pq dev tools tira foco também — checa após pequeno delay)
+    // Fecha em blur — mas no Mac focus() nao consegue steal do Premiere imediato, entao a primeira blur
+    // dispara logo apos show() e fecha a janela. Grace period de 600ms ignora blurs durante essa janela.
     lionSearchWin.on('blur', () => {
+        const sinceShow = Date.now() - _lionSearchShownAt;
+        const graceMs = isMac ? 600 : 150;
+        if (sinceShow < graceMs) {
+            // Reagenda check apos o grace period — se ainda nao tiver foco, fecha.
+            setTimeout(() => {
+                if (lionSearchWin && !lionSearchWin.isDestroyed() && !lionSearchWin.isFocused() && lionSearchWin.isVisible()) {
+                    try { lionSearchWin.hide(); lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
+                }
+            }, graceMs - sinceShow + 50);
+            return;
+        }
         setTimeout(() => {
             if (lionSearchWin && !lionSearchWin.isDestroyed() && !lionSearchWin.isFocused() && lionSearchWin.isVisible()) {
                 try { lionSearchWin.hide(); lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
@@ -4615,8 +4628,20 @@ function openLionSearch(forceOpen) {
         lionSearchWin.setBounds({ x, y, width, height });
         // Reset state da página (limpa input + resultados) antes de mostrar
         try { lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
+        _lionSearchShownAt = Date.now();
+        // No Mac, BrowserWindow.focus() nao consegue trazer Electron pra frente quando o Premiere
+        // esta como foreground app. app.focus({steal:true}) força o transfer.
+        if (isMac) { try { app.focus({ steal: true }); } catch(e) {} }
         lionSearchWin.show();
         lionSearchWin.focus();
+        // Reforça foco no proximo tick — show() pode ter sido pre-empted pelo OS no Mac
+        if (isMac) {
+            setTimeout(() => {
+                if (lionSearchWin && !lionSearchWin.isDestroyed() && lionSearchWin.isVisible() && !lionSearchWin.isFocused()) {
+                    try { app.focus({ steal: true }); lionSearchWin.focus(); } catch(e) {}
+                }
+            }, 50);
+        }
     } catch(e) {
         // Fallback: janela pode estar em estado ruim — recria do zero
         try { lionSearchWin.destroy(); } catch(eD) {}
