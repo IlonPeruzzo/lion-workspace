@@ -202,15 +202,36 @@ body{display:flex;flex-direction:column}
 
         <div class="panel-section">
             <div class="panel-title">Configurações</div>
+            <div class="row" style="margin-bottom:8px">
+                <label style="margin-bottom:4px">Preset</label>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+                    <button type="button" class="preset-btn" data-preset="accurate" style="padding:6px;background:rgba(190,242,100,.12);border:1px solid rgba(190,242,100,.3);color:var(--accent);border-radius:6px;cursor:pointer;font-size:.7rem;font-weight:600">🎯 Preciso</button>
+                    <button type="button" class="preset-btn" data-preset="balanced" style="padding:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text2);border-radius:6px;cursor:pointer;font-size:.7rem">⚖️ Balanced</button>
+                    <button type="button" class="preset-btn" data-preset="fast" style="padding:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text2);border-radius:6px;cursor:pointer;font-size:.7rem">⚡ Rápido</button>
+                    <button type="button" class="preset-btn" data-preset="smooth" style="padding:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text2);border-radius:6px;cursor:pointer;font-size:.7rem">🌊 Suave</button>
+                </div>
+            </div>
+            <div class="row">
+                <label>Algoritmo</label>
+                <select id="algorithm">
+                    <option value="CSRT" selected>CSRT (preciso, com scale)</option>
+                    <option value="KCF">KCF (rápido)</option>
+                    <option value="MOSSE">MOSSE (super rápido)</option>
+                    <option value="MIL">MIL (resistente)</option>
+                    <option value="LUCAS_KANADE">Lucas-Kanade (ponto puro)</option>
+                </select>
+            </div>
             <div class="row">
                 <label>Suavização</label>
                 <select id="smoothing">
                     <option value="whittaker">Whittaker</option>
+                    <option value="kalman">Kalman</option>
+                    <option value="supersmoother">Supersmoother</option>
                     <option value="none">Nenhuma (cru)</option>
                 </select>
             </div>
             <div class="row">
-                <label>Lambda</label>
+                <label>Lambda <span style="opacity:.5;font-size:.65rem">(Whittaker)</span></label>
                 <input type="number" id="lambda" value="100" min="0" max="10000" step="10">
             </div>
             <div class="row">
@@ -277,6 +298,72 @@ const pointInfo = document.getElementById('pointInfo');
 
 let trackPoint = null; // { x, y } em coords do vídeo
 let videoMeta = { width: 0, height: 0 };
+let pythonOk = false; // setado pelo check inicial — bloqueia track se false
+
+// === Presets ===
+const PRESETS = {
+    accurate: { algorithm: 'CSRT',         smoothing: 'whittaker',     lambda: 50   },
+    balanced: { algorithm: 'CSRT',         smoothing: 'whittaker',     lambda: 100  },
+    fast:     { algorithm: 'MOSSE',        smoothing: 'whittaker',     lambda: 100  },
+    smooth:   { algorithm: 'CSRT',         smoothing: 'kalman',        lambda: 500  },
+};
+function applyPreset(key) {
+    const p = PRESETS[key]; if (!p) return;
+    document.getElementById('algorithm').value = p.algorithm;
+    document.getElementById('smoothing').value = p.smoothing;
+    document.getElementById('lambda').value = p.lambda;
+    document.querySelectorAll('.preset-btn').forEach(b => {
+        const active = b.dataset.preset === key;
+        b.style.background = active ? 'rgba(190,242,100,.12)' : 'rgba(255,255,255,.05)';
+        b.style.borderColor = active ? 'rgba(190,242,100,.3)' : 'rgba(255,255,255,.08)';
+        b.style.color = active ? 'var(--accent)' : 'var(--text2)';
+        b.style.fontWeight = active ? '600' : '400';
+    });
+}
+document.querySelectorAll('.preset-btn').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
+
+// === Python check on boot ===
+async function checkPython() {
+    try {
+        const r = await fetch(API + '/motion-tracker/check-python', { method: 'POST', headers: authHeaders() });
+        const body = await r.json();
+        pythonOk = !!body.ok;
+        if (!pythonOk) showPythonBanner(body);
+    } catch (e) { pythonOk = false; showPythonBanner({ error: e.message }); }
+}
+function showPythonBanner(info) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:34px;left:0;right:0;background:linear-gradient(90deg,rgba(244,63,94,.18),rgba(245,158,11,.14));border-bottom:1px solid rgba(244,63,94,.35);padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:999;font-size:.74rem';
+    banner.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="2"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg><span style="flex:1;color:#fca5a5">' +
+        (info.pythonFound ? 'Python OK, mas falta <b>opencv-python</b> e <b>numpy</b>.' : 'Python <b>nao instalado</b>. Motion Tracker usa Python+OpenCV nativo.') +
+        '</span><button id="installPyBtn" style="background:var(--accent);color:#0a0a0a;border:0;padding:6px 14px;border-radius:5px;font-weight:700;cursor:pointer">Instalar agora</button>';
+    document.body.appendChild(banner);
+    document.getElementById('installPyBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('installPyBtn');
+        if (!info.pythonFound) {
+            setStatus('Instale Python 3.10+ primeiro: https://python.org/downloads/ (marque "Add Python to PATH" no Windows)', 'err');
+            return;
+        }
+        btn.disabled = true; btn.textContent = 'Instalando (~30s)...';
+        try {
+            const r = await fetch(API + '/motion-tracker/install-deps', { method: 'POST', headers: authHeaders() });
+            const body = await r.json();
+            if (body.ok) {
+                pythonOk = true;
+                banner.remove();
+                setStatus('Dependencias instaladas! Pronto pra trackear.', 'ok');
+            } else {
+                btn.disabled = false; btn.textContent = 'Tentar de novo';
+                setStatus('Falha pip: ' + (body.log || body.error || '').slice(-300), 'err');
+            }
+        } catch (e) {
+            btn.disabled = false; btn.textContent = 'Tentar de novo';
+            setStatus('Erro: ' + e.message, 'err');
+        }
+    });
+}
+checkPython();
+applyPreset('accurate'); // default
 
 function fmtTime(s) {
     if (!isFinite(s)) return '00:00.0';
@@ -411,13 +498,17 @@ trackBtn.addEventListener('click', async () => {
     const endFrame = Math.round(OUT_SEC * FPS);
 
     const payload = {
-        filePath: MEDIA_PATH, // proxy MP4 — full quality não importa pra KLT tracking
-        points: [{ x: trackPoint.x, y: trackPoint.y }],
+        filePath: MEDIA_PATH, // proxy MP4 — full quality não importa pra tracking via Python+cv2
+        points: [[trackPoint.x, trackPoint.y]],
         options: {
             startFrame,
             endFrame,
+            algorithm: document.getElementById('algorithm').value,
             smoothing: document.getElementById('smoothing').value,
             whittakerLambda: parseFloat(document.getElementById('lambda').value) || 100,
+            confidenceThreshold: parseFloat(document.getElementById('confThreshold')?.value) || 0.3,
+            bboxWidth: 40,
+            bboxHeight: 40,
         }
     };
     setProgress(15);

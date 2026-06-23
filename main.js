@@ -2484,59 +2484,74 @@ async function _removeBgBiRefNet(imagePath) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// MOTION TRACKER WORKER — roda OpenCV.js num worker_thread isolado
-// pra NÃO bloquear o main process durante tracking. Sem isso, o HTTP
-// server para de responder e o plugin Premiere marca "Desconectado".
+// MOTION TRACKER — spawn Python com motion_tracker.py.
+// Migracao da versao OpenCV.js (WASM, lenta) pra cv2 nativo (10-100x).
+// Suporta CSRT/KCF/MOSSE/MIL/LucasKanade + Whittaker/Kalman/Supersmoother.
 // ═══════════════════════════════════════════════════════════════════
-let _mtWorker = null;
-const _mtPending = new Map();
-let _mtNextReqId = 0;
-
-function _ensureMtWorker() {
-    if (_mtWorker) return _mtWorker;
-    const workerPath = app.isPackaged
-        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'motion-tracker-worker.js')
-        : path.join(__dirname, 'motion-tracker-worker.js');
-    // child_process.fork: processo Node TOTALMENTE isolado (vs worker_threads
-    // que compartilha libuv e tem incompatibilidade com WASM Emscripten do OpenCV.js).
-    const { fork } = require('child_process');
-    _mtWorker = fork(workerPath, [], {
-        // ELECTRON_RUN_AS_NODE: roda o binário do Electron em modo Node puro
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-        // Encaminha stdout/stderr pro main process pra capturar logs
-        silent: true,
-        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    });
-    _mtWorker.stdout && _mtWorker.stdout.on('data', d => process.stdout.write('[mt-fork:stdout] ' + d));
-    _mtWorker.stderr && _mtWorker.stderr.on('data', d => process.stderr.write('[mt-fork:stderr] ' + d));
-    _mtWorker.on('message', (msg) => {
-        if (msg && msg.ready) { console.log('[mt-worker] fork started'); return; }
-        if (msg && msg.reqId != null) {
-            const cb = _mtPending.get(msg.reqId);
-            if (cb) { _mtPending.delete(msg.reqId); cb(msg); }
-        }
-    });
-    _mtWorker.on('error', (e) => console.error('[mt-worker] err:', e));
-    _mtWorker.on('exit', (code, signal) => {
-        console.warn('[mt-worker] fork exit code:', code, 'signal:', signal);
-        for (const [id, cb] of _mtPending) cb({ ok: false, error: 'fork exited (' + code + ')' });
-        _mtPending.clear();
-        _mtWorker = null;
-    });
-    return _mtWorker;
+let _cachedPython = null;
+function _findPython() {
+    if (_cachedPython) return _cachedPython;
+    const { execSync } = require('child_process');
+    const candidates = isWin
+        ? ['py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe']
+        : ['python3', '/usr/local/bin/python3', '/opt/homebrew/bin/python3', '/usr/bin/python3', 'python'];
+    for (const cmd of candidates) {
+        try {
+            const out = execSync(`${cmd} -c "import cv2,numpy,sys;print(sys.executable)"`, { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+            if (out) { _cachedPython = cmd; console.log('[motion-tracker] using python:', cmd, '=>', out); return cmd; }
+        } catch (e) { /* tenta proximo */ }
+    }
+    return null;
 }
 
-// Dispara tracking no worker. Retorna o objeto result do motion-tracker.js
+// Spawn motion_tracker.py com pontos + opcoes. Retorna o JSON result.
 async function _runMotionTracker(filePath, ffmpegPath, ffprobePath, points, options) {
-    _ensureMtWorker();
-    const reqId = ++_mtNextReqId;
-    const out = await new Promise((resolve) => {
-        _mtPending.set(reqId, resolve);
-        // ChildProcess (fork) usa .send() — não .postMessage() como worker_threads
-        _mtWorker.send({ reqId, filePath, ffmpegPath, ffprobePath, points, options });
+    const py = _findPython();
+    if (!py) {
+        throw new Error('Python+OpenCV nao instalados. Abra Configuracoes > Motion Tracker pra instalar.');
+    }
+    const scriptPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'motion_tracker.py')
+        : path.join(__dirname, 'motion_tracker.py');
+
+    const opts = options || {};
+    const args = [
+        scriptPath,
+        filePath,
+        '--points', JSON.stringify(points),
+        '--algorithm', opts.algorithm || 'CSRT',
+        '--smoothing', opts.smoothing || 'whittaker',
+        '--bbox-width', String(opts.bboxWidth || 40),
+        '--bbox-height', String(opts.bboxHeight || 40),
+        '--confidence-threshold', String(opts.confidenceThreshold || 0.3),
+        '--max-lost-frames', String(opts.maxLostFrames || 5),
+        '--whittaker-lambda', String(opts.whittakerLambda || 100.0),
+    ];
+
+    const { spawn } = require('child_process');
+    // No Windows "py -3" precisa de shell. Em Mac/Linux usa array direto.
+    const useShell = isWin && py.startsWith('py ');
+    const proc = useShell
+        ? spawn(py + ' ' + args.map(a => `"${String(a).replace(/"/g, '\\"')}"`).join(' '), { shell: true, windowsHide: true })
+        : spawn(py, args, { windowsHide: true });
+
+    return new Promise((resolve, reject) => {
+        let stdout = '';
+        let stderr = '';
+        proc.stdout.on('data', d => { stdout += d.toString(); });
+        proc.stderr.on('data', d => { stderr += d.toString(); process.stderr.write('[mt-py] ' + d); });
+        proc.on('error', reject);
+        proc.on('close', code => {
+            if (code !== 0) {
+                return reject(new Error(`Python exit ${code}: ${stderr.slice(0, 500) || stdout.slice(0, 500)}`));
+            }
+            try {
+                resolve(JSON.parse(stdout));
+            } catch (e) {
+                reject(new Error('Falha parseando JSON do Python: ' + e.message + '\nSTDOUT: ' + stdout.slice(0, 500)));
+            }
+        });
     });
-    if (!out.ok) throw new Error(out.error || 'mt worker failed');
-    return out.result;
 }
 
 function startSyncServer() {
@@ -3495,15 +3510,11 @@ function toggleLoop(){
                 }
                 if (command === 'motion-tracker/track' && data.filePath && Array.isArray(data.points)) {
                     try {
-                        // Roda INLINE no main process. Tentamos fork mas
-                        // @techstark/opencv-js trava o event loop em ELECTRON_RUN_AS_NODE
-                        // (WASM Emscripten + Node-as-Electron = deadlock).
-                        // No main process funciona porque Electron tem Chromium runtime.
-                        // Pra clips curtos (30-100 frames) o block é ~1-3s — aceitável.
-                        console.log('[motion-tracker] starting inline track, points=' + data.points.length);
+                        // v1.4: roda via Python+cv2 nativo (10-100x mais rapido que WASM).
+                        // Spawn isolado do main process — nao bloqueia HTTP server.
+                        console.log('[motion-tracker] python track, points=' + data.points.length, 'algo=' + (data.options?.algorithm || 'CSRT'));
                         const t0 = Date.now();
-                        const tracker = require('./motion-tracker');
-                        const result = await tracker.trackPointsKLT(
+                        const result = await _runMotionTracker(
                             data.filePath, ffmpegBin, ffprobeBin,
                             data.points, data.options || {}
                         );
@@ -3512,6 +3523,76 @@ function toggleLoop(){
                         res.end(JSON.stringify(result));
                     } catch (e) {
                         console.error('[motion-tracker] track err:', e);
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                if (command === 'motion-tracker/check-python' && req.method === 'POST') {
+                    // Verifica se Python+OpenCV estao disponiveis. Resposta: {ok, python, error?}
+                    try {
+                        _cachedPython = null; // forca redetect
+                        const py = _findPython();
+                        if (py) {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ ok: true, python: py }));
+                        } else {
+                            // Detecta se ao menos Python existe (mesmo sem opencv)
+                            const { execSync } = require('child_process');
+                            let pyOnly = null;
+                            const candidates = isWin ? ['py -3', 'python', 'python3'] : ['python3', 'python'];
+                            for (const c of candidates) {
+                                try { execSync(`${c} --version`, { timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }); pyOnly = c; break; } catch {}
+                            }
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ ok: false, pythonFound: !!pyOnly, python: pyOnly, error: pyOnly ? 'Python OK mas falta opencv-python/numpy' : 'Python nao instalado' }));
+                        }
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                if (command === 'motion-tracker/install-deps' && req.method === 'POST') {
+                    // Roda pip install opencv-python numpy scipy via Python detectado.
+                    try {
+                        const { execSync } = require('child_process');
+                        let py = null;
+                        const candidates = isWin ? ['py -3', 'python', 'python3'] : ['python3', 'python'];
+                        for (const c of candidates) {
+                            try { execSync(`${c} --version`, { timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }); py = c; break; } catch {}
+                        }
+                        if (!py) {
+                            res.writeHead(400, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ ok: false, error: 'Python nao encontrado. Instale Python 3.10+ primeiro: https://python.org/downloads/' }));
+                            return;
+                        }
+                        const { spawn } = require('child_process');
+                        const useShell = isWin && py.startsWith('py ');
+                        // opencv-contrib-python inclui CSRT/KCF/MOSSE/MIL via cv2.legacy.* (opencv-python nao tem)
+                        const args = ['-m', 'pip', 'install', '--upgrade', 'opencv-contrib-python', 'numpy', 'scipy'];
+                        const proc = useShell
+                            ? spawn(py + ' ' + args.join(' '), { shell: true, windowsHide: true })
+                            : spawn(py, args, { windowsHide: true });
+                        let out = '', err = '';
+                        proc.stdout.on('data', d => { out += d.toString(); });
+                        proc.stderr.on('data', d => { err += d.toString(); });
+                        proc.on('close', code => {
+                            _cachedPython = null; // forca redetect
+                            const verified = _findPython();
+                            if (code === 0 && verified) {
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ ok: true, python: verified, log: out.slice(-1000) }));
+                            } else {
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ ok: false, error: `pip exit ${code}`, log: (err + out).slice(-2000) }));
+                            }
+                        });
+                        proc.on('error', e => {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ ok: false, error: e.message || String(e) }));
+                        });
+                    } catch (e) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message || String(e) }));
                     }
