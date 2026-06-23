@@ -24,7 +24,11 @@
 <script type="module">
 'use strict';
 
-import { ImageSegmenter, FilesetResolver } from './node_modules/@mediapipe/tasks-vision/vision_bundle.mjs';
+// BiRefNet via @huggingface/transformers (CDN). MediaPipe removido — BiRefNet
+// dá qualidade muito superior (cabelo, bordas finas). Tradeoff: ~5x mais lento.
+let _tf = null;        // transformers.js module
+let _tfModel = null;   // BiRefNet model
+let _tfProc = null;    // BiRefNet processor
 
 const ipc = require('electron').ipcRenderer;
 const fs = require('fs');
@@ -78,45 +82,31 @@ async function run() {
         log('Source: ' + SRC_PATH);
         log('Format: ' + FORMAT + ' · Quality: ' + QUALITY);
 
-        // 1) Carrega MediaPipe
+        // 1) Carrega BiRefNet via transformers.js (CDN)
         setPhase('Carregando IA');
-        log('Carregando MediaPipe Selfie Segmenter...');
+        log('Carregando BiRefNet...');
 
-        // FilesetResolver aponta pra pasta com .wasm
-        const wasmDir = pathLib.join(__dirname, 'node_modules', '@mediapipe', 'tasks-vision', 'wasm');
-        const wasmDirUrl = 'file:///' + wasmDir.replace(/\\/g, '/').replace(/^\//, '');
-        const fileset = await FilesetResolver.forVisionTasks(wasmDirUrl);
-
-        // Modelo MediaPipe Selfie Segmenter (general — boa qualidade pra retratos)
-        // Usar modelo local se já baixado; caso contrário baixa pra cache
-        const modelDir = pathLib.join(require('electron').remote
-            ? require('electron').remote.app.getPath('userData')
-            : (await ipc.invoke('bg-video:get-userdata')), 'mediapipe-models');
-        try { fs.mkdirSync(modelDir, { recursive: true }); } catch(e) {}
-
-        const modelLocalPath = pathLib.join(modelDir, 'selfie_segmenter.tflite');
-        let modelUrl;
-        if (fs.existsSync(modelLocalPath)) {
-            modelUrl = 'file:///' + modelLocalPath.replace(/\\/g, '/').replace(/^\//, '');
-            log('Modelo em cache: ' + modelLocalPath);
-        } else {
-            log('Baixando modelo (~3MB) na primeira vez...');
-            const remoteUrl = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
-            const resp = await fetch(remoteUrl);
-            if (!resp.ok) throw new Error('Falha ao baixar modelo: HTTP ' + resp.status);
-            const buf = Buffer.from(await resp.arrayBuffer());
-            fs.writeFileSync(modelLocalPath, buf);
-            log('Modelo salvo: ' + modelLocalPath + ' (' + Math.round(buf.length/1024) + ' KB)');
-            modelUrl = 'file:///' + modelLocalPath.replace(/\\/g, '/').replace(/^\//, '');
+        const cdns = [
+            'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5/+esm',
+            'https://esm.sh/@huggingface/transformers@3.7.5'
+        ];
+        let lastErr = null;
+        for (const url of cdns) {
+            try { _tf = await import(/* @vite-ignore */ url); break; } catch(e) { lastErr = e; }
         }
-
-        const segmenter = await ImageSegmenter.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: modelUrl, delegate: DELEGATE },
-            runningMode: 'VIDEO',
-            outputCategoryMask: false,
-            outputConfidenceMasks: true,
-        });
-        log('IA pronta (delegate: ' + DELEGATE + ')');
+        if (!_tf) return fail('Falha ao carregar transformers.js: ' + (lastErr?.message || lastErr));
+        try {
+            _tf.env.allowRemoteModels = true;
+            if (_tf.env.backends && _tf.env.backends.onnx && _tf.env.backends.onnx.wasm) {
+                _tf.env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+                _tf.env.backends.onnx.wasm.numThreads = 1;
+            }
+        } catch(e) {}
+        log('Baixando modelo BiRefNet (~85MB, só na 1ª vez)...');
+        const MODEL_ID = 'onnx-community/BiRefNet_lite-ONNX';
+        _tfModel = await _tf.AutoModel.from_pretrained(MODEL_ID, { dtype: 'fp32', device: 'wasm' });
+        _tfProc = await _tf.AutoProcessor.from_pretrained(MODEL_ID);
+        log('BiRefNet pronto');
 
         // 2) Abre vídeo via probe (pega dimensões/duração/fps)
         setPhase('Lendo vídeo');
@@ -205,11 +195,18 @@ async function run() {
             // Desenha frame em procCanvas
             procCtx.drawImage(vid, 0, 0, procW, procH);
 
-            // Roda MediaPipe (síncrono no VIDEO mode)
-            const result = segmenter.segmentForVideo(procCanvas, timestampMs);
+            // Converte canvas → blob → RawImage → BiRefNet
+            const frameBlob = await new Promise(r => procCanvas.toBlob(r, 'image/png'));
+            const rawImg = await _tf.RawImage.fromBlob(frameBlob);
+            const inputs = await _tfProc(rawImg);
+            const out = await _tfModel({ input_image: inputs.pixel_values });
+            const maskTensor = out.output_image ?? out.logits ?? Object.values(out)[0];
+            const maskImage = await _tf.RawImage.fromTensor(
+                maskTensor.sigmoid().mul(255).clamp(0, 255).to('uint8').squeeze(0)
+            ).resize(procW, procH);
 
-            // Aplica mask como alpha
-            applyMaskToCanvas(procCtx, result, procW, procH, outCanvas, outCtx);
+            // Compõe RGBA: RGB do frame + alpha da máscara
+            applyBiRefNetMaskToCanvas(procCtx, maskImage, procW, procH, outCanvas, outCtx);
 
             // Update preview local a cada 8 frames
             if (idx % 8 === 0) {
@@ -283,29 +280,23 @@ function seekVideo(vid, t) {
     });
 }
 
-function applyMaskToCanvas(srcCtx, segResult, w, h, outCanvas, outCtx) {
-    // segmentForVideo retorna { confidenceMasks: [MPMask] }
-    const masks = segResult.confidenceMasks;
-    if (!masks || masks.length === 0) {
+function applyBiRefNetMaskToCanvas(srcCtx, maskRawImage, w, h, outCanvas, outCtx) {
+    // BiRefNet retorna RawImage W×H 1-channel (Uint8 0..255 onde 255 = sujeito)
+    const maskData = maskRawImage.data; // Uint8Array length = w*h
+    if (!maskData || maskData.length < w * h) {
         outCtx.drawImage(srcCtx.canvas, 0, 0);
         return;
     }
-    const maskFloat = masks[0].getAsFloat32Array(); // 0..1, length = w*h
-
     const srcImg = srcCtx.getImageData(0, 0, w, h);
     const out = outCtx.createImageData(w, h);
     const total = w * h;
     for (let i = 0; i < total; i++) {
-        const conf = maskFloat[i]; // 0=fundo, 1=pessoa
         out.data[i*4]   = srcImg.data[i*4];
         out.data[i*4+1] = srcImg.data[i*4+1];
         out.data[i*4+2] = srcImg.data[i*4+2];
-        out.data[i*4+3] = Math.round(conf * 255);
+        out.data[i*4+3] = maskData[i];
     }
     outCtx.putImageData(out, 0, 0);
-
-    // Libera memória do mask
-    try { masks[0].close(); } catch(e) {}
 }
 
 // Boot

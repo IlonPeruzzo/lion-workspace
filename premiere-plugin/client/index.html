@@ -30,7 +30,10 @@
 
         .proj-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:8px;padding-right:2px}
         .proj-empty{text-align:center;font-size:.7rem;color:#555;padding:14px 0}
-        .pc{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);cursor:pointer;transition:all .15s}
+        .pc{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:9px}
+        .pc-avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;object-fit:cover;background:rgba(190,242,100,.08);border:1px solid rgba(190,242,100,.12)}
+        .pc-avatar-fb{display:flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;color:#bef264}
+        .pc-info{flex:1;min-width:0}
         .pc:hover{border-color:rgba(190,242,100,.18);background:rgba(190,242,100,.03)}
         .pc.sel{border-color:#bef264;background:rgba(190,242,100,.07)}
         .pc-name{font-size:.78rem;font-weight:600;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -40,7 +43,7 @@
         .timer-display{font-size:1.65rem;font-weight:800;text-align:left;letter-spacing:-.5px;color:#bef264;margin:0;font-variant-numeric:tabular-nums;line-height:1.05}
         .timer-display.app-paused{color:#636363}
         .timer-sub{text-align:left;font-size:.62rem;color:#888;margin:1px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .timer-sub.app-paused{color:#f59e0b}
+        .timer-sub.app-paused{color:#f87171}
 
         .pomo-phase{text-align:center;margin-bottom:2px}
         .phase-badge{display:inline-block;padding:1px 8px;border-radius:8px;font-size:.55rem;font-weight:700;letter-spacing:.3px}
@@ -223,17 +226,26 @@
         .footer{text-align:center;margin-top:6px;font-size:.58rem;color:#3a3a3a;letter-spacing:.2px}
 
         /* Login screen */
-        .login-overlay{position:fixed;inset:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:20px}
+        .login-overlay{position:fixed;inset:0;background:radial-gradient(ellipse at top right,rgba(190,242,100,.06) 0%,transparent 50%),radial-gradient(ellipse at bottom left,rgba(34,211,238,.04) 0%,transparent 50%),#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:24px;overflow:hidden}
+        .login-overlay::before{content:'';position:absolute;width:280px;height:280px;background:radial-gradient(circle,rgba(190,242,100,.08) 0%,transparent 70%);top:-100px;right:-80px;pointer-events:none;animation:loginGlowPulse 6s ease-in-out infinite}
+        .login-overlay::after{content:'';position:absolute;width:240px;height:240px;background:radial-gradient(circle,rgba(190,242,100,.05) 0%,transparent 70%);bottom:-80px;left:-60px;pointer-events:none;animation:loginGlowPulse 6s ease-in-out infinite 3s}
+        @keyframes loginGlowPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
+        .login-overlay .login-card{position:relative;width:100%;max-width:280px;background:linear-gradient(180deg,rgba(28,28,28,.9) 0%,rgba(20,20,20,.95) 100%);border:1px solid rgba(190,242,100,.08);border-radius:16px;padding:28px 22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02) inset;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
         .login-overlay.hidden{display:none}
-        .login-overlay .logo{font-size:1.1rem;margin-bottom:4px}
-        .login-overlay .login-subtitle{font-size:.72rem;color:#636363;margin-bottom:20px;text-align:center}
-        .login-overlay .login-form{width:100%;max-width:240px;display:flex;flex-direction:column;gap:10px}
-        .login-overlay .login-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 12px;font-size:.78rem;color:#f5f5f5;outline:none;font-family:inherit;transition:border-color .2s}
-        .login-overlay .login-input:focus{border-color:rgba(190,242,100,.4)}
+        .login-overlay .logo{font-size:1.3rem;margin-bottom:4px;color:#f5f5f5;text-align:center;font-weight:800;letter-spacing:-.4px}
+        .login-overlay .logo span{color:#bef264}
+        .login-overlay .login-subtitle{font-size:.66rem;color:#737373;margin-bottom:18px;text-align:center;font-weight:500}
+        .login-overlay .login-form{width:100%;display:flex;flex-direction:column;gap:10px}
+        .login-overlay .input-wrap{position:relative;display:flex;align-items:center}
+        .login-overlay .input-icon{position:absolute;left:11px;display:flex;align-items:center;justify-content:center;color:#525252;pointer-events:none;transition:color .2s}
+        .login-overlay .input-wrap:focus-within .input-icon{color:#bef264}
+        .login-overlay .login-input{width:100%;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:11px 12px 11px 36px;font-size:.74rem;color:#f5f5f5;outline:none;font-family:inherit;transition:all .2s}
+        .login-overlay .login-input:focus{border-color:rgba(190,242,100,.4);background:rgba(255,255,255,.05);box-shadow:0 0 0 3px rgba(190,242,100,.08)}
         .login-overlay .login-input::placeholder{color:#525252}
-        .login-overlay .login-submit{background:#bef264;color:#0a0a0a;border:none;padding:11px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
-        .login-overlay .login-submit:hover{opacity:.9}
-        .login-overlay .login-submit:disabled{opacity:.4;cursor:not-allowed}
+        .login-overlay .login-submit{margin-top:4px;background:linear-gradient(135deg,#bef264 0%,#a3e635 100%);color:#0a0a0a;border:none;padding:11px;border-radius:9px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 14px rgba(190,242,100,.18);letter-spacing:-.1px}
+        .login-overlay .login-submit:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(190,242,100,.3)}
+        .login-overlay .login-submit:active{transform:translateY(0)}
+        .login-overlay .login-submit:disabled{opacity:.4;cursor:not-allowed;transform:none}
 
         /* Auto-login button — entrar com sessão do app desktop */
         .auto-login-btn{
@@ -332,39 +344,46 @@
 <body>
     <!-- Plugin Login Screen -->
     <div class="login-overlay" id="pluginLogin">
-        <div class="logo">Lion <span>Workspace</span></div>
-        <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
-        <div class="login-form">
-            <div class="login-error" id="pluginLoginError"></div>
-            <input class="login-input" type="email" id="pluginEmail" placeholder="Email" autocomplete="off">
-            <div style="position:relative">
-                <input class="login-input" type="password" id="pluginPassword" placeholder="Senha" style="width:100%;padding-right:36px">
-                <button type="button" onclick="togglePluginPwEye()" id="pluginPwEye" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#525252;cursor:pointer;padding:4px;display:flex;align-items:center;transition:color .2s">
-                    <svg id="pluginEyeOpen" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg id="pluginEyeClosed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        <div class="login-card">
+            <div class="logo">Lion <span>Workspace</span></div>
+            <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
+            <div class="login-form">
+                <div class="login-error" id="pluginLoginError"></div>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    </span>
+                    <input class="login-input" type="email" id="pluginEmail" placeholder="Email" autocomplete="off">
+                </div>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </span>
+                    <input class="login-input" type="password" id="pluginPassword" placeholder="Senha" style="padding-right:36px">
+                    <button type="button" onclick="togglePluginPwEye()" id="pluginPwEye" style="position:absolute;right:8px;background:none;border:none;color:#525252;cursor:pointer;padding:4px;display:flex;align-items:center;transition:color .2s">
+                        <svg id="pluginEyeOpen" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="pluginEyeClosed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
+                <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
+                <div style="display:flex;align-items:center;gap:8px;margin:8px 0 0;color:#404040;font-size:.55rem;font-weight:600;letter-spacing:.6px">
+                    <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
+                    <span>OU</span>
+                    <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
+                </div>
+                <button type="button" id="pluginAutoLoginBtn" class="auto-login-btn pulse" onclick="pluginManualAutoLogin()">
+                    <span class="auto-login-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                        </svg>
+                    </span>
+                    <span class="auto-login-text">
+                        <span class="auto-login-title">Entrar com o app</span>
+                        <span class="auto-login-sub">Usa a sessão já aberta no Lion Workspace</span>
+                    </span>
+                    <svg class="auto-login-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
-            </div>
-            <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
-            <div style="display:flex;align-items:center;gap:8px;margin:11px 0 1px;color:#404040;font-size:.58rem;font-weight:600;letter-spacing:.6px">
-                <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
-                <span>OU</span>
-                <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
-            </div>
-            <button type="button" id="pluginAutoLoginBtn" class="auto-login-btn pulse" onclick="pluginManualAutoLogin()">
-                <span class="auto-login-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                    </svg>
-                </span>
-                <span class="auto-login-text">
-                    <span class="auto-login-title">Entrar com o app</span>
-                    <span class="auto-login-sub">Usa a sessão já aberta no Lion Workspace</span>
-                </span>
-                <svg class="auto-login-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-            <div style="text-align:center;font-size:.62rem;color:#525252;margin-top:4px">
-                Não tem conta? Crie pelo app ou pelo site.
             </div>
         </div>
     </div>
@@ -487,7 +506,7 @@
             <svg id="downloadChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="downloadBody">
-        <!-- Platform selector -->
+        <!-- Linha única: plataformas + URL + lupa -->
         <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center;margin-top:6px">
             <button class="plat-btn active" id="platYT" onclick="ytSetPlatform('youtube')" title="YouTube">
                 <svg viewBox="0 0 24 24" fill="#f43f5e"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
@@ -501,11 +520,10 @@
             <button class="plat-btn" id="platTT" onclick="ytSetPlatform('tiktok')" title="TikTok">
                 <svg viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.1z"/></svg>
             </button>
-        </div>
-        <!-- URL + Buscar -->
-        <div style="display:flex;gap:4px;margin-bottom:6px">
-            <input type="text" id="ytUrlPlugin" placeholder="Cole a URL..." style="flex:1;min-width:0;padding:6px 8px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.7rem;font-family:inherit;outline:none;overflow:hidden;text-overflow:ellipsis" onkeydown="if(event.key==='Enter')ytPluginFetch()" oninput="ytAutoDetectPlatform()">
-            <button class="btn btn-go" onclick="ytPluginFetch()" id="ytFetchBtn" style="padding:6px 10px;font-size:.66rem;white-space:nowrap">Buscar</button>
+            <input type="text" id="ytUrlPlugin" placeholder="URL" style="flex:1;min-width:0;padding:6px 8px;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.7rem;font-family:inherit;outline:none;overflow:hidden;text-overflow:ellipsis" onkeydown="if(event.key==='Enter')ytPluginFetch()" oninput="ytAutoDetectPlatform()">
+            <button class="btn btn-go" onclick="ytPluginFetch()" id="ytFetchBtn" style="padding:0;width:28px;height:28px;min-width:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="Buscar">
+                <span id="ytFetchIcon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+            </button>
         </div>
 
         <!-- Preview (hidden until fetched) -->
@@ -527,6 +545,12 @@
 
             <!-- Collapsible body -->
             <div id="ytPreviewBody">
+
+            <!-- Botão preview no browser (YouTube bloqueia iframe em file:// — Error 153) -->
+            <button id="ytPreviewBtn" onclick="ytOpenPreviewInBrowser()" style="display:none;width:100%;padding:7px;margin-top:4px;background:rgba(255,0,0,.08);border:1px solid rgba(255,0,0,.2);border-radius:6px;color:#fca5a5;font-size:.66rem;font-weight:600;cursor:pointer;font-family:inherit;display:none;align-items:center;justify-content:center;gap:5px" onmouseover="this.style.background='rgba(255,0,0,.15)'" onmouseout="this.style.background='rgba(255,0,0,.08)'">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span id="ytPreviewBtnLabel">Preview no browser</span>
+            </button>
 
             <!-- Format -->
             <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">
@@ -866,7 +890,7 @@
             <button id="rotoscopeBtn" style="display:none" onclick="rotoscopeOpen()"></button>
         </div>
     </div>
-    <style>@keyframes bgr-spin{to{transform:rotate(360deg)}}</style>
+    <style>@keyframes bgr-spin{to{transform:rotate(360deg)}}@keyframes lwspin{to{transform:rotate(360deg)}}</style>
 
     <!-- Copy / Paste -->
     <!-- LION SEARCH — atalho global pra busca rápida -->
@@ -921,35 +945,33 @@
         </div>
     </div>
 
-    <!-- Audio Library -->
-    <div class="section" id="sectionAudioLib">
-        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('audioLibBody')">
-            <span style="display:flex;align-items:center;gap:5px">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                Biblioteca de Áudios
-            </span>
-            <svg id="audioLibChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div id="audioLibBody">
-            <div style="font-size:.58rem;color:#666;margin-bottom:8px;text-align:center;line-height:1.4">
-                Áudios que aparecem no LION SEARCH · gerencie pelo app principal
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 9px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.05);border-radius:5px;margin-bottom:5px">
-                <span style="font-size:.62rem;color:#ddd">Áudios na biblioteca</span>
-                <span id="plAudioLibCount" style="font-size:.7rem;color:#bef264;font-weight:700">0</span>
-            </div>
-            <button class="yt-q" onclick="plAudioLibRefresh()" style="width:100%;font-size:.58rem;padding:5px;margin-bottom:5px">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:3px"><path d="M23 4v6h-6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>
-                Atualizar contagem
-            </button>
-            <div id="plAudioLibList" style="display:flex;flex-direction:column;gap:3px;max-height:140px;overflow-y:auto"></div>
-            <div style="margin-top:6px;padding:6px 8px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1);border-radius:5px;font-size:.55rem;color:#aaa;line-height:1.5">
-                💡 Pra adicionar áudios, abra a aba <strong style="color:#bef264">Áudios</strong> no app principal.
-            </div>
-        </div>
+<!-- Motion Tracker -->
+<div class="section" id="sectionMotionTracker">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('mtBody')">
+        <span style="display:flex;align-items:center;gap:5px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+            </svg>
+            Motion Tracker
+        </span>
+        <svg id="mtChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
+    <div id="mtBody">
+        <div style="font-size:.58rem;color:#666;margin-bottom:10px;text-align:center;line-height:1.4">
+            Trackeia um ponto no clip selecionado e aplica keyframes em Position
+        </div>
 
-    <div class="section" id="sectionCopyPaste">
+        <button class="btn btn-go" id="mtOpenBtn" onclick="mtOpenEditor()" style="width:100%;padding:9px;font-size:.74rem">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="vertical-align:-2px;margin-right:5px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Abrir Tracker
+        </button>
+
+        <div id="mtStatus" style="text-align:center;font-size:.58rem;color:#555;min-height:11px;line-height:1.3;margin-top:6px"></div>
+    </div>
+</div>
+
+<div class="section" id="sectionCopyPaste">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('cpBody')">
             <span style="display:flex;align-items:center;gap:5px">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -961,55 +983,38 @@
             <svg id="cpChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="cpBody">
-            <div style="font-size:.58rem;color:#666;margin-bottom:10px;text-align:center;line-height:1.4">
-                Copia arquivo do Explorer/print e cola direto no Premiere
-            </div>
-            <div style="display:flex;gap:6px;margin-bottom:8px">
-                <button class="btn btn-pause" style="flex:1;padding:9px 4px" onclick="cpDoCopy()" id="cpCopyBtn" title="Copia o arquivo do clip selecionado pro clipboard do Windows">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+                <button style="flex:1;padding:7px 4px;background:rgba(190,242,100,.06);border:1px solid rgba(190,242,100,.25);border-radius:8px;color:#bef264;font-size:.76rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;font-family:inherit;letter-spacing:-.2px;transition:all .12s" onmouseover="this.style.background='rgba(190,242,100,.12)'" onmouseout="this.style.background='rgba(190,242,100,.06)'" onclick="cpDoCopy()" id="cpCopyBtn" title="Copia o arquivo do clip selecionado">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     Copy
                 </button>
-                <button class="btn btn-go" style="flex:1;padding:9px 4px" onclick="cpDoPaste()" id="cpPasteBtn" title="Cola arquivo/print do clipboard no Premiere">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+                <button class="btn btn-go" style="flex:1;padding:7px 4px" onclick="cpDoPaste()" id="cpPasteBtn" title="Cola arquivo/print do clipboard">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
                     Paste
                 </button>
             </div>
 
-            <!-- Options -->
-            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;font-size:.6rem;color:#aaa">
-                <div style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 8px;background:rgba(255,255,255,.02);border-radius:4px;border:1px solid rgba(190,242,100,.04)" onclick="cpToggleFlag('insertAtPlayhead')">
-                    <div id="cpFlagInsertAtPlayhead" class="mini-check active">
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <span>Inserir no playhead da timeline</span>
+            <!-- Option: Timeline only (Bin removido) -->
+            <div style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 8px;background:rgba(255,255,255,.02);border-radius:4px;margin-bottom:6px;font-size:.58rem;color:#888" onclick="cpToggleFlag('insertAtPlayhead')" title="Inserir no playhead da timeline">
+                <div id="cpFlagInsertAtPlayhead" class="mini-check active">
+                    <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 8px;background:rgba(255,255,255,.02);border-radius:4px;border:1px solid rgba(190,242,100,.04)" onclick="cpToggleFlag('useBin')">
-                    <div id="cpFlagUseBin" class="mini-check active">
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <span>Organizar no bin "Copy-Pasta"</span>
-                </div>
+                <span>Inserir na timeline</span>
             </div>
 
-            <!-- Save location -->
-            <div style="margin-bottom:8px">
-                <div style="font-size:.56rem;text-transform:uppercase;letter-spacing:.4px;color:#555;font-weight:600;margin-bottom:4px">Salvar prints em</div>
-                <div style="display:flex;gap:3px">
-                    <button class="yt-q active" id="cpSaveModeProj" onclick="cpSetSaveMode('project')" style="flex:1">Pasta do Projeto</button>
-                    <button class="yt-q" id="cpSaveModeCustom" onclick="cpSetSaveMode('custom')" style="flex:1">Personalizada</button>
-                </div>
-                <div id="cpCustomPathRow" style="display:none;margin-top:4px;gap:3px;align-items:center">
-                    <input type="text" id="cpCustomPathInput" placeholder="C:\\caminho\\..." style="flex:1;padding:4px 6px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.58rem;font-family:inherit;outline:none" oninput="cpSavePathChanged()">
-                    <button class="yt-q" onclick="cpPickFolder()" style="padding:4px 6px;flex-shrink:0" title="Escolher pasta">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    </button>
-                </div>
-                <div id="cpPathHint" style="font-size:.5rem;color:#555;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+            <!-- Save location: select compacto -->
+            <div style="display:flex;gap:3px;margin-bottom:6px">
+                <button class="yt-q active" id="cpSaveModeProj" onclick="cpSetSaveMode('project')" style="flex:1;font-size:.55rem" title="Salva prints na pasta do .prproj">Projeto</button>
+                <button class="yt-q" id="cpSaveModeCustom" onclick="cpSetSaveMode('custom')" style="flex:1;font-size:.55rem" title="Salva prints em pasta customizada">Custom</button>
+            </div>
+            <div id="cpCustomPathRow" style="display:none;gap:3px;align-items:center;margin-bottom:6px">
+                <input type="text" id="cpCustomPathInput" placeholder="C:\\..." style="flex:1;padding:3px 6px;border-radius:4px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:#f5f5f5;font-size:.55rem;font-family:inherit;outline:none" oninput="cpSavePathChanged()">
+                <button class="yt-q" onclick="cpPickFolder()" style="padding:3px 6px;flex-shrink:0" title="Escolher pasta">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </button>
             </div>
 
-            <div id="cpStatus" style="text-align:center;font-size:.58rem;color:#555;margin-top:4px;min-height:12px;padding:4px 6px;background:rgba(255,255,255,.015);border-radius:4px;line-height:1.3">
-                Pronto. Copie um arquivo/print e clique Paste
-            </div>
+            <div id="cpStatus" style="text-align:center;font-size:.55rem;color:#444;min-height:11px;line-height:1.3"></div>
         </div>
     </div>
 
@@ -1109,21 +1114,23 @@
     var LWConnection = (function() {
         var _state = 'unknown';
         var _listeners = [];
-        var _interval = 2000;
+        // Poll interval reduzido pra latência baixa do timer/pomodoro.
+        // 127.0.0.1 HTTP é essencialmente free — não causa overhead real.
+        var _interval = 500;
         var _apiBase = '';
         function notify() { for (var i = 0; i < _listeners.length; i++) { try { _listeners[i](_state); } catch(e) {} } }
         return {
             init: function(api) { _apiBase = api; },
             onStateChange: function(fn) { _listeners.push(fn); },
             markConnected: function() {
-                _interval = 2000;
+                _interval = 500;
                 if (_state !== 'connected') { _state = 'connected'; notify(); }
             },
             markDisconnected: function() {
                 if (_interval < 8000) _interval = Math.min(8000, _interval * 1.5);
                 if (_state !== 'disconnected') { _state = 'disconnected'; notify(); }
             },
-            resetPollRate: function() { _interval = 1000; },
+            resetPollRate: function() { _interval = 250; },
             getPollInterval: function() { return _interval; },
             getState: function() { return _state; }
         };
@@ -1163,8 +1170,8 @@
         { key: 'download', id: 'sectionDownload',  label: 'Downloader' },
         { key: 'easing',   id: 'sectionEasing',    label: 'Easing / Curvas' },
         { key: 'anchor',   id: 'sectionAnchor',    label: 'Anchor Point Pro' },
+        { key: 'motionTracker', id: 'sectionMotionTracker', label: 'Motion Tracker' },
         { key: 'lionSearch', id: 'sectionLionSearch', label: 'Lion Search' },
-        { key: 'audioLib', id: 'sectionAudioLib',  label: 'Biblioteca de Áudios' },
         { key: 'cp',       id: 'sectionCopyPaste', label: 'Copy / Paste' },
         { key: 'bgRemove', id: 'sectionBgRemove',  label: 'Remover Fundo' }
     ];
@@ -1513,6 +1520,7 @@
             'pomoBody':'pomoChev',
             'easingBody':'easingChev',
             'anchorBody':'anchorChev',
+            'mtBody':'mtChev',
             'lionSearchBody':'lionSearchChev'
         };
         var chevId=chevMap[id]||id.replace('Body','Chev');
@@ -1539,10 +1547,18 @@
             var isSel=c.value===selProj;
             var stg=c.stageCSS||'background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)';
             if(!stg)stg='background:rgba(190,242,100,.08);color:#bef264;border:1px solid rgba(190,242,100,.15)';
+            // Avatar do cliente (foto do canal) — fallback pra inicial se não tem
+            var avLetter = (c.cliente||'?').charAt(0).toUpperCase();
+            var av = c.clienteFoto
+                ? '<img class="pc-avatar" src="'+esc(c.clienteFoto)+'" onerror="this.outerHTML=\'<div class=&quot;pc-avatar pc-avatar-fb&quot;>'+esc(avLetter)+'</div>\'">'
+                : '<div class="pc-avatar pc-avatar-fb">'+esc(avLetter)+'</div>';
             return '<div class="pc'+(isSel?' sel':'')+'" onclick="pick(\''+c.value.replace(/'/g,"\\'")+'\')">'
-                +'<div class="pc-name">'+esc(c.nome)+'</div>'
-                +'<div class="pc-cli">'+esc(c.cliente)+'</div>'
-                +'<div class="pc-stage" style="'+stg+'">'+esc(c.etapa||'Sem etapa')+'</div>'
+                +av
+                +'<div class="pc-info">'
+                    +'<div class="pc-name">'+esc(c.nome)+'</div>'
+                    +'<div class="pc-cli">'+esc(c.cliente)+'</div>'
+                    +'<div class="pc-stage" style="'+stg+'">'+esc(c.etapa||'Sem etapa')+'</div>'
+                +'</div>'
                 +'</div>';
         }).join('');
     }
@@ -1811,11 +1827,11 @@
     }
 
     function cmd(c){
-        LWConnection.resetPollRate(); // User action = poll fast
+        LWConnection.resetPollRate(); // User action = poll fast (250ms)
         LWHttp.post(API+'/'+c,{},{timeout:5000,retries:1},function(err){
             if(err) LWLog.warn('cmd','Command failed: '+c);
         });
-        setTimeout(poll,300);
+        setTimeout(poll,100); // confirma estado em 100ms (era 300ms)
     }
 
     // Prevent Space/Enter from accidentally triggering focused buttons
@@ -1875,6 +1891,7 @@
         ytUpdateRange();
     }
 
+    var _ytIframeDebounce=null;
     function ytUpdateRange(){
         var wrap=document.getElementById('ytRangeWrap');
         if(!wrap)return;
@@ -1893,6 +1910,30 @@
         var endSecs=Math.round(ytRangeEndPct*ytTotalDuration);
         var selDur=endSecs-startSecs;
         document.getElementById('ytTrimDuration').textContent=ytSecsToTime(startSecs)+' — '+ytSecsToTime(endSecs)+' ('+ytSecsToTime(selDur)+')';
+        // Atualiza label do botão preview com o tempo do trim
+        if(ytPlatform==='youtube'){
+            var lbl=document.getElementById('ytPreviewBtnLabel');
+            if(lbl){
+                if(selDur < ytTotalDuration && selDur > 0){
+                    lbl.textContent='Preview trecho ('+ytSecsToTime(startSecs)+' → '+ytSecsToTime(endSecs)+')';
+                } else {
+                    lbl.textContent='Preview no browser';
+                }
+            }
+        }
+    }
+
+    // Abre janela popup do Electron com YouTube embed servido pelo Lion Workspace
+    // (origin http://127.0.0.1:9847 — YT aceita iframe; file:// do CEP era bloqueado).
+    function ytOpenPreviewInBrowser(){
+        var btn=document.getElementById('ytPreviewBtn');
+        var ytId=btn && btn.dataset ? btn.dataset.ytId : '';
+        if(!ytId){ showMsg('Vídeo não identificado'); return; }
+        var startSecs=Math.round(ytRangeStartPct*ytTotalDuration);
+        var endSecs=Math.round(ytRangeEndPct*ytTotalDuration);
+        LWHttp.post(API+'/yt-preview/open', { id: ytId, start: startSecs, end: endSecs }, { timeout: 5000, retries: 1 }, function(err){
+            if(err) showMsg('Falha ao abrir preview: '+err);
+        });
     }
 
     function ytHandleDown(e,which){
@@ -1953,11 +1994,11 @@
         document.getElementById('platIG').classList.toggle('active',p==='instagram');
         document.getElementById('platTW').classList.toggle('active',p==='twitter');
         var ttBtn=document.getElementById('platTT'); if(ttBtn) ttBtn.classList.toggle('active',p==='tiktok');
-        var ph='Cole a URL...';
-        if(p==='youtube') ph='Cole a URL do YouTube...';
-        else if(p==='instagram') ph='Cole a URL do Instagram...';
-        else if(p==='twitter') ph='Cole a URL do Twitter/X...';
-        else if(p==='tiktok') ph='Cole a URL do TikTok...';
+        var ph='URL';
+        if(p==='youtube') ph='URL YouTube';
+        else if(p==='instagram') ph='URL Instagram';
+        else if(p==='twitter') ph='URL Twitter/X';
+        else if(p==='tiktok') ph='URL TikTok';
         document.getElementById('ytUrlPlugin').placeholder=ph;
     }
 
@@ -1970,6 +2011,27 @@
     }
 
     // Valida URL de mídia antes de baixar — retorna {ok,msg}
+    // Extrai o ID de vídeo do YouTube de qualquer formato (watch/shorts/youtu.be/embed)
+    function ytExtractVideoId(rawUrl){
+        if(!rawUrl) return '';
+        try {
+            var m;
+            // youtu.be/XXXX
+            m = rawUrl.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+            if (m) return m[1];
+            // youtube.com/watch?v=XXXX
+            m = rawUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+            if (m) return m[1];
+            // youtube.com/shorts/XXXX
+            m = rawUrl.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+            if (m) return m[1];
+            // youtube.com/embed/XXXX
+            m = rawUrl.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+            if (m) return m[1];
+        } catch(e) {}
+        return '';
+    }
+
     function ytValidateMediaUrl(raw){
         var url=(raw||'').trim();
         if(!url) return {ok:false,msg:'Cole uma URL'};
@@ -2067,12 +2129,17 @@
         var v=ytValidateMediaUrl(url);
         if(!v.ok){showMsg(v.msg);return}
         var btn=document.getElementById('ytFetchBtn');
-        btn.disabled=true;btn.textContent='Buscando...';
+        var icon=document.getElementById('ytFetchIcon');
+        var lupaSVG='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+        var spinSVG='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" style="animation:lwspin .7s linear infinite"><path d="M12 2 a10 10 0 0 1 10 10"/></svg>';
+        btn.disabled=true;
+        if(icon) icon.innerHTML=spinSVG;
         document.getElementById('ytPreview').style.display='none';
         LWLog.info('download', 'Fetching info: ' + url.substring(0, 60));
 
         LWHttp.post(API+'/yt/info',{url:url},{timeout:60000,retries:2},function(err,status,body){
-            btn.disabled=false;btn.textContent='Buscar';
+            btn.disabled=false;
+            if(icon) icon.innerHTML=lupaSVG;
             if(err){
                 LWLog.error('download','Fetch info failed: '+err);
                 showMsg(err==='TIMEOUT'?'Timeout - tente novamente':'Lion Workspace desconectado');
@@ -2089,6 +2156,16 @@
                 var mm=Math.floor(dur/60);var ss=dur%60;
                 document.getElementById('ytDurPlugin').textContent=mm+':'+(ss<10?'0':'')+ss;
                 document.getElementById('ytPreview').style.display='';
+                // Mostra botão "Preview no browser" pra YouTube (iframe é bloqueado
+                // pelo origin file:// do CEP — Error 153 do YouTube player).
+                var previewBtn=document.getElementById('ytPreviewBtn');
+                var ytId=ytExtractVideoId(url);
+                if(ytPlatform==='youtube' && ytId){
+                    previewBtn.style.display='flex';
+                    previewBtn.dataset.ytId=ytId;
+                } else {
+                    previewBtn.style.display='none';
+                }
                 if(ytPlatform!=='instagram'&&dur>0){
                     ytInitRange(dur);
                 } else {
@@ -2578,6 +2655,8 @@
                         { retries: 0 }, function(){});
                 });
             });
+        } else if (cmd.type === 'motion-tracker/apply') {
+            try { if (typeof mtHandleApplyCommand === 'function') mtHandleApplyCommand(cmd); } catch(e) {}
         } else if (cmd.type === 'get-context') {
             csInterface.evalScript('lwSearchGetContext()', function(result) {
                 var ctx = { selectionType: 'none' };
@@ -2659,32 +2738,8 @@
     // parseados com efeitos + parâmetros + keyframes. Aproveitamos.
     var _lsExcaliburCache = null;
     var _lsExcaliburCacheAt = 0;
-    // ─── AUDIO LIBRARY (plugin) — apenas mostra contagem e lista enxuta ───
-    function plAudioLibRefresh() {
-        LWHttp.get(API + '/lion-search/audio-library', { timeout: 3000, retries: 0 }, function(err, st, body) {
-            var items = [];
-            try { items = JSON.parse(body || '{}').items || []; } catch(e) {}
-            var cnt = document.getElementById('plAudioLibCount');
-            var lst = document.getElementById('plAudioLibList');
-            if (cnt) cnt.textContent = items.length;
-            if (lst) {
-                if (items.length === 0) {
-                    lst.innerHTML = '<div style="font-size:.55rem;color:#555;text-align:center;padding:8px;border:1px dashed rgba(190,242,100,.08);border-radius:5px">Vazio</div>';
-                } else {
-                    lst.innerHTML = items.slice(0, 20).map(function(it) {
-                        var trimmed = (it.inSec != null || it.outSec != null);
-                        var inS = it.inSec != null ? it.inSec.toFixed(1) : '0';
-                        var outS = it.outSec != null ? it.outSec.toFixed(1) : '∞';
-                        return '<div style="display:flex;align-items:center;gap:5px;padding:4px 7px;background:rgba(255,255,255,.02);border-radius:4px;font-size:.55rem"><span style="flex:1;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (it.path || '').replace(/"/g, '&quot;') + '">' + (it.name || '?') + '</span>' + (trimmed ? '<span style="color:#bef264;font-size:.5rem">⊟' + inS + '→' + outS + 's</span>' : '') + '</div>';
-                    }).join('');
-                    if (items.length > 20) lst.innerHTML += '<div style="font-size:.5rem;color:#555;text-align:center;padding:3px">+' + (items.length - 20) + ' mais</div>';
-                }
-            }
-        });
-    }
-    // Refresh automático no carregamento + a cada 30s
-    setTimeout(plAudioLibRefresh, 1000);
-    setInterval(plAudioLibRefresh, 30000);
+    // (Audio Library UI removida do plugin — gerencia no app principal.
+    //  LION SEARCH continua consumindo /lion-search/audio-library via lsLoadAudioLib.)
 
     function lsLoadExcaliburCache() {
         if (!_lsFs || !_lsPathL) return null;
@@ -3703,7 +3758,7 @@
     // ============================================
     var cpFlags = {
         insertAtPlayhead: true,
-        useBin: true
+        useBin: false
     };
 
     // Save mode for clipboard images: 'project' (next to .prproj) or 'custom' (user-chosen folder)
@@ -3815,12 +3870,31 @@
         if (!node) { callback('NODE_UNAVAILABLE', null); return; }
         try {
             var child_process = node.require('child_process');
+            var fs = node.require('fs');
+            var os = node.require('os');
+            var path = node.require('path');
             var Buf = node.require('buffer').Buffer;
-            var b64 = Buf.from(psScript, 'utf16le').toString('base64');
-            // -ExecutionPolicy Bypass evita bloqueio por GPO/política local
-            child_process.exec('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + b64,
+            // Scripts curtos: usa -EncodedCommand (mais rápido, sem I/O).
+            // Scripts longos: salva em .ps1 temporário (evita "linha de comando muito longa").
+            // Limite cmd.exe: ~8190 chars; base64(utf16le) = (script_len*2)*4/3.
+            // Threshold seguro: ~2500 chars (= ~6666 base64).
+            if (psScript.length < 2500) {
+                var b64 = Buf.from(psScript, 'utf16le').toString('base64');
+                child_process.exec('powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + b64,
+                    { maxBuffer: 8 * 1024 * 1024, windowsHide: true, timeout: 15000 },
+                    function(err, stdout, stderr) {
+                        callback(err, String(stdout || ''), String(stderr || ''));
+                    }
+                );
+                return;
+            }
+            // Script longo: salva e executa
+            var tmpFile = path.join(os.tmpdir(), 'lw-ps-' + Date.now() + '-' + Math.random().toString(36).substr(2,8) + '.ps1');
+            fs.writeFileSync(tmpFile, '﻿' + psScript, 'utf8'); // BOM pra PS reconhecer UTF-8
+            child_process.exec('powershell -NoProfile -ExecutionPolicy Bypass -File "' + tmpFile + '"',
                 { maxBuffer: 8 * 1024 * 1024, windowsHide: true, timeout: 15000 },
                 function(err, stdout, stderr) {
+                    try { fs.unlinkSync(tmpFile); } catch(e) {}
                     callback(err, String(stdout || ''), String(stderr || ''));
                 }
             );
@@ -3916,6 +3990,11 @@
             '    $img.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)',
             '    $img.Dispose()',
             '    $results += $out',
+            // Apaga o original (lw-clip-*) se diferente do sanitizado — evita acumular
+            // arquivos duplicados no disco e itens duplicados no project bin.
+            '    if ($src -ne $out -and (Split-Path -Leaf $src) -like "lw-clip-*") {',
+            '      try { Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue } catch {}',
+            '    }',
             '  } catch {',
             '    $results += $src',  // fallback: mantém original
             '  }',
@@ -3988,11 +4067,43 @@
     // ─── Clipboard Read (cross-platform) ───
     function cpReadClipboard(saveDir, callback){
         if (typeof saveDir === 'function') { callback = saveDir; saveDir = ''; }
-        if (cpIsWindows()) {
-            cpReadClipboardWin(saveDir, callback);
-        } else {
-            cpReadClipboardMac(saveDir, callback);
-        }
+        // 1) Tenta via Electron HTTP (clipboard.readImage() nativo — handle PNG/WebP/DIB)
+        //    Cross-platform e MUITO mais rápido que PS/JXA. Cai pro fallback se offline.
+        cpReadClipboardViaHttp(saveDir, function(httpRes){
+            if (httpRes && (httpRes.type === 'image' || httpRes.type === 'files')) {
+                callback(httpRes);
+                return;
+            }
+            // App offline / endpoint indisponível / empty real → tenta path nativo do SO
+            if (cpIsWindows()) {
+                cpReadClipboardWin(saveDir, callback);
+            } else {
+                cpReadClipboardMac(saveDir, callback);
+            }
+        });
+    }
+
+    // Lê clipboard via Electron main process (mais robusto que PS/JXA)
+    function cpReadClipboardViaHttp(saveDir, callback){
+        try {
+            if (typeof LWHttp === 'undefined' || typeof API === 'undefined') {
+                callback(null);
+                return;
+            }
+            var url = API + '/clipboard/read-image';
+            if (saveDir) url += '?dir=' + encodeURIComponent(saveDir);
+            LWHttp.get(url, { timeout: 5000, retries: 0 }, function(err, status, body){
+                if (err || status !== 200 || !body) { callback(null); return; }
+                try {
+                    var j = JSON.parse(body);
+                    if (j.type === 'image' || j.type === 'files') {
+                        callback({ type: j.type, paths: j.paths || [] });
+                    } else {
+                        callback(null); // fall through to native path
+                    }
+                } catch(e) { callback(null); }
+            });
+        } catch(e) { callback(null); }
     }
 
     function cpParseClipboardOutput(stdout, callback){
@@ -4002,6 +4113,8 @@
             callback({ type: 'files', paths: paths });
         } else if (out.indexOf('IMAGE:') === 0) {
             callback({ type: 'image', paths: [out.substring(6).trim()] });
+        } else if (out.indexOf('EMPTY_DBG:') === 0) {
+            callback({ type: 'empty', debug: out.substring(10).trim() });
         } else {
             callback({ type: 'empty' });
         }
@@ -4010,41 +4123,115 @@
     function cpReadClipboardWin(saveDir, callback){
         var saveDirEsc = String(saveDir || '').replace(/'/g, "''");
         var saveDirLine = saveDirEsc
-            ? ("    $dir = '" + saveDirEsc + "'")
-            : "    $dir = $env:TEMP";
+            ? ("$dir = '" + saveDirEsc + "'")
+            : "$dir = $env:TEMP";
         var ps = [
             'Add-Type -AssemblyName System.Windows.Forms',
             'Add-Type -AssemblyName System.Drawing',
+            saveDirLine,
+            'if (-not (Test-Path $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $dir = $env:TEMP } }',
+            '$tsMs = [int64]([System.DateTimeOffset]::Now.ToUnixTimeMilliseconds())',
+            '$guid = ([guid]::NewGuid().ToString("N")).Substring(0,8)',
+            '$outPath = Join-Path $dir ("lw-clip-" + $tsMs + "-" + $guid + ".png")',
+            '$dbg = New-Object System.Collections.Generic.List[string]',
+            // Robust extractor: handles any Stream / byte[] / null, writes file, reports type
+            'function Save-DataAsPng($data, $out) {',
+            '  if ($null -eq $data) { return "null" }',
+            '  $type = $data.GetType().FullName',
+            '  try {',
+            '    if ($data -is [System.IO.Stream]) {',
+            '      $ms = New-Object System.IO.MemoryStream',
+            '      if ($data.CanSeek) { $data.Position = 0 }',
+            '      $data.CopyTo($ms)',
+            '      $bytes = $ms.ToArray(); $ms.Dispose()',
+            '      if ($bytes.Length -gt 0) {',
+            '        [System.IO.File]::WriteAllBytes($out, $bytes)',
+            '        return "ok"',
+            '      }',
+            '      return "zero-stream:" + $type',
+            '    }',
+            '    if ($data -is [byte[]]) {',
+            '      if ($data.Length -gt 0) {',
+            '        [System.IO.File]::WriteAllBytes($out, $data)',
+            '        return "ok"',
+            '      }',
+            '      return "zero-bytes"',
+            '    }',
+            '    return "unsupported:" + $type',
+            '  } catch { return "err:" + $_.Exception.Message }',
+            '}',
+            // 1) Files copied from Explorer
             'try {',
             '  $files = [System.Windows.Forms.Clipboard]::GetFileDropList()',
             '  if ($files -and $files.Count -gt 0) {',
-            '    $paths = @()',
-            '    foreach ($f in $files) { $paths += $f }',
-            '    Write-Output ("FILES:" + ($paths -join "|"))',
-            '    exit 0',
+            '    $paths = @(); foreach ($f in $files) { $paths += $f }',
+            '    Write-Output ("FILES:" + ($paths -join "|")); exit 0',
             '  }',
-            '} catch {}',
+            '} catch { $dbg.Add("files:" + $_.Exception.Message) }',
+            // 2) Direct PNG format (Chromium browsers / WebP source / most modern apps)
+            'try {',
+            '  if ([System.Windows.Forms.Clipboard]::ContainsData("PNG")) {',
+            '    $data = [System.Windows.Forms.Clipboard]::GetData("PNG")',
+            '    $r = Save-DataAsPng $data $outPath',
+            '    if ($r -eq "ok") { Write-Output ("IMAGE:" + $outPath); exit 0 }',
+            '    $dbg.Add("png:" + $r)',
+            '  } else { $dbg.Add("png:absent") }',
+            '} catch { $dbg.Add("png-ex:" + $_.Exception.Message) }',
+            // 3) System.Drawing.Bitmap as a managed object (avoids GetImage() flakiness)
+            'try {',
+            '  $do = [System.Windows.Forms.Clipboard]::GetDataObject()',
+            '  foreach ($bmpFmt in @("System.Drawing.Bitmap","Bitmap")) {',
+            '    if ($do.GetDataPresent($bmpFmt)) {',
+            '      $bmp = $do.GetData($bmpFmt)',
+            '      if ($bmp -ne $null -and ($bmp -is [System.Drawing.Image])) {',
+            '        $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)',
+            '        $bmp.Dispose()',
+            '        Write-Output ("IMAGE:" + $outPath); exit 0',
+            '      } else {',
+            '        if ($bmp -eq $null) { $dbg.Add("bmp:" + $bmpFmt + ":null") }',
+            '        else { $dbg.Add("bmp:" + $bmpFmt + ":" + $bmp.GetType().FullName) }',
+            '      }',
+            '    }',
+            '  }',
+            '} catch { $dbg.Add("bmp-ex:" + $_.Exception.Message) }',
+            // 4) Legacy GetImage() fallback
             'try {',
             '  $img = [System.Windows.Forms.Clipboard]::GetImage()',
             '  if ($img -ne $null) {',
-            saveDirLine,
-            '    if (-not (Test-Path $dir)) { try { New-Item -ItemType Directory -Path $dir -Force | Out-Null } catch { $dir = $env:TEMP } }',
-            // ms + GUID — evita 2 prints consecutivos sobrescreverem
-            '    $tsMs = [int64]([System.DateTimeOffset]::Now.ToUnixTimeMilliseconds())',
-            '    $guid = ([guid]::NewGuid().ToString("N")).Substring(0,8)',
-            '    $outPath = Join-Path $dir ("lw-clip-" + $tsMs + "-" + $guid + ".png")',
-            '    $tryN = 0',
-            '    while (Test-Path $outPath) {',
-            '      $tryN++',
-            '      $outPath = Join-Path $dir ("lw-clip-" + $tsMs + "-" + $guid + "-" + $tryN + ".png")',
-            '      if ($tryN -gt 100) { break }',
-            '    }',
             '    $img.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)',
-            '    Write-Output ("IMAGE:" + $outPath)',
-            '    exit 0',
+            '    $img.Dispose()',
+            '    Write-Output ("IMAGE:" + $outPath); exit 0',
+            '  } else { $dbg.Add("getimage:null") }',
+            '} catch { $dbg.Add("getimage-ex:" + $_.Exception.Message) }',
+            // 4) DIB / DIBV5 fallback — older apps and some screenshot tools
+            'try {',
+            '  foreach ($fmt in @("DeviceIndependentBitmap","Format17")) {',
+            '    if ([System.Windows.Forms.Clipboard]::ContainsData($fmt)) {',
+            '      $data = [System.Windows.Forms.Clipboard]::GetData($fmt)',
+            '      if ($data -is [System.IO.MemoryStream]) {',
+            // Convert DIB stream into BMP (prepend BMP header) then re-save as PNG via System.Drawing
+            '        $dibBytes = $data.ToArray()',
+            '        $bmpHdr = New-Object byte[] 14',
+            '        $totalSize = 14 + $dibBytes.Length',
+            '        $bmpHdr[0] = 0x42; $bmpHdr[1] = 0x4D',  // 'BM'
+            '        [System.BitConverter]::GetBytes([int]$totalSize).CopyTo($bmpHdr, 2)',
+            // Pixel data offset = 14 + DIB header size (first 4 bytes of DIB) + palette (if any)
+            '        $dibHdrSize = [System.BitConverter]::ToInt32($dibBytes, 0)',
+            '        $pixelOffset = 14 + $dibHdrSize',
+            '        [System.BitConverter]::GetBytes([int]$pixelOffset).CopyTo($bmpHdr, 10)',
+            '        $bmpBytes = $bmpHdr + $dibBytes',
+            '        $ms = New-Object System.IO.MemoryStream(,$bmpBytes)',
+            '        try {',
+            '          $bmpImg = [System.Drawing.Image]::FromStream($ms)',
+            '          $bmpImg.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)',
+            '          $bmpImg.Dispose()',
+            '          Write-Output ("IMAGE:" + $outPath); exit 0',
+            '        } catch {} finally { $ms.Dispose() }',
+            '      }',
+            '    }',
             '  }',
             '} catch {}',
-            // Fallback: clipboard tem TEXTO que pode ser path(s) de arquivo
+            // 5) Last resort: clipboard text might be valid file path(s)
             'try {',
             '  $txt = [System.Windows.Forms.Clipboard]::GetText()',
             '  if ($txt -and $txt.Length -lt 32768) {',
@@ -4055,11 +4242,18 @@
             '      if (Test-Path -LiteralPath $clean -PathType Leaf) { $valid += $clean }',
             '    }',
             '    if ($valid.Count -gt 0) {',
-            '      Write-Output ("FILES:" + ($valid -join "|"))',
-            '      exit 0',
+            '      Write-Output ("FILES:" + ($valid -join "|")); exit 0',
             '    }',
             '  }',
             '} catch {}',
+            // Diagnostic: list available formats + per-step trace so we know WHY it failed
+            'try {',
+            '  $fmts = [System.Windows.Forms.Clipboard]::GetDataObject().GetFormats()',
+            '  $fmtStr = if ($fmts -and $fmts.Count -gt 0) { ($fmts -join ",") } else { "none" }',
+            '  $dbgStr = if ($dbg.Count -gt 0) { ($dbg -join ";") } else { "no-trace" }',
+            '  Write-Output ("EMPTY_DBG:fmts=" + $fmtStr + "|trace=" + $dbgStr)',
+            '  exit 0',
+            '} catch { Write-Output ("EMPTY_DBG:fatal:" + $_.Exception.Message) }',
             'Write-Output "EMPTY"'
         ].join("\r\n");
         cpExecPS(ps, function(err, stdout){
@@ -4787,6 +4981,176 @@
         }
     }
 
+    // ════════════════════════════════════════════════════════════════
+    // MOTION TRACKER — UI handler (abre editor dedicado no app)
+    // ════════════════════════════════════════════════════════════════
+    function mtSetStatus(txt, color) {
+        var el = document.getElementById('mtStatus');
+        if (el) { el.textContent = txt || ''; el.style.color = color || '#555'; }
+    }
+
+    function mtOpenEditor() {
+        if (!csInterface || !lwConnected) { mtSetStatus('Conecta o Lion Workspace primeiro', '#f43f5e'); return; }
+        mtSetStatus('Pegando clip selecionado...', '#f59e0b');
+        csInterface.evalScript('lwTrackerGetClipInfo()', function(res) {
+            var r = String(res || '');
+            if (r === 'NO_SELECTION') { mtSetStatus('Selecione um clip na timeline', '#f43f5e'); return; }
+            if (r === 'NO_SEQUENCE') { mtSetStatus('Abra uma sequence', '#f43f5e'); return; }
+            if (r === 'NO_MEDIA') { mtSetStatus('Clip sem arquivo de mídia', '#f43f5e'); return; }
+            if (r.indexOf('ERR:') === 0) { mtSetStatus(r, '#f43f5e'); return; }
+            var info;
+            try { info = JSON.parse(r); } catch(e) { mtSetStatus('JSON inválido: ' + r.slice(0,80), '#f43f5e'); return; }
+            if (!info || !info.mediaPath) { mtSetStatus('Sem mediaPath', '#f43f5e'); return; }
+            mtSetStatus('Abrindo editor...', '#f59e0b');
+            // Abre janela do editor via main process — URL = nome do command no main.js
+            LWHttp.post(API + '/motion-tracker/open-editor', info, { timeout: 5000 }, function(err, st, body) {
+                if (err) { mtSetStatus('Falha ao abrir: ' + err, '#f43f5e'); return; }
+                if (st !== 200) { mtSetStatus('Falha ao abrir (HTTP ' + st + '): ' + (body || '').slice(0, 100), '#f43f5e'); return; }
+                mtSetStatus('✓ Editor aberto. Marque o ponto e clique trackear.', '#22c55e');
+            });
+        });
+    }
+
+    // === Long-poll handler: aplica keyframes vindos do editor ===
+    function mtHandleApplyCommand(cmd) {
+        try {
+            var payload = cmd.payload || {};
+            // Serializa pra JSX
+            var jsonStr = JSON.stringify(payload).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            csInterface.evalScript('lwTrackerApplyKeyframes("' + jsonStr + '")', function(applyRes) {
+                var r = String(applyRes || '');
+                if (r.indexOf('OK') === 0) mtSetStatus('✓ ' + r, '#22c55e');
+                else mtSetStatus('Apply err: ' + r, '#f43f5e');
+            });
+        } catch(e) { mtSetStatus('Handler err: ' + e.message, '#f43f5e'); }
+    }
+    // Expõe globalmente pra _processPendingCommand reconhecer
+    window.mtHandleApplyCommand = mtHandleApplyCommand;
+
+    // Stub legado pra evitar erros se chamadas antigas ainda existirem
+    function mtLoadFrame() { mtOpenEditor(); }
+    function mtRunTrack() {}
+
+    function _stub_old_mtLoadFrame() {
+        if (!csInterface || !lwConnected) { mtSetStatus('Conecta o Lion Workspace primeiro', '#f43f5e'); return; }
+        mtSetStatus('Pegando clip selecionado...', '#f59e0b');
+        csInterface.evalScript('lwTrackerGetClipInfo()', function(res) {
+            var r = String(res || '');
+            if (r === 'NO_SELECTION') { mtSetStatus('Selecione um clip na timeline', '#f43f5e'); return; }
+            if (r === 'NO_SEQUENCE') { mtSetStatus('Abra uma sequence', '#f43f5e'); return; }
+            if (r === 'NO_MEDIA') { mtSetStatus('Clip sem arquivo de mídia', '#f43f5e'); return; }
+            if (r.indexOf('ERR:') === 0) { mtSetStatus(r, '#f43f5e'); return; }
+            var info;
+            try { info = JSON.parse(r); } catch(e) { mtSetStatus('JSON inválido do JSX: ' + r.slice(0,80), '#f43f5e'); return; }
+            if (!info || !info.mediaPath) { mtSetStatus('Sem mediaPath', '#f43f5e'); return; }
+            _mtClipInfo = info;
+            mtSetStatus('Extraindo frame...', '#f59e0b');
+            // Frame inicial = inPoint do clip no source
+            var startFrame = Math.max(0, Math.round((info.inPointSec || 0) * (info.fps || 30)));
+            LWHttp.post(API + '/motion-tracker/extract-frame', { filePath: info.mediaPath, frame: startFrame }, function(err, st, body) {
+                if (err || st !== 200) { mtSetStatus('Erro ao extrair frame: ' + (err || st), '#f43f5e'); return; }
+                try {
+                    var j = JSON.parse(body || '{}');
+                    if (!j.ok || !j.dataUrl) { mtSetStatus('Frame inválido', '#f43f5e'); return; }
+                    var img = new Image();
+                    img.onload = function() {
+                        _mtFrame = { width: img.width, height: img.height, dataUrl: j.dataUrl, startFrame: startFrame };
+                        var cv = document.getElementById('mtCanvas');
+                        cv.width = img.width; cv.height = img.height;
+                        cv.getContext('2d').drawImage(img, 0, 0);
+                        document.getElementById('mtCanvasWrap').style.display = 'block';
+                        document.getElementById('mtPointInfo').style.display = 'block';
+                        document.getElementById('mtPointInfo').textContent = 'Clique no frame pra marcar o ponto • ' + img.width + 'x' + img.height;
+                        document.getElementById('mtOpts').style.display = 'flex';
+                        document.getElementById('mtTrackBtn').style.display = 'block';
+                        document.getElementById('mtMarker').style.display = 'none';
+                        _mtPoint = null;
+                        mtSetStatus('', '');
+                    };
+                    img.onerror = function() { mtSetStatus('Falha ao decodificar frame', '#f43f5e'); };
+                    img.src = j.dataUrl;
+                } catch(e) { mtSetStatus('Parse err: ' + e.message, '#f43f5e'); }
+            }, { timeout: 30000 });
+        });
+    }
+
+    // Click no canvas pra marcar ponto (coords do FRAME original)
+    document.addEventListener('DOMContentLoaded', function() {
+        var cv = document.getElementById('mtCanvas');
+        if (!cv) return;
+        cv.addEventListener('click', function(e) {
+            if (!_mtFrame.width) return;
+            var rect = cv.getBoundingClientRect();
+            var scaleX = _mtFrame.width / rect.width;
+            var scaleY = _mtFrame.height / rect.height;
+            var x = (e.clientX - rect.left) * scaleX;
+            var y = (e.clientY - rect.top) * scaleY;
+            _mtPoint = { x: x, y: y };
+            var m = document.getElementById('mtMarker');
+            m.style.display = 'block';
+            m.style.left = ((e.clientX - rect.left) / rect.width * 100) + '%';
+            m.style.top = ((e.clientY - rect.top) / rect.height * 100) + '%';
+            document.getElementById('mtPointInfo').textContent = 'Ponto: (' + Math.round(x) + ', ' + Math.round(y) + ') — clique de novo pra reposicionar';
+        });
+    });
+
+    function mtRunTrack() {
+        if (!_mtClipInfo || !_mtPoint) { mtSetStatus('Carregue o frame e marque o ponto', '#f43f5e'); return; }
+        var smoothing = document.getElementById('mtSmoothing').value;
+        var applyMode = document.getElementById('mtApplyMode').value;
+        document.getElementById('mtTrackBtn').disabled = true;
+        mtSetStatus('Trackeando... isso pode demorar alguns segundos.', '#f59e0b');
+        mtSetProgress(5);
+
+        // Range: inPoint até outPoint do source (clip-relative)
+        var fps = _mtClipInfo.fps || 30;
+        var startFrame = Math.max(0, Math.round((_mtClipInfo.inPointSec || 0) * fps));
+        var endFrame = Math.max(startFrame, Math.round((_mtClipInfo.outPointSec || _mtClipInfo.duration || 10) * fps));
+
+        var payload = {
+            filePath: _mtClipInfo.mediaPath,
+            points: [{ x: _mtPoint.x, y: _mtPoint.y }],
+            options: {
+                startFrame: startFrame,
+                endFrame: endFrame,
+                smoothing: smoothing,
+                whittakerLambda: 100,
+            }
+        };
+        LWHttp.post(API + '/motion-tracker/track', payload, function(err, st, body) {
+            document.getElementById('mtTrackBtn').disabled = false;
+            mtSetProgress(null);
+            if (err || st !== 200) {
+                mtSetStatus('Erro: ' + (err || st) + ' — ' + (body || '').slice(0, 100), '#f43f5e');
+                return;
+            }
+            var result;
+            try { result = JSON.parse(body); } catch(e) { mtSetStatus('JSON inválido do server', '#f43f5e'); return; }
+            if (!result.success) { mtSetStatus('Tracking falhou', '#f43f5e'); return; }
+            var track = (result.tracks && result.tracks[0]) || null;
+            if (!track) { mtSetStatus('Sem resultado', '#f43f5e'); return; }
+            mtSetStatus('Aplicando ' + track.history.length + ' keyframes...', '#f59e0b');
+            // Passa pro JSX
+            var jsonStr = JSON.stringify({
+                applyMode: applyMode,
+                clipStartTicks: _mtClipInfo.clipStartTicks,
+                clipInPointTicks: _mtClipInfo.inPointTicks,
+                fps: fps,
+                videoWidth: result.metadata.width,
+                videoHeight: result.metadata.height,
+                history: track.history,
+            }).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            csInterface.evalScript('lwTrackerApplyKeyframes("' + jsonStr + '")', function(applyRes) {
+                var r = String(applyRes || '');
+                if (r.indexOf('OK') === 0) {
+                    mtSetStatus('✓ ' + r, '#22c55e');
+                } else {
+                    mtSetStatus('Apply err: ' + r, '#f43f5e');
+                }
+            });
+        }, { timeout: 300000 }); // 5min pra tracking
+    }
+
     function cpDoPaste(){
         if (!csInterface) { cpShowStatus('CEP indisponível', '#f43f5e'); return; }
         if (!cpGetNode()) { cpShowStatus('Node.js não disponível no CEP', '#f43f5e'); return; }
@@ -4806,7 +5170,9 @@
             }
             if (res.type === 'empty') {
                 if (btn) btn.disabled = false;
-                cpShowStatus('Clipboard vazio ou formato não suportado (copie arquivo, imagem ou path)', '#f59e0b');
+                var msg = 'Clipboard vazio ou formato não suportado (copie arquivo, imagem ou path)';
+                if (res.debug) msg += ' — formatos: ' + String(res.debug).substring(0, 200);
+                cpShowStatus(msg, '#f59e0b');
                 return;
             }
             var paths = res.paths || [];

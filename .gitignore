@@ -4,3 +4,6 @@ dist/
 *.dmg
 .debug
 checkfg.ps1
+mt-editor.log
+mt-editor.log.err
+TIMEOUT/

@@ -1,5 +1,211 @@
 // ExtendScript for Adobe Premiere Pro — Lion Workspace Plugin
 
+// ════════════════════════════════════════════════════════════════════
+// MOTION TRACKER — JSX functions
+// ════════════════════════════════════════════════════════════════════
+
+// Pega info do clip selecionado: media path absoluto, fps, in/out, dimensões.
+// Retorna JSON ou erro literal (NO_PROJECT, NO_SEQUENCE, NO_SELECTION, NO_MEDIA, ERR:...)
+function lwTrackerGetClipInfo() {
+    try {
+        if (!app.project) return 'NO_PROJECT';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        // Strict selection: pega só clips de VIDEO (filtra audio) e
+        // escolhe o que está na track MAIS ALTA (topmost video clip).
+        var videoClips = [];
+        // Itera todas as video tracks (de cima pra baixo no Premiere — V_top é o último índice)
+        // Acumula com info de qual track tá pra escolher o topmost depois.
+        for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+            for (var c = 0; c < seq.videoTracks[t].clips.numItems; c++) {
+                try {
+                    if (seq.videoTracks[t].clips[c].isSelected()) {
+                        videoClips.push({ clip: seq.videoTracks[t].clips[c], trackIdx: t });
+                    }
+                } catch(e2) {}
+            }
+        }
+        if (videoClips.length === 0) return 'NO_SELECTION';
+        // Pega o topmost (maior trackIdx em Premiere = track de cima visualmente)
+        var topmost = videoClips[0];
+        for (var ti = 1; ti < videoClips.length; ti++) {
+            if (videoClips[ti].trackIdx > topmost.trackIdx) topmost = videoClips[ti];
+        }
+        var clip = topmost.clip;
+        var pi = clip.projectItem;
+        if (!pi) return 'NO_MEDIA';
+        var mediaPath = '';
+        try { mediaPath = pi.getMediaPath(); } catch(eMP) {}
+        if (!mediaPath) return 'NO_MEDIA';
+        var f = new File(mediaPath);
+        if (!f.exists) return 'NO_MEDIA';
+
+        var fps = 30;
+        try {
+            // sequence.getSettings().videoFrameRate (Time obj)
+            var st = seq.getSettings();
+            if (st && st.videoFrameRate) {
+                fps = 1 / parseFloat(st.videoFrameRate.seconds);
+            }
+        } catch(eF) {}
+
+        // In/out e start ticks (clip-relative no source media)
+        var inSec = 0, outSec = 0, durSec = 0, clipStartTicks = '0', inTicks = '0';
+        try { inSec = parseFloat(clip.inPoint.seconds); } catch(e3) {}
+        try { outSec = parseFloat(clip.outPoint.seconds); } catch(e4) {}
+        try { durSec = parseFloat(clip.duration.seconds); } catch(e5) {}
+        try { clipStartTicks = String(clip.start.ticks); } catch(e6) {}
+        try { inTicks = String(clip.inPoint.ticks); } catch(e7) {}
+
+        // Dimensões via projectItem
+        var width = 0, height = 0;
+        try {
+            var dims = pi.getFootageInterpretation();
+            // Fallback: usa videoSettings da sequence
+            width = parseInt(pi.getMediaPath() ? 0 : 0, 10);
+        } catch(eD) {}
+
+        var out = '{"mediaPath":"' + f.fsName.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+        out += ',"fps":' + fps;
+        out += ',"inPointSec":' + inSec;
+        out += ',"outPointSec":' + outSec;
+        out += ',"duration":' + durSec;
+        out += ',"clipStartTicks":"' + clipStartTicks + '"';
+        out += ',"inPointTicks":"' + inTicks + '"';
+        out += '}';
+        return out;
+    } catch(e) { return 'ERR:' + e.toString(); }
+}
+
+// Aplica keyframes de Position do tracking no clip selecionado ou cria adjustment layer.
+// jsonStr: { applyMode: 'selected'|'null', clipStartTicks, clipInPointTicks, fps,
+//            videoWidth, videoHeight, history: [{frame, time, x, y, lost}] }
+function _trDbg(msg) {
+    try {
+        var f = new File(Folder.desktop.fsName + '/lion-tracker-apply.txt');
+        if (f.open('a')) { f.encoding = 'UTF-8'; f.write('[' + (new Date()).toString() + '] ' + msg + '\n'); f.close(); }
+    } catch(e) {}
+}
+
+function lwTrackerApplyKeyframes(jsonStr) {
+    _trDbg('═══ lwTrackerApplyKeyframes called, jsonStr.length=' + (jsonStr ? jsonStr.length : 0));
+    try {
+        var data = null;
+        try { data = eval('(' + jsonStr + ')'); } catch(eJ) { _trDbg('JSON parse err: ' + eJ); return 'ERR:json_parse:' + eJ; }
+        if (!data || !data.history || data.history.length === 0) { _trDbg('no_data'); return 'ERR:no_data'; }
+        _trDbg('history.length=' + data.history.length + ' fps=' + data.fps + ' videoWidth=' + data.videoWidth + ' videoHeight=' + data.videoHeight + ' clipInPointTicks=' + data.clipInPointTicks);
+        _trDbg('history[0]=' + JSON.stringify(data.history[0]) + ' history[end]=' + JSON.stringify(data.history[data.history.length-1]));
+        if (!app.project) { _trDbg('NO_PROJECT'); return 'NO_PROJECT'; }
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        try { app.enableQE(); } catch(eQE) {}
+
+        // Acha clip selecionado (mesmo strict mode)
+        var clips = [];
+        try {
+            var sel = seq.getSelection();
+            if (sel && sel.length > 0) for (var i = 0; i < sel.length; i++) clips.push(sel[i]);
+        } catch(e1) {}
+        if (clips.length === 0) {
+            for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+                for (var c = 0; c < seq.videoTracks[t].clips.numItems; c++) {
+                    try { if (seq.videoTracks[t].clips[c].isSelected()) clips.push(seq.videoTracks[t].clips[c]); } catch(e2) {}
+                }
+            }
+        }
+        if (clips.length === 0) { _trDbg('no_selection'); return 'ERR:no_selection'; }
+        var clip = clips[0];
+        _trDbg('clip OK, finding Motion component');
+
+        // Encontra Motion component e Position prop
+        var motion = null;
+        var comps = clip.components;
+        _trDbg('clip has ' + comps.numItems + ' components');
+        for (var ci = 0; ci < comps.numItems; ci++) {
+            var cmp = comps[ci];
+            var nm = '';
+            try { nm = String(cmp.matchName || ''); } catch(eN) {}
+            _trDbg('  comp[' + ci + '] matchName=' + nm);
+            if (nm === 'AE.ADBE Motion') { motion = cmp; break; }
+        }
+        if (!motion) { _trDbg('NO MOTION COMPONENT'); return 'ERR:no_motion_component'; }
+        _trDbg('Motion found');
+
+        var posProp = null;
+        var props = motion.properties;
+        for (var pi = 0; pi < props.numItems; pi++) {
+            var pp = props[pi];
+            var pn = '';
+            try { pn = String(pp.displayName || ''); } catch(eP) {}
+            if (pn === 'Position' || pn === 'Posicao' || pn === 'Posicion') { posProp = pp; break; }
+        }
+        if (!posProp) { _trDbg('NO POSITION PROP'); return 'ERR:no_position_prop'; }
+        _trDbg('Position prop found');
+
+        // Habilita time-varying
+        try { posProp.setTimeVarying(true); _trDbg('setTimeVarying OK'); } catch(eTv) { _trDbg('setTimeVarying err: ' + eTv); }
+
+        // Premiere Position é NORMALIZED [0..1] em algumas versões, ou PIXEL em outras.
+        // Auto-detect: lê valor atual, se ambos < 2 = normalized.
+        var current = posProp.getValue();
+        var isNormalized = false;
+        if (current && current.length >= 2) {
+            isNormalized = (Math.abs(current[0]) < 2.0 && Math.abs(current[1]) < 2.0);
+        }
+        // Em pixel mode, Position é em coords da SEQUENCE (não da source).
+        // Tracking foi feito no proxy (data.videoWidth × data.videoHeight).
+        // Precisamos reescalonar: trackPx * seqDim / proxyDim.
+        var seqW = 1920, seqH = 1080;
+        try { seqW = parseInt(seq.frameSizeHorizontal, 10) || 1920; } catch(eSw) {}
+        try { seqH = parseInt(seq.frameSizeVertical, 10) || 1080; } catch(eSh) {}
+        _trDbg('isNormalized=' + isNormalized + ' current=' + (current ? current.join(',') : 'null') + ' seqW=' + seqW + ' seqH=' + seqH);
+
+        // Source media tick of each keyframe = clipInPointTicks + (frame - startFrame) * (TICKS_PER_SEC / fps)
+        var TPS = 254016000000;
+        var clipInTicks = parseFloat(data.clipInPointTicks || '0');
+        var fps = data.fps || 30;
+        var ticksPerFrame = TPS / fps;
+        // history[0].frame é o startFrame
+        var startFrame = data.history[0].frame;
+        var added = 0;
+        var skipped = 0;
+
+        for (var hi = 0; hi < data.history.length; hi++) {
+            var h = data.history[hi];
+            if (h.lost || h.x == null || h.y == null) { skipped++; continue; }
+            // Source media time pra esse frame
+            var srcTicks = clipInTicks + (h.frame - startFrame) * ticksPerFrame;
+            var kfTime = new Time();
+            kfTime.ticks = String(Math.round(srcTicks));
+
+            // Valor Position: pixel ou normalizado
+            // Tracking foi feito no PROXY (data.videoWidth × data.videoHeight).
+            // Pixel mode: reescalonar pra coords da sequence.
+            var px = h.x;
+            var py = h.y;
+            var val;
+            if (isNormalized) {
+                val = [px / data.videoWidth, py / data.videoHeight];
+            } else {
+                val = [px * seqW / data.videoWidth, py * seqH / data.videoHeight];
+            }
+            try {
+                posProp.addKey(kfTime);
+                var setT = new Time(); setT.ticks = String(Math.round(srcTicks));
+                posProp.setValueAtKey(setT, val);
+                added++;
+                if (hi < 3 || hi === data.history.length - 1) {
+                    _trDbg('  kf[' + hi + '] frame=' + h.frame + ' srcTicks=' + Math.round(srcTicks) + ' val=' + val.join(','));
+                }
+            } catch(eKf) { _trDbg('  kf[' + hi + '] err: ' + eKf); }
+        }
+
+        _trDbg('DONE: added=' + added + ' skipped=' + skipped);
+        try { forceUIRefresh(); } catch(eR) {}
+        return 'OK: ' + added + ' keyframes aplicados (' + skipped + ' frames perdidos)';
+    } catch(e) { return 'ERR:' + e.toString(); }
+}
+
 // Get current project folder path
 function getProjectFolder() {
     try {
@@ -835,7 +1041,32 @@ function cpGetSelectedClipMediaPath() {
         if (!app.project) return 'NO_PROJECT';
         var seq = app.project.activeSequence;
         if (!seq) return 'NO_SEQUENCE';
-        var clips = getSelectedClips();
+        // Seleção ESTRITA: só aceita clips de fato selecionados, sem fallback
+        // pro clip no playhead (que confunde — copia sem ter clicado)
+        var clips = [];
+        try {
+            var sel = seq.getSelection();
+            if (sel && sel.length > 0) {
+                for (var i = 0; i < sel.length; i++) clips.push(sel[i]);
+            }
+        } catch (e1) {}
+        if (clips.length === 0) {
+            // Tenta isSelected() em cada track como fallback (NÃO usa playhead)
+            for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+                for (var c = 0; c < seq.videoTracks[t].clips.numItems; c++) {
+                    try {
+                        if (seq.videoTracks[t].clips[c].isSelected()) clips.push(seq.videoTracks[t].clips[c]);
+                    } catch (e2) {}
+                }
+            }
+            for (var t2 = 0; t2 < seq.audioTracks.numTracks; t2++) {
+                for (var c2 = 0; c2 < seq.audioTracks[t2].clips.numItems; c2++) {
+                    try {
+                        if (seq.audioTracks[t2].clips[c2].isSelected()) clips.push(seq.audioTracks[t2].clips[c2]);
+                    } catch (e3) {}
+                }
+            }
+        }
         if (clips.length === 0) return 'NO_SELECTION';
         var clip = clips[0];
         try {
@@ -904,17 +1135,22 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
                 var f = new File(fp);
                 if (!f.exists) { failed++; continue; }
 
-                var okImport = false;
+                // Premiere às vezes retorna undefined (sucesso sem return value),
+                // então NÃO confia no return — verifica via _cpFindItemByPath depois.
                 try {
                     if (targetBin) {
-                        okImport = app.project.importFiles([fp], false, targetBin, false);
+                        app.project.importFiles([fp], false, targetBin, false);
                     } else {
-                        okImport = app.project.importFiles([fp]);
+                        app.project.importFiles([fp]);
                     }
                 } catch (e1) {}
-                // Fallback: import to root
+                $.sleep(300);
+                var okImport = !!_cpFindItemByPath(fp);
+                // Fallback SÓ se item realmente não está no projeto
                 if (!okImport) {
-                    try { app.project.importFiles([fp]); okImport = true; } catch (e2) {}
+                    try { app.project.importFiles([fp]); } catch (e2) {}
+                    $.sleep(300);
+                    okImport = !!_cpFindItemByPath(fp);
                 }
 
                 if (!okImport) { failed++; continue; }
@@ -950,8 +1186,12 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
             } catch (e) { failed++; }
         }
 
+        try { _cpFlushDbg(); } catch(eFD) {}
         return 'OK:' + imported + ':' + inserted + ':' + failed;
-    } catch (e) { return 'ERR:' + e.toString(); }
+    } catch (e) {
+        try { _cpFlushDbg(); } catch(eFD) {}
+        return 'ERR:' + e.toString();
+    }
 }
 
 // ============================================// ============================================
@@ -980,52 +1220,144 @@ function _cpGetItemDurationTicks(item, mediaType) {
     return 5 * TPS;
 }
 
+// Debug log dedicado pra paste (separa do audio log)
+var _cpPasteDbgBuf = [];
+function _cpDbg(msg) { _cpPasteDbgBuf.push('[' + (new Date()).toString() + '] ' + msg); }
+function _cpFlushDbg() {
+    if (_cpPasteDbgBuf.length === 0) return;
+    var blob = _cpPasteDbgBuf.join('\n') + '\n';
+    _cpPasteDbgBuf = [];
+    try {
+        var f = new File(Folder.desktop.fsName + '/lion-paste-debug.txt');
+        if (f.open('a')) { f.encoding = 'UTF-8'; f.write(blob); f.close(); }
+    } catch(e) {}
+}
+
 // Acha track LIVRE pra o range [startTicks, endTicks). Se nenhuma livre,
-// cria nova track. NUNCA retorna track com clip no range — protege contra
-// overwrite/insert acidental em mídia existente.
+// cria nova track no topo. NUNCA retorna track ocupada — antes retorna null.
 function _cpFindFreeTrackForRange(seq, mediaType, startTicks, endTicks) {
     var tracks = (mediaType === 'audio') ? seq.audioTracks : seq.videoTracks;
+    var beforeNumTracks = tracks.numTracks;
+    _cpDbg('FindFreeTrack: type=' + mediaType + ' range=[' + startTicks + ',' + endTicks + '] numTracks=' + beforeNumTracks);
 
-    // Pra cada track existente, vê se o range [start, end) está LIVRE
-    for (var t = 0; t < tracks.numTracks; t++) {
+    // Pra cada track existente (V1 → topo), vê se o range [start, end) está LIVRE
+    for (var t = 0; t < beforeNumTracks; t++) {
         var track = tracks[t];
         var occupied = false;
+        var why = '';
         try {
-            // Track travada (lock) também não conta como livre
-            if (track.isLocked && track.isLocked()) { occupied = true; }
+            if (track.isLocked && track.isLocked()) { occupied = true; why = 'locked'; }
             for (var c = 0; !occupied && c < track.clips.numItems; c++) {
                 var clip = track.clips[c];
                 var clipStart = Number(clip.start.ticks);
                 var clipEnd = Number(clip.end.ticks);
-                // Overlap se: clipStart < endTicks E clipEnd > startTicks
                 if (clipStart < endTicks && clipEnd > startTicks) {
                     occupied = true;
+                    why = 'clip-overlap@' + clipStart + '-' + clipEnd;
                 }
             }
-        } catch (e) { occupied = true; }
-        if (!occupied) return track;
+        } catch (e) { occupied = true; why = 'ex:' + e; }
+        _cpDbg('  track[' + t + '] occupied=' + occupied + ' (' + why + ')');
+        if (!occupied) { _cpDbg('  -> using existing track[' + t + ']'); return track; }
     }
 
-    // Nenhuma track livre — cria uma nova track ACIMA da última
-    try {
-        if (mediaType === 'audio') {
-            // addTrack(numAudioTracks, audioTrackType, position)
-            // Posição -1 = no fim (acima de todas)
-            try { seq.audioTracks.addTrack(1); } catch(e) {
-                try { seq.audioTracks.addTrack(); } catch(e2) {}
-            }
-            return seq.audioTracks[seq.audioTracks.numTracks - 1];
-        } else {
-            try { seq.videoTracks.addTrack(1); } catch(e) {
-                try { seq.videoTracks.addTrack(); } catch(e2) {}
-            }
-            return seq.videoTracks[seq.videoTracks.numTracks - 1];
-        }
-    } catch (e) {
-        // addTrack indisponível — última cartada: a primeira track
-        // (vai usar overwriteClip de qualquer jeito, então só sobrescreve essa região)
-        return tracks[0];
+    // Nenhuma track existente livre — tenta criar uma nova.
+    // Snapshot das referências de track ANTES, pra achar a track NOVA depois
+    // (QE pode inserir no topo OU no fim, dependendo da versão do Premiere).
+    _cpDbg('  All tracks occupied — trying to ADD new track');
+    var beforeRefs = [];
+    for (var bi = 0; bi < beforeNumTracks; bi++) {
+        try { beforeRefs.push(tracks[bi]); } catch(eBR) {}
     }
+
+    var attempts = [];
+    if (mediaType === 'audio') {
+        attempts = [
+            // 5-arg signature (numV, vidIdx, numA, audCh, audIdx) — alguns QE aceitam
+            { name: 'QE.addTracks(0,0,1,1,numA)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(0, 0, 1, 1, seq.audioTracks.numTracks); } },
+            // 3-arg signature (numV, numA, audIdx)
+            { name: 'QE.addTracks(0,1,numA)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(0, 1, seq.audioTracks.numTracks); } },
+            { name: 'QE.addAudioTrack(numA)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addAudioTrack(seq.audioTracks.numTracks); } },
+            { name: 'QE.addAudioTrack()', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addAudioTrack(); } },
+            // 2-arg fallback (adiciona embaixo)
+            { name: 'QE.addTracks(0,1)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(0, 1); } },
+            { name: 'addTracks(0,0,1,1,-1)', fn: function(){ seq.addTracks(0, 0, 1, 1, -1); } },
+            { name: 'audioTracks.addTrack(1)', fn: function(){ seq.audioTracks.addTrack(1); } },
+            { name: 'audioTracks.addTrack()', fn: function(){ seq.audioTracks.addTrack(); } }
+        ];
+    } else {
+        attempts = [
+            // 5-arg signature (numV, vidIdx, numA, audCh, audIdx) — passa numTracks como posição = topo
+            { name: 'QE.addTracks(1,numV,0,0,0)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(1, seq.videoTracks.numTracks, 0, 0, 0); } },
+            // 3-arg signature (numV, numA, vidIdx)
+            { name: 'QE.addTracks(1,0,numV)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(1, 0, seq.videoTracks.numTracks); } },
+            { name: 'QE.addVideoTrack(numV)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addVideoTrack(seq.videoTracks.numTracks); } },
+            { name: 'QE.addVideoTrack()', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addVideoTrack(); } },
+            // 2-arg fallback (adiciona embaixo — vou tratar isso depois com swap)
+            { name: 'QE.addTracks(1,0)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(1, 0); } },
+            { name: 'addTracks(1,numVid,0,0,0)', fn: function(){ seq.addTracks(1, seq.videoTracks.numTracks, 0, 0, 0); } },
+            { name: 'addTracks(1,-1,0,0,0)', fn: function(){ seq.addTracks(1, -1, 0, 0, 0); } },
+            { name: 'videoTracks.addTrack(1)', fn: function(){ seq.videoTracks.addTrack(1); } },
+            { name: 'videoTracks.addTrack()', fn: function(){ seq.videoTracks.addTrack(); } }
+        ];
+    }
+    for (var a = 0; a < attempts.length; a++) {
+        var att = attempts[a];
+        try {
+            att.fn();
+            // Re-fetch tracks collection — cached ref pode estar stale após addTracks
+            var freshTracks = (mediaType === 'audio') ? seq.audioTracks : seq.videoTracks;
+            // Premiere pode demorar pra registrar — poll até 8 ciclos × 20ms
+            for (var pt = 0; pt < 8; pt++) {
+                if (freshTracks.numTracks > beforeNumTracks) break;
+                $.sleep(20);
+                freshTracks = (mediaType === 'audio') ? seq.audioTracks : seq.videoTracks;
+            }
+            var afterNum = freshTracks.numTracks;
+            _cpDbg('  attempt[' + att.name + ']: numTracks ' + beforeNumTracks + ' -> ' + afterNum);
+            if (afterNum > beforeNumTracks) {
+                // ACHA o índice da track EMPTY (sem clips) — método mais confiável
+                // que ref-compare em ExtendScript (refs de C++ wrappers podem
+                // não comparar corretamente com ===).
+                // Premiere SEMPRE adiciona track NOVA empty, então sweep por empty.
+                var emptyTracks = [];
+                for (var ei = 0; ei < afterNum; ei++) {
+                    try {
+                        var clipCount = freshTracks[ei].clips.numItems;
+                        _cpDbg('    track[' + ei + '].clips.numItems=' + clipCount);
+                        if (clipCount === 0) emptyTracks.push(ei);
+                    } catch(eEI) { _cpDbg('    track[' + ei + '] err: ' + eEI); }
+                }
+                _cpDbg('  emptyTracks: ' + emptyTracks.join(','));
+                if (emptyTracks.length > 0) {
+                    // Pega a empty no índice mais ALTO (topo da timeline em Premiere = numTracks-1)
+                    var chosenIdx = emptyTracks[emptyTracks.length - 1];
+                    _cpDbg('  -> using empty track at index ' + chosenIdx + ' (topmost empty)');
+                    return freshTracks[chosenIdx];
+                }
+                // Sem empty? Tenta ref-compare como fallback
+                _cpDbg('  no empty track — trying ref-compare');
+                for (var ni = 0; ni < afterNum; ni++) {
+                    var candidate = freshTracks[ni];
+                    var isOld = false;
+                    for (var bj = 0; bj < beforeRefs.length; bj++) {
+                        if (beforeRefs[bj] === candidate) { isOld = true; break; }
+                    }
+                    if (!isOld) {
+                        _cpDbg('  -> NEW track via ref-compare at index ' + ni);
+                        return candidate;
+                    }
+                }
+                _cpDbg('  could not identify new track — bailing');
+                return null;
+            }
+        } catch (e) {
+            _cpDbg('  attempt[' + att.name + '] threw: ' + e.toString());
+        }
+    }
+
+    _cpDbg('  ALL ATTEMPTS FAILED — returning null (no overwrite)');
+    return null;
 }
 
 // Detect media type from file extension
@@ -1090,11 +1422,20 @@ function insertClipToTimeline(filePath) {
         if (!clipItem) return 'CLIP_NOT_FOUND';
 
         var insertTime = seq.getPlayerPosition();
+        var insertTicks = Number(insertTime.ticks);
         var mType = _getMediaType(filePath);
-        var track = findEmptyTrackAtPlayhead(seq, mType);
-        if (!track) return 'NO_TRACK';
 
-        track.insertClip(clipItem, insertTime);
+        // Smart track: encontra track livre pra TODA duração do clip
+        // (não só ponto do playhead — antes sobreescrevia textos/clips adjacentes).
+        var clipDurTicks = _cpGetItemDurationTicks(clipItem, mType);
+        var smartTrack = _cpFindFreeTrackForRange(
+            seq, mType, insertTicks, insertTicks + clipDurTicks
+        );
+        if (!smartTrack) return 'NO_TRACK';
+
+        // overwriteClip NÃO empurra clips ao lado (insertClip empurrava).
+        // _cpFindFreeTrackForRange já garante range livre, então overwrite é seguro.
+        smartTrack.overwriteClip(clipItem, insertTime);
         return 'OK';
     } catch (e) {
         return 'ERROR: ' + e.toString();
@@ -2030,52 +2371,151 @@ function lwApplyPresetData(presetName, dataJsonStr) {
 
                 for (var pi = 0; pi < props.length; pi++) {
                     var prop = props[pi];
-                    if (!prop || !prop.Name) continue;
-                    var ppObj = _findProp(targetComp, prop.Name);
-                    if (!ppObj) { _lwDbgPreset('      NO_PROP: ' + prop.Name); continue; }
+                    if (!prop) continue;
+                    // Excalibur às vezes omite Name (ex: Uniform Scale). Fallback: usa o
+                    // mesmo índice no targetComp.properties (a ordem do JSON costuma
+                    // bater com a ordem das props do effect).
+                    var ppObj = null;
+                    var propLabel = prop.Name || '(unnamed@' + pi + ')';
+                    if (prop.Name) {
+                        ppObj = _findProp(targetComp, prop.Name);
+                    }
+                    if (!ppObj) {
+                        // Fallback por índice
+                        try {
+                            if (targetComp.properties && pi < targetComp.properties.numItems) {
+                                ppObj = targetComp.properties[pi];
+                                try { propLabel = String(ppObj.displayName || propLabel); } catch(eDn) {}
+                                _lwDbgPreset('      using index fallback for ' + propLabel);
+                            }
+                        } catch(eIdx) {}
+                    }
+                    if (!ppObj) { _lwDbgPreset('      NO_PROP: ' + propLabel); continue; }
 
                     try {
                         if (prop.IsTimeVarying && prop.Keyframes) {
-                            // KEYFRAMES
+                            // KEYFRAMES animados. Premiere Property API não expõe setter
+                            // de interpolação bezier — então:
+                            // 1. Adiciona os keyframes originais
+                            // 2. Pra cada par adjacente onde Excalibur marcou bezier (interp!=0),
+                            //    SAMPLA N intermediários ao longo da curva pra simular o ease.
+                            //    (mesma técnica que applyBezierEasing já usa)
                             try { ppObj.setTimeVarying(true); } catch(eTv) {}
-                            // Parse "time,value,...;time,value,...;"
+                            var clipInPointTicks = 0;
+                            try {
+                                if (clip.inPoint && clip.inPoint.ticks != null) {
+                                    clipInPointTicks = parseFloat(clip.inPoint.ticks);
+                                }
+                            } catch(eIp) {}
+                            _lwDbgPreset('    clipInPointTicks=' + clipInPointTicks + ' (' + _ticksToSec(clipInPointTicks).toFixed(3) + 's)');
+
+                            // PASS 1: parse todos os keyframes (time, value, interpIn, interpOut)
+                            var parsedKfs = [];
                             var kfStrs = String(prop.Keyframes).split(';');
-                            var kfCount = 0;
                             for (var ki = 0; ki < kfStrs.length; ki++) {
                                 var kfS = kfStrs[ki];
                                 if (!kfS) continue;
                                 var fields = kfS.split(',');
                                 if (fields.length < 2) continue;
-                                var ticks = parseFloat(fields[0]);
-                                // CONVERTE pra tempo RELATIVO ao clip atual (0 = início do clip)
-                                var relativeTicks = ticks - anchorInTicks;
-                                var sec = _ticksToSec(relativeTicks);
-                                if (sec < 0) sec = 0; // safety
+                                var rawTicks = parseFloat(fields[0]);
+                                var offsetTicks = rawTicks - anchorInTicks;
+                                if (offsetTicks < 0) offsetTicks = 0;
+                                var absTicks = clipInPointTicks + offsetTicks;
                                 var val = _parseVal(fields[1], prop.ParameterControlType);
+                                var interpIn = fields.length > 2 ? parseInt(fields[2], 10) || 0 : 0;
+                                var interpOut = fields.length > 3 ? parseInt(fields[3], 10) || 0 : 0;
+                                parsedKfs.push({ ticks: absTicks, val: val, interpIn: interpIn, interpOut: interpOut });
+                            }
+                            // Ordena por tempo (segurança)
+                            parsedKfs.sort(function(a, b) { return a.ticks - b.ticks; });
+
+                            // PASS 2: adiciona keyframes originais
+                            var addedCount = 0;
+                            for (var pi2 = 0; pi2 < parsedKfs.length; pi2++) {
+                                var kf = parsedKfs[pi2];
                                 try {
-                                    ppObj.addKey(sec);
-                                    ppObj.setValueAtKey(sec, val, true);
-                                    kfCount++;
-                                    _lwDbgPreset('        kf@' + sec.toFixed(3) + 's = ' + val);
+                                    var kfTime = new Time(); kfTime.ticks = String(Math.round(kf.ticks));
+                                    ppObj.addKey(kfTime);
+                                    var setTime = new Time(); setTime.ticks = String(Math.round(kf.ticks));
+                                    ppObj.setValueAtKey(setTime, kf.val);
+                                    addedCount++;
+                                    _lwDbgPreset('        kf@' + _ticksToSec(kf.ticks).toFixed(3) + 's = ' + kf.val + ' (in=' + kf.interpIn + ',out=' + kf.interpOut + ')');
                                 } catch(eKf) { _lwDbgPreset('      kf err: ' + eKf); }
                             }
-                            _lwDbgPreset('      ✓ ' + prop.Name + ' = TimeVarying (' + kfCount + ' kfs)');
-                        } else if (prop.CurrentValue !== null && prop.CurrentValue !== undefined) {
-                            // STATIC VALUE
-                            var val = _parseVal(prop.CurrentValue, prop.ParameterControlType);
-                            try { ppObj.setValue(val, true); } catch(eSv) {
-                                // Fallback sem segundo arg
-                                try { ppObj.setValue(val); } catch(eSv2) { _lwDbgPreset('      setVal err: ' + eSv2); }
+
+                            // PASS 3: sampling de intermediários pra simular bezier ease
+                            // Premiere não expõe setInterpolationAtKey via ExtendScript, então
+                            // criamos N kfs lineares ao longo de uma curva ease-in-out.
+                            // Default ease curve: cp1=(0.42,0), cp2=(0.58,1) (CSS "ease")
+                            var SAMPLE_STEPS = 6;
+                            var EPS = 0.0001;
+                            function _valsEqual(a, b) {
+                                if (typeof a === 'number' && typeof b === 'number') {
+                                    return Math.abs(a - b) < EPS;
+                                }
+                                if (a instanceof Array && b instanceof Array) {
+                                    if (a.length !== b.length) return false;
+                                    for (var i = 0; i < a.length; i++) {
+                                        if (Math.abs((a[i] || 0) - (b[i] || 0)) >= EPS) return false;
+                                    }
+                                    return true;
+                                }
+                                return false;
                             }
-                            _lwDbgPreset('      ✓ ' + prop.Name + ' = ' + prop.CurrentValue);
+                            var samplesAdded = 0;
+                            for (var pp1 = 0; pp1 < parsedKfs.length - 1; pp1++) {
+                                var kA = parsedKfs[pp1];
+                                var kB = parsedKfs[pp1 + 1];
+                                // Skip se valores iguais (não há nada pra interpolar — evita
+                                // padrão tracejado feio entre kfs com mesmo valor)
+                                if (_valsEqual(kA.val, kB.val)) continue;
+                                // Skip se ambos lados são lineares (interp 0)
+                                if (kA.interpOut === 0 && kB.interpIn === 0) continue;
+                                var durTicks = kB.ticks - kA.ticks;
+                                if (durTicks <= 0) continue;
+                                for (var s = 1; s < SAMPLE_STEPS; s++) {
+                                    var frac = s / SAMPLE_STEPS;
+                                    var eased = evalBezierCurve(frac, 0.42, 0, 0.58, 1);
+                                    var midTicks = kA.ticks + durTicks * frac;
+                                    var midVal;
+                                    if (typeof kA.val === 'number') {
+                                        midVal = kA.val + (kB.val - kA.val) * eased;
+                                    } else if (kA.val instanceof Array && kB.val instanceof Array) {
+                                        midVal = [];
+                                        for (var d = 0; d < kA.val.length; d++) {
+                                            midVal.push(kA.val[d] + ((kB.val[d] || 0) - kA.val[d]) * eased);
+                                        }
+                                    } else { continue; }
+                                    try {
+                                        var mt = new Time(); mt.ticks = String(Math.round(midTicks));
+                                        ppObj.addKey(mt);
+                                        var st = new Time(); st.ticks = String(Math.round(midTicks));
+                                        ppObj.setValueAtKey(st, midVal);
+                                        samplesAdded++;
+                                    } catch(eSm) {}
+                                }
+                            }
+                            _lwDbgPreset('      ✓ ' + prop.Name + ' = TimeVarying (' + addedCount + ' kfs + ' + samplesAdded + ' eased samples)');
                         } else if (prop.StartKeyframe) {
-                            // Tenta extrair valor do StartKeyframe (formato "ticks,value,...")
+                            // Excalibur prioriza StartKeyframe pra valor REAL da prop.
+                            // CurrentValue costuma ter "0" como placeholder pra props não-modificadas.
                             var skFields = String(prop.StartKeyframe).split(',');
                             if (skFields.length >= 2) {
                                 var skVal = _parseVal(skFields[1], prop.ParameterControlType);
                                 try { ppObj.setValue(skVal, true); _lwDbgPreset('      ✓ ' + prop.Name + ' = (start) ' + skFields[1]); }
                                 catch(eSk) { _lwDbgPreset('      setVal (start) err: ' + eSk); }
                             }
+                        } else if (prop.CurrentValue !== null && prop.CurrentValue !== undefined && String(prop.CurrentValue) !== '0' && String(prop.CurrentValue) !== '') {
+                            // STATIC VALUE — só se não for "0" placeholder do Excalibur
+                            // (Excalibur exporta "0" pra props que não foram modificadas pelo preset;
+                            //  setar 0 em Scale/Opacity quebra o clip)
+                            var val = _parseVal(prop.CurrentValue, prop.ParameterControlType);
+                            try { ppObj.setValue(val, true); } catch(eSv) {
+                                try { ppObj.setValue(val); } catch(eSv2) { _lwDbgPreset('      setVal err: ' + eSv2); }
+                            }
+                            _lwDbgPreset('      ✓ ' + prop.Name + ' = ' + prop.CurrentValue);
+                        } else {
+                            _lwDbgPreset('      ⊘ ' + prop.Name + ' = SKIP (no real data; CurrentValue=' + prop.CurrentValue + ')');
                         }
                     } catch(eOuter) { _lwDbgPreset('      prop err: ' + eOuter); }
                 }
@@ -4251,32 +4691,46 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
             _lwDbgAudio('  no free track — creating new');
             var beforeNumTracks = 0;
             try { beforeNumTracks = seq.audioTracks.numTracks; } catch(eBN) {}
-            try {
-                // addTracks(numVid, vidIdx, numAudio, audioChType, audioIdx)
-                // audioChType: 0=Mono, 1=Stereo, 2=5.1, 3=Adaptive
-                seq.addTracks(0, 0, 1, 1, -1); // 1 stereo audio no final
-                // Premiere pode demorar um pouco pra registrar nova track — poll rápido
-                for (var pt = 0; pt < 8; pt++) {
-                    if (seq.audioTracks.numTracks > beforeNumTracks) break;
-                    $.sleep(20);
-                }
-                targetTrackIdx = seq.audioTracks.numTracks - 1;
-                _lwDbgAudio('  addTracks OK, new idx=' + targetTrackIdx + ' (was ' + beforeNumTracks + ' tracks)');
-            } catch(eAdd) {
-                _lwDbgAudio('  addTracks err: ' + eAdd);
-                // Fallback via QE
+            // Tenta múltiplas signatures (Premiere varia muito entre versões)
+            var audioAttempts = [
+                { name: 'QE.addTracks(0,0,1,1,numA)', fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(0, 0, 1, 1, seq.audioTracks.numTracks); } },
+                { name: 'QE.addTracks(0,1,numA)',     fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(0, 1, seq.audioTracks.numTracks); } },
+                { name: 'QE.addAudioTrack(numA)',     fn: function(){ app.enableQE(); qe.project.getActiveSequence().addAudioTrack(seq.audioTracks.numTracks); } },
+                { name: 'QE.addAudioTrack()',         fn: function(){ app.enableQE(); qe.project.getActiveSequence().addAudioTrack(); } },
+                { name: 'QE.addTracks(0,1)',          fn: function(){ app.enableQE(); qe.project.getActiveSequence().addTracks(0, 1); } },
+                { name: 'addTracks(0,0,1,1,-1)',      fn: function(){ seq.addTracks(0, 0, 1, 1, -1); } },
+                { name: 'audioTracks.addTrack(1)',    fn: function(){ seq.audioTracks.addTrack(1); } },
+                { name: 'audioTracks.addTrack()',     fn: function(){ seq.audioTracks.addTrack(); } }
+            ];
+            for (var aa = 0; aa < audioAttempts.length; aa++) {
+                var aAtt = audioAttempts[aa];
                 try {
-                    app.enableQE();
-                    var qSeq = qe.project.getActiveSequence();
-                    if (qSeq && qSeq.addAudioTrack) {
-                        qSeq.addAudioTrack();
-                        targetTrackIdx = seq.audioTracks.numTracks - 1;
-                        _lwDbgAudio('  QE addAudioTrack OK, idx=' + targetTrackIdx);
+                    aAtt.fn();
+                    for (var pt = 0; pt < 8; pt++) {
+                        if (seq.audioTracks.numTracks > beforeNumTracks) break;
+                        $.sleep(20);
                     }
-                } catch(eQA) { _lwDbgAudio('  QE addAudioTrack err: ' + eQA); return 'ERR:could_not_create_audio_track:' + eAdd.toString().slice(0, 80); }
+                    _lwDbgAudio('  attempt[' + aAtt.name + ']: numTracks ' + beforeNumTracks + ' -> ' + seq.audioTracks.numTracks);
+                    if (seq.audioTracks.numTracks > beforeNumTracks) {
+                        // Acha a track EMPTY (sem clips) — funciona se QE inserir no topo OU no fim
+                        var emptyAudioIdxs = [];
+                        for (var ei = 0; ei < seq.audioTracks.numTracks; ei++) {
+                            try { if (seq.audioTracks[ei].clips.numItems === 0) emptyAudioIdxs.push(ei); } catch(eEI) {}
+                        }
+                        if (emptyAudioIdxs.length > 0) {
+                            targetTrackIdx = emptyAudioIdxs[emptyAudioIdxs.length - 1]; // empty mais ao topo
+                            _lwDbgAudio('  -> using empty audio track at idx ' + targetTrackIdx);
+                            break;
+                        }
+                        // Fallback: assume última
+                        targetTrackIdx = seq.audioTracks.numTracks - 1;
+                        _lwDbgAudio('  -> falling back to last audio track at idx ' + targetTrackIdx);
+                        break;
+                    }
+                } catch(eAtt) { _lwDbgAudio('  attempt[' + aAtt.name + '] threw: ' + eAtt); }
             }
         }
-        if (targetTrackIdx < 0) { _lwDbgAudio('  → no_track_available'); return 'ERR:no_track_available'; }
+        if (targetTrackIdx < 0) { _lwDbgAudio('  → no_track_available (all attempts failed)'); return 'ERR:no_track_available'; }
         _lwDbgAudio('  final targetTrackIdx=' + targetTrackIdx);
 
         // Insere o clip no playhead
@@ -4501,24 +4955,26 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
                             try { levelProp = props[propsN >= 2 ? 1 : 0]; _lwDbgAudio('    using prop idx fallback'); } catch(eIdx) {}
                         }
                         if (levelProp) {
-                            // Tenta múltiplas escalas — diferentes versões de Premiere usam unidades diferentes
-                            // 1. dB direto (ex: -3, +6)
-                            // 2. gain linear (ex: 0.7079, 2.0)
-                            // 3. Premiere "Audio Levels" custom: 0-... onde 15 ≈ 0dB
-                            var attempts = [
-                                { val: _lwLibVolumeDb, label: 'dB direct' },
-                                { val: gainLinear, label: 'gain linear' },
-                                { val: gainLinear * 15, label: 'gain * 15 (Premiere internal)' }
-                            ];
-                            var applied = false;
-                            for (var ai = 0; ai < attempts.length && !applied; ai++) {
-                                try {
-                                    levelProp.setValue(attempts[ai].val, true);
-                                    applied = true;
-                                    _lwDbgAudio('    ✓ setValue OK using ' + attempts[ai].label + ' = ' + attempts[ai].val);
-                                } catch(eSv) {
-                                    _lwDbgAudio('    setValue err (' + attempts[ai].label + '): ' + eSv);
-                                }
+                            // FIX: setValue(-10) não lança erro mas Premiere clampa pro fundo do range
+                            // (essencialmente silencia). Solução: lê o valor ATUAL (que representa 0dB
+                            // por default — escala varia: 1.0 em Premiere moderno, 15.0 em legacy)
+                            // e aplica ganho LINEAR proporcional. Funciona em qualquer escala.
+                            var currentVal = null;
+                            try { currentVal = levelProp.getValue(); } catch(eGv) { _lwDbgAudio('    getValue err: ' + eGv); }
+                            _lwDbgAudio('    currentVal (0dB ref) = ' + currentVal);
+                            if (currentVal == null || isNaN(currentVal) || currentVal <= 0) {
+                                // Sem ref válida — usa default 1.0 (gain linear puro)
+                                currentVal = 1.0;
+                                _lwDbgAudio('    using fallback currentVal=1.0');
+                            }
+                            // newValue = currentVal * 10^(dB/20)
+                            var newVal = currentVal * gainLinear;
+                            _lwDbgAudio('    target newVal = ' + currentVal + ' * ' + gainLinear + ' = ' + newVal);
+                            try {
+                                levelProp.setValue(newVal, true);
+                                _lwDbgAudio('    ✓ setValue OK with proportional value');
+                            } catch(eSv) {
+                                _lwDbgAudio('    setValue err: ' + eSv);
                             }
                         } else {
                             _lwDbgAudio('    ✗ no level property found');
@@ -4543,11 +4999,12 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
 // ═══════════════════════════════════════════════════════════════════
 // LION SEARCH — LIST ALL (effects + presets + audio sources merged)
 // ═══════════════════════════════════════════════════════════════════
-function lwSearchListAllExtended(sfxFolderPath) {
+function lwSearchListAllExtended(sfxFolderPath, skipAudioScan) {
     var items = [];
     var debug = [];
     var errors = [];
     var masterDebug = [];
+    var _skipAudio = (skipAudioScan === true);
 
     function mlog(m) { try { masterDebug.push(m); } catch(e) {} }
 
@@ -4630,10 +5087,16 @@ function lwSearchListAllExtended(sfxFolderPath) {
     mergeFrom(presetsJson, 'pre');
 
     // ─── AUDIO SOURCES ───
-    mlog('--- listing audio sources ---');
-    var audioJson = '';
-    try { audioJson = lwSearchListAudioSources(sfxFolderPath || ''); } catch(e3) { errors.push('audio-call:' + e3); mlog('audio call exception: ' + e3); }
-    mergeFrom(audioJson, 'aud');
+    // Se skipAudioScan=true (useLibraryOnly), pula completamente o scan
+    // de áudio dos projetos. Áudios da biblioteca são injetados depois.
+    if (_skipAudio) {
+        mlog('--- audio scan SKIPPED (useLibraryOnly=true) ---');
+    } else {
+        mlog('--- listing audio sources ---');
+        var audioJson = '';
+        try { audioJson = lwSearchListAudioSources(sfxFolderPath || ''); } catch(e3) { errors.push('audio-call:' + e3); mlog('audio call exception: ' + e3); }
+        mergeFrom(audioJson, 'aud');
+    }
 
     mlog('=== TOTAL items: ' + items.length + ' ===');
 

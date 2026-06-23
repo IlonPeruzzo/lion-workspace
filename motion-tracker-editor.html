@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Motion Tracker — Lion Workspace</title>
+<style>
+:root {
+    --bg:#0a0a0a; --bg2:#111; --bg3:#181818;
+    --text:#f5f5f5; --text2:#a3a3a3; --text3:#636363;
+    --accent:#bef264; --accent2:#d9f99d;
+    --red:#f43f5e; --orange:#f59e0b; --green:#22c55e;
+    --border:rgba(255,255,255,.08);
+    --border-h:rgba(190,242,100,.25);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:13px;overflow:hidden}
+body{display:flex;flex-direction:column}
+
+/* Title bar */
+.titlebar{
+    display:flex;align-items:center;justify-content:space-between;
+    height:34px;padding:0 12px;background:var(--bg2);
+    border-bottom:1px solid var(--border);
+    -webkit-app-region:drag;user-select:none;flex-shrink:0
+}
+.title{font-size:.78rem;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:6px}
+.title svg{color:var(--accent)}
+.win-btns{display:flex;-webkit-app-region:no-drag}
+.win-btn{
+    width:38px;height:34px;border:0;background:transparent;color:var(--text2);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s
+}
+.win-btn:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.win-btn.close:hover{background:#e81123;color:#fff}
+.win-btn svg{width:11px;height:11px}
+
+/* Main layout: video stage + side panel */
+.main{display:flex;flex:1;min-height:0}
+.stage{flex:1;display:flex;flex-direction:column;background:#000;position:relative;min-width:0}
+.video-wrap{
+    flex:1;display:flex;align-items:center;justify-content:center;position:relative;
+    background:repeating-conic-gradient(#1a1a1a 0% 25%,#0f0f0f 0% 50%) 50%/14px 14px;
+    overflow:hidden
+}
+#vid{max-width:100%;max-height:100%;display:block;background:#000}
+#pickerCanvas{
+    position:absolute;cursor:crosshair;pointer-events:auto;
+    border:1px solid rgba(190,242,100,.15)
+}
+.marker{
+    position:absolute;width:18px;height:18px;border:2px solid var(--accent);
+    border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;
+    box-shadow:0 0 0 1px rgba(0,0,0,.7), 0 0 10px rgba(190,242,100,.5)
+}
+.marker::after{
+    content:'';position:absolute;left:50%;top:50%;width:2px;height:2px;
+    background:var(--accent);transform:translate(-50%,-50%);border-radius:50%
+}
+
+/* Player controls */
+.controls{
+    display:flex;align-items:center;gap:8px;padding:8px 14px;
+    background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0
+}
+.ctrl-btn{
+    width:28px;height:28px;border:0;border-radius:5px;background:rgba(255,255,255,.05);
+    color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:all .12s
+}
+.ctrl-btn:hover{background:rgba(255,255,255,.1)}
+.ctrl-btn svg{width:13px;height:13px}
+.time-display{
+    font-family:'JetBrains Mono','SF Mono',monospace;font-size:.7rem;color:var(--text2);
+    min-width:90px;text-align:center;font-variant-numeric:tabular-nums
+}
+.scrubber{flex:1;position:relative;height:20px;display:flex;align-items:center;cursor:pointer}
+.scrubber-track{
+    position:absolute;left:0;right:0;height:4px;background:rgba(255,255,255,.08);
+    border-radius:2px
+}
+.scrubber-fill{
+    position:absolute;left:0;height:4px;background:linear-gradient(90deg,var(--accent2),var(--accent));
+    border-radius:2px;pointer-events:none
+}
+.scrubber-thumb{
+    position:absolute;width:12px;height:12px;background:var(--accent);
+    border-radius:50%;transform:translate(-50%,0);pointer-events:none;
+    box-shadow:0 0 0 2px rgba(0,0,0,.4)
+}
+
+/* Side panel */
+.panel{
+    width:300px;background:var(--bg2);border-left:1px solid var(--border);
+    display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto
+}
+.panel-section{padding:14px;border-bottom:1px solid var(--border)}
+.panel-title{
+    font-size:.65rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);
+    font-weight:700;margin-bottom:8px
+}
+.panel-info{font-size:.7rem;color:var(--text2);line-height:1.5}
+.panel-info strong{color:var(--text)}
+
+.row{display:flex;align-items:center;gap:8px;font-size:.74rem;margin-bottom:6px}
+.row label{flex:1;color:var(--text2)}
+.row select, .row input[type=number]{
+    background:rgba(0,0,0,.3);border:1px solid rgba(190,242,100,.1);
+    border-radius:5px;color:var(--accent);font-size:.7rem;
+    padding:5px 8px;font-family:inherit;outline:none;width:130px
+}
+
+.btn{
+    width:100%;padding:9px;border:0;border-radius:6px;cursor:pointer;
+    font-size:.78rem;font-weight:600;font-family:inherit;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    transition:all .12s
+}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:#0a0a0a}
+.btn-primary:hover:not(:disabled){background:var(--accent2)}
+.btn-outline{background:transparent;border:1px solid var(--border-h);color:var(--text)}
+.btn-outline:hover:not(:disabled){background:rgba(190,242,100,.06)}
+
+.progress-wrap{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:8px}
+.progress-bar{height:100%;background:linear-gradient(90deg,#22c55e,var(--accent));width:0%;transition:width .2s}
+
+#statusEl{font-size:.7rem;color:var(--text2);text-align:center;line-height:1.4;min-height:14px}
+.status-err{color:var(--red)!important}
+.status-warn{color:var(--orange)!important}
+.status-ok{color:var(--green)!important}
+
+.point-info{
+    font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--accent);
+    padding:8px 12px;background:rgba(190,242,100,.05);border-radius:6px;
+    border:1px solid rgba(190,242,100,.15);text-align:center
+}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:14px;height:14px;border:2px solid rgba(190,242,100,.2);border-top-color:var(--accent);
+    border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="titlebar">
+    <div class="title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+        </svg>
+        Motion Tracker — Lion Workspace
+    </div>
+    <div class="win-btns">
+        <button class="win-btn" id="btnMin" title="Minimizar">
+            <svg viewBox="0 0 11 11"><path fill="currentColor" d="M0,5 H11 V6 H0 Z"/></svg>
+        </button>
+        <button class="win-btn" id="btnMax" title="Maximizar">
+            <svg viewBox="0 0 11 11"><path fill="none" stroke="currentColor" d="M.5,.5 L10.5,.5 L10.5,10.5 L.5,10.5 Z"/></svg>
+        </button>
+        <button class="win-btn close" id="btnClose" title="Fechar">
+            <svg viewBox="0 0 11 11"><path fill="none" stroke="currentColor" d="M0,0 L11,11 M11,0 L0,11"/></svg>
+        </button>
+    </div>
+</div>
+
+<div class="main">
+    <div class="stage">
+        <div class="video-wrap">
+            <video id="vid" muted playsinline></video>
+            <canvas id="pickerCanvas"></canvas>
+            <div class="marker" id="marker" style="display:none"></div>
+        </div>
+        <div class="controls">
+            <button class="ctrl-btn" id="playBtn" title="Play/Pause">
+                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+            <button class="ctrl-btn" id="prevFrameBtn" title="Frame anterior">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="ctrl-btn" id="nextFrameBtn" title="Próximo frame">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <div class="time-display" id="timeDisplay">00:00.0 / 00:00.0</div>
+            <div class="scrubber" id="scrubber">
+                <div class="scrubber-track"></div>
+                <div class="scrubber-fill" id="scrubberFill"></div>
+                <div class="scrubber-thumb" id="scrubberThumb"></div>
+            </div>
+            <div class="time-display" id="frameDisplay">F 0</div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-section">
+            <div class="panel-title">Clip</div>
+            <div class="panel-info" id="clipInfo">—</div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-title">Ponto de tracking</div>
+            <div class="point-info" id="pointInfo">Clique no vídeo pra marcar</div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-title">Configurações</div>
+            <div class="row">
+                <label>Suavização</label>
+                <select id="smoothing">
+                    <option value="whittaker">Whittaker</option>
+                    <option value="none">Nenhuma (cru)</option>
+                </select>
+            </div>
+            <div class="row">
+                <label>Lambda</label>
+                <input type="number" id="lambda" value="100" min="0" max="10000" step="10">
+            </div>
+            <div class="row">
+                <label>Aplicar em</label>
+                <select id="applyMode">
+                    <option value="selected">Clip selecionado</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <button class="btn btn-primary" id="trackBtn" disabled>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+                Trackear ponto
+            </button>
+            <div class="progress-wrap" id="progressWrap" style="display:none">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div id="statusEl" style="margin-top:8px"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+const ipc = (() => { try { return require('electron').ipcRenderer; } catch(e) { return null; } })();
+const remoteWin = (() => { try { return require('@electron/remote').getCurrentWindow(); } catch(e) { return null; } })();
+
+const params = new URLSearchParams(location.search);
+const SESSION = params.get('session') || '';
+const TOKEN = params.get('token') || ''; // Bearer token herdado do plugin
+const MEDIA_PATH = decodeURIComponent(params.get('media') || '');         // proxy MP4 (preview)
+const ORIG_MEDIA_PATH = decodeURIComponent(params.get('origMedia') || params.get('media') || ''); // original (tracking)
+const USING_PROXY = params.get('usingProxy') === '1';
+const FPS = parseFloat(params.get('fps')) || 30;
+const IN_SEC = parseFloat(params.get('inSec')) || 0;
+const OUT_SEC = parseFloat(params.get('outSec')) || 0;
+const ORIG_IN_SEC = parseFloat(params.get('origInSec')) || IN_SEC;
+const ORIG_OUT_SEC = parseFloat(params.get('origOutSec')) || OUT_SEC;
+const CLIP_IN_TICKS = params.get('clipInTicks') || '0';
+const API = 'http://127.0.0.1:9847';
+function authHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
+    return h;
+}
+
+const vid = document.getElementById('vid');
+const canvas = document.getElementById('pickerCanvas');
+const ctx = canvas.getContext('2d');
+const marker = document.getElementById('marker');
+const playBtn = document.getElementById('playBtn');
+const timeDisplay = document.getElementById('timeDisplay');
+const frameDisplay = document.getElementById('frameDisplay');
+const scrubber = document.getElementById('scrubber');
+const scrubberFill = document.getElementById('scrubberFill');
+const scrubberThumb = document.getElementById('scrubberThumb');
+const trackBtn = document.getElementById('trackBtn');
+const statusEl = document.getElementById('statusEl');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+const clipInfo = document.getElementById('clipInfo');
+const pointInfo = document.getElementById('pointInfo');
+
+let trackPoint = null; // { x, y } em coords do vídeo
+let videoMeta = { width: 0, height: 0 };
+
+function fmtTime(s) {
+    if (!isFinite(s)) return '00:00.0';
+    const m = Math.floor(s / 60);
+    const sec = s - m * 60;
+    return String(m).padStart(2,'0') + ':' + sec.toFixed(1).padStart(4,'0');
+}
+function setStatus(txt, cls) {
+    statusEl.textContent = txt;
+    statusEl.className = '';
+    if (cls) statusEl.classList.add('status-' + cls);
+}
+function setProgress(pct) {
+    if (pct == null) { progressWrap.style.display = 'none'; return; }
+    progressWrap.style.display = 'block';
+    progressBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+}
+
+// === Video load + setup ===
+function loadVideo() {
+    if (!MEDIA_PATH) { setStatus('Sem caminho de mídia', 'err'); return; }
+    clipInfo.innerHTML =
+        '<strong>' + (MEDIA_PATH.split(/[\\/]/).pop() || '?') + '</strong><br>' +
+        IN_SEC.toFixed(2) + 's → ' + OUT_SEC.toFixed(2) + 's<br>' +
+        '@ ' + FPS.toFixed(2) + 'fps';
+    vid.src = 'file:///' + MEDIA_PATH.replace(/\\/g, '/').replace(/^\//, '');
+    vid.addEventListener('loadedmetadata', () => {
+        videoMeta.width = vid.videoWidth;
+        videoMeta.height = vid.videoHeight;
+        // Seek pro in-point
+        vid.currentTime = IN_SEC;
+        layoutCanvas();
+        updateTimeDisplay();
+    });
+    vid.addEventListener('timeupdate', updateTimeDisplay);
+    vid.addEventListener('error', () => {
+        setStatus('Erro decodificando: ' + (vid.error?.message || 'codec não suportado'), 'err');
+    });
+}
+function layoutCanvas() {
+    // Posiciona canvas EXATAMENTE em cima do vídeo
+    const r = vid.getBoundingClientRect();
+    const parent = vid.parentElement.getBoundingClientRect();
+    canvas.width = videoMeta.width;
+    canvas.height = videoMeta.height;
+    canvas.style.left = (r.left - parent.left) + 'px';
+    canvas.style.top = (r.top - parent.top) + 'px';
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    if (trackPoint) updateMarkerPos();
+}
+window.addEventListener('resize', layoutCanvas);
+
+function updateTimeDisplay() {
+    let t = vid.currentTime;
+    // Auto-pausa se passou do fim do clip durante playback
+    if (!vid.paused && OUT_SEC > 0 && t >= OUT_SEC - 0.01) {
+        vid.pause();
+        vid.currentTime = OUT_SEC;
+        t = OUT_SEC;
+    }
+    const clipDur = (OUT_SEC > IN_SEC) ? (OUT_SEC - IN_SEC) : (vid.duration || 0);
+    const tRel = Math.max(0, t - IN_SEC); // tempo relativo ao início do clip
+    timeDisplay.textContent = fmtTime(tRel) + ' / ' + fmtTime(clipDur);
+    frameDisplay.textContent = 'F ' + Math.round(tRel * FPS);
+    if (clipDur > 0) {
+        const pct = Math.max(0, Math.min(100, (tRel / clipDur) * 100));
+        scrubberFill.style.width = pct + '%';
+        scrubberThumb.style.left = pct + '%';
+    }
+}
+
+// === Play/pause ===
+playBtn.addEventListener('click', () => { if (vid.paused) vid.play(); else vid.pause(); });
+vid.addEventListener('play', () => playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>');
+vid.addEventListener('pause', () => playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>');
+
+// === Frame step (clamp ao range do clip) ===
+function seekClamped(targetSec) {
+    const lo = IN_SEC;
+    const hi = (OUT_SEC > IN_SEC) ? OUT_SEC : (vid.duration || 999);
+    vid.currentTime = Math.max(lo, Math.min(hi, targetSec));
+}
+document.getElementById('prevFrameBtn').addEventListener('click', () => { vid.pause(); seekClamped(vid.currentTime - 1/FPS); });
+document.getElementById('nextFrameBtn').addEventListener('click', () => { vid.pause(); seekClamped(vid.currentTime + 1/FPS); });
+
+// === Scrubber: mapeia 0-100% pro range [IN_SEC, OUT_SEC] ===
+let scrubbing = false;
+function scrubTo(e) {
+    const r = scrubber.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    vid.pause();
+    const clipDur = (OUT_SEC > IN_SEC) ? (OUT_SEC - IN_SEC) : (vid.duration || 0);
+    vid.currentTime = IN_SEC + pct * clipDur;
+}
+scrubber.addEventListener('mousedown', e => { scrubbing = true; scrubTo(e); });
+window.addEventListener('mousemove', e => { if (scrubbing) scrubTo(e); });
+window.addEventListener('mouseup', () => scrubbing = false);
+
+// === Click no canvas pra marcar ponto ===
+canvas.addEventListener('click', e => {
+    if (!videoMeta.width) return;
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (videoMeta.width / r.width);
+    const y = (e.clientY - r.top) * (videoMeta.height / r.height);
+    trackPoint = { x, y, frame: Math.round(vid.currentTime * FPS) };
+    pointInfo.textContent = '(' + Math.round(x) + ', ' + Math.round(y) + ') @ F' + trackPoint.frame;
+    updateMarkerPos();
+    trackBtn.disabled = false;
+});
+function updateMarkerPos() {
+    if (!trackPoint) return;
+    const r = canvas.getBoundingClientRect();
+    const parent = vid.parentElement.getBoundingClientRect();
+    marker.style.display = 'block';
+    marker.style.left = ((r.left - parent.left) + (trackPoint.x / videoMeta.width) * r.width) + 'px';
+    marker.style.top = ((r.top - parent.top) + (trackPoint.y / videoMeta.height) * r.height) + 'px';
+}
+
+// === Track + apply ===
+trackBtn.addEventListener('click', async () => {
+    if (!trackPoint) return;
+    trackBtn.disabled = true;
+    setStatus('Iniciando tracking... (primeira vez pode demorar ~5s pro OpenCV inicializar)', 'warn');
+    setProgress(5);
+
+    // Tracking roda no PROXY (clipe já recortado, pequeno e rápido de decodificar).
+    // Se rodasse no original .mov de 60min, ffmpeg precisaria decodificar ~45mil
+    // frames pra chegar no in-point — demoraria minutos. Proxy = decode imediato.
+    // Frame indices ficam relative-to-clip (0 = in-point), que é o que o JSX espera.
+    const startFrame = trackPoint.frame;
+    const endFrame = Math.round(OUT_SEC * FPS);
+
+    const payload = {
+        filePath: MEDIA_PATH, // proxy MP4 — full quality não importa pra KLT tracking
+        points: [{ x: trackPoint.x, y: trackPoint.y }],
+        options: {
+            startFrame,
+            endFrame,
+            smoothing: document.getElementById('smoothing').value,
+            whittakerLambda: parseFloat(document.getElementById('lambda').value) || 100,
+        }
+    };
+    setProgress(15);
+
+    let body;
+    try {
+        // URL = nome do command em main.js (não /api)
+        const resp = await fetch(API + '/motion-tracker/track', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        body = await resp.json();
+    } catch (e) {
+        setStatus('Erro: ' + e.message, 'err');
+        setProgress(null);
+        trackBtn.disabled = false;
+        return;
+    }
+    if (!body.success) {
+        setStatus('Tracking falhou: ' + (body.errors || []).join(', '), 'err');
+        setProgress(null);
+        trackBtn.disabled = false;
+        return;
+    }
+    const track = body.tracks?.[0];
+    if (!track) {
+        setStatus('Sem track no resultado', 'err');
+        setProgress(null);
+        trackBtn.disabled = false;
+        return;
+    }
+    setProgress(85);
+    setStatus('Aplicando ' + track.history.length + ' keyframes no Premiere...', 'warn');
+
+    // Envia pra plugin via main process (que vai queue pra plugin pegar via long-poll)
+    try {
+        const applyPayload = {
+            session: SESSION,
+            applyMode: document.getElementById('applyMode').value,
+            clipInPointTicks: CLIP_IN_TICKS,
+            fps: FPS,
+            videoWidth: body.metadata.width,
+            videoHeight: body.metadata.height,
+            history: track.history,
+        };
+        const resp2 = await fetch(API + '/motion-tracker/queue-apply', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify(applyPayload)
+        });
+        if (!resp2.ok) throw new Error('HTTP ' + resp2.status);
+        setProgress(100);
+        setStatus('✓ Pronto! Confere o Premiere — Position deve estar animado.', 'ok');
+    } catch (e) {
+        setStatus('Apply err: ' + e.message, 'err');
+    } finally {
+        setTimeout(() => { setProgress(null); trackBtn.disabled = false; }, 1500);
+    }
+});
+
+// === Window controls ===
+document.getElementById('btnClose').addEventListener('click', () => { try { remoteWin?.close(); } catch(e) { window.close(); } });
+document.getElementById('btnMin').addEventListener('click', () => { try { remoteWin?.minimize(); } catch(e) {} });
+document.getElementById('btnMax').addEventListener('click', () => {
+    try { remoteWin?.isMaximized() ? remoteWin.unmaximize() : remoteWin?.maximize(); } catch(e) {}
+});
+
+loadVideo();
+</script>
+</body>
+</html>

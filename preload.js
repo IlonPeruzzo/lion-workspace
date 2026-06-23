@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('setup', {
     skipPlugin: () => ipcRenderer.invoke('skip-premiere-plugin')
 });
 
+const { webUtils } = require('electron');
 contextBridge.exposeInMainWorld('audioLibrary', {
     get: () => ipcRenderer.invoke('audio-library:get'),
     add: (item) => ipcRenderer.invoke('audio-library:add', item),
@@ -69,6 +70,8 @@ contextBridge.exposeInMainWorld('audioLibrary', {
     pickFiles: () => ipcRenderer.invoke('audio-library:pick-files'),
     // Lê via IPC (async) — renderer não consegue fetch file://
     readFileBuffer: (filePath) => ipcRenderer.invoke('audio-library:read-buffer', filePath),
+    // Resolve path absoluto de File object (drag-drop) — Electron 32+ removeu File.path
+    getFilePath: (file) => { try { return webUtils.getPathForFile(file); } catch (e) { return ''; } },
 });
 
 contextBridge.exposeInMainWorld('lionSearch', {

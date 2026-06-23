@@ -203,6 +203,11 @@
         .kanban{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;min-height:320px}
         .kanban::-webkit-scrollbar{height:6px}.kanban::-webkit-scrollbar-track{background:transparent}.kanban::-webkit-scrollbar-thumb{background:rgba(190,242,100,.15);border-radius:3px}
         .kanban-col{min-width:240px;max-width:280px;flex:0 0 240px;background:rgba(15,15,15,.5);border:1px solid rgba(190,242,100,.06);border-radius:12px;display:flex;flex-direction:column}
+        @keyframes pipeImpact{0%{transform:translate(0,0)}8%{transform:translate(-9px,4px)}18%{transform:translate(11px,-4px)}28%{transform:translate(-10px,3px)}38%{transform:translate(8px,3px)}50%{transform:translate(-6px,-2px)}62%{transform:translate(5px,2px)}74%{transform:translate(-3px,1px)}86%{transform:translate(2px,0)}100%{transform:translate(0,0)}}
+        @keyframes pipeImpactGlow{0%{box-shadow:0 0 0 0 rgba(190,242,100,0);background:rgba(15,15,15,.5)}15%{box-shadow:0 0 50px 12px rgba(190,242,100,.55),inset 0 0 0 2px rgba(190,242,100,.85);background:rgba(40,55,15,.8)}55%{box-shadow:0 0 30px 6px rgba(190,242,100,.35),inset 0 0 0 1px rgba(190,242,100,.4);background:rgba(20,25,12,.6)}100%{box-shadow:0 0 0 0 rgba(190,242,100,0);background:rgba(15,15,15,.5)}}
+        .kanban-col.pipe-impact{animation:pipeImpact .65s cubic-bezier(.36,.07,.19,.97),pipeImpactGlow .85s ease-out}
+        @keyframes pipeCardImpact{0%{transform:scale(1.18) translateY(-6px) rotate(-1deg);box-shadow:0 12px 36px rgba(190,242,100,.55),0 0 0 3px rgba(190,242,100,.85)}25%{transform:scale(.92) translateY(4px) rotate(.8deg)}45%{transform:scale(1.06) translateY(-2px) rotate(-.4deg)}65%{transform:scale(.97) translateY(1px) rotate(.2deg)}82%{transform:scale(1.01) translateY(0) rotate(0)}100%{transform:scale(1);box-shadow:none}}
+        .kb-card.pipe-card-impact{animation:pipeCardImpact .7s cubic-bezier(.34,1.56,.64,1)}
         .kanban-col-header{padding:12px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(190,242,100,.06);font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.5px}
         .kanban-col-header .kh-count{margin-left:auto;background:rgba(190,242,100,.1);color:var(--accent);font-size:.68rem;padding:2px 8px;border-radius:10px;font-weight:600}
         .kanban-col-body{flex:1;padding:8px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;max-height:500px}
@@ -756,9 +761,22 @@ var I18N = {
         // Payment method descriptions
         'pay.paypal_desc': '2% + $0,30 + ~3,5% spread cambial',
         'pay.wise_desc': '~1,2% (câmbio comercial real)',
+        'pay.stripe_desc': '2,9% + $0,30 (cartões internacionais)',
+        'pay.payoneer_desc': '2% recebimento + ~2% saque BRL',
+        'pay.deel_desc': '~3% plataforma (saque grátis em Wise)',
+        'pay.revolut_desc': 'Grátis até limite mensal + ~0,5% spread',
+        'pay.skrill_desc': '1,45% + ~3,99% spread cambial',
+        'pay.venmo_desc': 'Grátis (apenas EUA, P2P)',
         'pay.ach_desc': 'Gratuito via Wise (sem taxa)',
+        'pay.sepa_desc': 'Grátis (transferências dentro da UE)',
         'pay.pix_desc': 'Gratuito (recebimento nacional)',
+        'pay.ted_desc': 'Grátis na maioria dos bancos digitais',
+        'pay.boleto_desc': 'R$ 3,49 por boleto emitido (média)',
+        'pay.mp_desc': '4,99% (link de pagamento)',
+        'pay.pgs_desc': '4,99% + R$ 0,40 (link de pagamento)',
+        'pay.cartao_desc': '~5,99% taxa média do adquirente (1x)',
         'pay.crypto_desc': '~0,5% taxa de rede/exchange',
+        'pay.usdt_desc': '~0,1% + taxa de rede (Tron/BSC barato)',
         'pay.zelle_desc': 'Gratuito (apenas EUA)',
         'pay.outro_desc': 'Personalizado',
         // Clientes
@@ -937,9 +955,22 @@ var I18N = {
         // Payment method descriptions
         'pay.paypal_desc': '2% + $0.30 + ~3.5% FX spread',
         'pay.wise_desc': '~1.2% (mid-market rate)',
+        'pay.stripe_desc': '2.9% + $0.30 (international cards)',
+        'pay.payoneer_desc': '2% receive + ~2% withdraw to local currency',
+        'pay.deel_desc': '~3% platform fee (free withdraw to Wise)',
+        'pay.revolut_desc': 'Free up to monthly limit + ~0.5% FX spread',
+        'pay.skrill_desc': '1.45% + ~3.99% FX spread',
+        'pay.venmo_desc': 'Free (US only, P2P)',
         'pay.ach_desc': 'Free via Wise (no fee)',
+        'pay.sepa_desc': 'Free (intra-EU transfers)',
         'pay.pix_desc': 'Free (domestic)',
+        'pay.ted_desc': 'Free at most digital banks',
+        'pay.boleto_desc': '~R$ 3.49 per boleto issued',
+        'pay.mp_desc': '4.99% (payment link)',
+        'pay.pgs_desc': '4.99% + R$ 0.40 (payment link)',
+        'pay.cartao_desc': '~5.99% average acquirer fee (1 instalment)',
         'pay.crypto_desc': '~0.5% network/exchange fee',
+        'pay.usdt_desc': '~0.1% + network fee (cheap on Tron/BSC)',
         'pay.zelle_desc': 'Free (US only)',
         'pay.outro_desc': 'Custom',
         // Clients
@@ -1728,7 +1759,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <div style="margin-top:10px">
                 <div class="fg" style="margin-bottom:6px"><label data-i18n="cli.payment">Pagamento</label></div>
                 <div class="bubble-pay" id="bubbleCliPaySel"></div>
-                <select id="cliPagamento" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="ach">ACH</option><option value="pix">PIX</option><option value="crypto">Crypto</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
+                <select id="cliPagamento" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="stripe">Stripe</option><option value="payoneer">Payoneer</option><option value="deel">Deel</option><option value="revolut">Revolut</option><option value="skrill">Skrill</option><option value="venmo">Venmo</option><option value="ach">ACH</option><option value="sepa">SEPA</option><option value="pix">PIX</option><option value="ted">TED</option><option value="boleto">Boleto</option><option value="mercadopago">Mercado Pago</option><option value="pagseguro">PagSeguro</option><option value="cartao">Cartão</option><option value="crypto">Crypto</option><option value="usdt">USDT</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
             </div>
             <div class="fr" style="margin-top:10px">
                 <div class="fg" style="max-width:140px"><label data-i18n="cli.currency">Moeda</label>
@@ -2135,7 +2166,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
             <!-- First-time notice -->
             <div id="rmbgFirstTime" style="display:none;margin-top:12px;padding:10px 14px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.18);border-radius:8px;font-size:.74rem;color:#22d3ee;line-height:1.5">
-                <strong>Primeira vez:</strong> O modelo de IA (~80MB) está sendo baixado. Isso só acontece UMA vez — depois processa instantâneo offline.
+                <strong>Primeira vez:</strong> O modelo BiRefNet (~85MB) está sendo baixado. Isso só acontece UMA vez — depois fica em cache offline.
             </div>
         </div>
 
@@ -2449,7 +2480,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         <div style="margin-top:8px">
             <div class="fg" style="margin-bottom:6px"><label data-i18n="cli.payment">Pagamento</label></div>
             <div class="bubble-pay" id="bubbleEditPaySel"></div>
-            <select id="editPag" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="ach">ACH</option><option value="pix">PIX</option><option value="crypto">Crypto</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
+            <select id="editPag" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="stripe">Stripe</option><option value="payoneer">Payoneer</option><option value="deel">Deel</option><option value="revolut">Revolut</option><option value="skrill">Skrill</option><option value="venmo">Venmo</option><option value="ach">ACH</option><option value="sepa">SEPA</option><option value="pix">PIX</option><option value="ted">TED</option><option value="boleto">Boleto</option><option value="mercadopago">Mercado Pago</option><option value="pagseguro">PagSeguro</option><option value="cartao">Cartão</option><option value="crypto">Crypto</option><option value="usdt">USDT</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
         </div>
         <div class="fr" style="margin-top:8px">
             <div class="fg" style="max-width:140px"><label>Moeda</label>
@@ -3275,9 +3306,22 @@ function stageAbrev(etapa){
 const _ALL_PAY_METHODS=[
     {id:'paypal',nome:'PayPal',icon:'https://cdn.simpleicons.org/paypal/00457C',color:'#00457C'},
     {id:'wise',nome:'Wise',icon:'https://cdn.simpleicons.org/wise/9FE870',color:'#9FE870'},
+    {id:'stripe',nome:'Stripe',icon:'https://cdn.simpleicons.org/stripe/635BFF',color:'#635BFF'},
+    {id:'payoneer',nome:'Payoneer',icon:'https://cdn.simpleicons.org/payoneer/FF4800',color:'#FF4800'},
+    {id:'deel',nome:'Deel',icon:'',color:'#15CB94',svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#15CB94"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="9" font-weight="700" font-family="sans-serif">Deel</text></svg>'},
+    {id:'revolut',nome:'Revolut',icon:'https://cdn.simpleicons.org/revolut/0666EB',color:'#0666EB'},
+    {id:'skrill',nome:'Skrill',icon:'https://cdn.simpleicons.org/skrill/862165',color:'#862165'},
+    {id:'venmo',nome:'Venmo',icon:'https://cdn.simpleicons.org/venmo/008CFF',color:'#008CFF'},
     {id:'ach',nome:'ACH',icon:'',color:'#4F46E5',brOnly:false,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#4F46E5"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="9" font-weight="700" font-family="sans-serif">ACH</text></svg>'},
+    {id:'sepa',nome:'SEPA',icon:'',color:'#003399',svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#003399"/><text x="12" y="16" text-anchor="middle" fill="#FFCC00" font-size="8" font-weight="700" font-family="sans-serif">SEPA</text></svg>'},
     {id:'pix',nome:'PIX',icon:'',color:'#32BCAD',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#32BCAD"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="8" font-weight="700" font-family="sans-serif">PIX</text></svg>'},
+    {id:'ted',nome:'TED',icon:'',color:'#0EA5E9',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#0EA5E9"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="9" font-weight="700" font-family="sans-serif">TED</text></svg>'},
+    {id:'boleto',nome:'Boleto',icon:'',color:'#1F2937',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#1F2937"/><g stroke="#fff" stroke-width="1.5"><line x1="6" y1="6" x2="6" y2="18"/><line x1="9" y1="6" x2="9" y2="18"/><line x1="12" y1="6" x2="12" y2="18"/><line x1="15" y1="6" x2="15" y2="18"/><line x1="18" y1="6" x2="18" y2="18"/></g></svg>'},
+    {id:'mercadopago',nome:'Mercado Pago',icon:'https://cdn.simpleicons.org/mercadopago/00B1EA',color:'#00B1EA',brOnly:true},
+    {id:'pagseguro',nome:'PagSeguro',icon:'https://cdn.simpleicons.org/pagseguro/FFC107',color:'#FFC107',brOnly:true},
+    {id:'cartao',nome:'Cartão',icon:'',color:'#7C3AED',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#7C3AED"/><rect x="4" y="8" width="16" height="10" rx="1.5" fill="none" stroke="#fff" stroke-width="1.5"/><line x1="4" y1="11" x2="20" y2="11" stroke="#fff" stroke-width="1.5"/></svg>'},
     {id:'crypto',nome:'Crypto',icon:'https://cdn.simpleicons.org/bitcoin/F7931A',color:'#F7931A'},
+    {id:'usdt',nome:'USDT',icon:'https://cdn.simpleicons.org/tether/26A17B',color:'#26A17B'},
     {id:'zelle',nome:'Zelle',icon:'',color:'#6D1ED4',svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#6D1ED4"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="700" font-family="sans-serif">Z</text></svg>'},
     {id:'outro',nome:'Outro',icon:'',color:'#888',svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#888"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="10" font-weight="700" font-family="sans-serif">$</text></svg>'}
 ];
@@ -3723,7 +3767,30 @@ function salvarEdtCliente(){
 // ===== DRAG & DROP =====
 let _dragCardId=null,_dragEtapaIdx=null;
 function onDragCard(e,id){_dragCardId=id;e.dataTransfer.effectAllowed='move'}
-function onDropCard(e,etapa){e.preventDefault();if(_dragCardId!==null){changeStage(_dragCardId,etapa);_dragCardId=null}}
+function onDropCard(e,etapa){
+    e.preventDefault();
+    if(_dragCardId===null)return;
+    const droppedId=_dragCardId;
+    changeStage(droppedId,etapa);
+    _dragCardId=null;
+    // Shake de impacto: coluna + card que chegou (re-render ja aconteceu dentro de changeStage)
+    requestAnimationFrame(()=>{
+        const col=document.querySelector('.kanban-col[data-etapa="'+etapa.replace(/"/g,'&quot;')+'"]');
+        if(col){
+            col.classList.remove('pipe-impact');
+            void col.offsetWidth;
+            col.classList.add('pipe-impact');
+            setTimeout(()=>col.classList.remove('pipe-impact'),900);
+        }
+        const card=document.querySelector('.kb-card[data-regid="'+droppedId+'"]');
+        if(card){
+            card.classList.remove('pipe-card-impact');
+            void card.offsetWidth;
+            card.classList.add('pipe-card-impact');
+            setTimeout(()=>card.classList.remove('pipe-card-impact'),750);
+        }
+    });
+}
 function onDragEtapa(e,idx){_dragEtapaIdx=idx;e.dataTransfer.effectAllowed='move'}
 function onDropEtapa(e,targetIdx){
     e.preventDefault();if(_dragEtapaIdx===null||_dragEtapaIdx===targetIdx)return;
@@ -4591,7 +4658,7 @@ function renderVidsAndamento(){
                 liveExtra=projT.stageElapsed+(projT.paused?0:Math.floor((Date.now()-projT.stageStart)/1000));
             }
             const vidTimeStr=(vidStageTime+liveExtra)>0?fmtDurCompact(vidStageTime+liveExtra):'';
-            return `<div class="kb-card" draggable="true" ondragstart="onDragCard(event,${r.id})">
+            return `<div class="kb-card" data-regid="${r.id}" draggable="true" ondragstart="onDragCard(event,${r.id})">
                 <div class="kb-thumb">
                     <svg viewBox="0 0 24 24" fill="currentColor" opacity=".2"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm6 4.5v7l5.5-3.5L10 8.5z"/></svg>
                     <span class="kb-dur">${d}</span>
@@ -4609,7 +4676,7 @@ function renderVidsAndamento(){
                 </div>
             </div>`;
         }).join('');
-        return `<div class="kanban-col" ondragover="event.preventDefault();this.style.borderColor='rgba(190,242,100,.3)'" ondragleave="this.style.borderColor=''" ondrop="onDropCard(event,'${etapa.replace(/'/g,"\\'")}');this.style.borderColor=''">
+        return `<div class="kanban-col" data-etapa="${etapa.replace(/"/g,'&quot;')}" ondragover="event.preventDefault();this.style.borderColor='rgba(190,242,100,.3)'" ondragleave="this.style.borderColor=''" ondrop="onDropCard(event,'${etapa.replace(/'/g,"\\'")}');this.style.borderColor=''">
             <div class="kanban-col-header"><span class="stage-badge ${sc}" style="padding:4px 8px;font-size:.68rem;${ds}">${icon} ${etapa}</span>${stageTimeStr?`<span style="font-size:.62rem;color:var(--text3);display:inline-flex;align-items:center;gap:3px;margin-left:4px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${stageTimeStr}</span>`:''}<span class="kh-count">${colVids.length}</span></div>
             <div class="kanban-col-body">${cards||`<div class="kanban-empty">${(typeof t==='function')?t('prod.no_service'):'Nenhum serviço'}</div>`}</div>
         </div>`;
@@ -6512,11 +6579,20 @@ function linkProcess(procName,procPath){
     const id='custom_'+procName.toLowerCase().replace(/[^a-z0-9]/g,'_');
     const colors=['#e879f9','#60a5fa','#f472b6','#a78bfa','#34d399','#fbbf24','#fb923c','#38bdf8','#c084fc','#4ade80'];
     const col=colors[customApps.length%colors.length];
-    const app={id,name:procName,abbr:procName.substring(0,2).toUpperCase(),color:col,cat:'Personalizado',processName:procName.toLowerCase(),exePath:procPath,_custom:true};
+    const procLower=procName.toLowerCase();
+    const app={id,name:procName,abbr:procName.substring(0,2).toUpperCase(),color:col,cat:'Personalizado',processName:procLower,exePath:procPath,_custom:true};
     customApps.push(app);
     localStorage.setItem('vc_custom_apps',JSON.stringify(customApps));
     appFavorites.push(id);
     localStorage.setItem('vc_app_favorites',JSON.stringify(appFavorites));
+    // Auto-whitelist: programa linkado nao deve ser minimizado pelo Focus Mode
+    if(!focusWhitelist.some(item=>(typeof item==='object'?item.process:item)===procLower)){
+        focusWhitelist.push({name:procName,process:procLower});
+        localStorage.setItem('vc_focus_whitelist',JSON.stringify(focusWhitelist));
+        const processNames=focusWhitelist.map(item=>typeof item==='object'?item.process:item);
+        if(window.focusMode?.setWhitelist)window.focusMode.setWhitelist(processNames);
+        try{renderWhitelist()}catch(e){}
+    }
     renderAppButtons();renderLinkProcs();
     showToast(procName+' adicionado!');
 }
@@ -6642,7 +6718,7 @@ function getSyncState(){
     const projectCards=vids.map(r=>{
         const cl=getCl(r.cliente);
         const ds=stageStyle(r.etapa);
-        return{value:String(r.id),nome:r.nome||'Edição de Vídeo',cliente:r.cliente,etapa:r.etapa||'',stageCSS:ds,id:r.id};
+        return{value:String(r.id),nome:r.nome||'Edição de Vídeo',cliente:r.cliente,clienteFoto:cl?.avatar||'',etapa:r.etapa||'',stageCSS:ds,id:r.id};
     });
     const currentSelId=sel?.value||'';
     // Pipeline info for selected/active project (by ID)
@@ -6712,42 +6788,79 @@ function handleSyncCommand(data){
 }
 
 // ===== REMOVE BACKGROUND =====
-// Lazy-load @imgly/background-removal from CDN (ESM). Works offline after first download (browser cache).
-let _rmbgLib = null;
+// Usa BiRefNet (alta qualidade) via @huggingface/transformers CDN.
+// Modelo ~85MB baixado uma vez e cacheado em IndexedDB do browser.
+let _rmbgHqMod = null;       // transformers.js module
+let _rmbgHqModel = null;     // BiRefNet model
+let _rmbgHqProcessor = null; // BiRefNet processor
 let _rmbgOriginalBlob = null;
 let _rmbgResultBlob = null;
 let _rmbgFirstLoad = !localStorage.getItem('vc_rmbg_loaded');
 
-async function _rmbgEnsureLib(){
-    if (_rmbgLib) return _rmbgLib;
-    if (_rmbgFirstLoad) document.getElementById('rmbgFirstTime').style.display='block';
-    document.getElementById('rmbgLoading').style.display='block';
-    document.getElementById('rmbgLoadingTxt').textContent = _rmbgFirstLoad ? 'Baixando IA (~80MB, só na 1ª vez)...' : 'Carregando modelo...';
-    document.getElementById('rmbgLoadingHint').textContent = '';
-    document.getElementById('rmbgProgress').style.width = '5%';
-    // Tenta múltiplos CDNs (jsdelivr, esm.sh, unpkg) — alguns ISPs/redes corporativas
-    // bloqueiam um ou outro. Mac/Win mesmo binário do Electron, então diferença real
-    // é só a rede do usuário.
-    const cdns = [
-        'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm',
-        'https://esm.sh/@imgly/background-removal@1.7.0',
-        'https://unpkg.com/@imgly/background-removal@1.7.0/dist/index.mjs?module'
-    ];
-    let lastErr = null;
-    for (const url of cdns) {
+// Lazy-load BiRefNet via @huggingface/transformers (CDN ESM).
+// Cache: o lib persiste o ONNX em IndexedDB do navegador, então só baixa na 1ª vez.
+async function _rmbgEnsureHq(onProgress) {
+    if (_rmbgHqModel && _rmbgHqProcessor) return { mod: _rmbgHqMod, model: _rmbgHqModel, processor: _rmbgHqProcessor };
+    if (!_rmbgHqMod) {
+        if (onProgress) onProgress('lib', 'Carregando transformers.js...', 5);
+        const cdns = [
+            'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5/+esm',
+            'https://esm.sh/@huggingface/transformers@3.7.5'
+        ];
+        let lastErr = null;
+        for (const url of cdns) {
+            try { _rmbgHqMod = await import(/* @vite-ignore */ url); break; }
+            catch(e) { lastErr = e; }
+        }
+        if (!_rmbgHqMod) throw new Error('Falha ao carregar transformers.js: ' + (lastErr?.message || lastErr));
         try {
-            document.getElementById('rmbgLoadingHint').textContent = 'Conectando a ' + (new URL(url).hostname) + '...';
-            const mod = await import(/* @vite-ignore */ url);
-            _rmbgLib = mod;
-            localStorage.setItem('vc_rmbg_loaded','1');
-            _rmbgFirstLoad = false;
-            return _rmbgLib;
-        } catch(e) { lastErr = e; }
+            _rmbgHqMod.env.allowRemoteModels = true;
+            // Aponta os WASMs do onnxruntime-web pro CDN — em Electron file://
+            // o path relativo dos WASMs não resolve e dá "no available backend".
+            if (_rmbgHqMod.env.backends && _rmbgHqMod.env.backends.onnx && _rmbgHqMod.env.backends.onnx.wasm) {
+                _rmbgHqMod.env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+                _rmbgHqMod.env.backends.onnx.wasm.numThreads = 1; // single-thread evita SharedArrayBuffer/COOP issues
+            }
+        } catch(e) {}
     }
-    document.getElementById('rmbgLoading').style.display='none';
-    document.getElementById('rmbgFirstTime').style.display='none';
-    showToast('Não foi possível baixar a IA. Verifique sua internet. ' + (lastErr ? lastErr.message : ''), 'err');
-    throw lastErr || new Error('All CDNs failed');
+    if (onProgress) onProgress('model', 'Baixando BiRefNet (~85MB, só na 1ª vez)...', 15);
+    const MODEL_ID = 'onnx-community/BiRefNet_lite-ONNX';
+    const progressCb = (data) => {
+        if (!onProgress || !data) return;
+        if (data.status === 'progress' && data.progress != null) {
+            const pct = Math.round(data.progress);
+            onProgress('model', 'Baixando BiRefNet... ' + pct + '%', 15 + pct * 0.6);
+        }
+    };
+    _rmbgHqModel = await _rmbgHqMod.AutoModel.from_pretrained(MODEL_ID, { dtype: 'fp32', device: 'wasm', progress_callback: progressCb });
+    _rmbgHqProcessor = await _rmbgHqMod.AutoProcessor.from_pretrained(MODEL_ID, { progress_callback: progressCb });
+    return { mod: _rmbgHqMod, model: _rmbgHqModel, processor: _rmbgHqProcessor };
+}
+
+// Processa via BiRefNet — recebe Blob, retorna Blob PNG com alpha
+async function _rmbgProcessHQ(blob, onProgress) {
+    const { mod, model, processor } = await _rmbgEnsureHq(onProgress);
+    if (onProgress) onProgress('compute', 'Processando IA...', 80);
+    const image = await mod.RawImage.fromBlob(blob);
+    const inputs = await processor(image);
+    const out = await model({ input_image: inputs.pixel_values });
+    // BiRefNet retorna [1, 1, H, W] — squeeze(0) tira o batch dim (RawImage espera 3D)
+    const maskTensor = out.output_image ?? out.logits ?? Object.values(out)[0];
+    const maskImage = await mod.RawImage.fromTensor(maskTensor.sigmoid().mul(255).clamp(0, 255).to('uint8').squeeze(0)).resize(image.width, image.height);
+    // Compõe RGBA: cor original + alpha da máscara
+    if (onProgress) onProgress('compose', 'Aplicando máscara...', 95);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width; canvas.height = image.height;
+    const ctx = canvas.getContext('2d');
+    const imgBmp = await createImageBitmap(blob);
+    ctx.drawImage(imgBmp, 0, 0, image.width, image.height);
+    const imgData = ctx.getImageData(0, 0, image.width, image.height);
+    const maskData = maskImage.data; // Uint8Array 1-channel
+    for (let i = 0, j = 0; i < imgData.data.length; i += 4, j++) {
+        imgData.data[i + 3] = maskData[j];
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return await new Promise(res => canvas.toBlob(res, 'image/png'));
 }
 
 function rmbgPickFile(files){
@@ -6768,20 +6881,14 @@ async function rmbgProcess(blobOrFile){
     reader.readAsDataURL(blobOrFile);
 
     try {
-        const lib = await _rmbgEnsureLib();
-        document.getElementById('rmbgLoadingTxt').textContent = 'Removendo fundo...';
-        const config = {
-            progress: (key, current, total) => {
-                const pct = total > 0 ? Math.round((current/total)*100) : 0;
-                document.getElementById('rmbgProgress').style.width = pct + '%';
-                if (key.includes('fetch')) {
-                    document.getElementById('rmbgLoadingTxt').textContent = 'Baixando modelo... ' + pct + '%';
-                } else if (key.includes('compute')) {
-                    document.getElementById('rmbgLoadingTxt').textContent = 'Processando IA... ' + pct + '%';
-                }
-            }
+        // Sempre usa BiRefNet (HQ) — modelo único, melhor qualidade
+        document.getElementById('rmbgLoading').style.display='block';
+        document.getElementById('rmbgFirstTime').style.display = _rmbgHqModel ? 'none' : 'block';
+        const hqProg = (key, txt, pct) => {
+            document.getElementById('rmbgLoadingTxt').textContent = txt;
+            document.getElementById('rmbgProgress').style.width = Math.max(5, Math.min(99, pct)) + '%';
         };
-        const resultBlob = await lib.removeBackground(blobOrFile, config);
+        const resultBlob = await _rmbgProcessHQ(blobOrFile, hqProg);
         _rmbgResultBlob = resultBlob;
         const resultUrl = URL.createObjectURL(resultBlob);
         document.getElementById('rmbgImgResult').src = resultUrl;
@@ -7185,9 +7292,22 @@ let cotacao={usd:0,var:0,ts:0,eur:0,gbp:0,cad:0,aud:0};
 const _payFeesRaw={
     paypal:{nome:'PayPal',taxa:2.00,fixa:0.30,spread:3.5,moeda:'USD',descKey:'pay.paypal_desc',desc:'2% + $0,30 + ~3,5% spread cambial'},
     wise:{nome:'Wise',taxa:1.20,fixa:0,spread:0,moeda:'USD',descKey:'pay.wise_desc',desc:'~1,2% (câmbio comercial real)'},
+    stripe:{nome:'Stripe',taxa:2.90,fixa:0.30,spread:1.0,moeda:'USD',descKey:'pay.stripe_desc',desc:'2,9% + $0,30 (cartões internacionais)'},
+    payoneer:{nome:'Payoneer',taxa:2.00,fixa:0,spread:2.0,moeda:'USD',descKey:'pay.payoneer_desc',desc:'2% recebimento + ~2% saque BRL'},
+    deel:{nome:'Deel',taxa:3.00,fixa:0,spread:0,moeda:'USD',descKey:'pay.deel_desc',desc:'~3% plataforma (saque grátis em Wise)'},
+    revolut:{nome:'Revolut',taxa:0,fixa:0,spread:0.5,moeda:'EUR',descKey:'pay.revolut_desc',desc:'Grátis até limite mensal + ~0,5% spread'},
+    skrill:{nome:'Skrill',taxa:1.45,fixa:0,spread:3.99,moeda:'USD',descKey:'pay.skrill_desc',desc:'1,45% + ~3,99% spread cambial'},
+    venmo:{nome:'Venmo',taxa:0,fixa:0,spread:0,moeda:'USD',descKey:'pay.venmo_desc',desc:'Grátis (apenas EUA, P2P)'},
     ach:{nome:'ACH',taxa:0,fixa:0,spread:0,moeda:'USD',descKey:'pay.ach_desc',desc:'Gratuito via Wise (sem taxa)'},
+    sepa:{nome:'SEPA',taxa:0,fixa:0,spread:0,moeda:'EUR',descKey:'pay.sepa_desc',desc:'Grátis (transferências dentro da UE)'},
     pix:{nome:'PIX',taxa:0,fixa:0,spread:0,moeda:'BRL',descKey:'pay.pix_desc',desc:'Gratuito (recebimento nacional)'},
+    ted:{nome:'TED',taxa:0,fixa:0,spread:0,moeda:'BRL',descKey:'pay.ted_desc',desc:'Grátis na maioria dos bancos digitais'},
+    boleto:{nome:'Boleto',taxa:0,fixa:3.49,spread:0,moeda:'BRL',descKey:'pay.boleto_desc',desc:'R$ 3,49 por boleto emitido (média)'},
+    mercadopago:{nome:'Mercado Pago',taxa:4.99,fixa:0,spread:0,moeda:'BRL',descKey:'pay.mp_desc',desc:'4,99% (link de pagamento, recebimento imediato)'},
+    pagseguro:{nome:'PagSeguro',taxa:4.99,fixa:0.40,spread:0,moeda:'BRL',descKey:'pay.pgs_desc',desc:'4,99% + R$ 0,40 (link de pagamento)'},
+    cartao:{nome:'Cartão de Crédito',taxa:5.99,fixa:0,spread:0,moeda:'BRL',descKey:'pay.cartao_desc',desc:'~5,99% taxa média do adquirente (1x)'},
     crypto:{nome:'Crypto',taxa:0.50,fixa:0,spread:0,moeda:'USD',descKey:'pay.crypto_desc',desc:'~0,5% taxa de rede/exchange'},
+    usdt:{nome:'USDT',taxa:0.10,fixa:0,spread:0,moeda:'USD',descKey:'pay.usdt_desc',desc:'~0,1% + taxa de rede (Tron/BSC barato)'},
     zelle:{nome:'Zelle',taxa:0,fixa:0,spread:0,moeda:'USD',descKey:'pay.zelle_desc',desc:'Gratuito (apenas EUA)'},
     outro:{nome:'Outro',taxa:0,fixa:0,spread:0,moeda:'BRL',descKey:'pay.outro_desc',desc:'Personalizado'}
 };
@@ -7470,7 +7590,7 @@ function calcTaxaMeio(valor,meio,moeda){
     const spreadPct=fee.spread||0;
     const m=(moeda||'USD').toUpperCase();
     if(m==='BRL'){
-        return{taxaValor:0,recebidoUSD:valor,recebidoBRL:valor,cambioEfetivo:1,perdaSpreadBRL:0,fee};
+        return{taxaValor,recebidoUSD:recebido,recebidoBRL:recebido,cambioEfetivo:1,perdaSpreadBRL:0,fee};
     }
     const rate=getCotacaoMoeda(m);
     const cambioEfetivo=rate*(1-spreadPct/100);
@@ -8030,24 +8150,24 @@ async function audioLibRender() {
                     <div style="flex:1;height:1px;background:rgba(190,242,100,.1)"></div>
                     <input id="audioLibEdit_out_${item.id}" type="text" placeholder="end" value="${item.outSec != null ? audioLibFmtSec(item.outSec) : ''}" style="width:70px;padding:5px 8px;background:rgba(0,0,0,.3);border:1px solid rgba(190,242,100,.1);border-radius:5px;color:var(--text);font-size:.72rem;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;outline:none;text-align:center" oninput="audioLibInputChanged('${item.id}','out')">
                 </div>
-                <!-- Volume dB control -->
+                <!-- Volume dB control: slider + input editável -->
                 <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,.2);border-radius:6px">
                     <span style="font-size:.7rem;color:var(--text3);min-width:50px;font-weight:600">Volume</span>
-                    <input id="audioLibEdit_db_${item.id}" type="range" min="-30" max="12" step="0.5" value="${item.volumeDb != null ? item.volumeDb : 0}" style="flex:1;accent-color:#bef264" oninput="audioLibDbChanged('${item.id}', this.value)">
-                    <span id="audioLibDbLabel_${item.id}" style="font-size:.74rem;color:#bef264;font-weight:600;font-variant-numeric:tabular-nums;min-width:56px;text-align:right">${item.volumeDb != null ? (item.volumeDb > 0 ? '+' : '') + Number(item.volumeDb).toFixed(1) : '0.0'} dB</span>
+                    <input id="audioLibEdit_db_${item.id}" type="range" min="-30" max="12" step="0.5" value="${item.volumeDb != null ? item.volumeDb : 0}" style="flex:1;accent-color:#bef264" oninput="audioLibDbChanged('${item.id}', this.value, 'slider')">
+                    <input id="audioLibDbInput_${item.id}" type="text" inputmode="decimal" value="${item.volumeDb != null ? Number(item.volumeDb).toFixed(1) : '0.0'}" style="width:54px;padding:3px 0;background:transparent;border:none;color:#bef264;font-size:.74rem;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;font-family:inherit;outline:none;cursor:text" oninput="audioLibDbChanged('${item.id}', this.value, 'input')" onfocus="this.select()" onkeydown="if(event.key==='Enter')this.blur()">
+                    <span style="font-size:.74rem;color:#bef264;font-weight:600">dB</span>
                 </div>
-                <!-- Botão de preview -->
-                <div style="display:flex;gap:6px;align-items:center">
+                <audio id="audioLibPlayer_${item.id}" preload="metadata" style="display:none"></audio>
+                <div style="font-size:.62rem;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escPath}">${escPath}</div>
+                <!-- Action row: preview + reset + cancel + save todos juntos -->
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
                     <button class="btn btn-o" style="font-size:.74rem;padding:6px 14px" onclick="audioLibPlayPreview('${item.id}')" id="audioLibPlayBtn_${item.id}">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px"><polygon points="6 4 20 12 6 20"/></svg> Tocar trecho
                     </button>
-                    <audio id="audioLibPlayer_${item.id}" preload="metadata" style="display:none"></audio>
                     <button class="btn btn-o" style="font-size:.74rem;padding:6px 10px" onclick="audioLibResetTrim('${item.id}')">Resetar</button>
-                </div>
-                <div style="font-size:.62rem;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escPath}">${escPath}</div>
-                <div style="display:flex;gap:6px">
-                    <button class="btn btn-o" style="flex:1;font-size:.78rem;padding:8px" onclick="audioLibCancelEdit('${item.id}')">Cancelar</button>
-                    <button class="btn btn-a" style="flex:1;font-size:.78rem;padding:8px" onclick="audioLibSaveEdit('${item.id}')">Salvar</button>
+                    <div style="flex:1;min-width:8px"></div>
+                    <button class="btn btn-o" style="font-size:.74rem;padding:6px 14px" onclick="audioLibCancelEdit('${item.id}')">Cancelar</button>
+                    <button class="btn btn-a" style="font-size:.74rem;padding:6px 18px" onclick="audioLibSaveEdit('${item.id}')">Salvar</button>
                 </div>
             </div>`;
         }
@@ -8077,14 +8197,85 @@ async function audioLibPickAndAdd() {
     if (!window.audioLibrary) return;
     const res = await window.audioLibrary.pickFiles();
     if (!res.ok || !res.paths) return;
-    for (const p of res.paths) {
-        const name = p.split(/[\\/]/).pop().replace(/\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff|wma|opus)$/i, '');
-        await window.audioLibrary.add({ path: p, name: name });
-    }
-    // Invalidação do catálogo LION SEARCH pra pegar o novo áudio
-    audioLibInvalidateLionCatalog();
-    audioLibRender();
+    await audioLibAddPaths(res.paths);
 }
+
+// Adiciona uma lista de paths absolutos à biblioteca (usado pelo pickFiles + drag-drop)
+async function audioLibAddPaths(paths) {
+    if (!window.audioLibrary || !paths || paths.length === 0) return 0;
+    const audioExt = /\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff|wma|opus)$/i;
+    let added = 0;
+    for (const p of paths) {
+        if (!audioExt.test(p)) continue;
+        const name = p.split(/[\\/]/).pop().replace(audioExt, '');
+        try {
+            await window.audioLibrary.add({ path: p, name: name });
+            added++;
+        } catch (e) { console.warn('audioLib add err', e); }
+    }
+    if (added > 0) {
+        audioLibInvalidateLionCatalog();
+        audioLibRender();
+    }
+    return added;
+}
+
+// Drag & drop de áudios direto na aba Áudios — instala uma vez
+function audioLibInstallDropZone() {
+    const tab = document.getElementById('tab-audiolib');
+    if (!tab || tab.dataset.dropInstalled === '1') return;
+    tab.dataset.dropInstalled = '1';
+    const card = tab.querySelector('.card') || tab;
+    let dragDepth = 0;
+    function setHover(on) {
+        if (on) {
+            card.style.outline = '2px dashed #bef264';
+            card.style.outlineOffset = '-4px';
+            card.style.background = 'rgba(190,242,100,.04)';
+        } else {
+            card.style.outline = '';
+            card.style.outlineOffset = '';
+            card.style.background = '';
+        }
+    }
+    tab.addEventListener('dragenter', e => {
+        e.preventDefault();
+        dragDepth++;
+        if (dragDepth === 1) setHover(true);
+    });
+    tab.addEventListener('dragover', e => { e.preventDefault(); });
+    tab.addEventListener('dragleave', e => {
+        e.preventDefault();
+        dragDepth--;
+        if (dragDepth <= 0) { dragDepth = 0; setHover(false); }
+    });
+    tab.addEventListener('drop', async e => {
+        e.preventDefault();
+        dragDepth = 0;
+        setHover(false);
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        // Electron 32+ removeu File.path por segurança — usar webUtils.getPathForFile
+        // exposto via preload (window.audioLibrary.getFilePath).
+        const audioExt = /\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff|wma|opus)$/i;
+        const paths = [];
+        for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            // Filtra pela extensão ANTES de resolver path (drop só aceita áudio)
+            if (!audioExt.test(f.name || '')) continue;
+            let p = '';
+            if (window.audioLibrary && window.audioLibrary.getFilePath) {
+                try { p = window.audioLibrary.getFilePath(f) || ''; } catch(eP) {}
+            }
+            if (!p && f.path) p = f.path; // fallback Electron < 32
+            if (p) paths.push(p);
+        }
+        if (paths.length === 0) return;
+        await audioLibAddPaths(paths);
+    });
+}
+// Instala quando DOM tiver pronto
+document.addEventListener('DOMContentLoaded', () => setTimeout(audioLibInstallDropZone, 100));
 
 async function audioLibDelete(id) {
     if (!window.audioLibrary) return;
@@ -8119,6 +8310,16 @@ function audioLibStartEdit(id) {
     }, 50);
 }
 
+// Singleton AudioContext — criar novo a cada call esgota o pool do browser (~6 max)
+// e o primeiro decode trava quando state='suspended' por user-activation perdida.
+let _audioLibCtx = null;
+function _audioLibGetCtx() {
+    if (!_audioLibCtx) {
+        _audioLibCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return _audioLibCtx;
+}
+
 // Carrega o áudio, extrai peaks do PCM e desenha no canvas
 async function audioLibLoadWave(id) {
     const item = _audioLibCache.find(x => x.id === id);
@@ -8139,10 +8340,19 @@ async function audioLibLoadWave(id) {
             player.src = blobUrl;
             player.dataset.blobUrl = blobUrl;
         }
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioCtx = _audioLibGetCtx();
+        // Se context tá suspended (user-activation perdida via setTimeout),
+        // resume() antes de decodificar — senão decodeAudioData trava.
+        if (audioCtx.state === 'suspended') {
+            try { await audioCtx.resume(); } catch(eR) {}
+        }
         // decodeAudioData precisa de uma CÓPIA do buffer (consome)
         const bufCopy = buf.slice(0);
-        const decoded = await audioCtx.decodeAudioData(bufCopy);
+        // Timeout safety — se decode travar (raro mas possível), aborta em 10s
+        const decoded = await Promise.race([
+            audioCtx.decodeAudioData(bufCopy),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('decodeAudioData timeout (10s)')), 10000))
+        ]);
         const duration = decoded.duration;
         // Pega channel 0 (mono ou L)
         const channel = decoded.getChannelData(0);
@@ -8319,10 +8529,22 @@ function audioLibInputChanged(id, which) {
     audioLibUpdateRangeUI(id);
 }
 
-function audioLibDbChanged(id, val) {
-    const lbl = document.getElementById('audioLibDbLabel_' + id);
-    const v = parseFloat(val) || 0;
-    if (lbl) lbl.textContent = (v > 0 ? '+' : '') + v.toFixed(1) + ' dB';
+function audioLibDbChanged(id, val, source) {
+    let v = parseFloat(val);
+    if (isNaN(v)) v = 0;
+    // Clamp suave: input vai até -60..+24, slider só -30..+12
+    if (v < -60) v = -60;
+    if (v > 24) v = 24;
+    // Sincroniza slider <-> input (mas não o que originou a mudança, pra não bagunçar focus)
+    const slider = document.getElementById('audioLibEdit_db_' + id);
+    const input = document.getElementById('audioLibDbInput_' + id);
+    if (source !== 'slider' && slider) {
+        // Clamp pro range do slider
+        slider.value = Math.max(-30, Math.min(12, v));
+    }
+    if (source !== 'input' && input && document.activeElement !== input) {
+        input.value = v.toFixed(1);
+    }
     // Aplica no player (preview) — dB → gain linear: gain = 10^(dB/20)
     const player = document.getElementById('audioLibPlayer_' + id);
     if (player) {

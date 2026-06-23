@@ -2349,9 +2349,11 @@ ipcMain.on('lion-search:close', () => {
 let _isApplyInProgress = false;
 let _isNotifying = false;
 
-// IPC: mostra notificação nativa (sucesso ou erro do apply otimista)
+// IPC: mostra notificação nativa SÓ pra erros (sucesso é silencioso —
+// o plugin/UI já dá feedback visual de "inserido", não precisa toast Windows).
 ipcMain.on('lion-search:notify', (event, payload) => {
     try {
+        if (payload?.success === true) return; // skip sucesso
         _isNotifying = true;
         setTimeout(() => { _isNotifying = false; }, 1500);
         const { Notification } = require('electron');
@@ -2359,8 +2361,7 @@ ipcMain.on('lion-search:notify', (event, payload) => {
             const n = new Notification({
                 title: payload?.title || 'LION SEARCH',
                 body: payload?.body || '',
-                silent: payload?.success === true, // silent pra sucesso, com som pra erro
-                urgency: payload?.success ? 'low' : 'normal',
+                urgency: 'normal',
             });
             n.show();
         }
@@ -2424,6 +2425,119 @@ ipcMain.handle('sync-push-state', (event, state) => {
     cachedState = state;
     return true;
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// BiRefNet (Node worker) — usado pelos endpoints /bg/remove (img).
+// Inferência roda em worker_thread separado pra NÃO bloquear o main process
+// (plugin Premiere marcaria "Desconectado" se main bloqueasse >3s pings).
+// ═══════════════════════════════════════════════════════════════════
+const { Worker } = require('worker_threads');
+let _bgWorker = null;
+let _ytPreviewWin = null;
+const _bgPending = new Map();
+let _bgNextReqId = 0;
+
+function _ensureBgWorker() {
+    if (_bgWorker) return _bgWorker;
+    const workerPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'bg-img-worker.js')
+        : path.join(__dirname, 'bg-img-worker.js');
+    _bgWorker = new Worker(workerPath);
+    _bgWorker.on('message', (msg) => {
+        if (msg && msg.ready) { console.log('[bg-worker] started'); return; }
+        if (msg && msg.reqId != null) {
+            const cb = _bgPending.get(msg.reqId);
+            if (cb) {
+                _bgPending.delete(msg.reqId);
+                cb(msg);
+            }
+        }
+    });
+    _bgWorker.on('error', (e) => console.error('[bg-worker] err:', e));
+    _bgWorker.on('exit', (code) => {
+        console.warn('[bg-worker] exit code:', code);
+        // Rejeita pendentes
+        for (const [id, cb] of _bgPending) cb({ ok: false, error: 'worker exited (' + code + ')' });
+        _bgPending.clear();
+        _bgWorker = null;
+    });
+    return _bgWorker;
+}
+
+// Processa imagem via BiRefNet no worker. Retorna Buffer PNG com alpha.
+async function _removeBgBiRefNet(imagePath) {
+    _ensureBgWorker();
+    const reqId = ++_bgNextReqId;
+    const outputPath = path.join(currentUD, 'bgremoved-' + Date.now() + '-' + reqId + '.png');
+    const result = await new Promise((resolve) => {
+        _bgPending.set(reqId, resolve);
+        _bgWorker.postMessage({ reqId, imagePath, outputPath });
+    });
+    if (!result.ok) throw new Error(result.error || 'worker failed');
+    try {
+        const buf = fs.readFileSync(result.outputPath);
+        try { fs.unlinkSync(result.outputPath); } catch(e) {}
+        return buf;
+    } catch (e) {
+        throw new Error('worker output missing: ' + e.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MOTION TRACKER WORKER — roda OpenCV.js num worker_thread isolado
+// pra NÃO bloquear o main process durante tracking. Sem isso, o HTTP
+// server para de responder e o plugin Premiere marca "Desconectado".
+// ═══════════════════════════════════════════════════════════════════
+let _mtWorker = null;
+const _mtPending = new Map();
+let _mtNextReqId = 0;
+
+function _ensureMtWorker() {
+    if (_mtWorker) return _mtWorker;
+    const workerPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'motion-tracker-worker.js')
+        : path.join(__dirname, 'motion-tracker-worker.js');
+    // child_process.fork: processo Node TOTALMENTE isolado (vs worker_threads
+    // que compartilha libuv e tem incompatibilidade com WASM Emscripten do OpenCV.js).
+    const { fork } = require('child_process');
+    _mtWorker = fork(workerPath, [], {
+        // ELECTRON_RUN_AS_NODE: roda o binário do Electron em modo Node puro
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        // Encaminha stdout/stderr pro main process pra capturar logs
+        silent: true,
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    });
+    _mtWorker.stdout && _mtWorker.stdout.on('data', d => process.stdout.write('[mt-fork:stdout] ' + d));
+    _mtWorker.stderr && _mtWorker.stderr.on('data', d => process.stderr.write('[mt-fork:stderr] ' + d));
+    _mtWorker.on('message', (msg) => {
+        if (msg && msg.ready) { console.log('[mt-worker] fork started'); return; }
+        if (msg && msg.reqId != null) {
+            const cb = _mtPending.get(msg.reqId);
+            if (cb) { _mtPending.delete(msg.reqId); cb(msg); }
+        }
+    });
+    _mtWorker.on('error', (e) => console.error('[mt-worker] err:', e));
+    _mtWorker.on('exit', (code, signal) => {
+        console.warn('[mt-worker] fork exit code:', code, 'signal:', signal);
+        for (const [id, cb] of _mtPending) cb({ ok: false, error: 'fork exited (' + code + ')' });
+        _mtPending.clear();
+        _mtWorker = null;
+    });
+    return _mtWorker;
+}
+
+// Dispara tracking no worker. Retorna o objeto result do motion-tracker.js
+async function _runMotionTracker(filePath, ffmpegPath, ffprobePath, points, options) {
+    _ensureMtWorker();
+    const reqId = ++_mtNextReqId;
+    const out = await new Promise((resolve) => {
+        _mtPending.set(reqId, resolve);
+        // ChildProcess (fork) usa .send() — não .postMessage() como worker_threads
+        _mtWorker.send({ reqId, filePath, ffmpegPath, ffprobePath, points, options });
+    });
+    if (!out.ok) throw new Error(out.error || 'mt worker failed');
+    return out.result;
+}
 
 function startSyncServer() {
     const server = http.createServer((req, res) => {
@@ -2613,6 +2727,126 @@ function startSyncServer() {
             return;
         }
 
+        // === YouTube preview HTML (no auth — só serve embed do YT pra origin http://) ===
+        // Necessário porque CEP plugin tem origin file:// que YouTube bloqueia (Error 153).
+        // Servindo daqui, a janela tem origin http://127.0.0.1 — YT aceita.
+        if (req.method === 'GET' && req.url.indexOf('/yt-preview') === 0) {
+            try {
+                const u = new URL(req.url, 'http://127.0.0.1:9847');
+                const id = (u.searchParams.get('id') || '').replace(/[^a-zA-Z0-9_-]/g, '');
+                const start = Math.max(0, parseInt(u.searchParams.get('start') || '0', 10));
+                const end = Math.max(0, parseInt(u.searchParams.get('end') || '0', 10));
+                if (!id) {
+                    res.writeHead(400, { 'Content-Type': 'text/plain' });
+                    res.end('missing id');
+                    return;
+                }
+                // HTML com identidade Lion Workspace + IFrame API que força loop no trim
+                const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Lion Workspace · YouTube Preview</title>
+<style>
+:root{--bg:#0a0a0a;--bg2:#111;--accent:#bef264;--accent2:#d9f99d;--text:#f5f5f5;--text2:#a3a3a3;--text3:#636363;--border:rgba(255,255,255,.08)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,sans-serif;overflow:hidden;font-size:13px}
+body{display:flex;flex-direction:column}
+.hdr{display:flex;align-items:center;gap:9px;padding:7px 11px;background:linear-gradient(180deg,rgba(190,242,100,.06),transparent);border-bottom:1px solid rgba(190,242,100,.08);flex-shrink:0}
+.logo{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--accent2),var(--accent));color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;box-shadow:0 2px 6px rgba(190,242,100,.25)}
+.t{font-size:.74rem;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t-sub{font-size:.58rem;color:var(--text3);font-weight:500;margin-top:1px;font-family:monospace}
+.t-wrap{flex:1;min-width:0}
+.badge{font-family:'JetBrains Mono','SF Mono',monospace;font-size:.62rem;color:var(--accent);background:rgba(190,242,100,.1);border:1px solid rgba(190,242,100,.18);padding:3px 8px;border-radius:5px;font-weight:600;flex-shrink:0;font-variant-numeric:tabular-nums}
+.player-wrap{flex:1;position:relative;background:#000;display:flex;align-items:center;justify-content:center}
+#player{width:100%;height:100%}
+.loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text3);font-size:.7rem;display:flex;align-items:center;gap:6px}
+.spin{width:14px;height:14px;border:2px solid rgba(190,242,100,.2);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ftr{display:flex;align-items:center;justify-content:space-between;padding:6px 11px;background:var(--bg2);border-top:1px solid var(--border);font-size:.62rem;flex-shrink:0}
+.ts{font-family:'JetBrains Mono',monospace;color:var(--text2);font-variant-numeric:tabular-nums}
+.ts strong{color:var(--accent)}
+.loop{display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--text3);padding:3px 7px;border-radius:5px;transition:all .12s;user-select:none}
+.loop:hover{background:rgba(190,242,100,.04);color:var(--text2)}
+.loop.on{color:var(--accent);background:rgba(190,242,100,.1)}
+.loop svg{width:11px;height:11px}
+</style>
+</head><body>
+<div class="hdr">
+    <div class="logo">L</div>
+    <div class="t-wrap">
+        <div class="t">YouTube Preview</div>
+        <div class="t-sub">Lion Workspace</div>
+    </div>
+    <div class="badge" id="trimBadge">--</div>
+</div>
+<div class="player-wrap">
+    <div id="player"></div>
+    <div class="loading" id="loading"><span class="spin"></span>Carregando player…</div>
+</div>
+<div class="ftr">
+    <div class="ts"><strong id="curT">0:00</strong> / <span id="totT">0:00</span></div>
+    <div class="loop on" id="loopBtn" onclick="toggleLoop()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <span>Loop trim</span>
+    </div>
+</div>
+<script>
+var VIDEO_ID=${JSON.stringify(id)};
+var START=${start};
+var END=${end};
+var player=null;
+var loopEnabled=true;
+function fmt(s){s=Math.max(0,Math.floor(s));var m=Math.floor(s/60);var sec=s%60;return m+':'+(sec<10?'0':'')+sec}
+document.getElementById('trimBadge').textContent=(END>START)?fmt(START)+' → '+fmt(END):'sem trim';
+var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);
+window.onYouTubeIframeAPIReady=function(){
+    player=new YT.Player('player',{
+        videoId:VIDEO_ID,
+        playerVars:{autoplay:1,controls:1,rel:0,modestbranding:1,iv_load_policy:3,fs:1,playsinline:1,start:START},
+        events:{
+            onReady:function(e){
+                document.getElementById('loading').style.display='none';
+                e.target.playVideo();
+                setInterval(tick,250);
+            },
+            onStateChange:function(e){
+                // 0=ended → loop pro start do trim
+                if(e.data===0 && loopEnabled && END>START){
+                    player.seekTo(START,true);player.playVideo();
+                }
+            }
+        }
+    });
+};
+function tick(){
+    if(!player||!player.getCurrentTime)return;
+    var cur=player.getCurrentTime()||0;
+    var dur=player.getDuration()||0;
+    document.getElementById('curT').textContent=fmt(cur);
+    document.getElementById('totT').textContent=fmt(dur);
+    // Trim end: param 'end' do YT é não confiável — força via JS
+    if(END>START && cur>=END-0.1){
+        if(loopEnabled){ player.seekTo(START,true); }
+        else{ player.pauseVideo(); player.seekTo(END,true); }
+    }
+    // Skip antes do start (se user arrastar a barra pra trás do trim)
+    if(END>START && cur<Math.max(0,START-1)){
+        player.seekTo(START,true);
+    }
+}
+function toggleLoop(){
+    loopEnabled=!loopEnabled;
+    document.getElementById('loopBtn').classList.toggle('on',loopEnabled);
+}
+</script>
+</body></html>`;
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(html);
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'text/plain' });
+                res.end('err: ' + e.message);
+            }
+            return;
+        }
+
         // === All other routes require authentication ===
         const pluginSession = authenticatePluginRequest(req);
         if (!pluginSession) {
@@ -2624,6 +2858,60 @@ function startSyncServer() {
         if (req.method === 'GET' && req.url === '/state') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(cachedState));
+            return;
+        }
+
+        // ═══════ CLIPBOARD — leitura via Electron (cross-platform, handle PNG/WebP/DIB nativamente) ═══════
+        // Plugin pode chamar isso ao invés de PowerShell/JXA pra evitar problemas de encoding/formato.
+        if (req.method === 'GET' && req.url.indexOf('/clipboard/read-image') === 0) {
+            try {
+                const { clipboard } = require('electron');
+                const u = new URL(req.url, 'http://localhost');
+                let saveDir = u.searchParams.get('dir') || '';
+                const tmpFallback = require('os').tmpdir();
+                // Aceita só absolute path (Win drive letter ou Unix /); senão usa tmp
+                const isAbs = saveDir && (path.isAbsolute(saveDir) || /^[a-zA-Z]:[\\/]/.test(saveDir));
+                if (!isAbs) saveDir = tmpFallback;
+                try { fs.mkdirSync(saveDir, { recursive: true }); } catch (e) { saveDir = tmpFallback; }
+                // Final write-test — se dir não é writável, cai pro tmp
+                try {
+                    const tf = path.join(saveDir, '.lw-wt-' + Date.now());
+                    fs.writeFileSync(tf, ''); fs.unlinkSync(tf);
+                } catch (e) { saveDir = tmpFallback; }
+
+                // 1) Tenta imagem direto (cobre PNG, WebP, DIB — Electron handles tudo)
+                const img = clipboard.readImage();
+                if (img && !img.isEmpty()) {
+                    const pngBuf = img.toPNG();
+                    if (pngBuf && pngBuf.length > 0) {
+                        const fname = `lw-clip-${Date.now()}-${Math.random().toString(36).slice(2,10)}.png`;
+                        const outPath = path.join(saveDir, fname);
+                        fs.writeFileSync(outPath, pngBuf);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ type: 'image', paths: [outPath] }));
+                        return;
+                    }
+                }
+
+                // 2) Fallback: clipboard.readBuffer('FileNameW') on Win or NSPasteboard via clipboard.read
+                // Electron já normaliza isso via readImage, mas tentamos texto como path
+                const txt = clipboard.readText();
+                if (txt && txt.length < 32768) {
+                    const lines = txt.split(/[\r\n]+/).map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+                    const valid = lines.filter(p => { try { return fs.statSync(p).isFile(); } catch (e) { return false; } });
+                    if (valid.length > 0) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ type: 'files', paths: valid }));
+                        return;
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ type: 'empty', reason: 'no-image-no-paths' }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ type: 'error', message: String(e.message || e) }));
+            }
             return;
         }
 
@@ -2804,16 +3092,26 @@ function startSyncServer() {
                         const newItems = data.items;
                         const newAudio = newItems.filter(x => x.kind === 'audio-source');
                         const newRest  = newItems.filter(x => x.kind !== 'audio-source');
-                        const oldAudio = lionSearchEffectsCache.filter(x => x.kind === 'audio-source');
+                        // Library-only enforcement: drop qualquer audio-source que não seja LIB:
+                        // (entries antigos de scan de projetos persistiam no cache).
+                        // Mantém só os LIB: do cache antigo (eles vêm do app, não do scan de projeto).
+                        const oldAudioLib = lionSearchEffectsCache.filter(x =>
+                            x.kind === 'audio-source' && String(x.matchName || '').indexOf('LIB:') === 0
+                        );
                         const audioMap = {};
-                        for (const a of oldAudio) audioMap[a.matchName || a.name] = a;
-                        for (const a of newAudio) audioMap[a.matchName || a.name] = a;
+                        for (const a of oldAudioLib) audioMap[a.matchName || a.name] = a;
+                        for (const a of newAudio) {
+                            // Só aceita áudio novo se for LIB: (paranoia — JSX já não envia outros)
+                            if (String(a.matchName || '').indexOf('LIB:') === 0) {
+                                audioMap[a.matchName || a.name] = a;
+                            }
+                        }
                         const mergedAudio = Object.values(audioMap);
                         lionSearchEffectsCache = [...newRest, ...mergedAudio];
                         lionSearchEffectsCachedAt = Date.now();
                         lionSearchCatalogDebug = String(data.debug || '');
                         lionSearchCatalogError = String(data.error || '');
-                        console.log('[lion-search] catálogo: total=' + lionSearchEffectsCache.length + ' (effects=' + newRest.length + ', audio merged=' + mergedAudio.length + ' [+' + (mergedAudio.length - oldAudio.length) + ' novos])');
+                        console.log('[lion-search] catálogo: total=' + lionSearchEffectsCache.length + ' (effects=' + newRest.length + ', audio LIB-only=' + mergedAudio.length + ')');
                         // Persiste no disco — disponível na próxima boot do app
                         saveLionCatalogToDisk();
                     }
@@ -2996,7 +3294,231 @@ function startSyncServer() {
                     res.end(JSON.stringify({ ok: true }));
                     return;
                 }
-                // ═══════ Background Remover — IA local via @imgly/background-removal-node ═══════
+                // ═══════ Motion Tracker — KLT via OpenCV.js (WASM) ═══════
+                if (command === 'motion-tracker/probe' && data.filePath) {
+                    try {
+                        const mt = require('./motion-tracker');
+                        const meta = await mt.probeVideo(data.filePath, ffprobeBin);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, ...meta }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                if (command === 'motion-tracker/extract-frame' && data.filePath && data.frame != null) {
+                    try {
+                        const fIdx = parseInt(data.frame, 10) || 0;
+                        const args = ['-i', data.filePath, '-vf', `select=eq(n\\,${fIdx})`, '-vframes', '1', '-f', 'image2pipe', '-vcodec', 'png', '-'];
+                        const chunks = [];
+                        await new Promise((resolve, reject) => {
+                            const ff = spawn(ffmpegBin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+                            ff.stdout.on('data', d => chunks.push(d));
+                            ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
+                            ff.on('error', reject);
+                        });
+                        const pngBuf = Buffer.concat(chunks);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, dataUrl: 'data:image/png;base64,' + pngBuf.toString('base64') }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                // ═══════ YouTube Preview Window (floating popup com embed do YT) ═══════
+                // Plugin pede pra abrir/atualizar uma janela pequena always-on-top
+                // que carrega o /yt-preview da própria HTTP server (origin http://).
+                if (command === 'yt-preview/open' && data.id) {
+                    try {
+                        const ytId = String(data.id).replace(/[^a-zA-Z0-9_-]/g, '');
+                        const startS = Math.max(0, parseInt(data.start || 0, 10));
+                        const endS = Math.max(0, parseInt(data.end || 0, 10));
+                        const url = 'http://127.0.0.1:9847/yt-preview?id=' + ytId + '&start=' + startS + (endS > startS ? '&end=' + endS : '');
+                        if (_ytPreviewWin && !_ytPreviewWin.isDestroyed()) {
+                            _ytPreviewWin.loadURL(url);
+                            _ytPreviewWin.show();
+                            _ytPreviewWin.focus();
+                        } else {
+                            const { BrowserWindow } = require('electron');
+                            _ytPreviewWin = new BrowserWindow({
+                                width: 480, height: 310,
+                                title: 'YouTube Preview · Lion Workspace',
+                                backgroundColor: '#000',
+                                alwaysOnTop: true,
+                                resizable: true,
+                                minWidth: 320, minHeight: 220,
+                                webPreferences: { contextIsolation: true, sandbox: true }
+                            });
+                            _ytPreviewWin.setMenuBarVisibility(false);
+                            _ytPreviewWin.loadURL(url);
+                            _ytPreviewWin.on('closed', () => { _ytPreviewWin = null; });
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+
+                if (command === 'motion-tracker/open-editor' && data.mediaPath) {
+                    try {
+                        const { BrowserWindow } = require('electron');
+                        // Extrai token do header Authorization pra passar pro editor
+                        // (editor precisa autenticar /motion-tracker/track e /queue-apply)
+                        let token = '';
+                        try {
+                            const authH = req.headers['authorization'] || '';
+                            if (authH.startsWith('Bearer ')) token = authH.slice(7);
+                        } catch (e) {}
+                        const session = String(data.session || ('mt-' + Date.now()));
+                        const inSec = parseFloat(data.inPointSec) || 0;
+                        const outSec = parseFloat(data.outPointSec) || 0;
+                        const dur = Math.max(0.5, outSec - inSec);
+                        // ─── Proxy MP4 H.264 — HTML5 video não decodifica ProRes/HEVC/DNxHR ───
+                        // Tracking continua usando o ORIGINAL (full quality).
+                        const proxyDir = path.join(currentUD, 'mt-proxies');
+                        try { fs.mkdirSync(proxyDir, { recursive: true }); } catch (e) {}
+                        const proxyPath = path.join(proxyDir, 'proxy-' + session + '.mp4');
+                        console.log('[mt-editor] gerando proxy:', proxyPath);
+                        await new Promise((resolve) => {
+                            // Downscale pra max 720p — tracking não precisa de 4K.
+                            // Acelera 5-10x: 4K→720p reduz frames de 8MB pra 1MB cada.
+                            const ff = spawn(ffmpegBin, [
+                                '-y',
+                                '-ss', String(Math.max(0, inSec - 0.05)),
+                                '-i', data.mediaPath,
+                                '-t', String(dur + 0.1),
+                                '-vf', 'scale=-2:min(720\\,ih)', // mantém aspect, limita altura a 720
+                                '-c:v', 'libx264',
+                                '-preset', 'ultrafast',
+                                '-crf', '23',
+                                '-pix_fmt', 'yuv420p',
+                                '-movflags', '+faststart',
+                                '-an',
+                                proxyPath
+                            ], { stdio: ['ignore', 'ignore', 'pipe'] });
+                            let errBuf = '';
+                            ff.stderr.on('data', d => { errBuf += d.toString(); });
+                            ff.on('close', (code) => {
+                                if (code === 0 && fs.existsSync(proxyPath)) {
+                                    console.log('[mt-editor] proxy OK:', fs.statSync(proxyPath).size, 'bytes');
+                                } else {
+                                    console.error('[mt-editor] proxy FAIL code=' + code, errBuf.slice(-500));
+                                }
+                                resolve();
+                            });
+                            ff.on('error', e => { console.error('[mt-editor] ffmpeg spawn err:', e); resolve(); });
+                        });
+                        const usingProxy = fs.existsSync(proxyPath) && fs.statSync(proxyPath).size > 1024;
+                        const previewPath = usingProxy ? proxyPath : data.mediaPath;
+                        // No proxy o vídeo começa em 0s (trecho cortado começa do 0)
+                        const editorInSec = usingProxy ? 0 : inSec;
+                        const editorOutSec = usingProxy ? dur : outSec;
+                        const q = new URLSearchParams({
+                            session,
+                            token,
+                            media: encodeURIComponent(previewPath),
+                            origMedia: encodeURIComponent(data.mediaPath),
+                            usingProxy: usingProxy ? '1' : '0',
+                            fps: String(data.fps || 30),
+                            inSec: String(editorInSec),
+                            outSec: String(editorOutSec),
+                            origInSec: String(inSec),
+                            origOutSec: String(outSec),
+                            // Plugin JSX envia `inPointTicks` (não clipInPointTicks).
+                            // Sem isso, keyframes vão pra source-time 0 (fora do trecho visível).
+                            clipInTicks: String(data.inPointTicks || data.clipInPointTicks || '0'),
+                        }).toString();
+                        const win = new BrowserWindow({
+                            width: 1280, height: 800,
+                            title: 'Motion Tracker',
+                            backgroundColor: '#0a0a0a',
+                            show: true,
+                            center: true,
+                            alwaysOnTop: false,
+                            skipTaskbar: false,
+                            webPreferences: { nodeIntegration: true, contextIsolation: false }
+                        });
+                        try { require('@electron/remote/main').enable(win.webContents); } catch (e) { console.warn('[mt-editor] remote enable err:', e.message); }
+                        // Debug: loga erros de load + crash
+                        win.webContents.on('did-fail-load', (_e, code, desc) => console.error('[mt-editor] load fail:', code, desc));
+                        win.webContents.on('render-process-gone', (_e, det) => console.error('[mt-editor] render gone:', det));
+                        win.webContents.on('console-message', (_e, lvl, msg) => console.log('[mt-editor:console]', msg));
+                        win.webContents.on('did-finish-load', () => {
+                            console.log('[mt-editor] loaded OK');
+                        });
+                        const htmlPath = path.join(__dirname, 'motion-tracker-editor.html');
+                        console.log('[mt-editor] loading:', htmlPath, 'q:', q);
+                        win.loadFile(htmlPath, { search: q });
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, session }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                if (command === 'motion-tracker/queue-apply' && data.history) {
+                    try {
+                        // Enfileira como comando pro plugin pegar via long-poll
+                        const commandId = 'mt-apply-' + Date.now();
+                        pendingPluginCommands.push({
+                            id: commandId,
+                            type: 'motion-tracker/apply',
+                            payload: data
+                        });
+                        // Acorda waiters
+                        if (typeof _notifyLongPollWaiters === 'function') {
+                            _notifyLongPollWaiters();
+                        } else {
+                            while (pendingPluginCommands.length > 0 && lionLongPollWaiters.length > 0) {
+                                const w = lionLongPollWaiters.shift();
+                                clearTimeout(w.timeoutHandle);
+                                const cmds = pendingPluginCommands.splice(0, pendingPluginCommands.length);
+                                try {
+                                    w.res.writeHead(200, { 'Content-Type': 'application/json' });
+                                    w.res.end(JSON.stringify({ commands: cmds }));
+                                } catch (e) {}
+                            }
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, commandId }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                if (command === 'motion-tracker/track' && data.filePath && Array.isArray(data.points)) {
+                    try {
+                        // Roda INLINE no main process. Tentamos fork mas
+                        // @techstark/opencv-js trava o event loop em ELECTRON_RUN_AS_NODE
+                        // (WASM Emscripten + Node-as-Electron = deadlock).
+                        // No main process funciona porque Electron tem Chromium runtime.
+                        // Pra clips curtos (30-100 frames) o block é ~1-3s — aceitável.
+                        console.log('[motion-tracker] starting inline track, points=' + data.points.length);
+                        const t0 = Date.now();
+                        const tracker = require('./motion-tracker');
+                        const result = await tracker.trackPointsKLT(
+                            data.filePath, ffmpegBin, ffprobeBin,
+                            data.points, data.options || {}
+                        );
+                        console.log('[motion-tracker] track done in ' + (Date.now()-t0) + 'ms');
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify(result));
+                    } catch (e) {
+                        console.error('[motion-tracker] track err:', e);
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+
+                // ═══════ Background Remover — IA local via BiRefNet ═══════
                 if (command === 'bg/remove' && data.filePath) {
                     try {
                         const origPath = data.filePath;
@@ -3006,30 +3528,10 @@ function startSyncServer() {
                             return;
                         }
 
-                        // Lazy-load
-                        let removeBackground;
-                        try {
-                            const mod = require('@imgly/background-removal-node');
-                            removeBackground = mod.removeBackground || mod.default;
-                        } catch (e) {
-                            res.writeHead(500, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ error: 'IA indisponível: ' + e.message }));
-                            return;
-                        }
-
-                        // publicPath: aponta pros recursos da lib (resources.json, modelos onnx).
-                        // Em produção, lib fica em app.asar.unpacked. Em dev, no node_modules normal.
-                        const imglyPublicPath = (() => {
-                            const base = app.isPackaged
-                                ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@imgly', 'background-removal-node', 'dist')
-                                : path.join(__dirname, 'node_modules', '@imgly', 'background-removal-node', 'dist');
-                            return 'file://' + base.replace(/\\/g, '/') + '/';
-                        })();
-
-                        // Lib só suporta PNG/JPG/WEBP. Pra outros formatos (PSD/TIFF/BMP/SVG/etc),
-                        // converte pra PNG primeiro usando Electron nativeImage (já vem no Electron).
+                        // Formatos não-padrão: converte pra PNG via Electron nativeImage
+                        // (sharp já suporta JPG/PNG/WEBP/TIFF/HEIC/etc — converte só pra raros)
                         const ext = path.extname(origPath).toLowerCase().substring(1);
-                        const SUPPORTED = new Set(['png','jpg','jpeg','webp']);
+                        const SUPPORTED = new Set(['png','jpg','jpeg','webp','tif','tiff','bmp','gif']);
                         let workingPath = origPath;
                         let tmpConverted = null;
                         if (!SUPPORTED.has(ext)) {
@@ -3043,35 +3545,27 @@ function startSyncServer() {
                                 workingPath = tmpConverted;
                             } catch (eConv) {
                                 res.writeHead(400, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ error: 'Formato não suportado (' + ext + '). Use PNG, JPG ou WEBP.' }));
+                                res.end(JSON.stringify({ error: 'Formato não suportado (' + ext + '). Use PNG, JPG, WEBP, etc.' }));
                                 return;
                             }
                         }
 
-                        // Tenta processar — primeiro com path (deixa lib detectar), depois com Blob
-                        let resultBlob;
+                        // Processa via BiRefNet (helper definido em escopo de módulo)
+                        let resultBuf;
                         try {
-                            resultBlob = await removeBackground(workingPath, {
-                                output: { format: 'image/png', quality: 0.95 },
-                                publicPath: imglyPublicPath,
-                                debug: false
-                            });
-                        } catch (eP) {
-                            // Fallback: passa como Blob explícito com MIME
-                            const buf = fs.readFileSync(workingPath);
-                            const blob = new Blob([buf], { type: 'image/png' });
-                            resultBlob = await removeBackground(blob, {
-                                output: { format: 'image/png', quality: 0.95 },
-                                publicPath: imglyPublicPath,
-                                debug: false
-                            });
+                            resultBuf = await _removeBgBiRefNet(workingPath);
+                        } catch (eBR) {
+                            console.error('[bg/remove] BiRefNet err:', eBR);
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'IA falhou: ' + (eBR.message || String(eBR)) }));
+                            if (tmpConverted) { try { fs.unlinkSync(tmpConverted); } catch(e) {} }
+                            return;
                         }
 
-                        // Salva resultado ao lado do original (não do convertido)
+                        // Salva resultado ao lado do original
                         const dir = path.dirname(origPath);
                         const base = path.basename(origPath, path.extname(origPath));
                         let outPath = path.join(dir, base + '_nobg.png');
-                        const resultBuf = Buffer.from(await resultBlob.arrayBuffer());
                         try {
                             fs.writeFileSync(outPath, resultBuf);
                         } catch (eW) {
@@ -3860,6 +4354,8 @@ app.on('before-quit', () => {
 });
 
 app.whenReady().then(() => {
+    // Initialize @electron/remote pro motion-tracker-editor.html
+    try { require('@electron/remote/main').initialize(); } catch (e) {}
     // Set up Edit menu só Ctrl+V / Cmd+V works in all input fields
     const menuTemplate = [
         ...(isMac ? [{ role: 'appMenu' }] : []),

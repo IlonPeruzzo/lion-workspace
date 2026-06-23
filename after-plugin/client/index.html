@@ -40,7 +40,7 @@
         .timer-display{font-size:2.1rem;font-weight:800;text-align:center;letter-spacing:-1px;color:#bef264;margin:4px 0;font-variant-numeric:tabular-nums}
         .timer-display.app-paused{color:#636363}
         .timer-sub{text-align:center;font-size:.72rem;color:#888;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px}
-        .timer-sub.app-paused{color:#f59e0b}
+        .timer-sub.app-paused{color:#f87171}
 
         .pomo-phase{text-align:center;margin-bottom:2px}
         .phase-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.66rem;font-weight:700;letter-spacing:.3px}
@@ -158,18 +158,27 @@
 
         .footer{text-align:center;margin-top:6px;font-size:.58rem;color:#3a3a3a;letter-spacing:.2px}
 
-        /* Login screen */
-        .login-overlay{position:fixed;inset:0;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:20px}
+        /* Login screen — redesign moderno (mesmo padrão do Premiere) */
+        .login-overlay{position:fixed;inset:0;background:radial-gradient(ellipse at top right,rgba(190,242,100,.06) 0%,transparent 50%),radial-gradient(ellipse at bottom left,rgba(34,211,238,.04) 0%,transparent 50%),#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:24px;overflow:hidden}
+        .login-overlay::before{content:'';position:absolute;width:280px;height:280px;background:radial-gradient(circle,rgba(190,242,100,.08) 0%,transparent 70%);top:-100px;right:-80px;pointer-events:none;animation:loginGlowPulse 6s ease-in-out infinite}
+        .login-overlay::after{content:'';position:absolute;width:240px;height:240px;background:radial-gradient(circle,rgba(190,242,100,.05) 0%,transparent 70%);bottom:-80px;left:-60px;pointer-events:none;animation:loginGlowPulse 6s ease-in-out infinite 3s}
+        @keyframes loginGlowPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
         .login-overlay.hidden{display:none}
-        .login-overlay .logo{font-size:1.1rem;margin-bottom:4px}
-        .login-overlay .login-subtitle{font-size:.72rem;color:#636363;margin-bottom:20px;text-align:center}
-        .login-overlay .login-form{width:100%;max-width:240px;display:flex;flex-direction:column;gap:10px}
-        .login-overlay .login-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 12px;font-size:.78rem;color:#f5f5f5;outline:none;font-family:inherit;transition:border-color .2s}
-        .login-overlay .login-input:focus{border-color:rgba(190,242,100,.4)}
+        .login-overlay .login-card{position:relative;width:100%;max-width:280px;background:linear-gradient(180deg,rgba(28,28,28,.9) 0%,rgba(20,20,20,.95) 100%);border:1px solid rgba(190,242,100,.08);border-radius:16px;padding:28px 22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02) inset;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+        .login-overlay .logo{font-size:1.3rem;margin-bottom:4px;color:#f5f5f5;text-align:center;font-weight:800;letter-spacing:-.4px}
+        .login-overlay .logo span{color:#bef264}
+        .login-overlay .login-subtitle{font-size:.66rem;color:#737373;margin-bottom:18px;text-align:center;font-weight:500}
+        .login-overlay .login-form{width:100%;display:flex;flex-direction:column;gap:10px}
+        .login-overlay .input-wrap{position:relative;display:flex;align-items:center}
+        .login-overlay .input-icon{position:absolute;left:11px;display:flex;align-items:center;justify-content:center;color:#525252;pointer-events:none;transition:color .2s}
+        .login-overlay .input-wrap:focus-within .input-icon{color:#bef264}
+        .login-overlay .login-input{width:100%;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:11px 12px 11px 36px;font-size:.74rem;color:#f5f5f5;outline:none;font-family:inherit;transition:all .2s}
+        .login-overlay .login-input:focus{border-color:rgba(190,242,100,.4);background:rgba(255,255,255,.05);box-shadow:0 0 0 3px rgba(190,242,100,.08)}
         .login-overlay .login-input::placeholder{color:#525252}
-        .login-overlay .login-submit{background:#bef264;color:#0a0a0a;border:none;padding:11px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s}
-        .login-overlay .login-submit:hover{opacity:.9}
-        .login-overlay .login-submit:disabled{opacity:.4;cursor:not-allowed}
+        .login-overlay .login-submit{margin-top:4px;background:linear-gradient(135deg,#bef264 0%,#a3e635 100%);color:#0a0a0a;border:none;padding:11px;border-radius:9px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 14px rgba(190,242,100,.18);letter-spacing:-.1px}
+        .login-overlay .login-submit:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(190,242,100,.3)}
+        .login-overlay .login-submit:active{transform:translateY(0)}
+        .login-overlay .login-submit:disabled{opacity:.4;cursor:not-allowed;transform:none}
         .login-overlay .login-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;padding:8px 10px;border-radius:6px;font-size:.7rem;display:none;text-align:center}
         .login-overlay .login-error.show{display:block}
         .login-user-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;margin-bottom:6px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.08);border-radius:6px}
@@ -201,28 +210,37 @@
 <body>
     <!-- Plugin Login Screen -->
     <div class="login-overlay" id="pluginLogin">
-        <div class="logo">Lion <span>Workspace</span></div>
-        <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
-        <div class="login-form">
-            <div class="login-error" id="pluginLoginError"></div>
-            <input class="login-input" type="email" id="pluginEmail" placeholder="Email" autocomplete="off">
-            <div style="position:relative">
-                <input class="login-input" type="password" id="pluginPassword" placeholder="Senha" style="width:100%;padding-right:36px">
-                <button type="button" onclick="togglePluginPwEye()" id="pluginPwEye" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#525252;cursor:pointer;padding:4px;display:flex;align-items:center;transition:color .2s">
-                    <svg id="pluginEyeOpen" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    <svg id="pluginEyeClosed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        <div class="login-card">
+            <div class="logo">Lion <span>Workspace</span></div>
+            <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
+            <div class="login-form">
+                <div class="login-error" id="pluginLoginError"></div>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    </span>
+                    <input class="login-input" type="email" id="pluginEmail" placeholder="Email" autocomplete="off">
+                </div>
+                <div class="input-wrap">
+                    <span class="input-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </span>
+                    <input class="login-input" type="password" id="pluginPassword" placeholder="Senha" style="padding-right:36px">
+                    <button type="button" onclick="togglePluginPwEye()" id="pluginPwEye" style="position:absolute;right:8px;background:none;border:none;color:#525252;cursor:pointer;padding:4px;display:flex;align-items:center;transition:color .2s">
+                        <svg id="pluginEyeOpen" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="pluginEyeClosed" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
+                <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
+                <div style="display:flex;align-items:center;gap:8px;margin:8px 0 0;color:#404040;font-size:.55rem;font-weight:600;letter-spacing:.6px">
+                    <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
+                    <span>OU</span>
+                    <span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>
+                </div>
+                <button type="button" id="pluginAutoLoginBtn" onclick="pluginManualAutoLogin()" style="width:100%;padding:10px;background:transparent;border:1px solid rgba(190,242,100,.25);color:#bef264;border-radius:9px;font-size:.74rem;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .2s" onmouseover="this.style.background='rgba(190,242,100,.08)'" onmouseout="this.style.background='transparent'">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 12l2 2 4-4"/></svg>
+                    Entrar com sessão do Lion Workspace
                 </button>
-            </div>
-            <button class="login-submit" id="pluginLoginBtn" onclick="pluginDoLogin()">Entrar</button>
-            <button type="button" id="pluginAutoLoginBtn" onclick="pluginManualAutoLogin()" style="width:100%;margin-top:8px;padding:10px;background:transparent;border:1px solid rgba(190,242,100,.25);color:#bef264;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .2s" onmouseover="this.style.background='rgba(190,242,100,.08)'" onmouseout="this.style.background='transparent'">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 12l2 2 4-4"/></svg>
-                Entrar com sessão do Lion Workspace
-            </button>
-            <div id="pluginAutoLoginHint" style="text-align:center;font-size:.62rem;color:#525252;margin-top:8px">
-                Se o Lion Workspace estiver aberto e logado, o plugin entra sozinho.
-            </div>
-            <div style="text-align:center;font-size:.62rem;color:#525252;margin-top:4px">
-                Não tem conta? Crie pelo app ou pelo site.
             </div>
         </div>
     </div>
