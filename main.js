@@ -4662,6 +4662,7 @@ function isPremiereForeground() {
 
 // Pre-cria janela escondida no boot — abertura via hotkey é INSTANTÂNEA (não cria mais BrowserWindow)
 let _lionSearchShownAt = 0; // timestamp do ultimo show() — usado pra ignorar blur que dispara durante focus race no Mac
+let _mainWinWasVisible = false; // memo: estava visivel quando abrimos o search? (Mac)
 function preloadLionSearchWindow() {
     if (lionSearchWin && !lionSearchWin.isDestroyed()) return;
     const width = 440, height = 88;
@@ -4686,6 +4687,13 @@ function preloadLionSearchWindow() {
     lionSearchWin.on('closed', () => { lionSearchWin = null; });
     // Fecha em blur — mas no Mac focus() nao consegue steal do Premiere imediato, entao a primeira blur
     // dispara logo apos show() e fecha a janela. Grace period de 600ms ignora blurs durante essa janela.
+    const _hideSearchAndRestore = () => {
+        try { lionSearchWin.hide(); lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
+        // Mac: nao restaura mainWin (pra nao trazer o Lion Workspace pra frente).
+        // mainWin permanece escondido ate o usuario clicar no dock. _mainWinWasVisible
+        // serve so de memo logico.
+        _mainWinWasVisible = false;
+    };
     lionSearchWin.on('blur', () => {
         const sinceShow = Date.now() - _lionSearchShownAt;
         const graceMs = isMac ? 600 : 150;
@@ -4693,14 +4701,14 @@ function preloadLionSearchWindow() {
             // Reagenda check apos o grace period — se ainda nao tiver foco, fecha.
             setTimeout(() => {
                 if (lionSearchWin && !lionSearchWin.isDestroyed() && !lionSearchWin.isFocused() && lionSearchWin.isVisible()) {
-                    try { lionSearchWin.hide(); lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
+                    _hideSearchAndRestore();
                 }
             }, graceMs - sinceShow + 50);
             return;
         }
         setTimeout(() => {
             if (lionSearchWin && !lionSearchWin.isDestroyed() && !lionSearchWin.isFocused() && lionSearchWin.isVisible()) {
-                try { lionSearchWin.hide(); lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
+                _hideSearchAndRestore();
             }
         }, 150);
     });
@@ -4733,16 +4741,25 @@ function openLionSearch(forceOpen) {
         // Reset state da página (limpa input + resultados) antes de mostrar
         try { lionSearchWin.webContents.send('lion-search:reset'); } catch(e) {}
         _lionSearchShownAt = Date.now();
-        // No Mac, BrowserWindow.focus() nao consegue trazer Electron pra frente quando o Premiere
-        // esta como foreground app. app.focus({steal:true}) força o transfer.
-        if (isMac) { try { app.focus({ steal: true }); } catch(e) {} }
+        // No Mac, app.focus({steal:true}) traz TODAS as janelas do Electron — incluindo
+        // a main window do Lion Workspace. Pra so trazer o search, escondemos a main
+        // antes do focus steal. mainWin volta quando search fechar (no _hideSearchAndRestore).
+        // Nivel 'screen-saver' coloca o search acima de tudo no Mac sem precisar de focus.
+        if (isMac) {
+            try {
+                _mainWinWasVisible = !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible());
+                if (_mainWinWasVisible) mainWin.hide();
+            } catch(e) {}
+            try { lionSearchWin.setAlwaysOnTop(true, 'screen-saver'); } catch(e) {}
+            try { app.focus({ steal: true }); } catch(e) {}
+        }
         lionSearchWin.show();
         lionSearchWin.focus();
         // Reforça foco no proximo tick — show() pode ter sido pre-empted pelo OS no Mac
         if (isMac) {
             setTimeout(() => {
                 if (lionSearchWin && !lionSearchWin.isDestroyed() && lionSearchWin.isVisible() && !lionSearchWin.isFocused()) {
-                    try { app.focus({ steal: true }); lionSearchWin.focus(); } catch(e) {}
+                    try { lionSearchWin.moveTop(); lionSearchWin.focus(); } catch(e) {}
                 }
             }, 50);
         }
