@@ -780,15 +780,15 @@ function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH)
         else if (sv instanceof Array) scale = sv[0] / 100;
     } catch (e) {}
 
-    // MODE: Motion/VectorMotion sao SEMPRE pixel. Transform e normalized.
-    // O auto-detect antigo (anchor < 2.0) falhava quando anchor estava em (0,0)
-    // num clip em pixel mode — botava normalized incorretamente.
-    var compName = String(comp.displayName || '').toLowerCase();
-    var isTransform = false;
-    for (var ti = 0; ti < _transformNames.length; ti++) {
-        if (compName.indexOf(String(_transformNames[ti]).toLowerCase()) === 0) { isTransform = true; break; }
-    }
-    var isNormalized = isTransform;
+    // MODE: detecta pela combinacao de anchor + position.
+    // Premiere 2025+ usa NORMALIZED [0..1] tambem no Motion. Versoes antigas
+    // e Transform sempre normalized. Pixel mode: valores >> 1 (centro = srcW/2, srcH/2).
+    // Heuristica robusta: se AMBOS anchor[0] AND position[0] estao em [0, 5], normalized.
+    // Pixel-(0,0) num clip pixel mode nao acontece junto com position-(0,0) — em pixel
+    // mode position default eh (seqW/2, seqH/2), tipicamente > 100.
+    var anchorSmall = Math.abs(oldAnchor[0]) < 5.0 && Math.abs(oldAnchor[1]) < 5.0;
+    var posSmall = Math.abs(oldPos[0]) < 5.0 && Math.abs(oldPos[1]) < 5.0;
+    var isNormalized = anchorSmall && posSmall;
 
     if (isNormalized) {
         // ═══ NORMALIZED MODE ═══
