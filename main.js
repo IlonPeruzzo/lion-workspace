@@ -632,10 +632,27 @@ let ytProgress = { active: false, percent: 0, speed: '', eta: '', title: '', sta
 const maskEditorSessions = new Map();
 // token -> { status: 'editing'|'saved'|'cancelled', processedPath, win }
 
+// Singleton: só uma janela de mask editor aberta por vez.
+// Se ja tiver uma, foca nela e retorna o token existente.
+let _activeMaskEditorWin = null;
+let _activeMaskEditorToken = null;
+
 function openMaskEditor(origPath, processedPath) {
+    // Se ja tem editor aberto, foca nele e retorna o token existente
+    if (_activeMaskEditorWin && !_activeMaskEditorWin.isDestroyed()) {
+        try {
+            if (_activeMaskEditorWin.isMinimized()) _activeMaskEditorWin.restore();
+            _activeMaskEditorWin.show();
+            _activeMaskEditorWin.focus();
+            _activeMaskEditorWin.moveTop();
+        } catch(e) {}
+        return _activeMaskEditorToken || '';
+    }
+
     const token = crypto.randomBytes(8).toString('hex');
     const sess = { status: 'editing', processedPath, win: null };
     maskEditorSessions.set(token, sess);
+    _activeMaskEditorToken = token;
 
     // Limpa sessões antigas (>1h) pra não vazar
     const HOUR = 60 * 60 * 1000;
@@ -664,6 +681,7 @@ function openMaskEditor(origPath, processedPath) {
             },
         });
         sess.win = win;
+        _activeMaskEditorWin = win;
 
         const editorHtml = path.join(__dirname, 'mask-editor.html');
         const qs = '?orig=' + encodeURIComponent(origPath)
@@ -677,6 +695,11 @@ function openMaskEditor(origPath, processedPath) {
             const s = maskEditorSessions.get(token);
             if (s && s.status === 'editing') {
                 s.status = 'cancelled';
+            }
+            // Libera o singleton
+            if (_activeMaskEditorToken === token) {
+                _activeMaskEditorWin = null;
+                _activeMaskEditorToken = null;
             }
             // Mantém a entry por 5min pra plugin poder pollar status final
             setTimeout(() => maskEditorSessions.delete(token), 5 * 60 * 1000);
@@ -2434,6 +2457,7 @@ ipcMain.handle('sync-push-state', (event, state) => {
 const { Worker } = require('worker_threads');
 let _bgWorker = null;
 let _ytPreviewWin = null;
+let _activeMtEditorWin = null; // singleton: so um motion tracker editor aberto por vez
 const _bgPending = new Map();
 let _bgNextReqId = 0;
 
@@ -3403,6 +3427,18 @@ function toggleLoop(){
                 if (command === 'motion-tracker/open-editor' && data.mediaPath) {
                     try {
                         const { BrowserWindow } = require('electron');
+                        // Singleton: se ja tem editor aberto, foca nele em vez de criar novo
+                        if (_activeMtEditorWin && !_activeMtEditorWin.isDestroyed()) {
+                            try {
+                                if (_activeMtEditorWin.isMinimized()) _activeMtEditorWin.restore();
+                                _activeMtEditorWin.show();
+                                _activeMtEditorWin.focus();
+                                _activeMtEditorWin.moveTop();
+                            } catch(eF) {}
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ ok: true, focused: true }));
+                            return;
+                        }
                         // Extrai token do header Authorization pra passar pro editor
                         // (editor precisa autenticar /motion-tracker/track e /queue-apply)
                         let token = '';
@@ -3482,6 +3518,8 @@ function toggleLoop(){
                             webPreferences: { nodeIntegration: true, contextIsolation: false }
                         });
                         try { require('@electron/remote/main').enable(win.webContents); } catch (e) { console.warn('[mt-editor] remote enable err:', e.message); }
+                        _activeMtEditorWin = win;
+                        win.on('closed', () => { if (_activeMtEditorWin === win) _activeMtEditorWin = null; });
                         // Debug: loga erros de load + crash
                         win.webContents.on('did-fail-load', (_e, code, desc) => console.error('[mt-editor] load fail:', code, desc));
                         win.webContents.on('render-process-gone', (_e, det) => console.error('[mt-editor] render gone:', det));
