@@ -654,14 +654,17 @@
 
 <!-- ═══════ i18n SYSTEM ═══════ -->
 <script>
-// Idioma e país do usuário (persistidos em localStorage)
-// Default: English / US (mais cobertura global)
-var LW_LANG = localStorage.getItem('lw_lang') || '';
-var LW_COUNTRY = localStorage.getItem('lw_country') || '';
-var LW_SHOW_FISCAL = localStorage.getItem('lw_show_fiscal');
-// Default: só Brasil habilita fiscal (MEI/ME/Simples Nacional, NFe)
-// Outros países: cálculo simplificado (sem impostos BR)
-if (LW_SHOW_FISCAL === null) LW_SHOW_FISCAL = (LW_COUNTRY === 'BR' ? '1' : '0');
+// Lion Workspace e BR-only/PT-only — i18n desativado.
+// Mantemos as constantes pra nao quebrar referencias espalhadas no codigo.
+var LW_LANG = 'pt-BR';
+var LW_COUNTRY = 'BR';
+var LW_SHOW_FISCAL = '1';
+// Forca os valores no storage pra qualquer usuario que veio de uma versao com EN
+try {
+    localStorage.setItem('lw_lang', LW_LANG);
+    localStorage.setItem('lw_country', LW_COUNTRY);
+    localStorage.setItem('lw_show_fiscal', LW_SHOW_FISCAL);
+} catch(e) {}
 
 // Dicionário i18n — chaves de UI traduzíveis
 var I18N = {
@@ -2196,7 +2199,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             </button>
         </div>
 
-        <!-- ═══ Language / Country settings ═══ -->
+        <!-- ═══ Language / Country settings — DESATIVADO (PT/BR-only) ═══ -->
+        <div style="display:none">
         <div class="card-title" data-i18n="settings.language">Idioma</div>
         <select id="cfgLangSelect" onchange="setLanguage(this.value);refreshLangBtns()" style="width:100%;padding:9px 12px;background:rgba(15,15,15,.7);border:1px solid rgba(190,242,100,.2);color:#f5f5f5;font-size:.78rem;font-family:inherit;border-radius:8px;cursor:pointer;appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>');background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;margin-bottom:12px">
             <option value="en-US">🇺🇸 English</option>
@@ -2260,6 +2264,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <input type="checkbox" id="cfgShowFiscal" onchange="setShowFiscal(this.checked);refreshLangBtns()" style="accent-color:#bef264">
             <span style="font-size:.78rem;font-weight:600;color:var(--text1)" data-i18n="settings.show_fiscal">Brazilian tax system</span>
         </label>
+        </div>
+        <!-- fim do wrapper Language/Country/fiscal desativado -->
 
         <div class="card-title" data-i18n="settings.invoice_data">Dados para Invoice</div>
         <div style="display:inline-flex;background:rgba(15,15,15,.6);border:1px solid rgba(190,242,100,.15);border-radius:8px;padding:2px;margin-bottom:12px">
