@@ -121,6 +121,25 @@ body{display:flex;flex-direction:column}
 .btn-outline{background:transparent;border:1px solid var(--border-h);color:var(--text)}
 .btn-outline:hover:not(:disabled){background:rgba(190,242,100,.06)}
 
+/* Preset buttons — design minimalista sem emojis */
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.preset-btn{
+    padding:7px 4px;background:rgba(255,255,255,.03);
+    border:1px solid rgba(255,255,255,.06);
+    color:var(--text2);border-radius:6px;cursor:pointer;
+    font-size:.7rem;font-weight:500;font-family:inherit;
+    transition:all .15s;letter-spacing:.1px
+}
+.preset-btn:hover{background:rgba(190,242,100,.05);border-color:rgba(190,242,100,.15);color:var(--text)}
+.preset-btn.active{
+    background:linear-gradient(135deg,rgba(190,242,100,.18),rgba(190,242,100,.08));
+    border-color:rgba(190,242,100,.45);color:var(--accent);font-weight:600;
+    box-shadow:0 0 0 1px rgba(190,242,100,.08), 0 2px 8px rgba(190,242,100,.1) inset
+}
+
+/* Path overlay canvas — desenha a trajetória sobre o video */
+#pathCanvas{position:absolute;pointer-events:none;mix-blend-mode:screen}
+
 .progress-wrap{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:8px}
 .progress-bar{height:100%;background:linear-gradient(90deg,#22c55e,var(--accent));width:0%;transition:width .2s}
 
@@ -167,6 +186,7 @@ body{display:flex;flex-direction:column}
         <div class="video-wrap">
             <video id="vid" muted playsinline></video>
             <canvas id="pickerCanvas"></canvas>
+            <canvas id="pathCanvas"></canvas>
             <div class="marker" id="marker" style="display:none"></div>
         </div>
         <div class="controls">
@@ -202,13 +222,13 @@ body{display:flex;flex-direction:column}
 
         <div class="panel-section">
             <div class="panel-title">Configurações</div>
-            <div class="row" style="margin-bottom:8px">
-                <label style="margin-bottom:4px">Preset</label>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-                    <button type="button" class="preset-btn" data-preset="accurate" style="padding:6px;background:rgba(190,242,100,.12);border:1px solid rgba(190,242,100,.3);color:var(--accent);border-radius:6px;cursor:pointer;font-size:.7rem;font-weight:600">🎯 Preciso</button>
-                    <button type="button" class="preset-btn" data-preset="balanced" style="padding:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text2);border-radius:6px;cursor:pointer;font-size:.7rem">⚖️ Balanced</button>
-                    <button type="button" class="preset-btn" data-preset="fast" style="padding:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text2);border-radius:6px;cursor:pointer;font-size:.7rem">⚡ Rápido</button>
-                    <button type="button" class="preset-btn" data-preset="smooth" style="padding:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--text2);border-radius:6px;cursor:pointer;font-size:.7rem">🌊 Suave</button>
+            <div class="row" style="margin-bottom:10px">
+                <label style="margin-bottom:6px">Preset</label>
+                <div class="preset-grid">
+                    <button type="button" class="preset-btn active" data-preset="accurate">Preciso</button>
+                    <button type="button" class="preset-btn" data-preset="balanced">Balanced</button>
+                    <button type="button" class="preset-btn" data-preset="fast">Rápido</button>
+                    <button type="button" class="preset-btn" data-preset="smooth">Suave</button>
                 </div>
             </div>
             <div class="row">
@@ -237,8 +257,8 @@ body{display:flex;flex-direction:column}
             <div class="row">
                 <label>Modo de aplicação</label>
                 <select id="trackMode">
-                    <option value="track">🎯 Tracking (seguir ponto)</option>
-                    <option value="stabilize">📌 Estabilizar (travar ponto)</option>
+                    <option value="track">Tracking — seguir ponto</option>
+                    <option value="stabilize">Estabilizar — travar ponto</option>
                 </select>
             </div>
             <div class="row" id="applyModeRow">
@@ -308,6 +328,79 @@ const pointInfo = document.getElementById('pointInfo');
 let trackPoint = null; // { x, y } em coords do vídeo
 let videoMeta = { width: 0, height: 0 };
 let pythonOk = false; // setado pelo check inicial — bloqueia track se false
+let _trackHistory = null; // historico completo do tracking pra desenhar o path
+let _trackVideoSize = null; // {w, h} do video onde tracking rodou (proxy)
+const pathCanvas = document.getElementById('pathCanvas');
+const pathCtx = pathCanvas.getContext('2d');
+
+function drawPath(){
+    pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
+    if(!_trackHistory || !_trackVideoSize) return;
+    const vidRect = vid.getBoundingClientRect();
+    const parent = vid.parentElement.getBoundingClientRect();
+    const cw = vidRect.width, ch = vidRect.height;
+    if(cw < 1 || ch < 1) return;
+    pathCanvas.width = cw;
+    pathCanvas.height = ch;
+    pathCanvas.style.left = (vidRect.left - parent.left) + 'px';
+    pathCanvas.style.top = (vidRect.top - parent.top) + 'px';
+    pathCanvas.style.width = cw + 'px';
+    pathCanvas.style.height = ch + 'px';
+
+    const sx = cw / _trackVideoSize.w;
+    const sy = ch / _trackVideoSize.h;
+    const pts = _trackHistory.filter(h => !h.lost && h.x != null && h.y != null);
+    if(pts.length < 2) return;
+
+    // Sombra/glow externa pra contraste sobre o video
+    pathCtx.shadowColor = 'rgba(0,0,0,.6)';
+    pathCtx.shadowBlur = 4;
+    pathCtx.lineWidth = 2.2;
+    pathCtx.lineCap = 'round';
+    pathCtx.lineJoin = 'round';
+
+    // Segmentos com gradiente: lima saturado no inicio -> ciano no fim
+    for(let i = 1; i < pts.length; i++){
+        const a = pts[i - 1], b = pts[i];
+        const t = i / (pts.length - 1);
+        // mix de lima (#bef264) -> ciano (#22d3ee)
+        const r = Math.round(190 + (34 - 190) * t);
+        const g = Math.round(242 + (211 - 242) * t);
+        const bch = Math.round(100 + (238 - 100) * t);
+        pathCtx.strokeStyle = `rgba(${r},${g},${bch},.95)`;
+        pathCtx.beginPath();
+        pathCtx.moveTo(a.x * sx, a.y * sy);
+        pathCtx.lineTo(b.x * sx, b.y * sy);
+        pathCtx.stroke();
+    }
+
+    // Marcador no inicio (lime) e fim (ciano)
+    pathCtx.shadowBlur = 0;
+    const start = pts[0], end = pts[pts.length - 1];
+    pathCtx.fillStyle = '#bef264';
+    pathCtx.beginPath();
+    pathCtx.arc(start.x * sx, start.y * sy, 4.5, 0, Math.PI * 2);
+    pathCtx.fill();
+    pathCtx.fillStyle = '#22d3ee';
+    pathCtx.beginPath();
+    pathCtx.arc(end.x * sx, end.y * sy, 4.5, 0, Math.PI * 2);
+    pathCtx.fill();
+
+    // Marcador do frame ATUAL: bolinha branca com glow
+    const curTime = vid.currentTime || 0;
+    let cur = pts[0];
+    for(const p of pts){
+        if(p.time != null && p.time > curTime) break;
+        cur = p;
+    }
+    pathCtx.fillStyle = '#fff';
+    pathCtx.shadowColor = 'rgba(190,242,100,.9)';
+    pathCtx.shadowBlur = 10;
+    pathCtx.beginPath();
+    pathCtx.arc(cur.x * sx, cur.y * sy, 5, 0, Math.PI * 2);
+    pathCtx.fill();
+    pathCtx.shadowBlur = 0;
+}
 
 // === Presets ===
 const PRESETS = {
@@ -322,11 +415,7 @@ function applyPreset(key) {
     document.getElementById('smoothing').value = p.smoothing;
     document.getElementById('lambda').value = p.lambda;
     document.querySelectorAll('.preset-btn').forEach(b => {
-        const active = b.dataset.preset === key;
-        b.style.background = active ? 'rgba(190,242,100,.12)' : 'rgba(255,255,255,.05)';
-        b.style.borderColor = active ? 'rgba(190,242,100,.3)' : 'rgba(255,255,255,.08)';
-        b.style.color = active ? 'var(--accent)' : 'var(--text2)';
-        b.style.fontWeight = active ? '600' : '400';
+        b.classList.toggle('active', b.dataset.preset === key);
     });
 }
 document.querySelectorAll('.preset-btn').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
@@ -407,7 +496,8 @@ function loadVideo() {
         layoutCanvas();
         updateTimeDisplay();
     });
-    vid.addEventListener('timeupdate', updateTimeDisplay);
+    vid.addEventListener('timeupdate', () => { updateTimeDisplay(); drawPath(); });
+    vid.addEventListener('seeked', drawPath);
     vid.addEventListener('error', () => {
         setStatus('Erro decodificando: ' + (vid.error?.message || 'codec não suportado'), 'err');
     });
@@ -423,6 +513,7 @@ function layoutCanvas() {
     canvas.style.width = r.width + 'px';
     canvas.style.height = r.height + 'px';
     if (trackPoint) updateMarkerPos();
+    drawPath();
 }
 window.addEventListener('resize', layoutCanvas);
 
@@ -551,6 +642,10 @@ trackBtn.addEventListener('click', async () => {
         trackBtn.disabled = false;
         return;
     }
+    // Salva a trajetoria pra renderizar o path no overlay
+    _trackHistory = track.history;
+    _trackVideoSize = { w: body.metadata.width, h: body.metadata.height };
+    drawPath();
     setProgress(85);
     setStatus('Aplicando ' + track.history.length + ' keyframes no Premiere...', 'warn');
 
