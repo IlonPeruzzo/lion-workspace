@@ -189,6 +189,15 @@ function lwTrackerApplyKeyframes(jsonStr) {
         var ticksPerFrame = TPS / fps;
         // history[0].frame é o startFrame
         var startFrame = data.history[0].frame;
+        // MODE: 'track' (segue ponto, padrao) ou 'stabilize' (trava ponto, posiçao inversa)
+        var mode = (data.mode === 'stabilize') ? 'stabilize' : 'track';
+        _trDbg('mode=' + mode);
+        // Ponto de referencia no primeiro frame (usado tanto pra track quanto stabilize)
+        var refX = data.history[0].x;
+        var refY = data.history[0].y;
+        // Posicao base atual do clip (usada pra stabilize)
+        var baseX = current && current.length >= 2 ? current[0] : (isNormalized ? 0.5 : seqW/2);
+        var baseY = current && current.length >= 2 ? current[1] : (isNormalized ? 0.5 : seqH/2);
         var added = 0;
         var skipped = 0;
 
@@ -200,16 +209,25 @@ function lwTrackerApplyKeyframes(jsonStr) {
             var kfTime = new Time();
             kfTime.ticks = String(Math.round(srcTicks));
 
-            // Valor Position: pixel ou normalizado
-            // Tracking foi feito no PROXY (data.videoWidth × data.videoHeight).
-            // Pixel mode: reescalonar pra coords da sequence.
-            var px = h.x;
-            var py = h.y;
+            // Valor Position:
+            // - track: position = tracked location (clip se posiciona onde o ponto esta)
+            // - stabilize: position = base - (tracked - ref), clip se move oposto ao ponto
+            //   pra que o ponto trackeado fique TRAVADO no lugar
             var val;
-            if (isNormalized) {
-                val = [px / data.videoWidth, py / data.videoHeight];
+            if (mode === 'stabilize') {
+                var dx = h.x - refX;
+                var dy = h.y - refY;
+                if (isNormalized) {
+                    val = [baseX - dx / data.videoWidth, baseY - dy / data.videoHeight];
+                } else {
+                    val = [baseX - dx * seqW / data.videoWidth, baseY - dy * seqH / data.videoHeight];
+                }
             } else {
-                val = [px * seqW / data.videoWidth, py * seqH / data.videoHeight];
+                if (isNormalized) {
+                    val = [h.x / data.videoWidth, h.y / data.videoHeight];
+                } else {
+                    val = [h.x * seqW / data.videoWidth, h.y * seqH / data.videoHeight];
+                }
             }
             try {
                 posProp.addKey(kfTime);
@@ -222,7 +240,7 @@ function lwTrackerApplyKeyframes(jsonStr) {
             } catch(eKf) { _trDbg('  kf[' + hi + '] err: ' + eKf); }
         }
 
-        _trDbg('DONE: added=' + added + ' skipped=' + skipped);
+        _trDbg('DONE mode=' + mode + ' added=' + added + ' skipped=' + skipped);
         try { forceUIRefresh(); } catch(eR) {}
         return 'OK: ' + added + ' keyframes aplicados (' + skipped + ' frames perdidos)';
     } catch(e) { return 'ERR:' + e.toString(); }

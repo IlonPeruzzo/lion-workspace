@@ -235,6 +235,13 @@ body{display:flex;flex-direction:column}
                 <input type="number" id="lambda" value="100" min="0" max="10000" step="10">
             </div>
             <div class="row">
+                <label>Modo de aplicação</label>
+                <select id="trackMode">
+                    <option value="track">🎯 Tracking (seguir ponto)</option>
+                    <option value="stabilize">📌 Estabilizar (travar ponto)</option>
+                </select>
+            </div>
+            <div class="row" id="applyModeRow">
                 <label>Aplicar em</label>
                 <select id="applyMode">
                     <option value="selected">Clip selecionado</option>
@@ -552,6 +559,7 @@ trackBtn.addEventListener('click', async () => {
         const applyPayload = {
             session: SESSION,
             applyMode: document.getElementById('applyMode').value,
+            mode: document.getElementById('trackMode').value, // 'track' | 'stabilize'
             clipInPointTicks: CLIP_IN_TICKS,
             clipStartTicks: CLIP_START_TICKS,
             trackIdx: TRACK_IDX,
