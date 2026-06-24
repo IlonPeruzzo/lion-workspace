@@ -3376,6 +3376,71 @@ function fecharConfig(){document.getElementById('configPanel').classList.remove(
 // ═══════ LION SEARCH — Atalhos tab ═══════
 // LION SEARCH config moved to plugin sidebar — não tem mais UI no app principal
 
+// ===== POR HORA — usa timer do Lion Workspace pra calcular valor final =====
+// PF_IRPF_MONTHLY_THRESHOLD: se a soma BRUTA do mes for menor que isso,
+// nao aplica IRPF na PF (carne-leao isento ate esse valor)
+const PF_IRPF_MONTHLY_THRESHOLD = 5000;
+
+function getRegTimerSeconds(r){
+    let total = 0;
+    if(r && r.tempoEtapas){
+        for(const et in r.tempoEtapas){
+            const v = r.tempoEtapas[et]; if(typeof v==='number' && v>0) total += v;
+        }
+    }
+    // Adiciona tempo "vivo" se o timer esta rodando neste reg
+    try{
+        if(projT && projT.running && projT.currentRegId===r.id){
+            if(!projT.paused) total += (projT.stageElapsed||0) + Math.floor((Date.now()-projT.stageStart)/1000);
+            else total += (projT.stageElapsed||0);
+        }
+    }catch(e){}
+    return total;
+}
+
+// Bruto na moeda do cliente. Para por_hora usa o tempo do timer.
+function getRegBruto(r){
+    if(!r) return 0;
+    const cl = getCl(r.cliente);
+    if(cl && cl.tipoCobranca === 'por_hora'){
+        const secs = getRegTimerSeconds(r);
+        if(secs > 0){
+            return (secs/3600) * (r.valor||0);
+        }
+        // Fallback: usuario digitou horas manualmente (campo legado)
+        if(r.horas && r.horas>0) return r.horas * (r.valor||0);
+        return 0;
+    }
+    return (r.quantidade||0) * (r.valor||0);
+}
+
+// Cache do bruto total do mes em BRL (usado pelo threshold IRPF)
+let _pfMonthlyBrutoCache = null;
+let _pfMonthlyBrutoKey = '';
+function _getPFMonthlyBrutoBRL(monthStr){
+    const key = monthStr + ':' + (regs?regs.length:0);
+    if(_pfMonthlyBrutoKey === key) return _pfMonthlyBrutoCache;
+    let total = 0;
+    if(Array.isArray(regs)){
+        regs.forEach(r=>{
+            if(!r.data || r.data.substring(0,7)!==monthStr) return;
+            const b = getRegBruto(r);
+            const cl = getCl(r.cliente);
+            const moe = (cl&&cl.moeda) || 'BRL';
+            const rate = moe==='BRL' ? 1 : getCotacaoMoeda(moe);
+            total += b * rate;
+        });
+    }
+    _pfMonthlyBrutoCache = total;
+    _pfMonthlyBrutoKey = key;
+    return total;
+}
+function _pfShouldSkipIRPF(){
+    if(cfg.tipoPessoa !== 'PF') return false;
+    const mesAtual = hoje().substring(0,7);
+    return _getPFMonthlyBrutoBRL(mesAtual) < PF_IRPF_MONTHLY_THRESHOLD;
+}
+
 // ===== IMPOSTOS =====
 function calcImp(bruto,cliNome){
     // SHORT CIRCUIT: pra usuários fora do Brasil (LW_SHOW_FISCAL='0'),
@@ -3408,12 +3473,16 @@ function calcImp(bruto,cliNome){
         // PF (Carnê-leão)
         const inss=Math.min(bruto*0.20,1631.48);total+=inss;
         breakdown.push({nome:'INSS',valor:inss,desc:'20% (teto R$ 1.631,48)'});
-        const base=bruto-inss;let ir=0;
-        if(base<=2259.20)ir=0;else if(base<=2826.65)ir=base*0.075-169.44;
-        else if(base<=3751.05)ir=base*0.15-381.44;else if(base<=4664.68)ir=base*0.225-662.77;
-        else ir=base*0.275-896;
-        ir=Math.max(0,ir);total+=ir;
-        if(ir>0) breakdown.push({nome:'IRPF',valor:ir,desc:'tabela progressiva'});
+        // IRPF: nao aplica se faturamento mensal BRUTO < R$ 5.000 (carne-leao isento)
+        const skipIRPF = _pfShouldSkipIRPF();
+        if(!skipIRPF){
+            const base=bruto-inss;let ir=0;
+            if(base<=2259.20)ir=0;else if(base<=2826.65)ir=base*0.075-169.44;
+            else if(base<=3751.05)ir=base*0.15-381.44;else if(base<=4664.68)ir=base*0.225-662.77;
+            else ir=base*0.275-896;
+            ir=Math.max(0,ir);total+=ir;
+            if(ir>0) breakdown.push({nome:'IRPF',valor:ir,desc:'tabela progressiva'});
+        }
         if(inter){const iof=bruto*0.0038;total+=iof;breakdown.push({nome:'IOF',valor:iof,desc:'0,38% sobre câmbio'})}
         else{const iss=bruto*0.05;total+=iss;breakdown.push({nome:'ISS',valor:iss,desc:'5% (serviço nacional)'})}
     }
@@ -3968,7 +4037,7 @@ function renderCli(){
         const vids=regs.filter(r=>r.cliente===c.nome);
         const mesAtual=hoje().substring(0,7);
         const vidsMes=vids.filter(r=>r.data.substring(0,7)===mesAtual);
-        const totalMes=vidsMes.reduce((s,r)=>s+r.quantidade*r.valor,0);
+        const totalMes=vidsMes.reduce((s,r)=>s+getRegBruto(r),0);
         let links='';
         if(c.yt)links+=`<span class="cc-link-badge" style="background:rgba(255,0,0,.1);color:#ff4444;border-color:rgba(255,0,0,.18)">YouTube</span>`;
         if(c.tt)links+=`<span class="cc-link-badge" style="background:rgba(255,255,255,.06);color:#e0e0e0;border-color:rgba(255,255,255,.12)">TikTok</span>`;
@@ -4087,13 +4156,15 @@ function abrirRegistrar(nome){
     document.getElementById('nomeVid').value='';
     const isHora=cl.tipoCobranca==='por_hora';
     const isThumb=_getCliServiços(cl).some(s=>s.toLowerCase()==='thumbnail');
-    document.getElementById('fgHoras').style.display=isHora?'':'none';
+    // Por hora: esconde Horas (timer conta automaticamente) — Valor vira rate/hora
+    document.getElementById('fgHoras').style.display='none';
     document.getElementById('horasVid').value='';
     const sym=getCliMoedaSymbol(cl);
     document.getElementById('lblVal').textContent=isHora?`Valor/Hora (${sym})`:`Valor Unitario (${sym})`;
     const info=document.getElementById('regModalCliInfo');
     const svcLabel=_getCliServiços(cl).join(', ')||'Sem serviço';
-    if(info)info.innerHTML=`${getAvatar(cl)}<div><strong style="color:var(--text)">${cl.nome}</strong> ${flagSvg(getCliBandeira(cl))}<div style="font-size:.78rem;color:var(--text3);margin-top:2px">${svcLabel} · ${cl.moeda||'BRL'} · ${getPayMethod(cl.pagamento||'outro').nome}${isHora?' · Por hora':''}</div></div>`;
+    const horaHint=isHora?`<div style="font-size:.7rem;color:var(--accent);margin-top:4px;display:flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Valor total sera calculado pelo tempo do timer no Lion Workspace</div>`:'';
+    if(info)info.innerHTML=`${getAvatar(cl)}<div><strong style="color:var(--text)">${cl.nome}</strong> ${flagSvg(getCliBandeira(cl))}<div style="font-size:.78rem;color:var(--text3);margin-top:2px">${svcLabel} · ${cl.moeda||'BRL'} · ${getPayMethod(cl.pagamento||'outro').nome}${isHora?' · Por hora':''}</div>${horaHint}</div>`;
     renderRegServicoTipo(cl.nome);
     document.getElementById('regModalTitle').textContent=`Registrar Serviço — ${cl.nome}`;
     document.getElementById('modRegistrar').classList.add('active');
@@ -4233,7 +4304,7 @@ function showTaxasInfo(){
         const meio=r.pagamento||'outro';
         const rcl=getCl(r.cliente);
         const moe=rcl?.moeda||'BRL';
-        const b=r.quantidade*r.valor;
+        const b=getRegBruto(r);
         const tx=calcTaxaMeio(b,meio,moe);
         const rate=getCotacaoMoeda(moe);
         const txBRL=moe==='BRL'?tx.taxaValor:tx.taxaValor*rate;
@@ -4269,7 +4340,7 @@ function showImpInfo(){
     let totalBruto=0,totalTaxas=0,totalImp=0;
     const porCliente={};
     mesRegs.forEach(r=>{
-        const b=r.quantidade*r.valor;
+        const b=getRegBruto(r);
         const rcl=getCl(r.cliente);
         const moe=rcl?.moeda||'BRL';
         const rate=getCotacaoMoeda(moe);
@@ -4672,7 +4743,7 @@ function renderVidsAndamento(){
                 <div class="kb-title" title="${r.nome||'Edição de Vídeo'}">${r.nome||'Edição de Vídeo'}</div>
                 <div class="kb-meta">${avHtml}<span>${r.cliente}</span><span style="margin-left:auto;border-color:${pm.color}33;color:${pm.color}">${payIcon(pm)}</span></div>
                 <div class="kb-footer">
-                    <span class="kb-val">${s} ${fb(r.quantidade*r.valor)}</span>
+                    <span class="kb-val">${s} ${fb(getRegBruto(r))}</span>
                     <div class="kb-actions">
                         ${vidTimeStr?`<span style="font-size:.6rem;color:var(--text3);display:inline-flex;align-items:center;gap:2px"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${vidTimeStr}</span>`:''}
                         ${prevEtapa?`<button onclick="changeStage(${r.id},'${prevEtapa.replace(/'/g,"\\'")}');event.stopPropagation()" title="Voltar para ${prevEtapa}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg></button>`:''}
@@ -4756,7 +4827,7 @@ function renderRegs(){
     const tb=document.getElementById('tBody'),em=document.getElementById('emptyState');
     if(!lista.length){tb.innerHTML='';em.style.display='block';return}em.style.display='none';
     tb.innerHTML=lista.map(r=>{
-        const b=r.quantidade*r.valor,d=r.data.split('-').reverse().join('/');
+        const b=getRegBruto(r),d=r.data.split('-').reverse().join('/');
         const meio=r.pagamento||'outro';
         const rcl=getCl(r.cliente);
         const tx=calcTaxaMeio(b,meio,rcl?.moeda);
@@ -5224,7 +5295,7 @@ function updStats(){
     });
     let tv=0,tb=0,ti=0,tl=0,ttx=0,pendB=0;
     mesRegs.forEach(r=>{
-        const b=r.quantidade*r.valor;
+        const b=getRegBruto(r);
         const rcl=getCl(r.cliente);
         const moe=rcl?.moeda||'BRL';
         const rate=getCotacaoMoeda(moe);
@@ -5245,7 +5316,7 @@ function updStats(){
     let dvid=0,dbruto=0;
     diaRegs.forEach(r=>{
         const rcl=getCl(r.cliente);const moe=rcl?.moeda||'BRL';const rate=getCotacaoMoeda(moe);
-        const b=r.quantidade*r.valor;const bBRL=moe==='BRL'?b:b*rate;
+        const b=getRegBruto(r);const bBRL=moe==='BRL'?b:b*rate;
         dvid+=r.quantidade;dbruto+=bBRL;
     });
     document.getElementById('sVid').textContent=tv;
