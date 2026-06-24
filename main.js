@@ -3468,6 +3468,8 @@ function toggleLoop(){
                             // Plugin JSX envia `inPointTicks` (não clipInPointTicks).
                             // Sem isso, keyframes vão pra source-time 0 (fora do trecho visível).
                             clipInTicks: String(data.inPointTicks || data.clipInPointTicks || '0'),
+                            clipStartTicks: String(data.clipStartTicks || '0'),
+                            trackIdx: String(data.trackIdx != null ? data.trackIdx : -1),
                         }).toString();
                         const win = new BrowserWindow({
                             width: 1280, height: 800,

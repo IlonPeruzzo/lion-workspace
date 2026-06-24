@@ -72,6 +72,7 @@ function lwTrackerGetClipInfo() {
         out += ',"duration":' + durSec;
         out += ',"clipStartTicks":"' + clipStartTicks + '"';
         out += ',"inPointTicks":"' + inTicks + '"';
+        out += ',"trackIdx":' + topmost.trackIdx;
         out += '}';
         return out;
     } catch(e) { return 'ERR:' + e.toString(); }
@@ -112,6 +113,27 @@ function lwTrackerApplyKeyframes(jsonStr) {
                     try { if (seq.videoTracks[t].clips[c].isSelected()) clips.push(seq.videoTracks[t].clips[c]); } catch(e2) {}
                 }
             }
+        }
+        // Fallback: seleção foi perdida durante o tracking — usa clipStartTicks + trackIdx
+        // pra achar o clip exato que o usuario tinha quando abriu o tracker.
+        if (clips.length === 0 && data.clipStartTicks && data.trackIdx != null && data.trackIdx >= 0) {
+            _trDbg('selection lost — buscando por trackIdx=' + data.trackIdx + ' startTicks=' + data.clipStartTicks);
+            try {
+                var tgtTrack = data.trackIdx;
+                var tgtTicks = String(data.clipStartTicks);
+                if (tgtTrack < seq.videoTracks.numTracks) {
+                    var trk = seq.videoTracks[tgtTrack];
+                    for (var ck = 0; ck < trk.clips.numItems; ck++) {
+                        try {
+                            if (String(trk.clips[ck].start.ticks) === tgtTicks) {
+                                clips.push(trk.clips[ck]);
+                                _trDbg('found clip by position');
+                                break;
+                            }
+                        } catch(eF) {}
+                    }
+                }
+            } catch(eL) { _trDbg('fallback lookup err: ' + eL); }
         }
         if (clips.length === 0) { _trDbg('no_selection'); return 'ERR:no_selection'; }
         var clip = clips[0];
@@ -740,9 +762,15 @@ function _applyAnchorToComponent(comp, clip, anchorNorm, compensate, seqW, seqH)
         else if (sv instanceof Array) scale = sv[0] / 100;
     } catch (e) {}
 
-    // AUTO-DETECT: normalized (0-1) vs pixel mode
-    // If both anchor values are < 2.0, Premiere is using normalized coordinates
-    var isNormalized = (Math.abs(oldAnchor[0]) < 2.0 && Math.abs(oldAnchor[1]) < 2.0);
+    // MODE: Motion/VectorMotion sao SEMPRE pixel. Transform e normalized.
+    // O auto-detect antigo (anchor < 2.0) falhava quando anchor estava em (0,0)
+    // num clip em pixel mode — botava normalized incorretamente.
+    var compName = String(comp.displayName || '').toLowerCase();
+    var isTransform = false;
+    for (var ti = 0; ti < _transformNames.length; ti++) {
+        if (compName.indexOf(String(_transformNames[ti]).toLowerCase()) === 0) { isTransform = true; break; }
+    }
+    var isNormalized = isTransform;
 
     if (isNormalized) {
         // ═══ NORMALIZED MODE ═══

@@ -272,6 +272,8 @@ const OUT_SEC = parseFloat(params.get('outSec')) || 0;
 const ORIG_IN_SEC = parseFloat(params.get('origInSec')) || IN_SEC;
 const ORIG_OUT_SEC = parseFloat(params.get('origOutSec')) || OUT_SEC;
 const CLIP_IN_TICKS = params.get('clipInTicks') || '0';
+const CLIP_START_TICKS = params.get('clipStartTicks') || '0';
+const TRACK_IDX = parseInt(params.get('trackIdx') || '-1', 10);
 const API = 'http://127.0.0.1:9847';
 function authHeaders() {
     const h = { 'Content-Type': 'application/json' };
@@ -551,6 +553,8 @@ trackBtn.addEventListener('click', async () => {
             session: SESSION,
             applyMode: document.getElementById('applyMode').value,
             clipInPointTicks: CLIP_IN_TICKS,
+            clipStartTicks: CLIP_START_TICKS,
+            trackIdx: TRACK_IDX,
             fps: FPS,
             videoWidth: body.metadata.width,
             videoHeight: body.metadata.height,
