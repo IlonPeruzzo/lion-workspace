@@ -1,6 +1,6 @@
 {
   "name": "lion-workspace",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "Lion Workspace - Gestao para Editores de Video",
   "main": "main.js",
   "scripts": {
@@ -124,7 +124,16 @@
       "node_modules/onnxruntime-node/**/*",
       "node_modules/onnxruntime-common/**/*",
       "node_modules/onnxruntime-web/**/*",
-      "node_modules/sharp/**/*"
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*",
+      "node_modules/detect-libc/**/*",
+      "node_modules/color/**/*",
+      "node_modules/color-convert/**/*",
+      "node_modules/color-name/**/*",
+      "node_modules/color-string/**/*",
+      "node_modules/simple-swizzle/**/*",
+      "node_modules/is-arrayish/**/*",
+      "node_modules/semver/**/*"
     ],
     "extraResources": [
       {

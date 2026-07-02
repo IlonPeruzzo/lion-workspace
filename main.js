@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, powerMonitor, Menu, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, powerMonitor, Menu, globalShortcut, shell } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -246,6 +246,18 @@ function createWindow() {
     mainWin = new BrowserWindow(opts);
     mainWin.loadFile('index.html');
     mainWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    // DEBUG: abre devtools embutido no bottom pra ver erros de JS
+    mainWin.webContents.once('did-finish-load', () => {
+        try { mainWin.webContents.openDevTools({ mode: 'bottom' }); } catch(e) { console.error('devtools open err:', e); }
+    });
+    // Shortcuts pra DevTools: Ctrl+Shift+I / F12 / Ctrl+R (reload)
+    mainWin.webContents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown') return;
+        const key = (input.key || '').toLowerCase();
+        if ((input.control || input.meta) && input.shift && key === 'i') { mainWin.webContents.toggleDevTools(); event.preventDefault(); }
+        else if (key === 'f12') { mainWin.webContents.toggleDevTools(); event.preventDefault(); }
+        else if ((input.control || input.meta) && key === 'r') { mainWin.webContents.reload(); event.preventDefault(); }
+    });
 
     // When main window closes, kill focus mode só overlays don't keep the app alive
     mainWin.on('close', () => {
@@ -617,6 +629,507 @@ ipcMain.handle('open-folder', () => {
     exec(isWin ? 'explorer.exe' : 'open ~', { windowsHide: true });
     return true;
 });
+
+/* ═══════════════════════════════════════════════════════════════════
+   DISCORD AUTH — login via OAuth + verificacao de role em guild especifica
+   Config em lw-discord-config.json (client_id, client_secret, guild_id,
+   allowed_role_ids). Sessao em lw-discord-session.json.
+   ═══════════════════════════════════════════════════════════════════ */
+const DISCORD_CONFIG_FILE = path.join(currentUD, 'lw-discord-config.json');
+const DISCORD_SESSION_FILE = path.join(currentUD, 'lw-discord-session.json');
+const DISCORD_REDIRECT_URI = 'http://127.0.0.1:9847/auth/discord/callback';
+// URL da Edge Function que troca code por session (client_secret fica no server, nao no app)
+const DISCORD_AUTH_PROXY_URL = 'https://rxwprlqskwylhvpjiung.supabase.co/functions/v1/dynamic-service';
+
+// ═══ Anti-tamper / anti-crack detection ═══
+// Roda so no app instalado (nao alarma em dev). Detecta indicios de reverse engineering
+// e envia alerta pro canal de logs via Edge Function.
+let _tamperLastAlertTs = 0;
+const _tamperSuspiciousProcs = [
+    'x64dbg', 'x32dbg', 'ollydbg', 'ida64', 'ida.exe', 'ghidra', 'radare2', 'r2.exe',
+    'frida', 'cheatengine', 'ce.exe', 'wireshark', 'fiddler', 'charles',
+    'processhacker', 'processexplorer', 'procexp', 'httpdebugger',
+    'dnspy', 'ilspy', 'reflector', 'jd-gui', 'jadx', 'apktool',
+    'binaryninja', 'binaryninja.exe', 'hopperv4', 'hexrays',
+];
+
+async function _runTamperChecks() {
+    if (!app.isPackaged) return; // pula em dev (electron .)
+    const detections = [];
+    // 1) Debugger via inspector API
+    try {
+        const inspector = require('inspector');
+        const url = inspector.url();
+        if (url) detections.push({ type: 'inspector_attached', detail: url });
+    } catch { }
+    // 2) execArgv contem debug flags
+    if (process.execArgv.some(a => a.includes('--inspect') || a.includes('--debug') || a.includes('--remote-debugging'))) {
+        detections.push({ type: 'debug_arg', detail: process.execArgv.join(' ') });
+    }
+    // 3) app.asar ausente = rodando de arquivos extraidos
+    try {
+        const asarPath = path.join(process.resourcesPath, 'app.asar');
+        if (!fs.existsSync(asarPath)) detections.push({ type: 'asar_missing', detail: process.resourcesPath });
+    } catch { }
+    // 4) Processos de RE rodando
+    try {
+        const running = await new Promise((resolve) => {
+            require('child_process').exec('tasklist /FO CSV /NH', { timeout: 4000, windowsHide: true }, (err, stdout) => {
+                if (err) return resolve([]);
+                const lower = stdout.toLowerCase();
+                const found = new Set();
+                for (const t of _tamperSuspiciousProcs) {
+                    if (lower.includes(t.toLowerCase())) found.add(t);
+                }
+                resolve([...found]);
+            });
+        });
+        if (running.length > 0) detections.push({ type: 'suspicious_process', detail: running.join(', ') });
+    } catch { }
+
+    if (detections.length === 0) return;
+    // Rate limit: max 1 alerta a cada 30min
+    const now = Date.now();
+    if (now - _tamperLastAlertTs < 30 * 60 * 1000) return;
+    _tamperLastAlertTs = now;
+
+    try {
+        const session = loadValidDiscordSession();
+        const payload = {
+            action: 'tamper_alert',
+            detections,
+            session_info: session ? {
+                discord_user_id: session.discord_user_id,
+                username: session.username,
+                avatar_url: session.avatar_url,
+            } : null,
+            device: {
+                fingerprint: getDeviceFingerprint(),
+                hostname: os.hostname(),
+                platform: os.platform(),
+                arch: os.arch(),
+                app_version: app.getVersion(),
+            },
+        };
+        await fetch(DISCORD_AUTH_PROXY_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + (process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY),
+            },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(5000),
+        });
+    } catch (e) {
+        // silencioso
+    }
+}
+
+// Agenda checks: 10s apos boot, depois a cada 5 min
+setTimeout(() => { _runTamperChecks().catch(() => {}); setInterval(() => _runTamperChecks().catch(() => {}), 5 * 60 * 1000); }, 10000);
+
+// ═══ Boot ping — pega quem abre o app mesmo sem logar ═══
+// Roda uma vez por instalação (marca arquivo local). Se alguem apaga o marker
+// e reabre, dispara de novo (indicio de tampering).
+async function _sendBootPing() {
+    if (!app.isPackaged) return; // pula em dev
+    const flagFile = path.join(currentUD, '.lw-boot-recorded');
+    if (fs.existsSync(flagFile)) return;
+    try { fs.writeFileSync(flagFile, new Date().toISOString()); } catch { }
+    try {
+        const session = loadValidDiscordSession();
+        await fetch(DISCORD_AUTH_PROXY_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + (process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY),
+            },
+            body: JSON.stringify({
+                action: 'boot_ping',
+                session_info: session ? {
+                    discord_user_id: session.discord_user_id,
+                    username: session.username,
+                    avatar_url: session.avatar_url,
+                } : null,
+                device: {
+                    fingerprint: getDeviceFingerprint(),
+                    hostname: os.hostname(),
+                    platform: os.platform(),
+                    arch: os.arch(),
+                    app_version: app.getVersion(),
+                },
+            }),
+            signal: AbortSignal.timeout(5000),
+        });
+    } catch (e) { /* silencioso */ }
+}
+setTimeout(() => _sendBootPing().catch(() => {}), 3000);
+// Client ID e Guild ID sao publicos (aparecem na URL do OAuth) — pode ficar hardcoded.
+// Client secret NUNCA fica aqui — so na Edge Function do Supabase.
+const DISCORD_APP_CLIENT_ID = '1520130072483336312';
+const DISCORD_APP_GUILD_ID = '1515931707935686847';
+let _discordOAuthState = null; // CSRF token de OAuth pendente
+const _discordOAuthConsumedStates = new Set(); // states ja processados (dedup callbacks duplicados do browser)
+
+function loadDiscordConfig() {
+    let saved = {};
+    try { saved = JSON.parse(fs.readFileSync(DISCORD_CONFIG_FILE, 'utf8')); } catch (e) {}
+    // Merge: valores hardcoded (client_id / guild_id publicos) tem prioridade sobre arquivo local.
+    // Isso garante que qualquer usuario que instala o app ja tem tudo configurado.
+    return {
+        client_id: DISCORD_APP_CLIENT_ID,
+        guild_id: DISCORD_APP_GUILD_ID,
+        client_secret: 'proxied', // dummy — real fica na Edge Function
+        allowed_role_ids: Array.isArray(saved.allowed_role_ids) ? saved.allowed_role_ids : [],
+        max_devices: typeof saved.max_devices === 'number' ? saved.max_devices : 0,
+        discord_webhook_url: saved.discord_webhook_url || '',
+    };
+}
+function saveDiscordConfigFile(cfg) {
+    try {
+        const merged = { ...loadDiscordConfig(), ...(cfg || {}) };
+        fs.writeFileSync(DISCORD_CONFIG_FILE, JSON.stringify(merged, null, 2));
+        return true;
+    } catch (e) { console.error('[discord] save config err:', e); return false; }
+}
+function loadDiscordSession() {
+    try { return JSON.parse(fs.readFileSync(DISCORD_SESSION_FILE, 'utf8')); }
+    catch (e) { return null; }
+}
+function saveDiscordSessionFile(s) {
+    try { fs.writeFileSync(DISCORD_SESSION_FILE, JSON.stringify(s, null, 2)); return true; }
+    catch (e) { console.error('[discord] save session err:', e); return false; }
+}
+function clearDiscordSession() {
+    try { fs.unlinkSync(DISCORD_SESSION_FILE); } catch (e) {}
+    // Invalida todos os tokens de plugin que dependiam dessa sessao Discord
+    try {
+        let removed = 0;
+        if (typeof pluginSessions !== 'undefined' && pluginSessions && pluginSessions.forEach) {
+            const toRemove = [];
+            pluginSessions.forEach((sess, tok) => {
+                if (sess && (sess.discordId || sess.authProvider === 'discord')) toRemove.push(tok);
+            });
+            toRemove.forEach(t => pluginSessions.delete(t));
+            removed = toRemove.length;
+            if (removed > 0 && typeof savePluginSessions === 'function') savePluginSessions();
+        }
+        if (removed > 0) console.log('[discord] logout: invalidated ' + removed + ' plugin token(s)');
+    } catch (e) { console.warn('[discord] plugin sessions cleanup err:', e); }
+}
+
+async function _discordFetch(url, options) {
+    const resp = await fetch(url, options);
+    const txt = await resp.text();
+    let json;
+    try { json = txt ? JSON.parse(txt) : {}; } catch (e) { json = { _raw: txt }; }
+    return { ok: resp.ok, status: resp.status, data: json };
+}
+
+async function _discordExchangeCode(code, cfg) {
+    const body = new URLSearchParams({
+        client_id: cfg.client_id,
+        client_secret: cfg.client_secret,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: DISCORD_REDIRECT_URI,
+    }).toString();
+    const r = await _discordFetch('https://discord.com/api/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+    });
+    if (!r.ok) throw new Error('token exchange failed (' + r.status + '): ' + JSON.stringify(r.data));
+    return r.data;
+}
+async function _discordGetUser(accessToken) {
+    const r = await _discordFetch('https://discord.com/api/users/@me', {
+        headers: { 'Authorization': 'Bearer ' + accessToken },
+    });
+    if (!r.ok) throw new Error('get user failed (' + r.status + ')');
+    return r.data;
+}
+async function _discordGetGuildMember(accessToken, guildId) {
+    const r = await _discordFetch(`https://discord.com/api/users/@me/guilds/${guildId}/member`, {
+        headers: { 'Authorization': 'Bearer ' + accessToken },
+    });
+    if (!r.ok) return null;
+    return r.data;
+}
+function _discordBuildAuthUrl(state, cfg) {
+    const scope = ['identify', 'guilds', 'guilds.members.read'].join(' ');
+    const p = new URLSearchParams({
+        client_id: cfg.client_id,
+        response_type: 'code',
+        redirect_uri: DISCORD_REDIRECT_URI,
+        scope,
+        state,
+        prompt: 'none',
+    }).toString();
+    return 'https://discord.com/api/oauth2/authorize?' + p;
+}
+
+// ═══ Discord Device Tracking (locally + optional webhook) ═══
+const DISCORD_DEVICES_FILE = path.join(currentUD, 'lw-discord-devices.json');
+
+function loadDiscordDevices() {
+    try {
+        const j = JSON.parse(fs.readFileSync(DISCORD_DEVICES_FILE, 'utf8'));
+        return Array.isArray(j.devices) ? j.devices : [];
+    } catch (e) { return []; }
+}
+function saveDiscordDevices(devices) {
+    try { fs.writeFileSync(DISCORD_DEVICES_FILE, JSON.stringify({ devices }, null, 2)); return true; }
+    catch (e) { console.error('[discord-device] save err:', e); return false; }
+}
+
+// Registra ou atualiza este device pra este discord_user. Retorna { device, isNew, blocked, tooMany }
+function registerDiscordDevice(discordUserId, meta) {
+    const fp = getDeviceFingerprint();
+    const cfg = loadDiscordConfig();
+    const maxDevices = Number.isFinite(cfg.max_devices) && cfg.max_devices > 0 ? cfg.max_devices : 0;
+    const devices = loadDiscordDevices();
+    const existing = devices.find(d => d.fingerprint === fp && d.discord_user_id === discordUserId);
+    if (existing) {
+        if (existing.blocked) return { device: existing, isNew: false, blocked: true };
+        existing.last_seen = Date.now();
+        existing.username = (meta && meta.username) || existing.username;
+        existing.hostname = os.hostname();
+        saveDiscordDevices(devices);
+        return { device: existing, isNew: false, blocked: false };
+    }
+    // Novo device pra esse user. Verifica limite.
+    const userDevices = devices.filter(d => d.discord_user_id === discordUserId && !d.blocked);
+    if (maxDevices > 0 && userDevices.length >= maxDevices) {
+        return { device: null, isNew: false, blocked: false, tooMany: true, count: userDevices.length, max: maxDevices };
+    }
+    const dev = {
+        fingerprint: fp,
+        discord_user_id: discordUserId,
+        username: (meta && meta.username) || '',
+        global_name: (meta && meta.global_name) || '',
+        hostname: os.hostname(),
+        platform: os.platform(),
+        arch: os.arch(),
+        first_seen: Date.now(),
+        last_seen: Date.now(),
+        blocked: false,
+    };
+    devices.push(dev);
+    saveDiscordDevices(devices);
+    // Webhook opcional (dispara em background, nao bloqueia login)
+    if (cfg.discord_webhook_url) {
+        _postDiscordWebhook(cfg.discord_webhook_url, {
+            content: null,
+            embeds: [{
+                title: 'Novo device logado',
+                color: 0x5865F2,
+                fields: [
+                    { name: 'Usuario', value: `<@${discordUserId}> (${(meta && meta.global_name) || (meta && meta.username) || '?'})`, inline: false },
+                    { name: 'Hostname', value: '`' + os.hostname() + '`', inline: true },
+                    { name: 'OS', value: os.platform() + ' ' + os.arch(), inline: true },
+                    { name: 'Fingerprint', value: '`' + fp.slice(0, 16) + '…`', inline: false },
+                ],
+                timestamp: new Date().toISOString(),
+            }],
+        }).catch(() => {});
+    }
+    return { device: dev, isNew: true, blocked: false };
+}
+
+// Sync Discord user info pro Supabase (tabela discord_users).
+// Fails silently se tabela nao existe.
+async function syncDiscordUserToSupabase(session) {
+    try {
+        if (!supabase || !session || !session.discord_user_id) return;
+        await supabase.from('discord_users').upsert({
+            discord_id: session.discord_user_id,
+            username: session.username || '',
+            global_name: session.global_name || session.username || '',
+            avatar_url: session.avatar_url || '',
+            roles: session.roles || [],
+            allowed_roles_matched: session.allowed_roles_matched || [],
+            last_login: new Date().toISOString(),
+        }, { onConflict: 'discord_id' });
+        console.log('[discord:supabase] user synced: ' + (session.username || session.discord_user_id));
+    } catch (e) {
+        console.warn('[discord:supabase] user sync failed:', e.message);
+    }
+}
+// Sync device do Discord pro Supabase (tabela discord_devices)
+async function syncDiscordDeviceToSupabase(device) {
+    try {
+        if (!supabase || !device) return;
+        await supabase.from('discord_devices').upsert({
+            discord_id: device.discord_user_id,
+            fingerprint: device.fingerprint,
+            hostname: device.hostname || '',
+            platform: device.platform || '',
+            arch: device.arch || '',
+            username: device.username || '',
+            first_seen: new Date(device.first_seen).toISOString(),
+            last_seen: new Date(device.last_seen).toISOString(),
+            blocked: !!device.blocked,
+        }, { onConflict: 'discord_id,fingerprint' });
+    } catch (e) {
+        console.warn('[discord:supabase] device sync failed:', e.message);
+    }
+}
+
+async function _postDiscordWebhook(url, payload) {
+    try {
+        await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+    } catch (e) { console.warn('[discord-webhook] err:', e.message); }
+}
+
+// Sessao ja foi validada pela Edge Function no login. Aqui so checa se existe
+// e nao expirou. Revalidacao live contra Discord API seria via Edge Function tambem.
+async function loadValidDiscordSession() {
+    const sess = loadDiscordSession();
+    if (!sess || !sess.discord_user_id) return { session: null, valid: false, reason: 'no_session' };
+    if (sess.expires_at && Date.now() > sess.expires_at) {
+        clearDiscordSession();
+        return { session: null, valid: false, reason: 'expired' };
+    }
+    return { session: sess, valid: true };
+}
+
+// Pagina HTML de resposta do callback (mostrada no browser depois do OAuth)
+let _lionIconB64 = '';
+let _carimboB64 = '';
+try {
+    const _iconPath = path.join(__dirname, 'build', 'icon.png');
+    if (fs.existsSync(_iconPath)) {
+        _lionIconB64 = 'data:image/png;base64,' + fs.readFileSync(_iconPath).toString('base64');
+    }
+    const _carimboPath = path.join(__dirname, 'build', 'carimbo-1m.png');
+    if (fs.existsSync(_carimboPath)) {
+        _carimboB64 = 'data:image/png;base64,' + fs.readFileSync(_carimboPath).toString('base64');
+    }
+} catch (e) {}
+
+function _discordCallbackHtml(title, message, isError, opts) {
+    opts = opts || {};
+    const accent = isError ? '#f87171' : '#bef264';
+    const accentSoft = isError ? 'rgba(248,113,113,.10)' : 'rgba(190,242,100,.10)';
+    const accentGlow = isError ? 'rgba(248,113,113,.18)' : 'rgba(190,242,100,.18)';
+    const iconSvg = isError
+        ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+        : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const autoClose = isError ? '' : `<script>setTimeout(()=>{try{window.close();}catch(e){}},4000);</script>`;
+    const avatarImg = (!isError && opts.avatarUrl)
+        ? `<img src="${opts.avatarUrl}" alt="">`
+        : '';
+    const showStamp = !isError && opts.firstLogin && _carimboB64;
+    // Random stamp position — 4 cantos INTERNOS do card (overflow:hidden clipa se passar da borda)
+    const stampCorners = [
+        { top: '8px', right: '8px', left: 'auto', bottom: 'auto', rot: 12 + (Math.random()*10-5) },   // top-right
+        { top: '8px', left: '8px', right: 'auto', bottom: 'auto', rot: -12 + (Math.random()*10-5) },  // top-left
+        { bottom: '8px', right: '8px', top: 'auto', left: 'auto', rot: -8 + (Math.random()*10-5) },   // bottom-right
+        { bottom: '8px', left: '8px', top: 'auto', right: 'auto', rot: 8 + (Math.random()*10-5) },    // bottom-left
+    ];
+    const sc = stampCorners[Math.floor(Math.random() * stampCorners.length)];
+    const stampInline = showStamp ? `top:${sc.top};left:${sc.left};right:${sc.right};bottom:${sc.bottom};--rot:${sc.rot}deg` : '';
+    // From where does it fly in — de fora do card, na diagonal do canto oposto
+    const flyFromX = (sc.right !== 'auto') ? 260 : -260;
+    const flyFromY = (sc.bottom !== 'auto') ? 260 : -260;
+    const stampSvg = showStamp ? `<img src="${_carimboB64}" class="stamp" style="${stampInline}" alt="1 Month of License">` : '';
+    // Confetti particles (subtle burst)
+    const confettiColors = ['#bef264', '#5865F2', '#3b9df5', '#fbbf24', '#f5f5f5'];
+    const confettiHtml = !isError ? `<div class="confetti">${Array.from({length:28}).map((_,i)=>{
+        const angle = (i / 28) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const dist = 70 + Math.random() * 90;
+        const dx = Math.cos(angle) * dist;
+        const dy = Math.sin(angle) * dist - 20;
+        const rot = (Math.random() - 0.5) * 720;
+        const color = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+        const size = 4 + Math.random() * 4;
+        const delay = i * 10;
+        return `<span class="c" style="--dx:${dx.toFixed(1)}px;--dy:${dy.toFixed(1)}px;--rot:${rot.toFixed(0)}deg;background:${color};width:${size}px;height:${size*.6}px;animation-delay:${delay}ms"></span>`;
+    }).join('')}</div>` : '';
+    // Escape special chars pra JS string
+    const messageEsc = message.replace(/[\\'"]/g, s => '\\' + s);
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${title} — Lion Workspace</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:radial-gradient(ellipse at top left,rgba(190,242,100,.05),transparent 55%),radial-gradient(ellipse at bottom right,rgba(88,101,242,.05),transparent 55%),#050505;color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.card{max-width:420px;width:calc(100% - 40px);padding:44px 36px 40px;text-align:center;background:rgba(15,15,15,.6);border:1px solid rgba(255,255,255,.06);border-radius:20px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 32px 80px -20px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden}
+${showStamp ? `
+.card{animation:enter .5s cubic-bezier(.3,.8,.4,1),card-shake .45s ease 2.1s}
+@keyframes card-shake{0%,100%{transform:translate(0,0)}15%{transform:translate(-4px,-2px) rotate(-.3deg)}30%{transform:translate(4px,2px) rotate(.3deg)}45%{transform:translate(-3px,1px) rotate(-.2deg)}60%{transform:translate(3px,-1px) rotate(.2deg)}75%{transform:translate(-2px,1px)}}
+` : `.card{animation:enter .5s cubic-bezier(.3,.8,.4,1)}`}
+@keyframes enter{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.badge{width:72px;height:72px;border-radius:50%;background:${accentSoft};display:flex;align-items:center;justify-content:center;margin:0 auto 22px;position:relative;animation:badge-pulse 2.4s ease-in-out infinite}
+.badge::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1px solid ${accent};opacity:.22;animation:badge-ring 2.4s ease-out infinite;pointer-events:none;z-index:3}
+@keyframes badge-pulse{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 18px 1px ${accentGlow}}}
+@keyframes badge-ring{0%{transform:scale(.9);opacity:.35}70%{transform:scale(1.35);opacity:0}100%{transform:scale(1.35);opacity:0}}
+.badge .icon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden}
+.badge .party-group{position:absolute;inset:0;pointer-events:none}
+.badge .avatar-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden}
+.badge .avatar-wrap img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.badge .party-hat{position:absolute;top:-15px;left:6px;width:34px;height:34px;z-index:5;transform-origin:bottom center}
+${avatarImg ? `
+.badge .icon{animation:icon-fade-out .4s ease 1s forwards}
+.badge .party-group{opacity:0;animation:party-in .55s cubic-bezier(.3,.9,.4,1.4) 1.2s forwards,happy-loop 1.4s cubic-bezier(.3,.9,.4,1.3) ${showStamp ? '2.8s' : '2s'} infinite}
+.badge .avatar-wrap{transform:scale(0);animation:avatar-scale-in .5s cubic-bezier(.3,.9,.4,1.4) 1.2s forwards}
+.badge .party-hat{opacity:0;animation:hat-drop .55s cubic-bezier(.3,.9,.4,1.4) 1.7s forwards}
+@keyframes icon-fade-out{to{opacity:0;transform:scale(.4);filter:blur(2px)}}
+@keyframes party-in{to{opacity:1}}
+@keyframes avatar-scale-in{0%{transform:scale(0) rotate(-20deg)}70%{transform:scale(1.15) rotate(2deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes happy-loop{0%,55%,100%{transform:translateY(0)}20%{transform:translateY(-14px)}32%{transform:translateY(-2px)}42%{transform:translateY(-6px)}}
+@keyframes hat-drop{0%{opacity:0;transform:translateY(-30px) rotate(-40deg) scale(.5)}75%{opacity:1;transform:translateY(0) rotate(-10deg) scale(1.15)}100%{opacity:1;transform:translateY(0) rotate(-18deg) scale(1)}}
+` : ''}
+h1{font-size:1.4rem;font-weight:800;letter-spacing:-.4px;color:${accent};margin-bottom:10px;text-shadow:0 0 24px ${accentSoft}}
+p{font-size:.86rem;line-height:1.55;color:#a3a3a3;max-width:340px;margin:0 auto}
+.brand{position:fixed;bottom:16px;left:20px;text-align:left;font-size:.66rem;color:#525252;letter-spacing:.3px}
+.brand b{color:#737373;font-weight:600}
+${showStamp ? `
+.stamp{position:absolute;width:96px;height:96px;z-index:20;opacity:0;transform:translate(${flyFromX}px,${flyFromY}px) rotate(-35deg) scale(3);animation:stamp-slam .65s cubic-bezier(.85,-.1,.15,1.05) 1.5s forwards;pointer-events:none;filter:drop-shadow(0 2px 10px rgba(59,157,245,.4))}
+@keyframes stamp-slam{0%{opacity:0;transform:translate(${flyFromX}px,${flyFromY}px) rotate(-35deg) scale(3)}75%{opacity:1;transform:translate(0,0) rotate(calc(var(--rot) + 8deg)) scale(1.15)}100%{opacity:1;transform:translate(0,0) rotate(var(--rot)) scale(1)}}
+` : ''}
+/* Confetti burst */
+.confetti{position:absolute;top:45%;left:50%;width:0;height:0;pointer-events:none;z-index:15}
+.confetti .c{position:absolute;top:0;left:0;border-radius:1px;opacity:0;animation:confetti-fly 1.4s cubic-bezier(.15,.6,.3,1) .35s forwards}
+@keyframes confetti-fly{0%{opacity:0;transform:translate(0,0) rotate(0)}15%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(var(--dx),calc(var(--dy) + 60px)) rotate(var(--rot))}}
+/* Typing cursor */
+.type-cursor{display:inline-block;width:2px;background:${accent};margin-left:2px;vertical-align:baseline;animation:type-blink 1s step-start infinite}
+@keyframes type-blink{50%{opacity:0}}
+.type-cursor.done{animation:type-blink 1.2s step-start infinite}
+p .typed-text{opacity:0;animation:fade-in .01s .5s forwards}
+@keyframes fade-in{to{opacity:1}}
+</style></head>
+<body>
+<div class="card">
+<div class="badge"><div class="icon">${iconSvg}</div>${avatarImg ? `<div class="party-group"><div class="avatar-wrap">${avatarImg}</div><svg class="party-hat" viewBox="0 0 40 40"><path d="M20 4 L8 34 L32 34 Z" fill="#f43f5e"/><path d="M20 4 L14 20 L20 20 Z" fill="#fbbf24"/><path d="M20 20 L14 34 L26 34 Z" fill="#fbbf24" opacity=".85"/><circle cx="20" cy="4" r="3.5" fill="#fde047"/><rect x="6" y="32" width="28" height="4" rx="2" fill="#dc2626"/></svg></div>` : ''}</div>
+<h1>${title}</h1>
+<p>${isError ? message : `<span class="typed-text" id="typed"></span><span class="type-cursor" id="tcur" style="height:1em"></span>`}</p>
+${confettiHtml}
+${autoClose}
+${stampSvg}
+</div>
+<div class="brand"><b>Lion Workspace</b> · lionwork.com.br</div>
+${!isError ? `<script>
+(function(){
+  const text = '${messageEsc}';
+  const el = document.getElementById('typed');
+  const cur = document.getElementById('tcur');
+  if(!el) return;
+  let i = 0;
+  function type(){
+    if(i < text.length){
+      el.textContent += text[i]; i++;
+      setTimeout(type, 45 + Math.random() * 40);
+    } else if(cur){ cur.classList.add('done'); }
+  }
+  setTimeout(type, 700);
+})();
+</script>` : ''}
+</body></html>`;
+}
 
 /* ═══════ YouTube Downloader (yt-dlp) ═══════ */
 const ytDlpDir = path.join(app.getPath('userData'), 'yt-dlp');
@@ -2590,6 +3103,137 @@ function startSyncServer() {
             return;
         }
 
+        // === Discord OAuth endpoints (no token required) ===
+        if (req.method === 'GET' && req.url.indexOf('/auth/discord/callback') === 0) {
+            (async () => {
+                try {
+                    const u = new URL(req.url, 'http://127.0.0.1:9847');
+                    const code = u.searchParams.get('code');
+                    const state = u.searchParams.get('state');
+                    const errParam = u.searchParams.get('error');
+                    if (errParam) {
+                        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(_discordCallbackHtml('Login cancelado', 'Voce cancelou o login no Discord.', true));
+                        try {
+                            if (mainWin && !mainWin.isDestroyed()) {
+                                mainWin.webContents.send('discord-auth-error', { error: 'access_denied', message: 'Voce cancelou o login no Discord.' });
+                                mainWin.show(); mainWin.focus();
+                            }
+                        } catch (e) {}
+                        _discordOAuthState = null;
+                        return;
+                    }
+                    // Sem code ou state: browser preload / CORS / etc — ignora silenciosamente
+                    if (!code || !state) {
+                        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(_discordCallbackHtml('Erro', 'state invalido ou code ausente. Tente novamente.', true));
+                        return;
+                    }
+                    // State ja foi consumido por callback anterior (Chrome hita a URL duas vezes as vezes) — trata como sucesso silencioso
+                    if (_discordOAuthConsumedStates.has(state)) {
+                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(_discordCallbackHtml('Login OK', 'Ja processado, pode fechar.', false));
+                        return;
+                    }
+                    // State realmente nao bate = ataque/bug real
+                    if (state !== _discordOAuthState) {
+                        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(_discordCallbackHtml('Erro', 'state invalido. Tente novamente.', true));
+                        try {
+                            if (mainWin && !mainWin.isDestroyed()) {
+                                mainWin.webContents.send('discord-auth-error', { error: 'invalid_state', message: 'Login invalido. Tenta de novo.' });
+                                mainWin.show(); mainWin.focus();
+                            }
+                        } catch (e) {}
+                        return;
+                    }
+                    // Marca state como consumido ANTES de processar (evita duplicate handling)
+                    _discordOAuthConsumedStates.add(state);
+                    // Auto-limpa depois de 5min pra nao acumular states velhos
+                    setTimeout(() => { try { _discordOAuthConsumedStates.delete(state); } catch(e){} }, 300000);
+                    _discordOAuthState = null;
+
+                    // SECURE MODE: envia code pra Edge Function do Supabase.
+                    // Client_secret NUNCA sai do server, so o code (que e single-use).
+                    const sendProgress = (phase) => {
+                        try { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('discord-auth-progress', { phase }); } catch (e) {}
+                    };
+                    sendProgress('exchanging');
+                    const deviceInfo = {
+                        fingerprint: getDeviceFingerprint(),
+                        hostname: os.hostname(),
+                        platform: os.platform(),
+                        arch: os.arch(),
+                        app_version: app.getVersion(),
+                    };
+                    const proxyResp = await fetch(DISCORD_AUTH_PROXY_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + (process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY),
+                        },
+                        body: JSON.stringify({ code, device: deviceInfo }),
+                    });
+                    sendProgress('validating');
+                    const proxyData = await proxyResp.json().catch(() => ({ ok: false, error: 'proxy_bad_response' }));
+                    if (!proxyData.ok || !proxyData.session) {
+                        const msg = proxyData.message || proxyData.error || 'Falha na Edge Function';
+                        console.error('[discord-proxy] err:', proxyData);
+                        res.writeHead(proxyResp.status || 500, { 'Content-Type': 'text/html; charset=utf-8' });
+                        const title = proxyData.error === 'not_in_guild' ? 'Sem acesso'
+                                    : proxyData.error === 'no_role' ? 'Sem cargo necessario'
+                                    : proxyData.error === 'user_blocked' ? 'Conta bloqueada'
+                                    : proxyData.error === 'device_blocked' ? 'Device bloqueado'
+                                    : 'Erro';
+                        res.end(_discordCallbackHtml(title, msg, true));
+                        try {
+                            if (mainWin && !mainWin.isDestroyed()) {
+                                mainWin.webContents.send('discord-auth-error', { error: proxyData.error, message: msg, debug: proxyData.debug });
+                                mainWin.show(); mainWin.focus();
+                            }
+                        } catch (e) {}
+                        return;
+                    }
+                    // Session ja validada pela Edge Function (guild + role check + Supabase upsert feitos la)
+                    const session = { ...proxyData.session };
+                    // firstLogin do servidor (total_logins === 1) — mais confiavel que arquivo local
+                    const wasFirstLogin = session.first_login === true || (session.first_login === undefined && !fs.existsSync(DISCORD_SESSION_FILE));
+                    saveDiscordSessionFile(session);
+                    // Registra device local tambem (offline tracking + webhook opcional)
+                    const reg = registerDiscordDevice(session.discord_user_id, {
+                        username: session.username, global_name: session.global_name,
+                    });
+                    if (reg.blocked) {
+                        clearDiscordSession();
+                        res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(_discordCallbackHtml('Device bloqueado', 'Este device foi bloqueado. Contate o admin.', true));
+                        return;
+                    }
+                    if (reg.tooMany) {
+                        clearDiscordSession();
+                        res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(_discordCallbackHtml('Limite de devices', `Limite de ${reg.max} devices atingido pra sua conta. Desloga em outro device ou contate o admin.`, true));
+                        return;
+                    }
+                    sendProgress('finalizing');
+                    try {
+                        if (mainWin && !mainWin.isDestroyed()) {
+                            mainWin.webContents.send('discord-auth-progress', { phase: 'done' });
+                            mainWin.webContents.send('discord-auth-success', session);
+                            mainWin.show(); mainWin.focus();
+                        }
+                    } catch (e) {}
+                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(_discordCallbackHtml('Login OK', `Bem-vindo, ${session.username}!`, false, { avatarUrl: session.avatar_url, username: session.username, firstLogin: wasFirstLogin }));
+                } catch (e) {
+                    console.error('[discord-callback] err:', e);
+                    res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.end(_discordCallbackHtml('Erro', 'Falha inesperada: ' + (e.message || String(e)), true));
+                }
+            })();
+            return;
+        }
+
         // === Auth endpoints (no token required) ===
         if (req.method === 'POST' && req.url === '/auth/login') {
             let body = '';
@@ -2672,6 +3316,62 @@ function startSyncServer() {
         if (req.method === 'POST' && req.url === '/auth/local-session') {
             (async () => {
                 try {
+                    // ═══ Discord auto-login (novo padrao) — tenta primeiro ═══
+                    const discordCheck = await loadValidDiscordSession();
+                    if (discordCheck.valid && discordCheck.session) {
+                        const dsess = discordCheck.session;
+                        // Sync user do Discord pro Supabase (background)
+                        syncDiscordUserToSupabase(dsess).catch(() => {});
+                        const reg = registerDiscordDevice(dsess.discord_user_id, {
+                            username: dsess.username,
+                            global_name: dsess.global_name,
+                        });
+                        if (reg.device) syncDiscordDeviceToSupabase(reg.device).catch(() => {});
+                        if (reg.blocked) {
+                            res.writeHead(403, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'device_blocked', message: 'Este device foi bloqueado.' }));
+                            return;
+                        }
+                        if (reg.tooMany) {
+                            res.writeHead(403, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({
+                                error: 'too_many_devices',
+                                message: `Limite de ${reg.max} devices atingido. Contate o admin.`,
+                                current: reg.count, max: reg.max,
+                            }));
+                            return;
+                        }
+                        const token = generatePluginToken();
+                        pluginSessions.set(token, {
+                            userId: dsess.discord_user_id,
+                            discordId: dsess.discord_user_id,
+                            email: '', // Discord nao fornece email por padrao
+                            name: dsess.global_name || dsess.username,
+                            username: dsess.username,
+                            avatar_url: dsess.avatar_url || '',
+                            plan: 'discord',
+                            authProvider: 'discord',
+                            expiresAt: Date.now() + (24 * 60 * 60 * 1000)
+                        });
+                        savePluginSessions();
+                        console.log('[auto-login:discord] Issued plugin token for ' + (dsess.username || dsess.discord_user_id));
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({
+                            token,
+                            user: {
+                                email: '',
+                                name: dsess.global_name || dsess.username,
+                                username: dsess.username,
+                                discord_id: dsess.discord_user_id,
+                                avatar_url: dsess.avatar_url || '',
+                            },
+                            plan: 'discord',
+                            auth_provider: 'discord',
+                            app_version: app.getVersion(),
+                        }));
+                        return;
+                    }
+                    // Sem sessao Discord — cai no fluxo Supabase legado (retrocompatibilidade)
                     // First try the in-memory snapshot (set on login or app startup)
                     let user = currentAppUser;
                     // Fall back to Supabase session if snapshot is null
@@ -3515,8 +4215,14 @@ function toggleLoop(){
                             center: true,
                             alwaysOnTop: false,
                             skipTaskbar: false,
+                            // Frameless — o HTML ja tem .titlebar custom com drag region + win-btns.
+                            // Sem isso, Windows desenha tambem a barra nativa (com Edit menu) duplicando.
+                            frame: false,
+                            titleBarStyle: 'hidden',
+                            autoHideMenuBar: true,
                             webPreferences: { nodeIntegration: true, contextIsolation: false }
                         });
+                        try { win.setMenuBarVisibility(false); } catch (e) {}
                         try { require('@electron/remote/main').enable(win.webContents); } catch (e) { console.warn('[mt-editor] remote enable err:', e.message); }
                         _activeMtEditorWin = win;
                         win.on('closed', () => { if (_activeMtEditorWin === win) _activeMtEditorWin = null; });
@@ -4073,6 +4779,102 @@ ipcMain.handle('install-update', () => {
     autoUpdater.quitAndInstall(false, true);
 });
 
+/* ═══════ Discord Auth IPC ═══════ */
+ipcMain.handle('discord:get-config', () => loadDiscordConfig());
+ipcMain.handle('discord:save-config', (_, cfg) => saveDiscordConfigFile(cfg));
+ipcMain.handle('discord:get-session', () => loadDiscordSession());
+ipcMain.handle('discord:logout', () => { clearDiscordSession(); return true; });
+
+// Termos de uso — arquivo persistente por instalacao
+const TERMS_FLAG_FILE = path.join(currentUD, '.lw-terms-accepted');
+ipcMain.handle('terms:has-accepted', () => {
+    try { return fs.existsSync(TERMS_FLAG_FILE); } catch (e) { return false; }
+});
+ipcMain.handle('terms:accept', () => {
+    try {
+        fs.writeFileSync(TERMS_FLAG_FILE, new Date().toISOString());
+        return true;
+    } catch (e) { return false; }
+});
+ipcMain.handle('discord:start-login', () => {
+    const cfg = loadDiscordConfig();
+    if (!cfg.client_id) return { ok: false, error: 'Discord nao configurado. Preencha Client ID no painel admin.' };
+    if (!cfg.guild_id) return { ok: false, error: 'Server ID (guild) nao configurado.' };
+    const state = crypto.randomBytes(16).toString('hex');
+    _discordOAuthState = state;
+    const url = _discordBuildAuthUrl(state, cfg);
+    try { shell.openExternal(url); } catch (e) { return { ok: false, error: 'Nao consegui abrir o browser: ' + e.message }; }
+    return { ok: true };
+});
+ipcMain.handle('discord:cancel-login', () => {
+    _discordOAuthState = null;
+    return { ok: true };
+});
+// Revalida: chama API do Discord de novo pra ver se user ainda tem o role.
+// Se nao tem, apaga sessao e devolve {valid:false}.
+// Abre lw-discord-config.json no editor padrao (Notepad no Win, TextEdit no Mac).
+// Cria o arquivo com placeholder + comentario se nao existir.
+ipcMain.handle('discord:open-config-file', () => {
+    try {
+        if (!fs.existsSync(DISCORD_CONFIG_FILE)) {
+            const template = {
+                "_help": "Preencha os campos abaixo, salve o arquivo e feche. Depois clique em 'Entrar com Discord' de novo.",
+                "_docs": "Crie Discord Application em https://discord.com/developers/applications e cole os valores aqui.",
+                client_id: "COLE_O_CLIENT_ID_AQUI",
+                client_secret: "COLE_O_CLIENT_SECRET_AQUI",
+                guild_id: "COLE_O_SERVER_ID_AQUI",
+                allowed_role_ids: [],
+                "_note_roles": "Deixe allowed_role_ids como [] pra permitir qualquer membro. Pra restringir por cargo, adicione IDs: [\"123456789\", \"987654321\"]",
+                max_devices: 0,
+                discord_webhook_url: ""
+            };
+            fs.writeFileSync(DISCORD_CONFIG_FILE, JSON.stringify(template, null, 2));
+        }
+        // Abre EXPLICITO no Notepad (Win) / TextEdit (Mac) — nao depende de file association
+        if (isWin) {
+            spawn('notepad.exe', [DISCORD_CONFIG_FILE], { detached: true, stdio: 'ignore' }).unref();
+        } else if (isMac) {
+            spawn('open', ['-e', DISCORD_CONFIG_FILE], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+            shell.openPath(DISCORD_CONFIG_FILE);
+        }
+        return { ok: true, path: DISCORD_CONFIG_FILE };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+ipcMain.handle('discord:list-devices', () => loadDiscordDevices());
+ipcMain.handle('discord:block-device', (_, fingerprint) => {
+    const devices = loadDiscordDevices();
+    const dev = devices.find(d => d.fingerprint === fingerprint);
+    if (!dev) return { ok: false, error: 'not_found' };
+    dev.blocked = true;
+    saveDiscordDevices(devices);
+    return { ok: true };
+});
+ipcMain.handle('discord:unblock-device', (_, fingerprint) => {
+    const devices = loadDiscordDevices();
+    const dev = devices.find(d => d.fingerprint === fingerprint);
+    if (!dev) return { ok: false, error: 'not_found' };
+    dev.blocked = false;
+    saveDiscordDevices(devices);
+    return { ok: true };
+});
+ipcMain.handle('discord:remove-device', (_, fingerprint) => {
+    const devices = loadDiscordDevices().filter(d => d.fingerprint !== fingerprint);
+    saveDiscordDevices(devices);
+    return { ok: true };
+});
+ipcMain.handle('discord:revalidate', async () => {
+    const sess = loadDiscordSession();
+    if (!sess || !sess.discord_user_id) return { valid: false, reason: 'no_session' };
+    if (sess.expires_at && Date.now() > sess.expires_at) {
+        clearDiscordSession();
+        return { valid: false, reason: 'expired' };
+    }
+    return { valid: true, session: sess };
+});
+
 /* ═══════ Auth & License ═══════ */
 const SUPABASE_URL = 'https://rxwprlqskwylhvpjiung.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4d3BybHFza3d5bGh2cGppdW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjYyNTcsImV4cCI6MjA5MTM0MjI1N30.0ej5GjmfzCMu9odw6R6mjU6GTAvdjUu2vQ5t6dsJYkM';
@@ -4455,6 +5257,104 @@ ipcMain.handle('skip-premiere-plugin', () => {
     }
 });
 
+// IPC: Uninstall CEP plugin — apaga a pasta em Adobe/CEP/extensions
+ipcMain.handle('uninstall-plugin', (event, which) => {
+    try {
+        let cepDir;
+        if (isMac) cepDir = path.join(os.homedir(), 'Library', 'Application Support', 'Adobe', 'CEP', 'extensions');
+        else cepDir = path.join(process.env.APPDATA || '', 'Adobe', 'CEP', 'extensions');
+        const extId = which === 'ae' ? 'com.lionworkspace.after' : 'com.lionworkspace.premiere';
+        const target = path.join(cepDir, extId);
+        if (fs.existsSync(target)) {
+            fs.rmSync(target, { recursive: true, force: true });
+        }
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+// IPC: Detecta se Premiere Pro / After Effects estao rodando (Win/Mac)
+ipcMain.handle('adobe:detect-running', async () => {
+    return new Promise((resolve) => {
+        try {
+            if (isMac) {
+                exec('ps -A -o comm | grep -Ei "Adobe Premiere Pro|Adobe After Effects"', (err, stdout) => {
+                    const out = String(stdout || '').toLowerCase();
+                    resolve({
+                        premiere: /premiere pro/.test(out),
+                        ae: /after effects/.test(out),
+                    });
+                });
+            } else {
+                exec('tasklist /NH /FO CSV', { windowsHide: true }, (err, stdout) => {
+                    const out = String(stdout || '').toLowerCase();
+                    resolve({
+                        premiere: out.includes('adobe premiere pro.exe'),
+                        ae: out.includes('afterfx.exe'),
+                    });
+                });
+            }
+        } catch (e) {
+            resolve({ premiere: false, ae: false });
+        }
+    });
+});
+
+// IPC: Lista devices vinculados ao user Discord logado — consulta Supabase.
+// Aplica limite de MAX 2 devices por conta (retorna aviso se ultrapassar).
+ipcMain.handle('discord:list-supabase-devices', async () => {
+    try {
+        const sess = loadDiscordSession();
+        if (!sess || !sess.discord_user_id) return { ok: false, error: 'no_session' };
+        if (!supabase) return { ok: false, error: 'no_supabase' };
+        const { data, error } = await supabase
+            .from('discord_devices')
+            .select('*')
+            .eq('discord_id', sess.discord_user_id)
+            .order('last_seen', { ascending: false });
+        if (error) return { ok: false, error: error.message };
+        const MAX = 2;
+        const active = (data || []).filter(d => !d.blocked);
+        const myFp = getDeviceFingerprint();
+        const devices = (data || []).map(d => ({
+            fingerprint: d.fingerprint,
+            hostname: d.hostname || 'PC',
+            platform: d.platform || '',
+            arch: d.arch || '',
+            first_seen: d.first_seen,
+            last_seen: d.last_seen,
+            blocked: !!d.blocked,
+            is_this_pc: d.fingerprint === myFp,
+        }));
+        return { ok: true, devices, max: MAX, over_limit: active.length > MAX, active_count: active.length };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+// IPC: Bloqueia device remoto no Supabase (efeito real: proxima revalidacao mata a sessao)
+ipcMain.handle('discord:remote-block-device', async (_, fingerprint) => {
+    try {
+        const sess = loadDiscordSession();
+        if (!sess || !sess.discord_user_id) return { ok: false, error: 'no_session' };
+        if (!supabase) return { ok: false, error: 'no_supabase' };
+        const { error } = await supabase
+            .from('discord_devices')
+            .update({ blocked: true })
+            .eq('discord_id', sess.discord_user_id)
+            .eq('fingerprint', fingerprint);
+        if (error) return { ok: false, error: error.message };
+        // Se bloqueou o proprio device local tambem, marca localmente
+        const devices = loadDiscordDevices();
+        const d = devices.find(x => x.fingerprint === fingerprint);
+        if (d) { d.blocked = true; saveDiscordDevices(devices); }
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
 // Heartbeat every 5 minutes (keep device alive)
 let heartbeatInterval = null;
 function startHeartbeat() {
@@ -4697,6 +5597,30 @@ function isPremiereForeground() {
     if (!fg) return false;
     return /\bpremiere\b|\badobe premiere\b|\badobepremiere\b/i.test(fg);
 }
+
+// Watchdog: detecta Premiere fechando e fecha editores (mask + motion tracker)
+function _checkPremiereAlive(cb) {
+    if (isWin) {
+        exec('tasklist /FI "IMAGENAME eq Adobe Premiere Pro.exe" /NH', { timeout: 4000, windowsHide: true }, (err, stdout) => {
+            cb(!err && /Adobe Premiere/.test(stdout || ''));
+        });
+    } else if (isMac) {
+        exec('pgrep -x "Adobe Premiere Pro"', { timeout: 3000 }, (err, stdout) => {
+            cb(!err && (stdout || '').trim().length > 0);
+        });
+    } else { cb(true); }
+}
+setInterval(() => {
+    const maskOpen = !!(_activeMaskEditorWin && !_activeMaskEditorWin.isDestroyed());
+    const mtOpen = !!(_activeMtEditorWin && !_activeMtEditorWin.isDestroyed());
+    if (!maskOpen && !mtOpen) return;
+    _checkPremiereAlive((alive) => {
+        if (alive) return;
+        console.log('[watchdog] Premiere fechou — fechando editores abertos');
+        try { if (maskOpen) _activeMaskEditorWin.close(); } catch(e) {}
+        try { if (mtOpen) _activeMtEditorWin.close(); } catch(e) {}
+    });
+}, 5000);
 
 // Pre-cria janela escondida no boot — abertura via hotkey é INSTANTÂNEA (não cria mais BrowserWindow)
 let _lionSearchShownAt = 0; // timestamp do ultimo show() — usado pra ignorar blur que dispara durante focus race no Mac

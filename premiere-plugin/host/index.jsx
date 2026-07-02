@@ -101,17 +101,13 @@ function lwTrackerApplyKeyframes(jsonStr) {
         if (!seq) return 'NO_SEQUENCE';
         try { app.enableQE(); } catch(eQE) {}
 
-        // Acha clip selecionado (mesmo strict mode)
+        // Acha clip selecionado — STRICT: so video clips (filtra audio).
+        // getSelection() retorna video+audio quando user clica em parte sincronizada.
+        // Iteramos so videoTracks pra garantir que sao clips de video com Motion component.
         var clips = [];
-        try {
-            var sel = seq.getSelection();
-            if (sel && sel.length > 0) for (var i = 0; i < sel.length; i++) clips.push(sel[i]);
-        } catch(e1) {}
-        if (clips.length === 0) {
-            for (var t = 0; t < seq.videoTracks.numTracks; t++) {
-                for (var c = 0; c < seq.videoTracks[t].clips.numItems; c++) {
-                    try { if (seq.videoTracks[t].clips[c].isSelected()) clips.push(seq.videoTracks[t].clips[c]); } catch(e2) {}
-                }
+        for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+            for (var c = 0; c < seq.videoTracks[t].clips.numItems; c++) {
+                try { if (seq.videoTracks[t].clips[c].isSelected()) clips.push(seq.videoTracks[t].clips[c]); } catch(e2) {}
             }
         }
         // Fallback: seleção foi perdida durante o tracking — usa clipStartTicks + trackIdx

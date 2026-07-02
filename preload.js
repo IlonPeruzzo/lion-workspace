@@ -58,7 +58,12 @@ contextBridge.exposeInMainWorld('auth', {
 contextBridge.exposeInMainWorld('setup', {
     detectPremiere: () => ipcRenderer.invoke('detect-premiere'),
     installPlugin: (opts) => ipcRenderer.invoke('install-premiere-plugin', opts),
+    uninstallPlugin: (which) => ipcRenderer.invoke('uninstall-plugin', which),
     skipPlugin: () => ipcRenderer.invoke('skip-premiere-plugin')
+});
+
+contextBridge.exposeInMainWorld('adobe', {
+    detectRunning: () => ipcRenderer.invoke('adobe:detect-running'),
 });
 
 const { webUtils } = require('electron');
@@ -78,4 +83,30 @@ contextBridge.exposeInMainWorld('lionSearch', {
     getSettings: () => ipcRenderer.invoke('lion-search:get-settings'),
     setSettings: (s) => ipcRenderer.invoke('lion-search:set-settings', s),
     invalidateCatalog: () => ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true }),
+});
+
+// Discord OAuth login
+contextBridge.exposeInMainWorld('discordAuth', {
+    getConfig: () => ipcRenderer.invoke('discord:get-config'),
+    saveConfig: (cfg) => ipcRenderer.invoke('discord:save-config', cfg),
+    getSession: () => ipcRenderer.invoke('discord:get-session'),
+    logout: () => ipcRenderer.invoke('discord:logout'),
+    startLogin: () => ipcRenderer.invoke('discord:start-login'),
+    cancelLogin: () => ipcRenderer.invoke('discord:cancel-login'),
+    revalidate: () => ipcRenderer.invoke('discord:revalidate'),
+    openConfigFile: () => ipcRenderer.invoke('discord:open-config-file'),
+    listDevices: () => ipcRenderer.invoke('discord:list-devices'),
+    listSupabaseDevices: () => ipcRenderer.invoke('discord:list-supabase-devices'),
+    remoteBlockDevice: (fingerprint) => ipcRenderer.invoke('discord:remote-block-device', fingerprint),
+    blockDevice: (fingerprint) => ipcRenderer.invoke('discord:block-device', fingerprint),
+    unblockDevice: (fingerprint) => ipcRenderer.invoke('discord:unblock-device', fingerprint),
+    removeDevice: (fingerprint) => ipcRenderer.invoke('discord:remove-device', fingerprint),
+    onAuthSuccess: (cb) => ipcRenderer.on('discord-auth-success', (_, session) => cb(session)),
+    onAuthError: (cb) => ipcRenderer.on('discord-auth-error', (_, err) => cb(err)),
+    onAuthProgress: (cb) => ipcRenderer.on('discord-auth-progress', (_, data) => cb(data)),
+});
+
+contextBridge.exposeInMainWorld('terms', {
+    hasAccepted: () => ipcRenderer.invoke('terms:has-accepted'),
+    accept: () => ipcRenderer.invoke('terms:accept'),
 });
