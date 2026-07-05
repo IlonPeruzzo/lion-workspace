@@ -18,6 +18,52 @@
 
         .logo{font-size:.95rem;font-weight:800;color:#f5f5f5;text-align:center;margin-bottom:8px;letter-spacing:-.3px}
         .logo span{color:#bef264}
+        .logo-wrap{display:flex;align-items:center;justify-content:flex-start;gap:9px;margin-bottom:12px}
+        .header-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,.05);box-shadow:0 0 0 1px rgba(190,242,100,.25);flex-shrink:0;display:none}
+        .header-userinfo{display:flex;flex-direction:column;min-width:0;line-height:1.15}
+        .header-name{font-size:.86rem;font-weight:800;color:#f5f5f5;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+        .header-name span{color:#bef264}
+        .header-handle{font-size:.66rem;color:#737373;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+        .header-lion{width:20px;height:20px;border-radius:6px;object-fit:contain;flex-shrink:0}
+        .premium-star{flex-shrink:0;transform-origin:center;animation:premStar 2.6s ease-in-out infinite}
+        @keyframes premStar{0%,100%{transform:scale(1) rotate(0deg);filter:drop-shadow(0 0 0 rgba(190,242,100,0))}50%{transform:scale(1.22) rotate(9deg);filter:drop-shadow(0 0 4px rgba(190,242,100,.75))}}
+        #pluginUserBar{display:none!important}
+        /* Status do plugin — icone inline + animacao/cor por tipo (usado em TODAS as mensagens) */
+        .lw-st-ic{width:12px;height:12px;vertical-align:-2px;margin-right:5px;flex-shrink:0}
+        .lw-st span{line-height:1.3}
+        .lw-st-muted{color:#9a9aa5}
+        .lw-st-error{color:#fb7185;animation:cpShake .45s cubic-bezier(.36,.07,.19,.97) both}
+        .lw-st-error .lw-st-ic{animation:lwPop .4s cubic-bezier(.34,1.56,.64,1) both}
+        .lw-st-warn{color:#fcd34d;animation:cpFade .3s ease both}
+        .lw-st-warn .lw-st-ic{animation:lwPop .4s cubic-bezier(.34,1.56,.64,1) both}
+        .lw-st-success{color:#a3e635;animation:cpFade .3s ease both}
+        .lw-st-success .lw-st-ic{overflow:visible}
+        .lw-st-success .lw-st-ring{stroke-dasharray:63;stroke-dashoffset:63;animation:lwDrawRing .4s ease .04s forwards}
+        .lw-st-success .lw-st-check polyline{stroke-dasharray:22;stroke-dashoffset:22;animation:lwDraw .3s cubic-bezier(.65,0,.35,1) .34s forwards}
+        .lw-st-success .lw-st-burst{transform-box:fill-box;transform-origin:center;opacity:0;animation:lwBurst .5s ease-out .46s}
+        .lw-st-loading{color:#a78bfa}
+        .lw-st-loading .lw-st-bar{position:relative;height:3px;border-radius:2px;background:rgba(255,255,255,.09);overflow:hidden;width:100%;max-width:170px;margin:6px auto 0}
+        .lw-st-loading .lw-st-bar i{position:absolute;top:0;left:0;height:100%;width:38%;border-radius:2px;background:currentColor;animation:lwBar 1.05s ease-in-out infinite}
+        @keyframes lwBar{0%{left:-42%}100%{left:100%}}
+        @keyframes lwDraw{to{stroke-dashoffset:0}}
+        @keyframes lwDrawRing{to{stroke-dashoffset:0}}
+        @keyframes lwBurst{0%{opacity:.5;transform:scale(.5)}100%{opacity:0;transform:scale(1.7)}}
+        .lw-st-out{animation:lwOut .44s ease forwards!important}
+        @keyframes lwOut{to{opacity:0;transform:translateY(-3px)}}
+        @keyframes lwPop{0%{transform:scale(0) rotate(-25deg);opacity:0}60%{transform:scale(1.18) rotate(6deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+        @keyframes lwSpin{to{transform:rotate(360deg)}}
+        @keyframes lwDash{0%{stroke-dasharray:6 52;stroke-dashoffset:0}50%{stroke-dasharray:36 52;stroke-dashoffset:-14}100%{stroke-dasharray:6 52;stroke-dashoffset:-56}}
+        @keyframes cpFade{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}
+        @keyframes cpShake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-3px)}40%,60%{transform:translateX(3px)}}
+        /* Confetti leve */
+        .lw-confetti{position:fixed;z-index:99999;pointer-events:none;width:0;height:0}
+        .lw-confetti i{position:absolute;left:0;top:0;width:6px;height:6px;border-radius:1px;opacity:0;will-change:transform,opacity;animation:lwConf .95s cubic-bezier(.2,.7,.3,1) forwards}
+        @keyframes lwConf{0%{opacity:1;transform:translate(0,0) rotate(0) scale(1)}12%{opacity:1}100%{opacity:0;transform:translate(var(--tx),calc(var(--ty) + 72px)) rotate(var(--rot)) scale(.55)}}
+        .settings-card .panel-row.dragging{opacity:.4}
+        .settings-card .panel-row.drag-over-top{box-shadow:inset 0 2px 0 0 #bef264}
+        .settings-card .panel-row.drag-over-bottom{box-shadow:inset 0 -2px 0 0 #bef264}
+        .settings-card .panel-drag{cursor:grab;color:#555;font-size:.7rem;line-height:1;user-select:none;letter-spacing:-2px;pointer-events:none}
+        .settings-card .panel-row:hover .panel-drag{color:#888}
         .status{text-align:center;padding:5px 10px;border-radius:8px;margin-bottom:10px;font-size:.7rem;font-weight:600;transition:all .3s}
         .status.ok{background:rgba(34,197,94,.1);color:#22c55e;border:1px solid rgba(34,197,94,.15)}
         .status.off{background:rgba(244,63,94,.1);color:#f43f5e;border:1px solid rgba(244,63,94,.15)}
@@ -200,7 +246,9 @@
         .settings-card .info-row strong{color:#f5f5f5;font-weight:600}
         .settings-card .info-plan{display:inline-block;font-size:.56rem;padding:1px 6px;border-radius:4px;background:rgba(190,242,100,.1);color:#bef264;font-weight:700;text-transform:uppercase;margin-left:4px}
         .settings-card .sec-title{font-size:.6rem;text-transform:uppercase;letter-spacing:.4px;color:#666;font-weight:600;margin-top:12px;margin-bottom:6px}
-        .settings-card .panel-row{display:flex;align-items:center;gap:7px;cursor:pointer;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.04);margin-bottom:3px;font-size:.66rem;color:#ddd}
+        .settings-card .panel-row{display:flex;align-items:center;gap:7px;cursor:grab;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.04);margin-bottom:3px;font-size:.66rem;color:#ddd;transition:background .12s,box-shadow .12s,opacity .12s}
+        .settings-card .panel-row:active{cursor:grabbing}
+        .settings-card .panel-label{flex:1;pointer-events:none}
         .settings-card .panel-row:hover{background:rgba(190,242,100,.04)}
         .settings-card .logout-row{margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)}
         .settings-card .logout-btn-full{width:100%;padding:8px;border-radius:6px;background:rgba(244,63,94,.08);color:#f43f5e;border:1px solid rgba(244,63,94,.15);font-family:inherit;font-size:.7rem;font-weight:700;cursor:pointer;transition:all .2s}
@@ -262,10 +310,6 @@
                 <span>Configurações</span>
                 <button class="close-x" onclick="closeSettings()">×</button>
             </h3>
-            <div class="info-row"><strong>Email:</strong> <span id="settingsEmail">—</span></div>
-            <div class="info-row"><strong>Plano:</strong> <span class="info-plan" id="settingsPlan">—</span></div>
-
-            <div class="sec-title">Painéis visíveis</div>
             <div id="panelsList"></div>
 
             <div class="logout-row">
@@ -274,8 +318,20 @@
         </div>
     </div>
 
-    <div class="logo">Lion <span>Workspace</span></div>
-    <div class="status off" id="conn">Desconectado</div>
+    <div class="logo-wrap" id="pluginHeaderBar">
+        <img class="header-avatar" id="headerAvatar" src="" alt="">
+        <div class="header-userinfo">
+            <div class="header-name" id="headerName">Lion <span>Workspace</span></div>
+            <div class="header-handle" id="headerHandle"></div>
+        </div>
+        <svg class="premium-star" id="premiumStar" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><title>Lion Premium</title><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span style="flex:1"></span>
+        <img class="header-lion" id="headerLion" src="" alt="Lion" title="Lion Workspace" style="display:none">
+        <button class="gear-btn" id="headerGear" onclick="openSettings()" title="Configurações" style="display:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <div class="status off" id="conn" style="display:none">Desconectado</div>
+    </div>
 
     <!-- Timer -->
     <div class="section" id="sectionTimer">
@@ -505,6 +561,31 @@
        - Structured logging
        ═══════════════════════════════════════════════════════════ */
     var API='http://127.0.0.1:9847';
+    // Guarda o @username do Discord da 1a autenticacao (/auth/local-session traz username;
+    // o /auth/check periodico NAO traz, entao sem isso o handle era apagado no re-check).
+    var _lwKnownUsername = (function(){ try { return localStorage.getItem('lw_uname') || ''; } catch(e){ return ''; } })();
+    // Logo do leao em VERDE (mesma silhueta do app, sem borda quadrada) embutida como data URI.
+    var LION_GREEN_DATAURI = 'data:image/png;base64,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';
+    // Carrega imagem via XHR (blob) — no CEP o <img src=http://...> direto pode ser
+    // bloqueado por CSP de img, mas XHR pro servidor local funciona. Usa blob URL.
+    function loadImgViaXhr(url, imgEl){
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.responseType = 'blob';
+            xhr.onload = function(){
+                if (xhr.status === 200 && xhr.response && imgEl){
+                    try { if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl); } catch(e){}
+                    var b = URL.createObjectURL(xhr.response);
+                    imgEl._blobUrl = b;
+                    imgEl.src = b;
+                    imgEl.style.display = 'block';   // 'block' explícito (o CSS tem display:none)
+                } else if (imgEl) { imgEl.style.display = 'none'; }
+            };
+            xhr.onerror = function(){ if (imgEl) imgEl.style.display = 'none'; };
+            xhr.send();
+        } catch(e){ if (imgEl) imgEl.style.display = 'none'; }
+    }
     var PLUGIN_VERSION='1.3.53-AE';
     var csInterface=new CSInterface();
 
@@ -658,6 +739,33 @@
         }
     })();
 
+    // Ordem dos painéis (array de keys) — arrastável, persistida
+    var panelsOrder = (function(){
+        try {
+            var saved = JSON.parse(localStorage.getItem('lw_panels_order_ae') || 'null');
+            if (Array.isArray(saved)) {
+                var valid = saved.filter(function(k){ return PANELS.some(function(p){return p.key===k;}); });
+                PANELS.forEach(function(p){ if(valid.indexOf(p.key)<0) valid.push(p.key); });
+                return valid;
+            }
+        } catch(e){}
+        return PANELS.map(function(p){ return p.key; });
+    })();
+    function _panelByKey(k){ for(var i=0;i<PANELS.length;i++){ if(PANELS[i].key===k) return PANELS[i]; } return null; }
+    function orderedPanels(){ var out=[]; for(var i=0;i<panelsOrder.length;i++){ var p=_panelByKey(panelsOrder[i]); if(p) out.push(p); } return out; }
+    function savePanelsOrder(){ try { localStorage.setItem('lw_panels_order_ae', JSON.stringify(panelsOrder)); } catch(e){} }
+    function applyPanelsOrder(){
+        var ordered = orderedPanels();
+        if (!ordered.length) return;
+        var first = document.getElementById(ordered[0].id);
+        if (!first || !first.parentNode) return;
+        var parent = first.parentNode;
+        var lastEl = null;
+        ordered.forEach(function(p){ var e=document.getElementById(p.id); if(e) lastEl=e; });
+        var anchor = lastEl ? lastEl.nextSibling : null;
+        ordered.forEach(function(p){ var e=document.getElementById(p.id); if(e) parent.insertBefore(e, anchor); });
+    }
+
     function applyPanelsVisibility(){
         for (var i=0; i<PANELS.length; i++){
             var p = PANELS[i];
@@ -673,18 +781,75 @@
         renderPanelsList();
     }
 
+    var _panelDragKey = null;
+    function _clearPanelCues(){
+        var rows = document.querySelectorAll('#panelsList .panel-row');
+        for (var i=0;i<rows.length;i++){ rows[i].classList.remove('dragging','drag-over-top','drag-over-bottom'); }
+    }
+    function panelDragStart(e, key){
+        _panelDragKey = key;
+        try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', key); }catch(_){}
+        var row = e.currentTarget;
+        setTimeout(function(){ if(row && _panelDragKey) row.classList.add('dragging'); }, 0);
+    }
+    function panelDragEnd(e){ _panelDragKey = null; _clearPanelCues(); }
+    function panelDragOver(e, targetKey){
+        if (!_panelDragKey) return;
+        e.preventDefault();
+        try{ e.dataTransfer.dropEffect='move'; }catch(_){}
+        var row = e.currentTarget;
+        if (targetKey === _panelDragKey){ row.classList.remove('drag-over-top','drag-over-bottom'); return; }
+        var r = row.getBoundingClientRect();
+        var after = (e.clientY - r.top) > r.height/2;
+        // só troca a classe se mudou → sem flicker
+        if (after){ if(!row.classList.contains('drag-over-bottom')){ row.classList.remove('drag-over-top'); row.classList.add('drag-over-bottom'); } }
+        else { if(!row.classList.contains('drag-over-top')){ row.classList.remove('drag-over-bottom'); row.classList.add('drag-over-top'); } }
+        var rows = document.querySelectorAll('#panelsList .panel-row');
+        for (var i=0;i<rows.length;i++){ if(rows[i]!==row){ rows[i].classList.remove('drag-over-top','drag-over-bottom'); } }
+    }
+    function panelDragLeave(e){
+        var row = e.currentTarget;
+        if (!row.contains(e.relatedTarget)){ row.classList.remove('drag-over-top','drag-over-bottom'); }
+    }
+    function panelDrop(e, targetKey){
+        e.preventDefault();
+        var from = _panelDragKey;
+        var row = e.currentTarget;
+        var r = row.getBoundingClientRect();
+        var after = (e.clientY - r.top) > r.height/2;
+        _panelDragKey = null; _clearPanelCues();
+        if (!from || from === targetKey) return;
+        var fi = panelsOrder.indexOf(from);
+        if (fi < 0) return;
+        panelsOrder.splice(fi, 1);
+        var ni = panelsOrder.indexOf(targetKey);
+        if (ni < 0) ni = panelsOrder.length;
+        if (after) ni++;
+        panelsOrder.splice(ni, 0, from);
+        savePanelsOrder();
+        applyPanelsOrder();
+        renderPanelsList();
+    }
+
     function renderPanelsList(){
         var el = document.getElementById('panelsList');
         if (!el) return;
+        var ordered = orderedPanels();
         var html = '';
-        for (var i=0; i<PANELS.length; i++){
-            var p = PANELS[i];
+        for (var i=0; i<ordered.length; i++){
+            var p = ordered[i];
             var on = !!panelsVisible[p.key];
-            html += '<div class="panel-row" onclick="togglePanelVisible(\'' + p.key + '\')">'
-                  + '<div class="mini-check' + (on?' active':'') + '">'
+            html += '<div class="panel-row" data-key="'+p.key+'" draggable="true"'
+                  + ' ondragstart="panelDragStart(event,\''+p.key+'\')"'
+                  + ' ondragend="panelDragEnd(event)"'
+                  + ' ondragover="panelDragOver(event,\''+p.key+'\')"'
+                  + ' ondragleave="panelDragLeave(event)"'
+                  + ' ondrop="panelDrop(event,\''+p.key+'\')">'
+                  + '<span class="panel-drag" title="Arraste pra reordenar">⣿</span>'
+                  + '<div class="mini-check' + (on?' active':'') + '" onclick="togglePanelVisible(\''+p.key+'\')" title="Mostrar/ocultar">'
                   + '<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
                   + '</div>'
-                  + '<span>' + p.label + '</span>'
+                  + '<span class="panel-label">' + p.label + '</span>'
                   + '</div>';
         }
         el.innerHTML = html;
@@ -693,8 +858,6 @@
     function openSettings(){
         var ov = document.getElementById('settingsOverlay');
         if (!ov) return;
-        document.getElementById('settingsEmail').textContent = (pluginUser && pluginUser.email) || '—';
-        document.getElementById('settingsPlan').textContent = (window._lwPlan || '—');
         renderPanelsList();
         ov.classList.remove('hidden');
     }
@@ -721,6 +884,7 @@
     updateFooter();
     // Update footer health every 10s
     setInterval(updateFooter, 10000);
+    applyPanelsOrder();
     applyPanelsVisibility();
 
     /* ═══════ Plugin Auth ═══════ */
@@ -778,6 +942,10 @@
                     pluginUser = r.user;
                     LWInit.complete('auth-check');
                     pluginShowApp(r.user, r.plan);
+                    // Se o /auth/check nao trouxe username (versao antiga do app) e ainda nao
+                    // conhecemos, busca o perfil completo via /auth/local-session (que traz o
+                    // username do Discord) pra preencher o @handle. Roda so uma vez.
+                    if (!(r.user && r.user.username) && !_lwKnownUsername) { pluginTryAutoLogin(function(){}); }
                 } else {
                     if (pluginToken) {
                         pluginToken = '';
@@ -929,7 +1097,29 @@
         _authExpiredShown = false;
         lwConnected = true;
         lwSetSectionsDisabled(false); // ensure sections are enabled after login
+        applyPanelsOrder();
         applyPanelsVisibility();
+        // Header: avatar do Discord + nome + @handle + estrela premium + logo leão + engrenagem
+        try {
+            var avatarEl = document.getElementById('headerAvatar');
+            var nameEl = document.getElementById('headerName');
+            var handleEl = document.getElementById('headerHandle');
+            var starEl = document.getElementById('premiumStar');
+            var gearEl = document.getElementById('headerGear');
+            var lionEl = document.getElementById('headerLion');
+            var dispName = (user && (user.name || user.username)) || 'Lion Workspace';
+            if (nameEl) nameEl.textContent = dispName;
+            // /auth/local-session (login) traz user.username; /auth/check (re-check) NAO traz.
+            // Preserva o ultimo username conhecido pra nao apagar o @handle nos re-checks.
+            var uname = (user && user.username) || _lwKnownUsername || '';
+            if (user && user.username) { _lwKnownUsername = user.username; try { localStorage.setItem('lw_uname', user.username); } catch(e){} }
+            if (handleEl) handleEl.textContent = uname ? ('@' + uname) : '';
+            if (avatarEl) { avatarEl.title = dispName; loadImgViaXhr(API + '/discord-avatar?t=' + Date.now(), avatarEl); }
+            // Leao VERDE embutido (data URI) — sempre verde, sem depender do servidor.
+            if (lionEl) { lionEl.src = LION_GREEN_DATAURI; lionEl.style.display = 'block'; }
+            if (starEl) starEl.style.display = '';
+            if (gearEl) gearEl.style.display = '';
+        } catch(e) {}
         setTimeout(function() { poll(); }, 300);
     }
 
@@ -1115,7 +1305,7 @@
             var btn=event.target.closest('.yt-q'); if(btn) btn.classList.add('active');
         }
         var compensate=document.getElementById('aeAnchorCompensate').checked?'true':'false';
-        if(!csInterface){_msg('aeAnchorMsg','CEP indisponível','#f43f5e');return}
+        if(!csInterface){_msg('aeAnchorMsg','Ambiente do plugin indisponível','#f43f5e');return}
         csInterface.evalScript('lwAESetAnchor("'+pos+'",'+compensate+')', function(r){
             r=String(r||'');
             if(r.indexOf('OK:')===0) _msg('aeAnchorMsg','Aplicado em '+r.substring(3)+' layer(s)','#22c55e');
@@ -1180,7 +1370,7 @@
         document.getElementById('aeEaseAll').classList.toggle('active', m==='all');
     }
     function aeApplyEasing(){
-        if(!csInterface){_msg('aeEasingMsg','CEP indisponível','#f43f5e');return}
+        if(!csInterface){_msg('aeEasingMsg','Ambiente do plugin indisponível','#f43f5e');return}
         var c=aeEasingCP;
         var script='lwAEApplyEasing('+c[0]+','+c[1]+','+c[2]+','+c[3]+',"'+aeEasingMode+'")';
         csInterface.evalScript(script, function(r){
@@ -1202,7 +1392,7 @@
         aeExprTarget=btn.getAttribute('data-target');
     }
     function aeApplyExpr(kind){
-        if(!csInterface){_msg('aeExprMsg','CEP indisponível','#f43f5e');return}
+        if(!csInterface){_msg('aeExprMsg','Ambiente do plugin indisponível','#f43f5e');return}
         // Default params; could be made configurable in UI later
         var defaults={
             wiggle:{freq:2,amp:30}, shake:{freq:8,amp:50},
@@ -1284,7 +1474,7 @@
             // Fallback: ExtendScript File dialog
         } catch(e) {}
         // ExtendScript File pickerse direto:
-        if(!csInterface){_msg('aeColorMsg','CEP indisponível','#f43f5e');return}
+        if(!csInterface){_msg('aeColorMsg','Ambiente do plugin indisponível','#f43f5e');return}
         var pickScript='(function(){var f=File.openDialog("Escolha um arquivo .cube","*.cube"); if(!f) return "CANCELLED"; return "PATH:"+f.fsName.replace(/\\\\/g,"/");})()';
         csInterface.evalScript(pickScript, function(r){
             r=String(r||'');
@@ -1868,7 +2058,7 @@
                                         var tlScript='insertClipToTimeline("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'")';
                                         csInterface.evalScript(tlScript,function(r3){
                                             if(r3==='OK') showMsg('Adicionado na timeline!');
-                                            else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequence aberta');
+                                            else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequência aberta');
                                             else showMsg('Timeline: '+(r3||'erro'));
                                         });
                                     },800);
@@ -1886,7 +2076,7 @@
                                             var tlScript='insertClipToTimeline("'+filePath.replace(/\\/g,'/').replace(/"/g,'\\"')+'")';
                                             csInterface.evalScript(tlScript,function(r3){
                                                 if(r3==='OK') showMsg('Adicionado na timeline!');
-                                                else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequence aberta');
+                                                else if(r3==='NO_SEQUENCE') showMsg('Nenhuma sequência aberta');
                                             });
                                         },1500);
                                     }
@@ -2084,11 +2274,14 @@
     }
 
     function updateCoords(){
-        document.getElementById('cp1x').textContent=curveCP1.x.toFixed(2);
-        document.getElementById('cp1y').textContent=curveCP1.y.toFixed(2);
-        document.getElementById('cp2x').textContent=curveCP2.x.toFixed(2);
-        document.getElementById('cp2y').textContent=curveCP2.y.toFixed(2);
-        document.getElementById('curveCSS').textContent='cubic-bezier('+curveCP1.x.toFixed(2)+','+curveCP1.y.toFixed(2)+','+curveCP2.x.toFixed(2)+','+curveCP2.y.toFixed(2)+')';
+        // Null-safe: alguns desses elementos podem nao existir dependendo do painel montado
+        // (se um for null, o erro parava TODA a execucao top-level seguinte — copy/paste, etc).
+        var e;
+        if((e=document.getElementById('cp1x'))) e.textContent=curveCP1.x.toFixed(2);
+        if((e=document.getElementById('cp1y'))) e.textContent=curveCP1.y.toFixed(2);
+        if((e=document.getElementById('cp2x'))) e.textContent=curveCP2.x.toFixed(2);
+        if((e=document.getElementById('cp2y'))) e.textContent=curveCP2.y.toFixed(2);
+        if((e=document.getElementById('curveCSS'))) e.textContent='cubic-bezier('+curveCP1.x.toFixed(2)+','+curveCP1.y.toFixed(2)+','+curveCP2.x.toFixed(2)+','+curveCP2.y.toFixed(2)+')';
     }
 
     function copyCurveCSS(){
@@ -2185,15 +2378,13 @@
     // Apply easing to Premiere keyframes
     function showEasingMsg(msg,color){
         var el=document.getElementById('easingMsg');
-        el.textContent=msg;
-        el.style.color=color||'#888';
-        clearTimeout(el._t);
-        el._t=setTimeout(function(){el.textContent=''},4000);
+        if(!el) return;
+        lwStatusRender(el,msg,color);
     }
 
     function applyEasing(){
         if(!window.__adobe_cep__||typeof csInterface==='undefined'){
-            showEasingMsg('CEP indisponível','#f43f5e');
+            showEasingMsg('Ambiente do plugin indisponível','#f43f5e');
             return;
         }
         var cp1x=curveCP1.x,cp1y=curveCP1.y,cp2x=curveCP2.x,cp2y=curveCP2.y;
@@ -2207,9 +2398,9 @@
                 var parts=result.split(':');
                 showEasingMsg('Easing aplicado! ('+( parts[1]||'')+' props, '+(parts[2]||'')+' keys)','#22c55e');
             }else if(result==='NO_SEQUENCE'){
-                showEasingMsg('Nenhuma sequence aberta','#f43f5e');
+                showEasingMsg('Nenhuma sequência aberta','#f43f5e');
             }else if(result==='NO_SELECTION'){
-                showEasingMsg('Selecione um clip na timeline','#f43f5e');
+                showEasingMsg('Selecione um clipe na timeline','#f43f5e');
             }else if(result==='NO_KEYS'){
                 showEasingMsg('Clip sem keyframes — adicione keyframes primeiro','#f43f5e');
             }else if(result&&result.indexOf('ERRORS:')===0){
@@ -2438,11 +2629,7 @@
     function showAnchorMsg(msg,color){
         var el=document.getElementById('anchorMsg');
         if(!el) return;
-        el.textContent=msg;
-        el.style.color=color||'#555';
-        setTimeout(function(){
-            if(el.textContent===msg) el.textContent='';
-        },4000);
+        lwStatusRender(el,msg,color);
     }
 
     function ancSetSpinner(show){
@@ -2466,7 +2653,7 @@
     function applyAnchor(){
         if(_ancBusy) return;
         if(!csInterface){
-            showAnchorMsg('CEP indisponível','#f43f5e');
+            showAnchorMsg('Ambiente do plugin indisponível','#f43f5e');
             return;
         }
         var coords=anchorPosMap[anchorCurrent];
@@ -2521,7 +2708,18 @@
 
     // Save mode for clipboard images: 'project' (next to .prproj) or 'custom' (user-chosen folder)
     var cpSaveMode = localStorage.getItem('lw_cp_save_mode') || 'project';
-    var cpCustomPath = localStorage.getItem('lw_cp_save_path') || '';
+    // Valida se o valor parece um caminho real (evita sentinelas de erro tipo TIMEOUT/CANCEL
+    // que versoes antigas gravavam por engano no localStorage e apareciam no campo).
+    function cpIsValidFolderPath(p){
+        if (!p) return false;
+        if (p === 'TIMEOUT' || p === 'CANCEL' || p === 'NO_FOLDER' || p === 'NODE_UNAVAILABLE' || p === 'EvalScript error.') return false;
+        return (p.indexOf('\\') >= 0 || p.indexOf('/') >= 0);
+    }
+    var cpCustomPath = (function(){
+        var v = localStorage.getItem('lw_cp_save_path') || '';
+        if (v && !cpIsValidFolderPath(v)) { v = ''; try { localStorage.removeItem('lw_cp_save_path'); } catch(e){} }
+        return v;
+    })();
 
     function cpToggleFlag(key){
         cpFlags[key] = !cpFlags[key];
@@ -2530,11 +2728,83 @@
         if (el) el.classList.toggle('active', cpFlags[key]);
     }
 
-    function cpShowStatus(text, color){
-        var el = document.getElementById('cpStatus');
+    // ═══ Status unificado do plugin (icone + animacao + cor) — usado por TODAS as mensagens ═══
+    var LW_ST_ICONS = {
+        error:   '<svg class="lw-st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+        warn:    '<svg class="lw-st-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+        success: '<svg class="lw-st-ic lw-st-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle class="lw-st-burst" cx="12" cy="12" r="10"/><circle class="lw-st-ring" cx="12" cy="12" r="10"/><polyline points="7.5 12.5 10.5 15.5 16.5 8.5"/></svg>',
+        loading: '<svg class="lw-st-ic lw-st-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg>',
+        muted:   ''
+    };
+    function _lwStType(color, text){
+        if (color === '#f43f5e' || color === '#ef4444' || color === '#f87171') return 'error';
+        if (color === '#22c55e' || color === '#16a34a' || color === '#34d399' || color === '#bef264') return 'success';
+        if (/(…|\.\.\.)\s*$/.test(String(text||''))) return 'loading';
+        if (color === '#f59e0b' || color === '#f5a623' || color === '#fbbf24') return 'warn';
+        return 'muted';
+    }
+    function lwStatusRender(el, text, color){
         if (!el) return;
-        el.textContent = text;
-        el.style.color = color || '#777';
+        if (el._lwHideT) { clearTimeout(el._lwHideT); el._lwHideT = null; }
+        if (el._lwGoneT) { clearTimeout(el._lwGoneT); el._lwGoneT = null; }
+        var t = String(text == null ? '' : text);
+        el.className = el.className.replace(/\blw-st\b\S*/g, '').replace(/\s+/g,' ').trim();
+        if (!t.trim()) { el.innerHTML = ''; el.style.color = ''; return; }
+        var type = _lwStType(color, t);
+        var clean = t.replace(/^[\s✓✔✅⚠️⚠✗✘❌ℹ️ℹ•·\-–—]+/, '').trim() || t.trim();
+        var safe = clean.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        el.style.color = '';
+        // Carregando ("…") = barrinha de progresso indeterminada; demais = icone SVG
+        if (type === 'loading') {
+            el.innerHTML = '<span>' + safe + '</span><div class="lw-st-bar"><i></i></div>';
+        } else {
+            el.innerHTML = (LW_ST_ICONS[type] || '') + '<span>' + safe + '</span>';
+        }
+        el.className = (el.className + ' lw-st').trim();
+        void el.offsetWidth;
+        el.className = (el.className + ' lw-st-' + type).trim();
+        if (type !== 'loading') {
+            el._lwHideT = setTimeout(function(){
+                el.classList.add('lw-st-out');
+                el._lwGoneT = setTimeout(function(){ el.innerHTML=''; el.className = el.className.replace(/\blw-st\b\S*/g,'').replace(/\s+/g,' ').trim(); el.style.color=''; }, 460);
+            }, 4200);
+        }
+    }
+    function _cpShortName(s){
+        s = String(s || '');
+        if (s.length <= 22) return s;
+        var dot = s.lastIndexOf('.');
+        var ext = (dot > 0 && s.length - dot <= 6) ? s.slice(dot) : '';
+        return s.slice(0, 14) + '…' + ext;
+    }
+    function cpShowStatus(text, color){ lwStatusRender(document.getElementById('cpStatus'), text, color); }
+    // Confetti leve — explode a partir de um elemento (ex: botao Paste) ao confirmar
+    function lwConfetti(anchorEl){
+        try {
+            var host = document.createElement('div');
+            host.className = 'lw-confetti';
+            var cx = window.innerWidth/2, cy = window.innerHeight/2;
+            if (anchorEl && anchorEl.getBoundingClientRect) { var r = anchorEl.getBoundingClientRect(); cx = r.left + r.width/2; cy = r.top + r.height/2; }
+            host.style.left = cx + 'px'; host.style.top = cy + 'px';
+            document.body.appendChild(host);
+            var colors = ['#bef264','#a3e635','#4ade80','#38bdf8','#a78bfa','#f472b6','#fcd34d','#f5f5f5'];
+            var N = 22;
+            for (var i=0;i<N;i++){
+                var p = document.createElement('i');
+                var ang = Math.random()*Math.PI*2;
+                var dist = 26 + Math.random()*68;
+                var tx = Math.cos(ang)*dist;
+                var ty = Math.sin(ang)*dist - (18 + Math.random()*34);
+                p.style.setProperty('--tx', tx.toFixed(1)+'px');
+                p.style.setProperty('--ty', ty.toFixed(1)+'px');
+                p.style.setProperty('--rot', (Math.random()*720-360).toFixed(0)+'deg');
+                p.style.background = colors[i % colors.length];
+                if (i % 3 === 0) p.style.borderRadius = '50%';
+                p.style.animationDelay = (Math.random()*60).toFixed(0)+'ms';
+                host.appendChild(p);
+            }
+            setTimeout(function(){ if (host.parentNode) host.parentNode.removeChild(host); }, 1400);
+        } catch(e){}
     }
 
     function cpSetSaveMode(mode){
@@ -2568,16 +2838,31 @@
         }
     }
 
+    function cpApplyPickedFolder(r){
+        if (!cpIsValidFolderPath(r)) return; // ignora retornos que nao sao caminho real
+        cpCustomPath = r;
+        localStorage.setItem('lw_cp_save_path', r);
+        var inp = document.getElementById('cpCustomPathInput');
+        if (inp) inp.value = r;
+        cpUpdatePathHint();
+        cpShowStatus('Pasta de destino definida', '#22c55e');
+    }
     function cpPickFolder(){
-        if (!csInterface) return;
+        var initial = cpCustomPath || '';
+        // API nativa do CEP: abre o seletor de pasta direto do painel — mais confiavel que ExtendScript.
+        try {
+            if (window.cep && window.cep.fs && window.cep.fs.showOpenDialog) {
+                var res = window.cep.fs.showOpenDialog(false, true, 'Escolha a pasta de destino', initial);
+                var arr = (res && res.data) ? res.data : null;
+                if (arr && arr.length) cpApplyPickedFolder(String(arr[0]));
+                return;
+            }
+        } catch(e){}
+        if (!csInterface) { cpShowStatus('Nao foi possivel abrir o seletor de pasta', '#f43f5e'); return; }
         csInterface.evalScript('cpSelectFolder()', function(result){
             var r = String(result || '').trim();
             if (!r || r === 'CANCEL' || r === 'NO_FOLDER') return;
-            cpCustomPath = r;
-            localStorage.setItem('lw_cp_save_path', r);
-            var inp = document.getElementById('cpCustomPathInput');
-            if (inp) inp.value = r;
-            cpUpdatePathHint();
+            cpApplyPickedFolder(r);
         });
     }
 
@@ -2871,44 +3156,44 @@
     }
 
     function cpDoCopy(){
-        if (!csInterface) { cpShowStatus('CEP indisponível', '#f43f5e'); return; }
-        if (!cpGetNode()) { cpShowStatus('Node.js não disponível no CEP', '#f43f5e'); return; }
+        if (!csInterface) { cpShowStatus('Ambiente do plugin indisponível', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js indisponível — reinstale o plugin', '#f43f5e'); return; }
         var btn = document.getElementById('cpCopyBtn');
         if (btn) btn.disabled = true;
-        cpShowStatus('Pegando arquivo do clip…', '#f59e0b');
+        cpShowStatus('Localizando o arquivo do clipe…', '#f59e0b');
         csInterface.evalScript('cpGetSelectedClipMediaPath()', function(result){
             var r = String(result || '');
             if (r.indexOf('OK:') !== 0) {
                 if (btn) btn.disabled = false;
-                if (r === 'NO_SELECTION') cpShowStatus('Selecione um clip na timeline', '#f43f5e');
-                else if (r === 'NO_SEQUENCE') cpShowStatus('Nenhuma sequence aberta', '#f43f5e');
+                if (r === 'NO_SELECTION') cpShowStatus('Selecione um clipe na timeline', '#f43f5e');
+                else if (r === 'NO_SEQUENCE') cpShowStatus('Nenhuma sequência aberta', '#f43f5e');
                 else if (r === 'NO_PROJECT') cpShowStatus('Nenhum projeto aberto', '#f43f5e');
-                else if (r === 'NO_MEDIA') cpShowStatus('Clip sem arquivo de origem', '#f43f5e');
-                else if (r === 'FILE_NOT_FOUND') cpShowStatus('Arquivo não existe no disco', '#f43f5e');
+                else if (r === 'NO_MEDIA') cpShowStatus('O clipe não possui arquivo de origem', '#f43f5e');
+                else if (r === 'FILE_NOT_FOUND') cpShowStatus('Arquivo não encontrado no disco', '#f43f5e');
                 else cpShowStatus(r || 'Erro', '#f43f5e');
                 return;
             }
             var mediaPath = r.substring(3);
-            cpShowStatus('Pondo no clipboard…', '#f59e0b');
+            cpShowStatus('Copiando para a área de transferência…', '#f59e0b');
             cpWriteFileToClipboard(mediaPath, function(resp){
                 if (btn) btn.disabled = false;
                 if (resp === 'OK') {
                     var name = mediaPath.split(/[\\\/]/).pop();
                     if (name.length > 26) name = name.substring(0, 26) + '…';
-                    cpShowStatus('Copiado: ' + name, '#22c55e');
+                    cpShowStatus('Copiado: ' + _cpShortName(name), '#22c55e');
                 } else {
-                    cpShowStatus('Erro ao copiar: ' + resp, '#f43f5e');
+                    cpShowStatus('Falha ao copiar: ' + resp, '#f43f5e');
                 }
             });
         });
     }
 
     function cpDoPaste(){
-        if (!csInterface) { cpShowStatus('CEP indisponível', '#f43f5e'); return; }
-        if (!cpGetNode()) { cpShowStatus('Node.js não disponível no CEP', '#f43f5e'); return; }
+        if (!csInterface) { cpShowStatus('Ambiente do plugin indisponível', '#f43f5e'); return; }
+        if (!cpGetNode()) { cpShowStatus('Node.js indisponível — reinstale o plugin', '#f43f5e'); return; }
         var btn = document.getElementById('cpPasteBtn');
         if (btn) btn.disabled = true;
-        cpShowStatus('Lendo clipboard…', '#f59e0b');
+        cpShowStatus('Lendo a área de transferência…', '#f59e0b');
         cpResolveSaveDir(function(saveDir){
         // If still no save dir, use system TEMP as last resort
         if (!saveDir) {
@@ -2917,18 +3202,20 @@
         cpReadClipboard(saveDir, function(res){
             if (res.type === 'error') {
                 if (btn) btn.disabled = false;
-                cpShowStatus('Erro clipboard: ' + (res.msg || ''), '#f43f5e');
+                if (res.msg) { try { console.log('[copy-paste] erro clipboard: ' + res.msg); } catch(e){} }
+                cpShowStatus('Não consegui ler a área de transferência. Tente copiar de novo.', '#f43f5e');
                 return;
             }
             if (res.type === 'empty') {
                 if (btn) btn.disabled = false;
-                cpShowStatus('Clipboard vazio. Copie um arquivo ou tire um print', '#f59e0b');
+                if (res.debug) { try { console.log('[copy-paste] nada colável — ' + res.debug); } catch(e){} }
+                cpShowStatus('Área de transferência vazia. Copie um arquivo, imagem ou caminho.', '#f59e0b');
                 return;
             }
             var paths = res.paths || [];
             if (paths.length === 0) {
                 if (btn) btn.disabled = false;
-                cpShowStatus('Nada pra colar', '#f59e0b');
+                cpShowStatus('Nada para colar', '#f59e0b');
                 return;
             }
             var kind = res.type === 'image' ? 'print' : 'arquivo' + (paths.length > 1 ? 's' : '');
@@ -2949,18 +3236,19 @@
                     var imp = parts[0] || '0';
                     var ins = parts[1] || '0';
                     var fail = Number(parts[2] || 0);
-                    var msg = '✓ Importado ' + imp + ' no projeto';
-                    if (Number(ins) > 0) msg += ' + ' + ins + ' no playhead';
+                    var msg = imp + ' importado' + (Number(imp) > 1 ? 's' : '');
+                    if (Number(ins) > 0) msg += ' · ' + ins + ' na timeline';
                     if (fail > 0) msg += ' (' + fail + ' falhou)';
                     cpShowStatus(msg, '#22c55e');
+                    if (Number(imp) > 0) lwConfetti(document.getElementById('cpPasteBtn')); // confetti ao confirmar
                 } else if (r === 'NO_PROJECT') {
                     cpShowStatus('Abra um projeto primeiro', '#f43f5e');
                 } else if (r === 'NO_FILES') {
-                    cpShowStatus('Nenhum arquivo valido', '#f43f5e');
+                    cpShowStatus('Nenhum arquivo válido', '#f43f5e');
                 } else if (r === 'PARSE_ERROR') {
-                    cpShowStatus('Erro ao processar caminhos', '#f43f5e');
+                    cpShowStatus('Falha ao processar os caminhos', '#f43f5e');
                 } else {
-                    cpShowStatus(r || 'Erro ao importar', '#f43f5e');
+                    cpShowStatus(r || 'Falha ao importar', '#f43f5e');
                 }
             });
         });
@@ -3104,7 +3392,7 @@
 
     // ─── Silence analysis (with progress bar) ───
     function acAnalyze() {
-        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
+        if (!csInterface) { acShowStatus('Ambiente do plugin indisponível', '#f43f5e'); return; }
         var btn = document.getElementById('acAnalyzeBtn');
         btn.disabled = true;
         document.getElementById('acAiBtn').disabled = true;
@@ -3118,7 +3406,7 @@
             if (r.indexOf('OK:') !== 0) {
                 btn.disabled = false;
                 document.getElementById('acAiBtn').disabled = false;
-                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
+                if (r === 'NO_SELECTION') acShowStatus('Selecione um clipe na timeline', '#f43f5e');
                 else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
                 else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
                 else acShowStatus(r || 'Erro', '#f43f5e');
@@ -3188,7 +3476,7 @@
 
     // ─── AI Word Analysis (Whisper transcription + filler/repeat detection) ───
     function acAiAnalyze() {
-        if (!csInterface) { acShowStatus('CEP indisponível', '#f43f5e'); return; }
+        if (!csInterface) { acShowStatus('Ambiente do plugin indisponível', '#f43f5e'); return; }
 
         // Check if API key is configured first — if not, expand config inline and focus input
         var savedKey = localStorage.getItem('lw_openai_key') || '';
@@ -3230,7 +3518,7 @@
             if (r.indexOf('OK:') !== 0) {
                 btn.disabled = false;
                 document.getElementById('acAnalyzeBtn').disabled = false;
-                if (r === 'NO_SELECTION') acShowStatus('Selecione um clip na timeline', '#f43f5e');
+                if (r === 'NO_SELECTION') acShowStatus('Selecione um clipe na timeline', '#f43f5e');
                 else if (r === 'NO_SEQUENCE') acShowStatus('Abra uma sequence', '#f43f5e');
                 else if (r === 'NO_MEDIA') acShowStatus('Clip sem arquivo de mídia', '#f43f5e');
                 else acShowStatus(r || 'Erro', '#f43f5e');
@@ -3517,10 +3805,13 @@
         }, { retries: 1 });
     }
 
-    // Re-draw timeline when padding changes
-    document.getElementById('acPadding').addEventListener('input', function() {
-        if (acSilences.length > 0) acDrawTimeline();
-    });
+    // Re-draw timeline when padding changes (guard: acPadding pode nao existir no After)
+    (function(){
+        var _acPad = document.getElementById('acPadding');
+        if (_acPad) _acPad.addEventListener('input', function() {
+            if (acSilences.length > 0) acDrawTimeline();
+        });
+    })();
 
     </script>
 </body>

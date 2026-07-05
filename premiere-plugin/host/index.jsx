@@ -78,6 +78,42 @@ function lwTrackerGetClipInfo() {
     } catch(e) { return 'ERR:' + e.toString(); }
 }
 
+// Alvo do COLAR track: só precisa de seleção + ticks — SEM validar mídia no disco.
+// Assim dá pra colar em adjustment layer, texto/MOGRT, color matte, clip offline etc
+// (todos têm Motion component com Position, que é o que lwTrackerApplyKeyframes usa).
+function lwTrackerGetPasteTarget() {
+    try {
+        if (!app.project) return 'NO_PROJECT';
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        var videoClips = [];
+        for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+            for (var c = 0; c < seq.videoTracks[t].clips.numItems; c++) {
+                try {
+                    if (seq.videoTracks[t].clips[c].isSelected()) {
+                        videoClips.push({ clip: seq.videoTracks[t].clips[c], trackIdx: t });
+                    }
+                } catch(e2) {}
+            }
+        }
+        if (videoClips.length === 0) return 'NO_SELECTION';
+        var topmost = videoClips[0];
+        for (var ti = 1; ti < videoClips.length; ti++) {
+            if (videoClips[ti].trackIdx > topmost.trackIdx) topmost = videoClips[ti];
+        }
+        var clip = topmost.clip;
+        var clipStartTicks = '0', inTicks = '0';
+        try { clipStartTicks = String(clip.start.ticks); } catch(e6) {}
+        try { inTicks = String(clip.inPoint.ticks); } catch(e7) {}
+        var out = '{"clipStartTicks":"' + clipStartTicks + '"';
+        out += ',"inPointTicks":"' + inTicks + '"';
+        out += ',"trackIdx":' + topmost.trackIdx;
+        out += ',"name":"' + String(clip.name || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+        out += '}';
+        return out;
+    } catch(e) { return 'ERR:' + e.toString(); }
+}
+
 // Aplica keyframes de Position do tracking no clip selecionado ou cria adjustment layer.
 // jsonStr: { applyMode: 'selected'|'null', clipStartTicks, clipInPointTicks, fps,
 //            videoWidth, videoHeight, history: [{frame, time, x, y, lost}] }
@@ -200,8 +236,10 @@ function lwTrackerApplyKeyframes(jsonStr) {
         for (var hi = 0; hi < data.history.length; hi++) {
             var h = data.history[hi];
             if (h.lost || h.x == null || h.y == null) { skipped++; continue; }
-            // Source media time pra esse frame
-            var srcTicks = clipInTicks + (h.frame - startFrame) * ticksPerFrame;
+            // Source media time = in-point + frame ABSOLUTO do proxy (proxy frame 0 = in-point).
+            // Absoluto (não relativo ao startFrame) → track "só pra frente" deixa os frames
+            // ANTES do ponto marcado sem keyframe, no lugar certo da timeline.
+            var srcTicks = clipInTicks + h.frame * ticksPerFrame;
             var kfTime = new Time();
             kfTime.ticks = String(Math.round(srcTicks));
 
@@ -434,10 +472,15 @@ function forceUIRefresh() {
         var seq = app.project.activeSequence;
         if (!seq) return;
         var pos = seq.getPlayerPosition();
-        var ticks = Number(pos.ticks);
-        var nudge = createTimeAt(ticks + 1);
-        seq.setPlayerPosition(nudge.ticks);
-        seq.setPlayerPosition(pos.ticks);
+        var cur = Number(pos.ticks);
+        // Precisa cutucar o playhead por um FRAME INTEIRO (nao +1 tick) — 1 tick e uma
+        // fracao infima de frame, entao o frame exibido nao muda e o Premiere nao
+        // re-renderiza a alteracao (anchor/scale/etc). Um frame inteiro forca o re-render.
+        var frame = 4233583066;
+        try { if (seq.timebase && Number(seq.timebase) > 0) frame = Number(seq.timebase); } catch (e) {}
+        var nudged = (cur >= frame) ? (cur - frame) : (cur + frame);
+        seq.setPlayerPosition(String(nudged));
+        seq.setPlayerPosition(String(cur));
     } catch (e) {}
 }
 
@@ -1064,14 +1107,15 @@ function addAnchorKeyframe(useVector) {
 // Abre dialog nativo pra escolher pasta de salvamento de prints
 function cpSelectFolder() {
     try {
-        var initial = null;
+        // Abre a pasta do projeto por padrao, se existir
         try {
             if (app.project && app.project.path) {
                 var pf = new File(app.project.path);
-                if (pf.parent && pf.parent.exists) initial = pf.parent;
+                if (pf.parent && pf.parent.exists) Folder.current = pf.parent;
             }
         } catch (e) {}
-        var folder = (initial || Folder.desktop).selectDlg('Escolher pasta para salvar prints');
+        // Folder.selectDialog e o metodo CORRETO (selectDlg nao existe em ExtendScript)
+        var folder = Folder.selectDialog('Escolha a pasta de destino');
         if (!folder) return 'CANCEL';
         return folder.fsName;
     } catch (e) { return 'NO_FOLDER'; }
@@ -1511,8 +1555,21 @@ function lwBgGetSelected() {
                 if (foundClip) break;
             }
             if (foundClip) {
+                // Rejeita NEST (nested sequence) — não tem mídia real, é virtual
+                try {
+                    var pItem = foundClip.projectItem;
+                    if (pItem && pItem.isSequence && pItem.isSequence()) return "NEST_UNSUPPORTED";
+                    if (pItem && pItem.type === ProjectItemType.SEQUENCE) return "NEST_UNSUPPORTED";
+                } catch(e) {}
                 var path = "";
                 try { path = foundClip.projectItem.getMediaPath(); } catch(e) {}
+                // Se path vazio ou aponta pra .prproj (nest sem media path), rejeita
+                if (!path || String(path).toLowerCase().indexOf('.prproj') >= 0) return "NO_MEDIA_PATH";
+                // Valida extensão — só aceita imagens
+                var extMatch = String(path).toLowerCase().match(/\.([a-z0-9]+)$/);
+                var ext = extMatch ? extMatch[1] : '';
+                var IMG_EXTS = { png:1, jpg:1, jpeg:1, webp:1, tif:1, tiff:1, bmp:1, gif:1, heic:1, heif:1 };
+                if (!IMG_EXTS[ext]) return "NOT_AN_IMAGE:" + ext;
                 var TPS = 254016000000;
                 var startT = Number(foundClip.start.ticks);
                 var endT = Number(foundClip.end.ticks);

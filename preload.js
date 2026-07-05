@@ -15,7 +15,8 @@ contextBridge.exposeInMainWorld('focusMode', {
 
 contextBridge.exposeInMainWorld('electronAPI', {
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
-    copyImageToClipboard: (arrayBuf) => ipcRenderer.invoke('copy-image-to-clipboard', arrayBuf)
+    copyImageToClipboard: (arrayBuf) => ipcRenderer.invoke('copy-image-to-clipboard', arrayBuf),
+    saveInvoicePdf: (html, filename) => ipcRenderer.invoke('invoice:save-pdf', { html, filename })
 });
 
 contextBridge.exposeInMainWorld('ytDownloader', {

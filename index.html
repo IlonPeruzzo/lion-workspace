@@ -33,7 +33,6 @@
         body{
             font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
             background:var(--bg);
-            background-image:radial-gradient(ellipse at 20% 0%,rgba(190,242,100,0.08) 0%,transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(217,249,157,0.06) 0%,transparent 50%);
             color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;
             overflow-x:hidden;
         }
@@ -82,6 +81,29 @@
         .stat .val{font-size:1.4rem;font-weight:800;color:var(--text);letter-spacing:-.3px}
         .info-btn{position:absolute;top:6px;left:6px;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.06);color:var(--text3);font-size:.75rem;cursor:pointer;font-weight:700;border:1px solid rgba(255,255,255,.1);transition:all .15s;z-index:3;user-select:none}
         .info-btn:hover{background:rgba(190,242,100,.15);color:var(--accent);border-color:rgba(190,242,100,.3)}
+        /* Ações do card (? + olho) na parte de baixo */
+        .stat-actions{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto;padding-top:10px}
+        .stat-qbtn{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.06);color:var(--text3);font-size:.72rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.1);transition:all .15s;user-select:none}
+        .stat-qbtn:hover{background:rgba(190,242,100,.15);color:var(--accent);border-color:rgba(190,242,100,.3)}
+        .stat-eye{background:transparent;border:none;color:#737373;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;border-radius:6px;opacity:.55;transition:all .15s}
+        .stat-eye:hover{opacity:1;color:#bef264;background:rgba(190,242,100,.08)}
+        .stat-eye:active{transform:scale(.85)}
+        /* Só o VALOR borra (label + olho continuam clicáveis pra mostrar de volta) */
+        .stat-hideable{transition:filter .25s ease}
+        .stat.card-blurred .stat-hideable{filter:blur(9px);user-select:none;pointer-events:none}
+        /* Onboarding em etapas (dashboard vazio) */
+        .onb-steps{display:flex;align-items:stretch;justify-content:center;gap:10px;flex-wrap:wrap}
+        .onb-step{flex:1;min-width:190px;max-width:230px;padding:26px 20px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:18px;text-align:center;position:relative;transition:all .2s}
+        .onb-step .onb-num{position:absolute;top:12px;left:14px;width:24px;height:24px;border-radius:50%;background:rgba(190,242,100,.12);color:var(--accent);font-weight:800;font-size:.72rem;display:flex;align-items:center;justify-content:center}
+        .onb-step .onb-ico{width:52px;height:52px;margin:6px auto 16px;border-radius:16px;background:linear-gradient(135deg,rgba(190,242,100,.14),rgba(34,211,238,.06));border:1px solid rgba(190,242,100,.12);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+        .onb-step .onb-title{font-size:.95rem;font-weight:800;color:var(--text);margin-bottom:6px;letter-spacing:-.2px}
+        .onb-step .onb-desc{font-size:.76rem;color:var(--text3);line-height:1.5}
+        .onb-clickable{cursor:pointer}
+        .onb-clickable:hover{background:rgba(190,242,100,.05);border-color:rgba(190,242,100,.35);transform:translateY(-2px);box-shadow:0 10px 30px -12px rgba(190,242,100,.25)}
+        .onb-cta{margin-top:14px;display:inline-flex;align-items:center;gap:5px;font-size:.78rem;font-weight:800;color:#0a0a0a;background:var(--accent);padding:7px 16px;border-radius:9px;transition:all .2s}
+        .onb-clickable:hover .onb-cta{filter:brightness(1.05)}
+        .onb-arrow{display:flex;align-items:center;color:var(--text3);flex-shrink:0;opacity:.5}
+        @media(max-width:720px){.onb-arrow{transform:rotate(90deg)}}
         .info-panel{display:none;position:absolute;top:32px;left:6px;background:rgba(12,12,12,.98);border:1px solid rgba(190,242,100,.18);border-radius:12px;padding:14px;min-width:260px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,.7);font-size:.74rem;line-height:1.5;color:var(--text2);text-transform:none;letter-spacing:0;cursor:default}
         .info-panel.open{display:block}
         .info-panel .ip-title{font-weight:700;color:var(--accent);margin-bottom:8px;font-size:.78rem;display:flex;align-items:center;gap:4px}
@@ -281,8 +303,10 @@
         .cost-item .cl{font-size:.82rem;color:var(--text3)}.cost-item .cv{font-size:.92rem;font-weight:600;color:var(--orange)}
 
         /* Meta stepper — design custom (sem spinners feios do navegador) */
-        .meta-stepper{display:inline-flex;align-items:stretch;border:1px solid rgba(245,158,11,.22);background:rgba(245,158,11,.06);border-radius:10px;overflow:hidden;height:38px;transition:border-color .15s,box-shadow .15s}
-        .meta-stepper:focus-within{border-color:rgba(245,158,11,.5);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+        .meta-stepper{display:inline-flex;align-items:stretch;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:10px;overflow:hidden;height:38px;transition:border-color .15s,box-shadow .15s}
+        .meta-stepper:focus-within{border-color:rgba(190,242,100,.35);box-shadow:0 0 0 3px rgba(190,242,100,.1)}
+        .meta-step-btn{transition:transform .08s ease,background .15s}
+        .meta-step-btn:active{transform:scale(.82)}
         .meta-stepper input[type="number"]{width:120px;border:none;outline:none;background:transparent;color:var(--text);text-align:right;font-size:1rem;font-weight:700;font-family:inherit;padding:0 12px;-moz-appearance:textfield}
         .meta-stepper input[type="number"]::-webkit-inner-spin-button,
         .meta-stepper input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
@@ -512,7 +536,7 @@
         .update-banner .ub-close{background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;font-size:1.1rem;line-height:1;flex-shrink:0}
 
         /* Login screen */
-        .login-screen{position:fixed;inset:0;background:radial-gradient(ellipse at top left,rgba(190,242,100,.05),transparent 55%),radial-gradient(ellipse at bottom right,rgba(88,101,242,.05),transparent 55%),#050505;display:flex;align-items:center;justify-content:center;z-index:9999;-webkit-app-region:drag;overflow:hidden}
+        .login-screen{position:fixed;inset:0;background:#050505;display:flex;align-items:center;justify-content:center;z-index:9999;-webkit-app-region:drag;overflow:hidden}
         /* ═══ Login pop animation (pos-sucesso) ═══ */
         .login-pop-overlay{position:fixed;inset:0;background:rgba(5,5,5,.45);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);display:flex;align-items:center;justify-content:center;z-index:99999;opacity:0;pointer-events:none;transition:opacity .35s ease,backdrop-filter .35s ease}
         .login-pop-overlay.active{opacity:1;pointer-events:auto}
@@ -715,15 +739,42 @@
 .tabs button{width:100%!important;text-align:left!important;justify-content:flex-start!important;padding:11px 14px!important;border-radius:10px!important;font-size:.85rem!important;color:#a3a3a3!important;background:transparent!important;font-weight:600!important;box-shadow:none!important;display:flex!important;align-items:center!important;gap:11px!important;border:none!important;transition:all .2s!important}
 .tabs button:hover{background:rgba(255,255,255,.04)!important;color:#f5f5f5!important;transform:none!important}
 .tabs button.active{background:linear-gradient(90deg,rgba(190,242,100,.18),rgba(190,242,100,.05))!important;color:#bef264!important;box-shadow:inset 3px 0 0 #bef264!important}
-.tabs button svg{width:16px!important;height:16px!important;margin:0!important;flex-shrink:0}
+/* Esconde SVGs inline dos botões — TODOS usam ::before (alinhamento uniforme) */
+.tabs button svg{display:none!important}
 .tabs button[data-tab]::before{content:'';display:inline-block;width:16px;height:16px;flex-shrink:0;background-repeat:no-repeat;background-position:center;background-size:contain}
 .tabs button[data-tab="dashboard"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/><polyline points='9 22 9 12 15 12 15 22'/></svg>")}
 .tabs button[data-tab="clientes"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/></svg>")}
 .tabs button[data-tab="registros"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/></svg>")}
 .tabs button[data-tab="produtividade"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/></svg>")}
+.tabs button[data-tab="audiolib"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18V5l12-2v13'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='16' r='3'/></svg>")}
+.tabs button[data-tab="ytdownload"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='5' width='20' height='14' rx='4'/><polygon points='10 9 16 12 10 15' fill='%23a3a3a3' stroke='none'/></svg>")}
+.tabs button[data-tab="rmbg"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='17 8 12 3 7 8'/><line x1='12' y1='3' x2='12' y2='15'/></svg>")}
 .tabs button.active::before{filter:brightness(0) saturate(100%) invert(88%) sepia(23%) saturate(1074%) hue-rotate(31deg) brightness(101%) contrast(89%)}
 .tabs::-webkit-scrollbar{width:6px}
 .tabs::-webkit-scrollbar-thumb{background:rgba(190,242,100,.15);border-radius:3px}
+/* Card de usuário no topo da barra lateral (igual Configurações) */
+.sb-user{padding:12px 12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.02),transparent);margin:0 2px 14px}
+.sb-user-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sb-user-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#18181b);display:flex;align-items:center;justify-content:center;font-weight:800;color:#f5f5f5;font-size:.9rem;flex-shrink:0;overflow:hidden}
+.sb-user-avatar img{width:100%;height:100%;object-fit:cover}
+.sb-user-info{min-width:0;flex:1}
+.sb-user-name{font-size:.86rem;font-weight:700;color:#f5f5f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+.sb-user-handle{font-size:.7rem;color:#737373;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.sb-user-badges{display:flex;flex-direction:column;gap:6px}
+.sb-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:.7rem;font-weight:600}
+.sb-badge-plan{background:rgba(190,242,100,.08);border:1px solid rgba(190,242,100,.22);color:#bef264}
+/* Discord badge fica cinza (igual Configurações) mesmo conectado — só um check verde discreto */
+.sb-badge-discord{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);color:#a3a3a3;justify-content:space-between}
+.sb-badge-discord .sb-check{display:none;color:#22c55e;flex-shrink:0}
+.sb-badge-discord.connected .sb-check{display:block}
+/* Logo do Lion ao LADO do nome (usa icon.png empacotado — não quebra em outros PCs) */
+.sb-logo-inline{width:30px;height:30px;object-fit:contain;border-radius:8px;flex-shrink:0;margin-left:auto}
+/* Estrelinha do Plano Lion — brilho suave em loop */
+.plan-star{transform-origin:center;animation:planStar 2.6s ease-in-out infinite}
+@keyframes planStar{
+    0%,100%{transform:scale(1) rotate(0deg);filter:drop-shadow(0 0 0 rgba(190,242,100,0))}
+    50%{transform:scale(1.18) rotate(8deg);filter:drop-shadow(0 0 4px rgba(190,242,100,.7))}
+}
 /* Login/callback nao afetados pela sidebar */
 .login-screen,.login-pop-overlay,.ov,.setup-screen{padding-left:0!important;margin-left:0!important;left:0!important}
 .update-banner{margin-left:calc(max(0px, (100vw - var(--content-max)) / 2) + 200px + var(--content-gap))!important;margin-right:max(var(--content-gap), calc((100vw - var(--content-max)) / 2))!important}
@@ -799,14 +850,52 @@ div[style*="background:rgba(190,242,100,.06)"][style*="height:22px"]{height:12px
 </style>
 <style id="cfg-v2">
 /* ═══ Config v2 — full screen com sub-sidebar + right panel ═══ */
-.config-ov{background:#0a0a0a!important;backdrop-filter:none!important}
+/* Config começa DEPOIS da barra lateral da dashboard (que continua visível e clicável) */
+.config-ov{background:#0a0a0a!important;backdrop-filter:none!important;left:calc(max(0px, (100vw - var(--content-max,1600px)) / 2) + 200px)!important;right:0!important;top:0!important;bottom:0!important;z-index:90!important}
 .config-ov.active{justify-content:flex-start!important}
-.config-panel{max-width:none!important;width:100vw!important;height:100vh!important;padding:0!important;background:#0a0a0a!important;border-radius:0!important;border:none!important;overflow:hidden!important;display:flex!important;flex-direction:row!important}
+.config-panel{max-width:none!important;width:100%!important;height:100vh!important;padding:0!important;background:#0a0a0a!important;border-radius:0!important;border:none!important;overflow:hidden!important;display:flex!important;flex-direction:row!important}
+/* A barra lateral principal fica ACIMA do config (sempre clicável) */
+.tabs{z-index:120!important}
+/* Config não repete logo + user card (a barra lateral principal já mostra) */
+.config-panel .cs-logo,.config-panel .cs-user{display:none!important}
+.config-panel .cs-sidebar{padding-top:24px!important}
+/* Config agora usa a PRÓPRIA barra lateral (os tópicos trocam com animação) — esconde a sub-sidebar */
+.config-panel .cs-sidebar{display:none!important}
+/* Save bar respeita só a barra lateral principal (200px, sem a sub-sidebar de 240px) */
+.cs-save-bar{left:calc(max(0px, (100vw - var(--content-max,1600px)) / 2) + 200px)!important}
 .config-panel .cp-header{display:none!important}
+
+/* ═══ Transição animada da barra lateral: navegação principal ⇄ configurações ═══ */
+.sb-nav-stack{position:relative;flex:1 1 auto;min-height:0;margin-top:2px}
+.sb-nav-group{position:absolute;inset:0;display:flex;flex-direction:column;gap:4px;overflow-y:auto;overflow-x:hidden;transition:opacity .26s ease, transform .32s cubic-bezier(.4,0,.2,1)}
+#sbConfigNav{opacity:0;pointer-events:none;transform:translateX(10px)}
+#mainTabs.config-mode #sbMainNav{opacity:0;transform:translateX(-16px);pointer-events:none}
+#mainTabs.config-mode #sbConfigNav{opacity:1;transform:translateX(0);pointer-events:auto}
+/* tópicos entram em cascata (stagger) quando abre config */
+#mainTabs.config-mode .sb-cfg-list > button{animation:sbCfgItemIn .42s both cubic-bezier(.4,0,.2,1)}
+.sb-cfg-list > button:nth-child(1){animation-delay:.03s}
+.sb-cfg-list > button:nth-child(2){animation-delay:.06s}
+.sb-cfg-list > button:nth-child(3){animation-delay:.09s}
+.sb-cfg-list > button:nth-child(4){animation-delay:.12s}
+.sb-cfg-list > button:nth-child(5){animation-delay:.15s}
+.sb-cfg-list > button:nth-child(6){animation-delay:.18s}
+.sb-cfg-list > button:nth-child(7){animation-delay:.21s}
+@keyframes sbCfgItemIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.sb-cfg-list{display:flex;flex-direction:column;gap:4px}
+.tabs .sb-cfg-back{color:#e5e5e5!important;font-weight:700!important}
+.tabs .sb-cfg-back:hover{background:rgba(255,255,255,.05)!important;color:#fff!important}
+.tabs .sb-cfg-back svg{width:16px!important;height:16px!important;flex-shrink:0;display:inline-block;transition:transform .18s}
+.tabs .sb-cfg-back:hover svg{transform:translateX(-3px)}
+.sb-cfg-title{font-size:.63rem;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#525252;padding:10px 12px 4px}
+#sbConfigNav .sb-cfg-btn svg{width:16px;height:16px;flex-shrink:0}
+.sb-cfg-logout{margin-top:auto!important;color:#f87171!important}
+.sb-cfg-logout:hover{background:rgba(248,113,113,.08)!important;color:#f87171!important}
+.sb-cfg-help{padding:9px 12px;font-size:.68rem;color:#737373;cursor:pointer;border-radius:9px;transition:all .18s}
+.sb-cfg-help:hover{color:#a3a3a3;background:rgba(255,255,255,.03)}
 /* Sidebar do config */
 .cs-sidebar{width:240px;background:#0d0d0d;border-right:1px solid rgba(255,255,255,.06);padding:20px 14px 18px;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;-webkit-app-region:no-drag}
 .cs-logo{padding:0 6px 18px;display:flex;align-items:center}
-.cs-logo img{width:38px;height:38px;object-fit:contain;display:block;filter:brightness(0) saturate(100%) invert(88%) sepia(23%) saturate(1074%) hue-rotate(31deg) brightness(101%) contrast(89%)}
+.cs-logo img{width:38px;height:38px;object-fit:contain;display:block;border-radius:9px}
 .cs-user{padding:12px 12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.02),transparent);margin-bottom:16px}
 .cs-user-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .cs-user-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#18181b);display:flex;align-items:center;justify-content:center;font-weight:800;color:#f5f5f5;font-size:.9rem;flex-shrink:0;overflow:hidden}
@@ -2070,6 +2159,25 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
     </div>
 
     <div class="tabs" id="mainTabs">
+        <div class="sb-user" id="sbUserCard">
+            <div class="sb-user-row">
+                <div class="sb-user-avatar" id="sbAvatar">?</div>
+                <div class="sb-user-info">
+                    <div class="sb-user-name" id="sbUserName">Editor</div>
+                    <div class="sb-user-handle" id="sbUserHandle">@convidado</div>
+                </div>
+                <img class="sb-logo-inline" src="build/icon.png?v=4" alt="Lion">
+            </div>
+            <div class="sb-user-badges">
+                <div class="sb-badge sb-badge-plan">
+                    <svg class="plan-star" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    <span>Plano Lion</span>
+                </div>
+            </div>
+        </div>
+        <div class="sb-nav-stack">
+        <!-- Navegação principal -->
+        <div class="sb-nav-group" id="sbMainNav">
         <button class="active" data-tab="dashboard" onclick="showTab('dashboard',this)"><span data-i18n="tab.dashboard">Dashboard</span></button>
         <button data-tab="clientes" onclick="showTab('clientes',this)"><span data-i18n="tab.clientes">Clientes</span></button>
         <button data-tab="registros" onclick="showTab('registros',this)"><span data-i18n="tab.registros">Registros</span></button>
@@ -2086,13 +2194,31 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:3px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             <span data-i18n="tab.rmbg">Remover Fundo</span>
         </button>
+        </div>
+        <!-- Navegação de configurações (aparece com animação ao abrir Configurações) -->
+        <div class="sb-nav-group" id="sbConfigNav">
+            <button class="sb-cfg-back" onclick="fecharConfig()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg><span>Voltar</span></button>
+            <div class="sb-cfg-title" data-i18n="settings.title">Configurações</div>
+            <div class="sb-cfg-list">
+                <button class="sb-cfg-btn active" data-cfg-nav="conta" onclick="cfgV2Switch('conta')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Conta</span></button>
+                <button class="sb-cfg-btn" data-cfg-nav="invoice" onclick="cfgV2Switch('invoice')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><span>Invoice</span></button>
+                <button class="sb-cfg-btn" data-cfg-nav="tributacao" data-fiscal-only onclick="cfgV2Switch('tributacao')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M6 12h12M9 18h6"/></svg><span>Tributação</span></button>
+                <button class="sb-cfg-btn" data-cfg-nav="pagamentos" onclick="cfgV2Switch('pagamentos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span>Pagamentos</span></button>
+                <button class="sb-cfg-btn" data-cfg-nav="seguranca" onclick="cfgV2Switch('seguranca')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>Segurança</span></button>
+                <button class="sb-cfg-btn" data-cfg-nav="notificacoes" onclick="cfgV2Switch('notificacoes')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Notificações</span></button>
+                <button class="sb-cfg-btn" data-cfg-nav="integracoes" onclick="cfgV2Switch('integracoes')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Integrações</span></button>
+            </div>
+            <button class="sb-cfg-btn sb-cfg-logout" onclick="doLogout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Sair</span></button>
+            <div class="sb-cfg-help" onclick="cfgV2OpenHelp()">Central de ajuda ›</div>
+        </div>
+        </div>
     </div>
 
     <!-- ====== DASHBOARD ====== -->
     <div class="tab-content active" id="tab-dashboard">
         <div class="dash-greeting">
             <h2>Olá, <span id="greetName">Editor</span>!</h2>
-            <p>Aqui está o resumo da sua operação.</p>
+            <p id="greetSub">Aqui está o resumo da sua operação.</p>
         </div>
         <!-- Pro-labore: badge compacto. Clique abre o conteudo completo. -->
         <div id="alertaProlabore" style="display:none;position:relative;margin-bottom:14px">
@@ -2146,9 +2272,9 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         <div class="stats">
             <div class="stat"><div class="val" id="sVid">0</div><div class="lbl" data-i18n="dash.services_month">Serviços (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sVidDia">0</div><div class="lbl" style="font-size:.62rem" data-i18n="dash.today">Hoje</div></div></div>
             <div class="stat" style="position:relative"><div class="val" id="sBruto">R$ 0</div><div id="sBrutoPend" style="display:none;font-size:.65rem;color:var(--orange);margin-top:2px"></div><div class="lbl" data-i18n="dash.gross_month">Bruto (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sBrutoDia">R$ 0</div><div class="lbl" style="font-size:.62rem" data-i18n="dash.today">Hoje</div></div></div>
-            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" data-i18n-title="dash.click_hide" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showTaxasInfo();event.stopPropagation()">?</span><div class="val" id="sTaxas">R$ 0</div><div class="lbl" data-i18n="dash.fees">Taxas</div><div class="info-panel" id="taxasInfoPanel"></div><span id="eyeTaxas" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span></div>
-            <div class="stat" data-fiscal-only onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" data-i18n-title="dash.click_hide" title="Clique para ocultar/mostrar"><span class="info-btn" onclick="showImpInfo();event.stopPropagation()">?</span><div class="val" id="sImp">R$ 0</div><div class="lbl" data-i18n="dash.taxes">Impostos</div><div class="info-panel" id="impInfoPanel"></div><span id="eyeImp" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span></div>
-            <div class="stat" onclick="toggleBlurTaxas()" style="cursor:pointer;position:relative;overflow:visible" data-i18n-title="dash.click_hide" title="Clique para ocultar/mostrar"><div class="val" id="sLiq">R$ 0</div><div class="lbl" data-i18n="dash.net">Líquido</div><span id="eyeLiq" style="position:absolute;top:8px;right:8px;opacity:.4;transition:opacity .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span></div>
+            <div class="stat" style="position:relative;overflow:visible"><div class="val stat-hideable" id="sTaxas">R$ 0</div><div class="lbl" data-i18n="dash.fees">Taxas</div><div class="info-panel" id="taxasInfoPanel"></div><div class="stat-actions"><span class="stat-qbtn" onclick="showTaxasInfo();event.stopPropagation()">?</span><button class="stat-eye" id="eyeTaxas" title="Ocultar/mostrar" onclick="toggleCardBlur('sTaxas');event.stopPropagation()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+            <div class="stat" data-fiscal-only style="position:relative;overflow:visible"><div class="val stat-hideable" id="sImp">R$ 0</div><div class="lbl" data-i18n="dash.taxes">Impostos</div><div class="info-panel" id="impInfoPanel"></div><div class="stat-actions"><span class="stat-qbtn" onclick="showImpInfo();event.stopPropagation()">?</span><button class="stat-eye" id="eyeImp" title="Ocultar/mostrar" onclick="toggleCardBlur('sImp');event.stopPropagation()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+            <div class="stat" style="position:relative;overflow:visible"><div class="val stat-hideable" id="sLiq">R$ 0</div><div class="lbl" data-i18n="dash.net">Líquido</div><div class="stat-actions"><span style="flex:1"></span><button class="stat-eye" id="eyeLiq" title="Ocultar/mostrar" onclick="toggleCardBlur('sLiq');event.stopPropagation()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
             <div class="stat"><div class="val" id="sCli">0</div><div class="lbl" data-i18n="dash.clients">Clientes</div></div>
         </div>
         <!-- Meta Financeira -->
@@ -2184,7 +2310,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                         <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-bottom:4px;position:relative">
                             <div class="meta-confetti" id="metaConfetti" aria-hidden="true"></div>
                             <span style="font-size:1.8rem;font-weight:800;color:var(--accent)" id="metaAtual">R$ 0</span>
-                            <div id="metaAtualToggle" style="display:inline-flex;background:rgba(190,242,100,.08);border:1px solid rgba(190,242,100,.12);border-radius:6px;overflow:hidden;vertical-align:middle">
+                            <div id="metaAtualToggle" style="display:none;background:rgba(190,242,100,.08);border:1px solid rgba(190,242,100,.12);border-radius:6px;overflow:hidden;vertical-align:middle">
                                 <button type="button" id="metaAtualBRL" onclick="setMetaAtualMoeda('BRL')" style="padding:2px 8px;border:none;font-size:.65rem;font-weight:700;cursor:pointer;font-family:inherit;background:rgba(190,242,100,.25);color:#bef264;transition:all .2s">R$</button>
                                 <button type="button" id="metaAtualUSD" onclick="setMetaAtualMoeda('USD')" style="padding:2px 8px;border:none;font-size:.65rem;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3);transition:all .2s">$</button>
                             </div>
@@ -2199,13 +2325,33 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         </div>
 
         <!-- Empty state (no clients) -->
-        <div id="dashEmptyState" style="display:none;text-align:center;padding:40px 20px">
-            <div style="width:64px;height:64px;margin:0 auto 16px;border-radius:50%;background:linear-gradient(135deg,rgba(190,242,100,.1),rgba(34,211,238,.08));display:flex;align-items:center;justify-content:center">
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        <div id="dashEmptyState" style="display:none;padding:56px 24px 40px;max-width:760px;margin:0 auto">
+            <div class="onb-steps">
+                <!-- Passo 1 (clicável → Clientes) -->
+                <div class="onb-step onb-clickable" onclick="showTab('clientes',document.querySelector('[data-tab=clientes]'))">
+                    <div class="onb-num">1</div>
+                    <div class="onb-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>
+                    <div class="onb-title">Cadastre o cliente</div>
+                    <div class="onb-desc">Nome, valor e forma de pagamento</div>
+                    <div class="onb-cta">Começar agora <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+                </div>
+                <div class="onb-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+                <!-- Passo 2 -->
+                <div class="onb-step">
+                    <div class="onb-num">2</div>
+                    <div class="onb-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+                    <div class="onb-title">Registre os serviços</div>
+                    <div class="onb-desc">Cada entrega vira um registro</div>
+                </div>
+                <div class="onb-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+                <!-- Passo 3 -->
+                <div class="onb-step">
+                    <div class="onb-num">3</div>
+                    <div class="onb-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+                    <div class="onb-title">Acompanhe tudo</div>
+                    <div class="onb-desc">Gráficos, metas e impostos prontos</div>
+                </div>
             </div>
-            <div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:6px" data-i18n="empty.no_clients">Nenhum cliente cadastrado</div>
-            <div style="font-size:.84rem;color:var(--text3);line-height:1.6;max-width:380px;margin:0 auto 16px" data-i18n-html="empty.no_clients_desc">Adicione seu primeiro cliente na aba <strong style="color:var(--accent)">Clientes</strong> para ver gráficos, estatísticas e controlar seus serviços.</div>
-            <button class="btn btn-a" onclick="showTab('clientes',document.querySelector('[data-tab=clientes]'))" style="font-size:.88rem;padding:10px 24px" data-i18n="btn.add_client">+ Adicionar Cliente</button>
         </div>
 
         <div id="dashChartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -2721,7 +2867,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
         <!-- ═══ Sidebar do config ═══ -->
         <aside class="cs-sidebar">
-            <div class="cs-logo"><img src="build/icon-lion-only.png" alt="Lion"></div>
+            <div class="cs-logo"><img src="build/icon.png?v=4" alt="Lion"></div>
             <div class="cs-user">
                 <div class="cs-user-row">
                     <div class="cs-user-avatar" id="csAvatar">?</div>
@@ -2733,7 +2879,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 <div class="cs-user-badges">
                     <div class="cs-badge cs-badge-plan">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                        <span>Plano Free</span>
+                        <span>Plano Lion</span>
                     </div>
                     <div class="cs-badge cs-badge-discord" id="csDiscordBadge">
                         <span style="display:flex;align-items:center;gap:6px">
@@ -2768,12 +2914,6 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         <!-- ═══ Área central ═══ -->
         <main class="cs-main">
             <div class="cs-header">
-                <button class="cs-back-btn" onclick="fecharConfig()" title="Voltar ao app">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                </button>
-                <div class="cs-header-icon">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                </div>
                 <div>
                     <h1>Configurações</h1>
                     <p id="cfgV2Subtitle">Gerencie seus dados fiscais, invoice e formas de recebimento.</p>
@@ -3282,6 +3422,20 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <button class="btn btn-o" onclick="fecharMod('modEditar')" data-i18n="btn.close">Fechar</button>
         </div>
         <input type="hidden" id="editCliOriginal">
+        <!-- Foto do cliente: preview + upload + URL. Auto-fetch (YouTube/TikTok/Twitch) roda ao salvar; foto manual tem prioridade. -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px">
+            <div id="editAvatarPreview" style="width:48px;height:48px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,rgba(190,242,100,.2),rgba(34,211,238,.15));display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--accent);overflow:hidden;border:2px solid rgba(190,242,100,.2)">?</div>
+            <div style="flex:1;min-width:0">
+                <div style="font-size:.74rem;color:var(--text2);font-weight:600;margin-bottom:5px">Foto do cliente</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <button type="button" class="btn btn-o" style="padding:5px 12px;font-size:.72rem" onclick="document.getElementById('editAvatarFile').click()">Enviar foto</button>
+                    <input type="text" id="editAvatarUrl" placeholder="ou cole uma URL de imagem" style="flex:1;min-width:120px;padding:5px 10px;font-size:.72rem" onchange="cliSetAvatarFromUrl(this.value)">
+                    <button type="button" class="btn btn-o" id="editAvatarClearBtn" style="padding:5px 10px;font-size:.72rem;color:#fca5a5;border-color:rgba(248,113,113,.25);display:none" onclick="cliClearAvatar()">Remover</button>
+                </div>
+                <input type="file" id="editAvatarFile" accept="image/*" style="display:none" onchange="cliPickAvatarFile(this)">
+                <div style="font-size:.64rem;color:var(--text3);margin-top:5px">Instagram/X não têm foto automática (API paga). Use YouTube/TikTok/Twitch ou envie a foto aqui.</div>
+            </div>
+        </div>
         <div class="fg" style="margin-bottom:10px"><label data-i18n="cli.client_name">Nome do Cliente</label><input type="text" id="editCliNome" placeholder="Nome do cliente"></div>
         <!-- País -->
         <div style="margin-bottom:10px">
@@ -4023,19 +4177,40 @@ function showApp() {
 
 async function updateGreetName() {
     const el = document.getElementById('greetName');
-    if (!el) return;
+    let sess = null;
     try {
-        if (window.discordAuth && window.discordAuth.getSession) {
-            const s = await window.discordAuth.getSession();
-            if (s && (s.global_name || s.username)) {
-                const raw = s.global_name || s.username;
-                const first = String(raw).trim().split(/\s+/)[0];
-                el.textContent = first;
-                return;
-            }
-        }
+        if (window.discordAuth && window.discordAuth.getSession) sess = await window.discordAuth.getSession();
     } catch (e) {}
-    el.textContent = 'Editor';
+    if (el) {
+        const raw = sess && (sess.global_name || sess.username);
+        el.textContent = raw ? String(raw).trim().split(/\s+/)[0] : 'Editor';
+    }
+    try { updateSidebarUserCard(sess); } catch (e) {}
+}
+
+function updateSidebarUserCard(sess) {
+    const avatar = document.getElementById('sbAvatar');
+    const name = document.getElementById('sbUserName');
+    const handle = document.getElementById('sbUserHandle');
+    const dcBadge = document.getElementById('sbDiscordBadge');
+    const dcStatus = document.getElementById('sbDiscordStatus');
+    if (!avatar || !name) return;
+    if (sess && (sess.global_name || sess.username)) {
+        const display = sess.global_name || sess.username;
+        const first = String(display).trim().split(/\s+/)[0];
+        name.textContent = first;
+        if (handle) handle.textContent = '@' + (sess.username || 'user');
+        if (sess.avatar_url) avatar.innerHTML = '<img src="' + sess.avatar_url + '">';
+        else avatar.textContent = first.charAt(0).toUpperCase();
+        if (dcBadge) dcBadge.classList.add('connected');
+        if (dcStatus) dcStatus.textContent = 'Discord conectado';
+    } else {
+        name.textContent = 'Editor';
+        if (handle) handle.textContent = '@convidado';
+        avatar.innerHTML = '?';
+        if (dcBadge) dcBadge.classList.remove('connected');
+        if (dcStatus) dcStatus.textContent = 'Discord desconectado';
+    }
 }
 
 async function showLoginScreen() {
@@ -4735,6 +4910,8 @@ function salvarFaturas(){localStorage.setItem('vc_faturas',JSON.stringify(fatura
 // ===== TABS =====
 function showTab(id,btn){
     if(id==='config'){
+        // Anima a barra lateral trocando a nav principal pelos tópicos de configurações
+        try { document.getElementById('mainTabs').classList.add('config-mode'); } catch(e){}
         document.getElementById('configPanel').classList.add('active');
         // SEMPRE reaplica i18n + fiscal visibility ao abrir settings (refleti escolhas atuais)
         try { if(typeof applyI18n==='function') applyI18n(); } catch(e){}
@@ -4746,6 +4923,8 @@ function showTab(id,btn){
         try { if(typeof cfgV2Switch==='function') cfgV2Switch('conta'); } catch(e){}
         return;
     }
+    // Clicou numa aba principal com o Config aberto → fecha o Config (a barra lateral fica sempre clicável)
+    try { const cp=document.getElementById('configPanel'); if(cp&&cp.classList.contains('active')) fecharConfig(); } catch(e){}
     document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
     document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
     document.getElementById('tab-'+id).classList.add('active');
@@ -4755,11 +4934,11 @@ function showTab(id,btn){
     if(id==='produtividade') {renderVidsAndamento();updProjTimerSelect();renderProdHist();}
     if(id==='ytdownload') ytCheckDeps();
 }
-function fecharConfig(){document.getElementById('configPanel').classList.remove('active')}
+function fecharConfig(){document.getElementById('configPanel').classList.remove('active');try{document.getElementById('mainTabs').classList.remove('config-mode');}catch(e){}}
 
 // ═══ CONFIG v2 — sub-tab switching + user card + summary ═══
 function cfgV2Switch(section){
-    document.querySelectorAll('.cs-nav-btn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-cfg-nav')===section));
+    document.querySelectorAll('.cs-nav-btn,.sb-cfg-btn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-cfg-nav')===section));
     document.querySelectorAll('[data-cfg-section]').forEach(s=>s.classList.toggle('active', s.getAttribute('data-cfg-section')===section));
     const subs={
         conta:'Suas credenciais e conexões.',
@@ -5347,6 +5526,7 @@ function toggleProlaboreField(){
     if(f) f.style.display=cb&&cb.checked?'block':'none';
     salvarCfg();
 }
+var _meiAlertDismissed = false; // persiste durante a sessão pra o × do alerta MEI ficar fechado
 function updMeiTracker(){
     const tracker=document.getElementById('meiTracker');
     if(cfg.tipoPessoa!=='MEI'){tracker.style.display='none';return}
@@ -5386,7 +5566,7 @@ function updMeiTracker(){
     const alertEl=document.getElementById('meiAlertaPrevio');
     if(pct>90){alertEl.style.display='block';alertEl.style.borderColor='rgba(244,63,94,.3)';alertEl.style.color='#f43f5e';alertEl.style.background='rgba(244,63,94,.06)';alertEl.innerHTML='<strong>Atenção!</strong> Você está perto do limite do MEI. Considere migrar para ME antes de ultrapassar.';}
     else if(pct>70){alertEl.style.display='block';alertEl.innerHTML=`<strong>Cuidado:</strong> Você já usou ${pct.toFixed(0)}% do limite anual. ${meiAberturaMsg?'<br>'+meiAberturaMsg:''}`;}
-    else if(!cfg.meiData&&fatApp>0){alertEl.style.display='block';alertEl.style.borderColor='rgba(244,63,94,.3)';alertEl.style.color='#f43f5e';alertEl.style.background='rgba(244,63,94,.06)';alertEl.innerHTML='<span>Configure a <strong>data de abertura do MEI</strong> e o <strong>faturamento anterior</strong> nas Configurações para um cálculo mais preciso.</span><button onclick="this.parentElement.style.display=\'none\'" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#f43f5e;font-size:1.1rem;cursor:pointer;padding:2px 6px;opacity:.7">&times;</button>';alertEl.style.position='relative';}
+    else if(!cfg.meiData&&fatApp>0&&!_meiAlertDismissed){alertEl.style.display='block';alertEl.style.borderColor='rgba(244,63,94,.3)';alertEl.style.color='#f43f5e';alertEl.style.background='rgba(244,63,94,.06)';alertEl.innerHTML='<span>Configure a <strong>data de abertura do MEI</strong> e o <strong>faturamento anterior</strong> nas Configurações para um cálculo mais preciso.</span><button onclick="_meiAlertDismissed=true;this.parentElement.style.display=\'none\'" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#f43f5e;font-size:1.1rem;cursor:pointer;padding:2px 6px;opacity:.7">&times;</button>';alertEl.style.position='relative';}
     else{alertEl.style.display=meiAberturaMsg?'block':'none';if(meiAberturaMsg)alertEl.innerHTML=meiAberturaMsg;}
 }
 
@@ -5543,6 +5723,10 @@ function editarCliente(nome){
     document.getElementById('editSocialWrap').style.display=hasSocial?'':'none';
     document.getElementById('editEnderecoWrap').style.display=cl.endereco?'':'none';
     _tempPipeline=(cl.pipeline&&cl.pipeline.length)?cl.pipeline.slice():(cfg.etapas||[]).slice();
+    // Foto do cliente — reseta estado e mostra a atual
+    _editAvatarData=undefined;
+    const _au=document.getElementById('editAvatarUrl'); if(_au)_au.value=(cl.avatar&&cl.avatarManual&&!cl.avatar.startsWith('data:'))?cl.avatar:'';
+    _editAvatarUpdatePreview(cl.avatar||'', cl.nome);
     document.getElementById('modEditar').classList.add('active');
     renderBubblePayFor('bubbleEditPaySel','editPag','selectEditPay');
 }
@@ -5618,12 +5802,18 @@ function salvarEdtCliente(){
     cl.diaPag=parseInt(document.getElementById('editDiaPag').value)||0;
     cl.tipoCobranca=document.getElementById('editTipoCobranca').value||'por_video';
     cl.pipeline=_tempPipeline.slice();
-    // Clear avatar if social links changed só it re-fetches
-    if(cl.yt!==oldYt||cl.ig!==oldIg||cl.tt!==oldTt||cl.x!==oldX||cl.tw!==oldTw)cl.avatar='';
+    // === Foto do cliente ===
+    if(_editAvatarData!==undefined){
+        if(_editAvatarData){ cl.avatar=_editAvatarData; cl.avatarManual=true; }   // foto manual
+        else { cl.avatar=''; cl.avatarManual=false; }                              // removida → volta pro auto
+    }
+    const _manual=!!cl.avatarManual;
+    // Se NÃO é manual e mudou alguma rede, limpa pra re-buscar automaticamente
+    if(!_manual && (cl.yt!==oldYt||cl.ig!==oldIg||cl.tt!==oldTt||cl.x!==oldX||cl.tw!==oldTw))cl.avatar='';
     regs.filter(r=>r.cliente===cl.nome).forEach(r=>{if(!r.pagamento||r.pagamento===cl.pagamento)r.pagamento=cl.pagamento});
     salvar();fecharMod('modEditar');renderCli();updSelects();renderRegs();updStats();renderCharts();aoSelCli();renderVidsAndamento();
     showToast('Cliente atualizado!');
-    fetchAvatar(cl.nome);
+    if(!_manual) fetchAvatar(cl.nome);   // auto-fetch só quando não tem foto manual
 }
 // ===== DRAG & DROP =====
 let _dragCardId=null,_dragEtapaIdx=null;
@@ -5699,7 +5889,7 @@ function extractUsername(url,platform){
     if(platform==='tw'){return url.replace(/https?:\/\/(www\.)?twitch\.tv\/?/,'').replace(/^@/,'').split(/[/?#]/)[0]}
     return'';
 }
-function testImg(url){return new Promise(r=>{const img=new Image();img.onload=()=>r(img.width>1&&img.height>1);img.onerror=()=>r(false);setTimeout(()=>r(false),6000);img.src=url})}
+function testImg(url){return new Promise(r=>{const img=new Image();let done=false;const fin=v=>{if(done)return;done=true;r(v)};img.onload=()=>fin(img.width>1&&img.height>1);img.onerror=()=>fin(false);setTimeout(()=>fin(false),9000);img.src=url})}
 function extractYTIdentifier(raw){
     raw=raw.trim().replace(/\/$/,'');
     // Channel ID (UC...)
@@ -5718,54 +5908,64 @@ function extractYTIdentifier(raw){
     if(stripped&&stripped!=='watch')return{type:'handle',val:stripped.replace(/^@/,'')};
     return null;
 }
+// Foto manual (upload/URL) no modal de editar cliente
+let _editAvatarData; // undefined = sem mudança; string = nova foto; '' = removida
+function _editAvatarUpdatePreview(src, nome){
+    const el=document.getElementById('editAvatarPreview');
+    const clr=document.getElementById('editAvatarClearBtn');
+    if(!el)return;
+    if(src){ el.innerHTML='<img src="'+src+'" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">'; if(clr)clr.style.display=''; }
+    else { el.textContent=(nome||'?').charAt(0).toUpperCase()||'?'; if(clr)clr.style.display='none'; }
+}
+function cliPickAvatarFile(input){
+    const f=input.files&&input.files[0]; if(!f)return;
+    if(!f.type.startsWith('image/')){showToast('Selecione uma imagem','warn');return}
+    const rd=new FileReader();
+    rd.onload=e=>{ _editAvatarData=e.target.result; _editAvatarUpdatePreview(_editAvatarData); };
+    rd.readAsDataURL(f);
+    input.value='';
+}
+function cliSetAvatarFromUrl(url){
+    url=(url||'').trim();
+    if(!url){ return; }
+    _editAvatarData=url; _editAvatarUpdatePreview(url);
+}
+function cliClearAvatar(){
+    _editAvatarData=''; const u=document.getElementById('editAvatarUrl'); if(u)u.value='';
+    _editAvatarUpdatePreview('', document.getElementById('editCliNome')?.value);
+}
 async function fetchAvatar(nome){
     const cl=getCl(nome);if(!cl)return;
-    let avatar='';
+    if(cl.avatarManual){ console.log('[fetchAvatar] pulado (foto manual):',nome); return; }
     console.log('[fetchAvatar]', nome, 'campos:', {ig:cl.ig, yt:cl.yt, tt:cl.tt, x:cl.x, tw:cl.tw});
-    // 1. Instagram — tenta unavatar (sem strict pra sempre conseguir algo)
-    if(!avatar&&cl.ig){
-        const user=extractUsername(cl.ig,'ig');
-        if(user){
-            avatar=`https://unavatar.io/instagram/${user}`;
-            console.log('[fetchAvatar] IG url definida:',avatar);
-        }
-    }
-    // 2. YouTube — API (supports all URL formats: handle, channel ID, custom, user)
-    // YouTube avatar via mixerno (no API key)
-    if(!avatar&&cl.yt){
+    // Monta candidatos em ordem de prioridade. `fallback=false` faz o unavatar dar 404
+    // quando não consegue a foto real (aí testImg falha e cai pro próximo em vez de
+    // travar numa imagem genérica). Testamos cada um e usamos o PRIMEIRO que carrega.
+    const candidates=[];
+    if(cl.ig){const u=extractUsername(cl.ig,'ig');if(u)candidates.push(`https://unavatar.io/instagram/${u}?fallback=false`);}
+    // YouTube via API do mixerno (foto real, sem depender do unavatar)
+    if(cl.yt){
         try{
             const chId=await resolveYTChannelId(cl.yt);
             if(chId){
                 const sr=await fetch(`https://backend.mixerno.space/api/youtube/estv3/${chId}`);
-                if(sr.ok){const d=await sr.json();const it=d?.items?.[0]||d;avatar=it?.snippet?.thumbnails?.default?.url||it?.snippet?.thumbnails?.medium?.url||''}
+                if(sr.ok){const d=await sr.json();const it=d?.items?.[0]||d;const u=it?.snippet?.thumbnails?.default?.url||it?.snippet?.thumbnails?.medium?.url;if(u)candidates.push(u);}
             }
-        }catch(e){console.warn('YT avatar fetch error:',e)}
-    }
-    // 3. YouTube — unavatar fallback (handles + channel IDs)
-    if(!avatar&&cl.yt){
+        }catch(e){console.warn('YT api avatar err:',e)}
         const id=extractYTIdentifier(cl.yt);
-        if(id){
-            const ytUrl=`https://unavatar.io/youtube/${id.val}`;
-            try{if(await testImg(ytUrl))avatar=ytUrl}catch(e){}
-        }
+        if(id)candidates.push(`https://unavatar.io/youtube/${id.val}?fallback=false`);
     }
-    // 4. TikTok
-    if(!avatar&&cl.tt){
-        const user=extractUsername(cl.tt,'tt');
-        if(user){avatar=`https://unavatar.io/tiktok/${user}`;console.log('[fetchAvatar] TT url definida:',avatar)}
+    if(cl.tt){const u=extractUsername(cl.tt,'tt');if(u)candidates.push(`https://unavatar.io/tiktok/${u}?fallback=false`);}
+    if(cl.x){const u=extractUsername(cl.x,'x');if(u)candidates.push(`https://unavatar.io/twitter/${u}?fallback=false`);}
+    if(cl.tw){const u=extractUsername(cl.tw,'tw');if(u)candidates.push(`https://unavatar.io/twitch/${u}?fallback=false`);}
+    // Testa cada candidato até um carregar de verdade
+    let avatar='';
+    for(const url of candidates){
+        try{ if(await testImg(url)){ avatar=url; break; } }catch(e){}
+        console.log('[fetchAvatar] falhou/pulou:',url);
     }
-    // 5. X (Twitter)
-    if(!avatar&&cl.x){
-        const user=extractUsername(cl.x,'x');
-        if(user){avatar=`https://unavatar.io/twitter/${user}`;console.log('[fetchAvatar] X url definida:',avatar)}
-    }
-    // 6. Twitch
-    if(!avatar&&cl.tw){
-        const user=extractUsername(cl.tw,'tw');
-        if(user){avatar=`https://unavatar.io/twitch/${user}`;console.log('[fetchAvatar] TW url definida:',avatar)}
-    }
-    if(avatar){cl.avatar=avatar;salvar();renderCli();renderVidsAndamento();console.log('[fetchAvatar] AVATAR SET:',cl.nome,'->',avatar)}
-    else console.warn('[fetchAvatar] nenhuma fonte encontrada pra',nome);
+    if(avatar){cl.avatar=avatar;salvar();renderCli();renderVidsAndamento();console.log('[fetchAvatar] OK:',cl.nome,'->',avatar);}
+    else console.warn('[fetchAvatar] nenhuma foto carregou pra',nome,'(candidatos:',candidates.length,')');
 }
 function getAvatar(cl){
     if(cl.avatar)return `<img src="${cl.avatar}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(190,242,100,.2)" onerror="this.style.display='none'">`;
@@ -6022,6 +6222,14 @@ function toggleSection(id,headerEl){
 let taxasBlurred=false;
 const eyeOpenSvg=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const eyeClosedSvg=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+// Blur INDEPENDENTE por card — só o card cujo olho foi clicado borra
+function toggleCardBlur(valId){
+    const val=document.getElementById(valId); if(!val) return;
+    const card=val.closest('.stat'); if(!card) return;
+    const eye=card.querySelector('.stat-eye');
+    const on=card.classList.toggle('card-blurred');
+    if(eye) eye.innerHTML=on?eyeClosedSvg:eyeOpenSvg;
+}
 let _statVals={bruto:0,brutoDia:0,taxas:0,imp:0,liq:0,pendB:0};
 function toggleDashCurrency(){
     _chartCurrency = _chartCurrency==='BRL'?'USD':'BRL';
@@ -6930,14 +7138,33 @@ function updateFaturaPreview(){
     }
     document.getElementById('faturaInvoicePreview').innerHTML=html;
 }
-function downloadFaturaPreview(){
-    const content=document.getElementById('faturaInvoicePreview').innerHTML;
-    if(!content)return;
-    const htmlDoc=`<!DOCTYPE html><html><head><title>Invoice</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;padding:32px;background:#fff}table{width:100%;border-collapse:collapse}@media print{body{padding:16px}}</style></head><body>${content}</body></html>`;
+// Salva a invoice como PDF vetorial (texto selecionável) direto no disco, via Electron.
+// Fallback: se não tiver a API (ex: fora do Electron), usa o print do iframe.
+async function _saveInvoicePdf(htmlDoc, filename){
+    if(window.electronAPI && window.electronAPI.saveInvoicePdf){
+        try{
+            const r=await window.electronAPI.saveInvoicePdf(htmlDoc, filename||'invoice');
+            if(r&&r.ok){ showToast('PDF salvo!','ok'); return; }
+            if(r&&r.canceled) return;
+            showToast('Falha ao salvar PDF: '+((r&&r.error)||'?'),'err');
+            return;
+        }catch(e){ showToast('Erro ao salvar PDF: '+e.message,'err'); return; }
+    }
+    // Fallback (print dialog)
     let iframe=document.getElementById('printInvoiceFrame');
     if(!iframe){iframe=document.createElement('iframe');iframe.id='printInvoiceFrame';iframe.style.cssText='position:fixed;left:-9999px;top:-9999px;width:800px;height:600px;border:none';document.body.appendChild(iframe);}
     iframe.contentDocument.open();iframe.contentDocument.write(htmlDoc);iframe.contentDocument.close();
     setTimeout(()=>iframe.contentWindow.print(),400);
+}
+function _invoiceHtmlDoc(content){
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,Helvetica,sans-serif;padding:32px;color:#111;background:#fff}table{width:100%;border-collapse:collapse}</style></head><body>${content}</body></html>`;
+}
+function downloadFaturaPreview(){
+    const content=document.getElementById('faturaInvoicePreview').innerHTML;
+    if(!content)return;
+    let fname='invoice';
+    try{ const m=content.match(/INV-[\w-]+/); if(m)fname=m[0]; }catch(e){}
+    _saveInvoicePdf(_invoiceHtmlDoc(content), fname);
 }
 function buildFaturaInvoiceHTML(nome,videoIds,prazo,simple,lang){
     const cl=getCl(nome);if(!cl)return'';
@@ -6987,11 +7214,9 @@ function buildFaturaInvoiceHTML(nome,videoIds,prazo,simple,lang){
 }
 function downloadFaturaInvoice(fatId){
     const fat=faturas.find(f=>f.id===fatId);if(!fat||!fat.invoiceHTML)return;
-    const htmlDoc=`<!DOCTYPE html><html><head><title>Invoice</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;padding:32px;background:#fff}table{width:100%;border-collapse:collapse}@media print{body{padding:16px}}</style></head><body>${fat.invoiceHTML}</body></html>`;
-    let iframe=document.getElementById('printInvoiceFrame');
-    if(!iframe){iframe=document.createElement('iframe');iframe.id='printInvoiceFrame';iframe.style.cssText='position:fixed;left:-9999px;top:-9999px;width:800px;height:600px;border:none';document.body.appendChild(iframe);}
-    iframe.contentDocument.open();iframe.contentDocument.write(htmlDoc);iframe.contentDocument.close();
-    setTimeout(()=>iframe.contentWindow.print(),400);
+    let fname='invoice';
+    try{ const m=fat.invoiceHTML.match(/INV-[\w-]+/); if(m)fname=m[0]; }catch(e){}
+    _saveInvoicePdf(_invoiceHtmlDoc(fat.invoiceHTML), fname);
 }
 function criarFatura(){
     const nome=document.getElementById('faturaCliNome').value;
@@ -7133,6 +7358,11 @@ function updStats(){
     if(taxasWrap)taxasWrap.style.display=hasClients?'block':'none';
     if(metaEl)metaEl.style.display=hasClients?'block':'none';
     if(statsEl)statsEl.style.display=hasClients?'grid':'none';
+    // Sem clientes: esconde o período e o subtítulo "resumo" (não faz sentido sem dados)
+    const monthBar=document.getElementById('dashMonthBar');
+    const greetSub=document.getElementById('greetSub');
+    if(monthBar)monthBar.style.display=hasClients?'flex':'none';
+    if(greetSub)greetSub.textContent=hasClients?'Aqui está o resumo da sua operação.':'Vamos configurar sua operação em 3 passos.';
     renderTaxasResumo();
     updMeta();
 }
@@ -7163,7 +7393,9 @@ function metaStep(direction){
     if(!inp)return;
     const step=parseFloat(inp.step)||100;
     const cur=parseFloat(inp.value)||0;
-    const next=Math.max(0, cur + (direction*step));
+    // Arredonda pro múltiplo de `step` mais próximo e soma — nunca deixa centavos presos
+    const base=Math.round(cur/step)*step;
+    const next=Math.max(0, Math.round(base + (direction*step)));
     inp.value=next;
     salvarMeta();
 }
@@ -7182,6 +7414,9 @@ function setMetaMoeda(m){
     document.getElementById('metaMoedaBRL').style.color=m==='BRL'?'#f59e0b':'var(--text3)';
     document.getElementById('metaMoedaUSD').style.background=m==='USD'?'rgba(245,158,11,.25)':'transparent';
     document.getElementById('metaMoedaUSD').style.color=m==='USD'?'#f59e0b':'var(--text3)';
+    // Um único seletor de moeda: o toggle do topo controla TAMBÉM a exibição do valor atual,
+    // então trocar R$/$ converte o número grande junto (não fica travado numa moeda).
+    _metaAtualMoeda=m;
     salvarMeta();
 }
 let _metaAtualMoeda='BRL';
@@ -7198,7 +7433,7 @@ let _metaReachedShown = false;
 let _metaSuppressImpact = false;  // suprime impact durante typing (só dispara depois que parar)
 let _metaImpactTimer = null;
 function _metaFaltaColor(pct){
-    // 0% → vermelho (#f87171), 50% → laranja/amarelo (#fbbf24), 100% → verde-lima (#bef264)
+    // 0% → vermelho (#f87171), 50% → laranja/amarelo (#fbbf24), 100% → verde (#22c55e) matching ring
     const p = Math.max(0, Math.min(100, pct)) / 100;
     let r, g, b;
     if (p < 0.5) {
@@ -7208,9 +7443,9 @@ function _metaFaltaColor(pct){
         b = Math.round(113 + (36  - 113) * t);
     } else {
         const t = (p - 0.5) / 0.5;
-        r = Math.round(251 + (190 - 251) * t);
-        g = Math.round(191 + (242 - 191) * t);
-        b = Math.round(36  + (100 - 36)  * t);
+        r = Math.round(251 + (34  - 251) * t);
+        g = Math.round(191 + (197 - 191) * t);
+        b = Math.round(36  + (94  - 36)  * t);
     }
     return `rgb(${r},${g},${b})`;
 }
@@ -7335,14 +7570,16 @@ function updMeta(){
     const pct=metaValBRL>0?Math.min(Math.round(atualBRL/metaValBRL*100),100):0;
     const faltaBRL=Math.max(metaValBRL-atualBRL,0);
     const faltaDisplay=metaMoeda==='USD'?faltaBRL/usd:faltaBRL;
+    // COR ÚNICA pra tudo (número, %, anel) — interpola vermelho→amarelo→verde conforme o %,
+    // pra o gráfico circular acompanhar exatamente a cor dos números.
+    const metaCol=_metaFaltaColor(pct);
     const metaAtualEl=document.getElementById('metaAtual');
     metaAtualEl.textContent=sAtual+fb(atual);
-    // Cor do valor grande interpola de vermelho→amarelo→verde conforme % sobe (verde só no 100%)
-    metaAtualEl.style.color=atual>0?_metaFaltaColor(pct):'#f87171';
+    metaAtualEl.style.color=metaCol;
     document.getElementById('metaTotal').textContent=sMeta+fb(metaVal);
     const pctEl=document.getElementById('metaPct');
     pctEl.textContent=pct+'%';
-    pctEl.style.color=pct>=100?'#22c55e':pct>=70?'#f59e0b':'var(--text2)';
+    pctEl.style.color=metaCol;
     document.getElementById('metaBar').style.width=pct+'%';
     document.getElementById('metaBar').style.background=pct>=100?'linear-gradient(90deg,#22c55e,#bef264)':'linear-gradient(90deg,#f59e0b,#bef264)';
     // Atualiza circular ring — vermelho em 0%, verde subindo
@@ -7352,14 +7589,12 @@ function updMeta(){
         const card=document.getElementById('metaCard');
         if(ring){
             ring.style.setProperty('--pct',pct);
-            const pctSpan=document.getElementById('metaPct');
             if(pct===0){
-                if(pctSpan) pctSpan.style.color='#f87171';
-                ring.style.background='conic-gradient(rgba(248,113,113,.35) 100%, rgba(255,255,255,.06) 0)';
+                // Anel vazio com arco fraco na MESMA cor (vermelho) do número
+                ring.style.background='conic-gradient(rgba(248,113,113,.30) 100%, rgba(255,255,255,.06) 0)';
             } else {
-                const ringColor=reached?'#22c55e':'#bef264';
-                if(pctSpan) pctSpan.style.color=ringColor;
-                ring.style.background=`conic-gradient(${ringColor} calc(${pct}*3.6deg),rgba(255,255,255,.06) 0)`;
+                // Anel usa a cor unificada (metaCol) — acompanha número e %
+                ring.style.background=`conic-gradient(${metaCol} calc(${pct}*3.6deg),rgba(255,255,255,.06) 0)`;
             }
             ring.classList.toggle('reached', reached);
         }
@@ -7378,7 +7613,7 @@ function updMeta(){
     const faltaEl=document.getElementById('metaFalta');
     if(reached){
         faltaEl.textContent='Meta atingida!';
-        faltaEl.style.color='#bef264';
+        faltaEl.style.color='#22c55e';
         faltaEl.style.fontWeight='700';
     } else {
         faltaEl.textContent=faltaDisplay>0?'Faltam '+sMeta+fb(faltaDisplay):'Meta atingida!';
@@ -7624,7 +7859,15 @@ function renderCharts(){
                 // → o fundo do card (cinza escuro) aparece por trás, criando o efeito de vidro/atravessado
                 cx.globalCompositeOperation='destination-out';
                 cx.fillStyle='rgba(0,0,0,1)';
-                cx.fillText(txt,bar.x,textY);
+                // Clampa X pra o texto não ser cortado pela borda do gráfico (barras nas pontas)
+                let textX=bar.x;
+                const ca=chart.chartArea;
+                if(ca){
+                    const halfW=cx.measureText(txt).width/2 + 2;
+                    if(textX+halfW>ca.right) textX=ca.right-halfW;
+                    if(textX-halfW<ca.left) textX=ca.left+halfW;
+                }
+                cx.fillText(txt,textX,textY);
                 cx.restore();
             });
         }}]
@@ -7903,11 +8146,9 @@ function buildInvoice(){
 }
 function printInvoice(){
     const content=document.getElementById('invoicePrint').outerHTML;
-    const htmlDoc=`<!DOCTYPE html><html><head><title>Invoice</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter','Segoe UI',sans-serif;padding:32px;color:#111;background:#fff}table{width:100%;border-collapse:collapse}@media print{body{padding:16px}}</style></head><body>${content}</body></html>`;
-    let iframe=document.getElementById('printInvoiceFrame');
-    if(!iframe){iframe=document.createElement('iframe');iframe.id='printInvoiceFrame';iframe.style.cssText='position:fixed;left:-9999px;top:-9999px;width:800px;height:600px;border:none';document.body.appendChild(iframe);}
-    iframe.contentDocument.open();iframe.contentDocument.write(htmlDoc);iframe.contentDocument.close();
-    setTimeout(()=>iframe.contentWindow.print(),400);
+    let fname='invoice';
+    try{ const m=content.match(/INV-[\w-]+/); if(m)fname=m[0]; }catch(e){}
+    _saveInvoicePdf(_invoiceHtmlDoc(content), fname);
 }
 
 // ===== EXPORTS (CSV + Contador) =====
@@ -8883,33 +9124,22 @@ async function _rmbgProcessHQ(blob, onProgress) {
     const image = await mod.RawImage.fromBlob(blob);
     const inputs = await processor(image);
     const out = await model({ input_image: inputs.pixel_values });
-    // BiRefNet retorna [1, 1, H, W] — extrai manualmente pra evitar bugs de chain do transformers.js
+    // BiRefNet retorna [1, 1, H, W] — extrai TUDO manualmente sem chamar .sigmoid()/.to()/.squeeze()
+    // (esses métodos usam .getValue internamente que falha em algumas versões/hardware)
     const maskTensor = out.output_image ?? out.logits ?? Object.values(out)[0];
     if (!maskTensor) throw new Error('Modelo não retornou máscara válida');
-    // Aplica sigmoid manualmente e converte pra uint8 sem depender de .to()/.squeeze()
-    let sigmoidData;
-    let dims;
-    try {
-        const sigTensor = maskTensor.sigmoid();
-        dims = sigTensor.dims || sigTensor.shape || maskTensor.dims;
-        // Pega os dados brutos (typed array) — funciona em várias versões do transformers.js
-        sigmoidData = sigTensor.data || sigTensor.cpuData || await sigTensor.getData?.();
-        if (!sigmoidData) sigmoidData = new Float32Array(await (sigTensor.tolist?.() || []));
-    } catch (te) {
-        // Fallback: aplica sigmoid manualmente em cima do raw
-        const raw = maskTensor.data || maskTensor.cpuData;
-        if (!raw) throw new Error('Não consegui extrair dados do tensor: ' + te.message);
-        dims = maskTensor.dims || maskTensor.shape;
-        sigmoidData = new Float32Array(raw.length);
-        for (let i = 0; i < raw.length; i++) sigmoidData[i] = 1 / (1 + Math.exp(-raw[i]));
-    }
-    // Determina H e W (últimas duas dimensões)
+    // Extrai raw data direto — evita qualquer chain de tensor ops
+    const raw = maskTensor.data || maskTensor.cpuData || maskTensor.buffer;
+    if (!raw || !raw.length) throw new Error('Tensor sem dados extraíveis (dims: ' + JSON.stringify(maskTensor.dims || maskTensor.shape) + ')');
+    const dims = maskTensor.dims || maskTensor.shape || [];
     const w = dims[dims.length - 1];
     const h = dims[dims.length - 2];
     if (!w || !h) throw new Error('Dimensões da máscara inválidas: ' + JSON.stringify(dims));
+    // Aplica sigmoid + scale + clamp manualmente em JS puro
     const uint8 = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) {
-        const v = sigmoidData[i] * 255;
+        const sig = 1 / (1 + Math.exp(-raw[i]));
+        const v = sig * 255;
         uint8[i] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
     }
     const rawMask = new mod.RawImage(uint8, w, h, 1);

@@ -42,19 +42,39 @@ body{display:flex;flex-direction:column}
     background:repeating-conic-gradient(#1a1a1a 0% 25%,#0f0f0f 0% 50%) 50%/14px 14px;
     overflow:hidden
 }
+/* Camada de zoom — transform scale+pan; canvases posicionados via offset (pre-transform) */
+#zoomWrap{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    transform-origin:50% 50%;will-change:transform
+}
 #vid{max-width:100%;max-height:100%;display:block;background:#000}
 #pickerCanvas{
     position:absolute;cursor:crosshair;pointer-events:auto;
     border:1px solid rgba(190,242,100,.15)
 }
+/* Mira estilo After Effects — search region + feature region + crosshair */
 .marker{
-    position:absolute;width:18px;height:18px;border:2px solid var(--accent);
-    border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;
-    box-shadow:0 0 0 1px rgba(0,0,0,.7), 0 0 10px rgba(190,242,100,.5)
+    position:absolute;width:100px;height:100px;pointer-events:auto;cursor:grab;
+    transform:translate(-50%,-50%);
+    filter:drop-shadow(0 0 2px rgba(0,0,0,.8))
 }
-.marker::after{
-    content:'';position:absolute;left:50%;top:50%;width:2px;height:2px;
-    background:var(--accent);transform:translate(-50%,-50%);border-radius:50%
+.marker:active{cursor:grabbing}
+.marker svg{display:block;pointer-events:none}
+/* Controles de zoom (canto inferior-direito do vídeo) */
+.zoom-ctrls{
+    position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:2px;
+    background:rgba(10,10,10,.82);border:1px solid var(--border);border-radius:8px;
+    padding:3px;z-index:20;backdrop-filter:blur(6px)
+}
+.zoom-btn{
+    width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--text2);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s
+}
+.zoom-btn:hover{background:rgba(255,255,255,.08);color:var(--text)}
+.zoom-btn svg{width:14px;height:14px}
+.zoom-lbl{
+    font-family:'JetBrains Mono',monospace;font-size:.66rem;color:var(--text2);
+    min-width:40px;text-align:center;font-variant-numeric:tabular-nums;user-select:none
 }
 
 /* Player controls */
@@ -73,20 +93,19 @@ body{display:flex;flex-direction:column}
     font-family:'JetBrains Mono','SF Mono',monospace;font-size:.7rem;color:var(--text2);
     min-width:90px;text-align:center;font-variant-numeric:tabular-nums
 }
-.scrubber{flex:1;position:relative;height:20px;display:flex;align-items:center;cursor:pointer}
-.scrubber-track{
-    position:absolute;left:0;right:0;height:4px;background:rgba(255,255,255,.08);
-    border-radius:2px
+.spacer{flex:1}
+/* ═══ Timeline (estilo After Effects) — régua + keyframes trackeados + playhead ═══ */
+.timeline-row{padding:0 14px 10px;background:var(--bg2);border-top:1px solid var(--border);flex-shrink:0}
+.timeline{position:relative;height:52px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;overflow:hidden;user-select:none}
+.timeline:hover{border-color:rgba(190,242,100,.2)}
+#tlCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tl-playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);pointer-events:none;box-shadow:0 0 8px rgba(190,242,100,.7);left:0;z-index:3}
+.tl-playhead::before{
+    content:'';position:absolute;top:0;left:-5px;width:12px;height:8px;
+    background:var(--accent);clip-path:polygon(0 0,100% 0,50% 100%)
 }
-.scrubber-fill{
-    position:absolute;left:0;height:4px;background:linear-gradient(90deg,var(--accent2),var(--accent));
-    border-radius:2px;pointer-events:none
-}
-.scrubber-thumb{
-    position:absolute;width:12px;height:12px;background:var(--accent);
-    border-radius:50%;transform:translate(-50%,0);pointer-events:none;
-    box-shadow:0 0 0 2px rgba(0,0,0,.4)
-}
+.tl-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:.66rem;color:var(--text3);pointer-events:none;z-index:2}
 
 /* Side panel */
 .panel{
@@ -137,6 +156,18 @@ body{display:flex;flex-direction:column}
     box-shadow:0 0 0 1px rgba(190,242,100,.08), 0 2px 8px rgba(190,242,100,.1) inset
 }
 
+/* Botões de análise (estilo After Effects: tudo/1 pra trás e pra frente) */
+.analyze-row{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.an-btn{
+    height:36px;border:1px solid rgba(190,242,100,.18);border-radius:7px;
+    background:rgba(190,242,100,.05);color:var(--accent);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:all .12s;padding:0
+}
+.an-btn:hover:not(:disabled){background:rgba(190,242,100,.14);border-color:rgba(190,242,100,.4)}
+.an-btn:active:not(:disabled){transform:scale(.94)}
+.an-btn:disabled{opacity:.35;cursor:not-allowed}
+.an-btn svg{width:17px;height:17px}
+.an-btn.busy{opacity:.6;pointer-events:none}
 /* Path overlay canvas — desenha a trajetória sobre o video */
 #pathCanvas{position:absolute;pointer-events:none;mix-blend-mode:screen}
 
@@ -183,11 +214,39 @@ body{display:flex;flex-direction:column}
 
 <div class="main">
     <div class="stage">
-        <div class="video-wrap">
-            <video id="vid" muted playsinline></video>
-            <canvas id="pickerCanvas"></canvas>
-            <canvas id="pathCanvas"></canvas>
-            <div class="marker" id="marker" style="display:none"></div>
+        <div class="video-wrap" id="videoWrap">
+            <div id="zoomWrap">
+                <video id="vid" muted playsinline></video>
+                <canvas id="pickerCanvas"></canvas>
+                <canvas id="pathCanvas"></canvas>
+                <div class="marker" id="marker" style="display:none">
+                    <svg viewBox="0 0 100 100" width="100" height="100">
+                        <!-- Search region (outer, tracejado) -->
+                        <rect x="18" y="18" width="64" height="64" fill="none" stroke="rgba(190,242,100,.5)" stroke-width="1" stroke-dasharray="4 3"/>
+                        <!-- Feature region (inner) -->
+                        <rect x="34" y="34" width="32" height="32" fill="none" stroke="#bef264" stroke-width="1.5"/>
+                        <!-- Crosshair -->
+                        <line x1="50" y1="2" x2="50" y2="30" stroke="#bef264" stroke-width="1.5"/>
+                        <line x1="50" y1="70" x2="50" y2="98" stroke="#bef264" stroke-width="1.5"/>
+                        <line x1="2" y1="50" x2="30" y2="50" stroke="#bef264" stroke-width="1.5"/>
+                        <line x1="70" y1="50" x2="98" y2="50" stroke="#bef264" stroke-width="1.5"/>
+                        <!-- Centro -->
+                        <circle cx="50" cy="50" r="2.2" fill="#fff"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="zoom-ctrls">
+                <button class="zoom-btn" id="zoomOutBtn" title="Zoom -">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <div class="zoom-lbl" id="zoomLbl">100%</div>
+                <button class="zoom-btn" id="zoomInBtn" title="Zoom +">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="zoom-btn" id="zoomResetBtn" title="Ajustar (100%)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                </button>
+            </div>
         </div>
         <div class="controls">
             <button class="ctrl-btn" id="playBtn" title="Play/Pause">
@@ -200,12 +259,15 @@ body{display:flex;flex-direction:column}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
             <div class="time-display" id="timeDisplay">00:00.0 / 00:00.0</div>
-            <div class="scrubber" id="scrubber">
-                <div class="scrubber-track"></div>
-                <div class="scrubber-fill" id="scrubberFill"></div>
-                <div class="scrubber-thumb" id="scrubberThumb"></div>
-            </div>
+            <div class="spacer"></div>
             <div class="time-display" id="frameDisplay">F 0</div>
+        </div>
+        <div class="timeline-row">
+            <div class="timeline" id="timeline">
+                <canvas id="tlCanvas"></canvas>
+                <div class="tl-empty" id="tlEmpty">Marque um ponto e trackeie pra ver os keyframes aqui</div>
+                <div class="tl-playhead" id="tlPlayhead"></div>
+            </div>
         </div>
     </div>
 
@@ -270,14 +332,40 @@ body{display:flex;flex-direction:column}
         </div>
 
         <div class="panel-section">
-            <button class="btn btn-primary" id="trackBtn" disabled>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
-                Trackear ponto
-            </button>
+            <div class="panel-title">Analisar (a partir do frame atual)</div>
+            <div class="analyze-row" id="analyzeRow">
+                <button class="an-btn" id="anBackAll" title="Analisar tudo pra trás" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6z"/><path d="M20 5v14l-9-7z"/><path d="M11 5v14l-9-7z" opacity=".55"/></svg>
+                </button>
+                <button class="an-btn" id="anBack1" title="Analisar 1 frame pra trás" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h2v14H7z"/><path d="M19 5v14l-9-7z"/></svg>
+                </button>
+                <button class="an-btn" id="anFwd1" title="Analisar 1 frame pra frente" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5v14l9-7z"/><path d="M15 5h2v14h-2z"/></svg>
+                </button>
+                <button class="an-btn" id="anFwdAll" title="Analisar tudo pra frente" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5v14l9-7z" opacity=".55"/><path d="M13 5v14l9-7z"/><path d="M16 5h2v14h-2z"/></svg>
+                </button>
+            </div>
             <div class="progress-wrap" id="progressWrap" style="display:none">
                 <div class="progress-bar" id="progressBar"></div>
             </div>
             <div id="statusEl" style="margin-top:8px"></div>
+        </div>
+
+        <!-- Edição de pontos + salvar (aparece depois do tracking) -->
+        <div class="panel-section" id="editSection" style="display:none">
+            <div class="panel-title">Editar pontos</div>
+            <div class="panel-info" style="margin-bottom:8px">Arraste qualquer ponto do path pra corrigir. Os vizinhos acompanham suavemente.</div>
+            <div class="row">
+                <label>Suavizar vizinhos <span style="opacity:.5;font-size:.65rem">(frames)</span></label>
+                <input type="number" id="editFalloff" value="4" min="0" max="30" step="1">
+            </div>
+            <button class="btn btn-primary" id="saveTrackBtn" style="margin-top:4px">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Salvar Track
+            </button>
+            <button class="btn btn-outline" id="rePickBtn" style="margin-top:6px">Re-marcar ponto</button>
         </div>
     </div>
 </div>
@@ -315,10 +403,13 @@ const marker = document.getElementById('marker');
 const playBtn = document.getElementById('playBtn');
 const timeDisplay = document.getElementById('timeDisplay');
 const frameDisplay = document.getElementById('frameDisplay');
-const scrubber = document.getElementById('scrubber');
-const scrubberFill = document.getElementById('scrubberFill');
-const scrubberThumb = document.getElementById('scrubberThumb');
-const trackBtn = document.getElementById('trackBtn');
+const timelineEl = document.getElementById('timeline');
+const tlCanvas = document.getElementById('tlCanvas');
+const tlCtx = tlCanvas.getContext('2d');
+const tlPlayhead = document.getElementById('tlPlayhead');
+const tlEmpty = document.getElementById('tlEmpty');
+const anBtns = ['anBackAll','anBack1','anFwd1','anFwdAll'].map(id => document.getElementById(id));
+function setAnalyzeEnabled(on){ anBtns.forEach(b => { if(b) b.disabled = !on; }); }
 const statusEl = document.getElementById('statusEl');
 const progressWrap = document.getElementById('progressWrap');
 const progressBar = document.getElementById('progressBar');
@@ -330,32 +421,90 @@ let videoMeta = { width: 0, height: 0 };
 let pythonOk = false; // setado pelo check inicial — bloqueia track se false
 let _trackHistory = null; // historico completo do tracking pra desenhar o path
 let _trackVideoSize = null; // {w, h} do video onde tracking rodou (proxy)
+let _zoom = 1, _panX = 0, _panY = 0; // zoom/pan do stage de vídeo
+const ZOOM_MIN = 1, ZOOM_MAX = 8;
+const zoomWrap = document.getElementById('zoomWrap');
+const zoomLbl = document.getElementById('zoomLbl');
+function _applyZoomTransform() {
+    zoomWrap.style.transform = 'translate(' + _panX + 'px,' + _panY + 'px) scale(' + _zoom + ')';
+    if (zoomLbl) zoomLbl.textContent = Math.round(_zoom * 100) + '%';
+    // Re-desenha contadores de escala (traços/mira com tamanho constante)
+    try { drawPath(); if (trackPoint) updateMarkerPos(); } catch(e) {}
+}
+function _clampPan() {
+    // Limita o pan pra não arrastar o vídeo pra fora da área visível
+    const wrapRect = document.getElementById('videoWrap').getBoundingClientRect();
+    const maxX = (wrapRect.width * (_zoom - 1)) / 2;
+    const maxY = (wrapRect.height * (_zoom - 1)) / 2;
+    _panX = Math.max(-maxX, Math.min(maxX, _panX));
+    _panY = Math.max(-maxY, Math.min(maxY, _panY));
+}
+// Zoom mirando no cursor: mantém o ponto sob o mouse fixo na tela
+function _zoomAt(clientX, clientY, newZoom) {
+    newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    if (newZoom === _zoom) return;
+    const wrap = document.getElementById('videoWrap').getBoundingClientRect();
+    // posição do cursor relativa ao centro do wrap (origem do transform)
+    const cxRel = clientX - (wrap.left + wrap.width / 2);
+    const cyRel = clientY - (wrap.top + wrap.height / 2);
+    // ponto no espaço do conteúdo (antes do novo zoom)
+    const contentX = (cxRel - _panX) / _zoom;
+    const contentY = (cyRel - _panY) / _zoom;
+    _zoom = newZoom;
+    // recalcula pan pra manter contentX/Y sob o cursor
+    _panX = cxRel - contentX * _zoom;
+    _panY = cyRel - contentY * _zoom;
+    if (_zoom <= ZOOM_MIN + 0.001) { _zoom = 1; _panX = 0; _panY = 0; }
+    _clampPan();
+    _applyZoomTransform();
+}
+function _zoomReset() { _zoom = 1; _panX = 0; _panY = 0; _applyZoomTransform(); }
+function _zoomStep(factor, cx, cy) {
+    const wrap = document.getElementById('videoWrap').getBoundingClientRect();
+    _zoomAt(cx != null ? cx : (wrap.left + wrap.width / 2), cy != null ? cy : (wrap.top + wrap.height / 2), _zoom * factor);
+}
 const pathCanvas = document.getElementById('pathCanvas');
 const pathCtx = pathCanvas.getContext('2d');
 
 function drawPath(){
-    pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
-    if(!_trackHistory || !_trackVideoSize) return;
-    const vidRect = vid.getBoundingClientRect();
-    const parent = vid.parentElement.getBoundingClientRect();
-    const cw = vidRect.width, ch = vidRect.height;
+    if(!_trackHistory || !_trackVideoSize){
+        pathCtx.setTransform(1,0,0,1,0,0);
+        pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height);
+        return;
+    }
+    // Posiciona/dimensiona via OFFSET (pre-transform) — o #zoomWrap aplica o scale/pan
+    const cw = vid.offsetWidth, ch = vid.offsetHeight;
     if(cw < 1 || ch < 1) return;
-    pathCanvas.width = cw;
-    pathCanvas.height = ch;
-    pathCanvas.style.left = (vidRect.left - parent.left) + 'px';
-    pathCanvas.style.top = (vidRect.top - parent.top) + 'px';
+    // NÍTIDEZ NO ZOOM: renderiza o canvas na resolução final da tela (offset × zoom × dpr).
+    // Sem isso, o canvas é desenhado no tamanho sem-zoom e o transform estica → borra o path/mira.
+    const dpr = window.devicePixelRatio || 1;
+    let rscale = (_zoom || 1) * dpr;
+    const maxDim = 4096; // teto de memória do backing store
+    if(cw * rscale > maxDim) rscale = maxDim / cw;
+    if(ch * rscale > maxDim) rscale = Math.min(rscale, maxDim / ch);
+    const bw = Math.round(cw * rscale), bh = Math.round(ch * rscale);
+    if(pathCanvas.width !== bw || pathCanvas.height !== bh){
+        pathCanvas.width = bw;
+        pathCanvas.height = bh;
+    }
+    // CSS fica no tamanho offset; o #zoomWrap escala visualmente por zoom → backing = 1:1 com a tela
+    pathCanvas.style.left = vid.offsetLeft + 'px';
+    pathCanvas.style.top = vid.offsetTop + 'px';
     pathCanvas.style.width = cw + 'px';
     pathCanvas.style.height = ch + 'px';
+    pathCtx.setTransform(rscale, 0, 0, rscale, 0, 0); // desenha em coords offset, canvas em alta-res
+    pathCtx.clearRect(0, 0, cw, ch);
 
     const sx = cw / _trackVideoSize.w;
     const sy = ch / _trackVideoSize.h;
+    const zk = 1 / (_zoom || 1); // mantém traços com espessura constante na tela
     const pts = _trackHistory.filter(h => !h.lost && h.x != null && h.y != null);
     if(pts.length < 2) return;
 
     // Sombra/glow externa pra contraste sobre o video
     pathCtx.shadowColor = 'rgba(0,0,0,.6)';
-    pathCtx.shadowBlur = 4;
-    pathCtx.lineWidth = 2.2;
+    pathCtx.shadowBlur = 4 * zk;
+    pathCtx.lineWidth = 2.2 * zk;
     pathCtx.lineCap = 'round';
     pathCtx.lineJoin = 'round';
 
@@ -379,28 +528,176 @@ function drawPath(){
     const start = pts[0], end = pts[pts.length - 1];
     pathCtx.fillStyle = '#bef264';
     pathCtx.beginPath();
-    pathCtx.arc(start.x * sx, start.y * sy, 4.5, 0, Math.PI * 2);
+    pathCtx.arc(start.x * sx, start.y * sy, 4.5 * zk, 0, Math.PI * 2);
     pathCtx.fill();
     pathCtx.fillStyle = '#22d3ee';
     pathCtx.beginPath();
-    pathCtx.arc(end.x * sx, end.y * sy, 4.5, 0, Math.PI * 2);
+    pathCtx.arc(end.x * sx, end.y * sy, 4.5 * zk, 0, Math.PI * 2);
     pathCtx.fill();
 
-    // Marcador do frame ATUAL: bolinha branca com glow
-    const curTime = vid.currentTime || 0;
-    let cur = pts[0];
-    for(const p of pts){
-        if(p.time != null && p.time > curTime) break;
-        cur = p;
+    // Handles editáveis: bolinha pequena em cada ponto (modo edição)
+    if(_editMode){
+        for(let i = 0; i < pts.length; i++){
+            const p = pts[i];
+            const isDrag = (_dragIdx !== null && p === _trackHistory[_dragIdx]);
+            const isHover = (!isDrag && _hoverIdx !== null && p === _trackHistory[_hoverIdx]);
+            if(isDrag || isHover){
+                pathCtx.fillStyle = '#fff';
+                pathCtx.strokeStyle = 'rgba(190,242,100,.9)';
+                pathCtx.lineWidth = 2 * zk;
+                pathCtx.beginPath();
+                pathCtx.arc(p.x * sx, p.y * sy, (isDrag ? 7 : 6) * zk, 0, Math.PI * 2);
+                pathCtx.fill();
+                pathCtx.stroke();
+            } else {
+                pathCtx.fillStyle = 'rgba(255,255,255,.75)';
+                pathCtx.beginPath();
+                pathCtx.arc(p.x * sx, p.y * sy, 2.4 * zk, 0, Math.PI * 2);
+                pathCtx.fill();
+            }
+        }
     }
-    pathCtx.fillStyle = '#fff';
-    pathCtx.shadowColor = 'rgba(190,242,100,.9)';
-    pathCtx.shadowBlur = 10;
-    pathCtx.beginPath();
-    pathCtx.arc(cur.x * sx, cur.y * sy, 5, 0, Math.PI * 2);
-    pathCtx.fill();
-    pathCtx.shadowBlur = 0;
+
+    // A MIRA (DOM .marker) segue o ponto trackeado do frame atual — reposiciona aqui,
+    // que roda a cada timeupdate/seeked/scrub. (Substitui o antigo crosshair no canvas.)
+    updateMarkerPos();
 }
+
+// ═══ Modo edição de pontos (estilo After Effects) ═══
+let _editMode = false;
+let _dragIdx = null;      // índice em _trackHistory sendo arrastado
+let _hoverIdx = null;     // índice em hover (feedback visual)
+let _dragSnapshot = null; // cópia dos pontos afetados no início do drag
+
+function _mouseToVideoCoords(e){
+    const r = canvas.getBoundingClientRect();
+    return {
+        x: (e.clientX - r.left) * (videoMeta.width / r.width),
+        y: (e.clientY - r.top) * (videoMeta.height / r.height)
+    };
+}
+// Acha o ponto do history mais próximo do mouse (em px de TELA, raio 12px)
+function _hitTestPoint(e){
+    if(!_trackHistory || !_trackVideoSize) return null;
+    const vidRect = vid.getBoundingClientRect();
+    const sx = vidRect.width / _trackVideoSize.w;
+    const sy = vidRect.height / _trackVideoSize.h;
+    let best = null, bestD = 12; // raio de captura em px de tela
+    for(let i = 0; i < _trackHistory.length; i++){
+        const h = _trackHistory[i];
+        if(h.lost || h.x == null || h.y == null) continue;
+        const px = vidRect.left + h.x * sx;
+        const py = vidRect.top + h.y * sy;
+        const d = Math.hypot(e.clientX - px, e.clientY - py);
+        if(d < bestD){ bestD = d; best = i; }
+    }
+    return best;
+}
+function _startEditMode(){
+    _editMode = true;
+    _dragIdx = null; _hoverIdx = null;
+    document.getElementById('editSection').style.display = 'block';
+    if (tlEmpty) tlEmpty.style.display = 'none';
+    drawPath();
+    drawTimeline();
+}
+function _exitEditMode(){
+    _editMode = false;
+    _dragIdx = null; _hoverIdx = null;
+    _trackHistory = null; _trackVideoSize = null;
+    document.getElementById('editSection').style.display = 'none';
+    if (tlEmpty) tlEmpty.style.display = 'flex';
+    drawPath();
+    drawTimeline();
+}
+
+// Inicia o arrasto de um ponto do track (usado tanto pelos handles do path quanto pela mira)
+function _beginPointDrag(idx){
+    _dragIdx = idx;
+    const falloff = Math.max(0, parseInt(document.getElementById('editFalloff').value, 10) || 0);
+    _dragSnapshot = {};
+    for(let j = idx - falloff; j <= idx + falloff; j++){
+        if(j < 0 || j >= _trackHistory.length) continue;
+        const h = _trackHistory[j];
+        if(h.lost || h.x == null || h.y == null) continue;
+        _dragSnapshot[j] = { x: h.x, y: h.y };
+    }
+}
+// Índice do keyframe mais próximo do frame atual (pra arrastar a mira)
+function _nearestHistIdx(){
+    if(!_trackHistory) return null;
+    const cf = (vid.currentTime || 0) * FPS;
+    let best = null, bd = Infinity;
+    for(let i = 0; i < _trackHistory.length; i++){
+        const h = _trackHistory[i];
+        if(h.lost || h.x == null || h.y == null) continue;
+        const d = Math.abs(h.frame - cf);
+        if(d < bd){ bd = d; best = i; }
+    }
+    return best;
+}
+canvas.addEventListener('mousedown', e => {
+    if(e.altKey || e.button === 1) return; // Alt/meio = pan, não editar ponto
+    if(!_editMode) return;
+    const idx = _hitTestPoint(e);
+    if(idx === null) return;
+    e.preventDefault(); e.stopPropagation();
+    _beginPointDrag(idx);
+});
+// Arrastar a MIRA reposiciona o ponto do frame ATUAL (com falloff nos vizinhos)
+let _markerDragPre = false; // arrastando trackPoint (antes de trackear)
+marker.addEventListener('mousedown', e => {
+    if(e.altKey || e.button === 1) return; // deixa o pan agir
+    e.preventDefault(); e.stopPropagation();
+    if(_trackHistory){
+        const idx = _nearestHistIdx();
+        if(idx != null) _beginPointDrag(idx);
+    } else if(trackPoint){
+        _markerDragPre = true;
+    }
+});
+window.addEventListener('mousemove', e => {
+    // Arrastar a mira ANTES de trackear = reposiciona o ponto marcado
+    if(_markerDragPre && trackPoint){
+        const v = _mouseToVideoCoords(e);
+        trackPoint.x = Math.max(0, Math.min(videoMeta.width, v.x));
+        trackPoint.y = Math.max(0, Math.min(videoMeta.height, v.y));
+        pointInfo.textContent = '(' + Math.round(trackPoint.x) + ', ' + Math.round(trackPoint.y) + ') @ F' + trackPoint.frame;
+        updateMarkerPos();
+        return;
+    }
+    if(!_editMode) return;
+    if(_dragIdx !== null && _dragSnapshot){
+        const v = _mouseToVideoCoords(e);
+        const orig = _dragSnapshot[_dragIdx];
+        if(!orig) return;
+        const dx = v.x - orig.x, dy = v.y - orig.y;
+        const falloff = Math.max(0, parseInt(document.getElementById('editFalloff').value, 10) || 0);
+        for(const jStr of Object.keys(_dragSnapshot)){
+            const j = parseInt(jStr, 10);
+            const w = falloff === 0 ? (j === _dragIdx ? 1 : 0) : Math.max(0, 1 - Math.abs(j - _dragIdx) / (falloff + 1));
+            if(w <= 0) continue;
+            _trackHistory[j].x = _dragSnapshot[j].x + dx * w;
+            _trackHistory[j].y = _dragSnapshot[j].y + dy * w;
+        }
+        drawPath();
+        return;
+    }
+    // Hover feedback (só quando mouse tá sobre o canvas)
+    const idx = _hitTestPoint(e);
+    if(idx !== _hoverIdx){
+        _hoverIdx = idx;
+        canvas.style.cursor = (idx !== null) ? 'grab' : 'crosshair';
+        drawPath();
+    }
+});
+window.addEventListener('mouseup', () => {
+    if(_markerDragPre){ _markerDragPre = false; }
+    if(_dragIdx !== null){
+        _dragIdx = null; _dragSnapshot = null;
+        drawPath();
+    }
+});
 
 // === Presets ===
 const PRESETS = {
@@ -495,23 +792,41 @@ function loadVideo() {
         vid.currentTime = IN_SEC;
         layoutCanvas();
         updateTimeDisplay();
+        drawTimeline();
     });
-    vid.addEventListener('timeupdate', () => { updateTimeDisplay(); drawPath(); });
-    vid.addEventListener('seeked', drawPath);
+    vid.addEventListener('timeupdate', () => { updateTimeDisplay(); scheduleDraw(); });
+    vid.addEventListener('seeked', () => { scheduleDraw(); _applyPendingSeek(); });
     vid.addEventListener('error', () => {
         setStatus('Erro decodificando: ' + (vid.error?.message || 'codec não suportado'), 'err');
     });
 }
+// rAF-batch do drawPath: coalesce múltiplos triggers (timeupdate/seek/drag) em 1 render/frame
+let _drawScheduled = false;
+function scheduleDraw() {
+    if (_drawScheduled) return;
+    _drawScheduled = true;
+    requestAnimationFrame(() => { _drawScheduled = false; drawPath(); });
+}
+// Throttle de seek no scrub: enquanto um seek está em andamento, guarda só o último alvo
+let _pendingSeekTime = null;
+function _applyPendingSeek() {
+    if (_pendingSeekTime == null) return;
+    const t = _pendingSeekTime; _pendingSeekTime = null;
+    vid.currentTime = t;
+}
+function requestSeek(t) {
+    if (vid.seeking) _pendingSeekTime = t;
+    else vid.currentTime = t;
+}
 function layoutCanvas() {
-    // Posiciona canvas EXATAMENTE em cima do vídeo
-    const r = vid.getBoundingClientRect();
-    const parent = vid.parentElement.getBoundingClientRect();
+    // Posiciona o pickerCanvas em cima do vídeo via OFFSET (pre-transform).
+    // O #zoomWrap aplica scale/pan sobre tudo junto (vídeo + canvases + mira).
     canvas.width = videoMeta.width;
     canvas.height = videoMeta.height;
-    canvas.style.left = (r.left - parent.left) + 'px';
-    canvas.style.top = (r.top - parent.top) + 'px';
-    canvas.style.width = r.width + 'px';
-    canvas.style.height = r.height + 'px';
+    canvas.style.left = vid.offsetLeft + 'px';
+    canvas.style.top = vid.offsetTop + 'px';
+    canvas.style.width = vid.offsetWidth + 'px';
+    canvas.style.height = vid.offsetHeight + 'px';
     if (trackPoint) updateMarkerPos();
     drawPath();
 }
@@ -531,9 +846,89 @@ function updateTimeDisplay() {
     frameDisplay.textContent = 'F ' + Math.round(tRel * FPS);
     if (clipDur > 0) {
         const pct = Math.max(0, Math.min(100, (tRel / clipDur) * 100));
-        scrubberFill.style.width = pct + '%';
-        scrubberThumb.style.left = pct + '%';
+        tlPlayhead.style.left = pct + '%';
     }
+}
+
+// ═══ Timeline (AE-style): régua de frames + keyframes trackeados ═══
+function _tlTotalFrames() {
+    const dur = (OUT_SEC > IN_SEC) ? (OUT_SEC - IN_SEC) : (vid.duration || 0);
+    return Math.max(1, Math.round(dur * FPS));
+}
+function drawTimeline() {
+    const rect = timelineEl.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const W = rect.width, H = rect.height;
+    if (W < 2 || H < 2) return;
+    tlCanvas.width = Math.round(W * dpr);
+    tlCanvas.height = Math.round(H * dpr);
+    tlCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    tlCtx.clearRect(0, 0, W, H);
+
+    const total = _tlTotalFrames();
+    const rulerH = 15;
+
+    // Fundo da área de keyframes
+    tlCtx.fillStyle = 'rgba(255,255,255,.02)';
+    tlCtx.fillRect(0, rulerH, W, H - rulerH);
+
+    // Régua: ticks de frame. Escolhe passo pra ~10 labels
+    const targetTicks = Math.max(4, Math.floor(W / 70));
+    let step = Math.ceil(total / targetTicks);
+    // arredonda pra múltiplos "bonitos"
+    const nice = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+    for (const n of nice) { if (step <= n) { step = n; break; } }
+    tlCtx.fillStyle = 'rgba(255,255,255,.35)';
+    tlCtx.font = '9px JetBrains Mono, monospace';
+    tlCtx.textBaseline = 'middle';
+    tlCtx.strokeStyle = 'rgba(255,255,255,.08)';
+    tlCtx.lineWidth = 1;
+    for (let f = 0; f <= total; f += step) {
+        const x = (f / total) * W;
+        tlCtx.beginPath();
+        tlCtx.moveTo(x + 0.5, 0);
+        tlCtx.lineTo(x + 0.5, rulerH);
+        tlCtx.stroke();
+        if (x < W - 22) tlCtx.fillText('F' + f, x + 3, rulerH / 2);
+    }
+
+    // Keyframes trackeados
+    if (_trackHistory && _trackHistory.length) {
+        const midY = rulerH + (H - rulerH) / 2;
+        // Faixa contínua tracked (verde) / lost (vermelho) por frame
+        for (let i = 0; i < _trackHistory.length; i++) {
+            const h = _trackHistory[i];
+            const x = (h.frame / total) * W;
+            const lost = h.lost || h.x == null;
+            tlCtx.fillStyle = lost ? 'rgba(244,63,94,.55)' : 'rgba(190,242,100,.22)';
+            tlCtx.fillRect(x - 0.5, rulerH, 1.5, H - rulerH);
+        }
+        // Marcadores de keyframe (losango) — a cada N frames pra não poluir
+        const kfStep = Math.max(1, Math.round(_trackHistory.length / Math.min(_trackHistory.length, Math.floor(W / 14))));
+        for (let i = 0; i < _trackHistory.length; i += kfStep) {
+            const h = _trackHistory[i];
+            if (h.lost || h.x == null) continue;
+            const x = (h.frame / total) * W;
+            tlCtx.fillStyle = '#bef264';
+            tlCtx.beginPath();
+            tlCtx.moveTo(x, midY - 3.5);
+            tlCtx.lineTo(x + 3.5, midY);
+            tlCtx.lineTo(x, midY + 3.5);
+            tlCtx.lineTo(x - 3.5, midY);
+            tlCtx.closePath();
+            tlCtx.fill();
+        }
+    }
+}
+function seekToTimelineX(clientX) {
+    const r = timelineEl.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    vid.pause();
+    const clipDur = (OUT_SEC > IN_SEC) ? (OUT_SEC - IN_SEC) : (vid.duration || 0);
+    // requestSeek coalesce seeks rápidos (não empilha) — scrub fica suave
+    requestSeek(IN_SEC + pct * clipDur);
+    // Playhead acompanha o cursor na hora (mesmo antes do frame decodificar)
+    tlPlayhead.style.left = (pct * 100) + '%';
 }
 
 // === Play/pause ===
@@ -550,134 +945,216 @@ function seekClamped(targetSec) {
 document.getElementById('prevFrameBtn').addEventListener('click', () => { vid.pause(); seekClamped(vid.currentTime - 1/FPS); });
 document.getElementById('nextFrameBtn').addEventListener('click', () => { vid.pause(); seekClamped(vid.currentTime + 1/FPS); });
 
-// === Scrubber: mapeia 0-100% pro range [IN_SEC, OUT_SEC] ===
+// === Timeline: clique/arrasto pra scrubbar ===
 let scrubbing = false;
-function scrubTo(e) {
-    const r = scrubber.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-    vid.pause();
-    const clipDur = (OUT_SEC > IN_SEC) ? (OUT_SEC - IN_SEC) : (vid.duration || 0);
-    vid.currentTime = IN_SEC + pct * clipDur;
-}
-scrubber.addEventListener('mousedown', e => { scrubbing = true; scrubTo(e); });
-window.addEventListener('mousemove', e => { if (scrubbing) scrubTo(e); });
+timelineEl.addEventListener('mousedown', e => { scrubbing = true; seekToTimelineX(e.clientX); });
+window.addEventListener('mousemove', e => { if (scrubbing) seekToTimelineX(e.clientX); });
 window.addEventListener('mouseup', () => scrubbing = false);
+window.addEventListener('resize', drawTimeline);
 
-// === Click no canvas pra marcar ponto ===
+// === Click no canvas pra marcar ponto (só fora do modo edição) ===
 canvas.addEventListener('click', e => {
     if (!videoMeta.width) return;
+    if (e.altKey || _didPan) return; // pan não marca ponto
+    if (_editMode) return; // em modo edição, cliques são pra arrastar pontos do path
     const r = canvas.getBoundingClientRect();
     const x = (e.clientX - r.left) * (videoMeta.width / r.width);
     const y = (e.clientY - r.top) * (videoMeta.height / r.height);
     trackPoint = { x, y, frame: Math.round(vid.currentTime * FPS) };
     pointInfo.textContent = '(' + Math.round(x) + ', ' + Math.round(y) + ') @ F' + trackPoint.frame;
     updateMarkerPos();
-    trackBtn.disabled = false;
+    setAnalyzeEnabled(true);
 });
-function updateMarkerPos() {
-    if (!trackPoint) return;
-    const r = canvas.getBoundingClientRect();
-    const parent = vid.parentElement.getBoundingClientRect();
+// Coloca a mira (DOM) num ponto em coords intrínsecas (px,py) da referência refW×refH.
+// Offset-based (dentro do #zoomWrap transformado) + counter-scale 1/zoom = tamanho constante.
+function _placeMarkerDisplay(px, py, refW, refH) {
     marker.style.display = 'block';
-    marker.style.left = ((r.left - parent.left) + (trackPoint.x / videoMeta.width) * r.width) + 'px';
-    marker.style.top = ((r.top - parent.top) + (trackPoint.y / videoMeta.height) * r.height) + 'px';
+    marker.style.left = (vid.offsetLeft + (px / refW) * vid.offsetWidth) + 'px';
+    marker.style.top = (vid.offsetTop + (py / refH) * vid.offsetHeight) + 'px';
+    marker.style.transform = 'translate(-50%,-50%) scale(' + (1 / (_zoom || 1)) + ')';
+}
+// Posição interpolada do track no frame atual (coords do proxy) — null se não tem track.
+function _trackPointAtCurrentFrame() {
+    if (!_trackHistory) return null;
+    const pts = _trackHistory.filter(h => !h.lost && h.x != null && h.y != null);
+    if (!pts.length) return null;
+    const curFrame = (vid.currentTime || 0) * FPS;
+    for (let i = 0; i < pts.length; i++) {
+        if (pts[i].frame >= curFrame) {
+            if (i === 0) return { x: pts[0].x, y: pts[0].y };
+            const a = pts[i - 1], b = pts[i];
+            const span = (b.frame - a.frame) || 1;
+            const f = Math.max(0, Math.min(1, (curFrame - a.frame) / span));
+            return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+        }
+    }
+    const last = pts[pts.length - 1];
+    return { x: last.x, y: last.y };
+}
+function updateMarkerPos() {
+    // Depois de trackear, a mira SEGUE o ponto trackeado no frame atual (igual AE).
+    // Antes de trackear, fica no ponto marcado (trackPoint).
+    if (_trackHistory) {
+        const p = _trackPointAtCurrentFrame();
+        if (p) { _placeMarkerDisplay(p.x, p.y, _trackVideoSize.w, _trackVideoSize.h); return; }
+    }
+    if (trackPoint) { _placeMarkerDisplay(trackPoint.x, trackPoint.y, videoMeta.width, videoMeta.height); }
 }
 
-// === Track + apply ===
-trackBtn.addEventListener('click', async () => {
-    if (!trackPoint) return;
-    trackBtn.disabled = true;
-    setStatus('Iniciando tracking... (primeira vez pode demorar ~5s pro OpenCV inicializar)', 'warn');
-    setProgress(5);
+// === Análise (estilo After Effects): 4 direções, incremental a partir do frame atual ===
+let _analyzing = false;
+// Merge de um novo trecho no _trackHistory (sobrescreve frames iguais, mantém ordenado)
+function _mergeTrack(newHist) {
+    const map = new Map();
+    (_trackHistory || []).forEach(p => map.set(p.frame, p));
+    (newHist || []).forEach(p => map.set(p.frame, p));
+    _trackHistory = Array.from(map.values()).sort((a, b) => a.frame - b.frame);
+}
+function _endAnalyze() { _analyzing = false; anBtns.forEach(b => b && b.classList.remove('busy')); }
 
-    // Tracking roda no PROXY (clipe já recortado, pequeno e rápido de decodificar).
-    // Se rodasse no original .mov de 60min, ffmpeg precisaria decodificar ~45mil
-    // frames pra chegar no in-point — demoraria minutos. Proxy = decode imediato.
-    // Frame indices ficam relative-to-clip (0 = in-point), que é o que o JSX espera.
-    const startFrame = trackPoint.frame;
-    const endFrame = Math.round(OUT_SEC * FPS);
+async function runAnalyze(mode) {
+    if (_analyzing) return;
+    const curFrame = Math.round(vid.currentTime * FPS);
+    // Ponto de referência no frame atual: usa o track existente nesse frame, senão o ponto marcado
+    let ref = null;
+    if (_trackHistory) {
+        const exact = _trackHistory.find(h => h.frame === curFrame && !h.lost && h.x != null);
+        if (exact) ref = { x: exact.x, y: exact.y };
+        else { const p = _trackPointAtCurrentFrame(); if (p) ref = p; }
+    }
+    if (!ref && trackPoint) ref = { x: trackPoint.x, y: trackPoint.y };
+    if (!ref) { setStatus('Clique no vídeo pra marcar o ponto primeiro.', 'warn'); return; }
+
+    const lastFrame = Math.round(OUT_SEC * FPS);
+    let start = curFrame, end;
+    if (mode === 'fwdAll') end = lastFrame;
+    else if (mode === 'backAll') end = 0;
+    else if (mode === 'fwd1') end = Math.min(lastFrame, curFrame + 1);
+    else if (mode === 'back1') end = Math.max(0, curFrame - 1);
+    if (end === start) { setStatus('Já está no limite do clip.', 'warn'); return; }
+
+    _analyzing = true;
+    anBtns.forEach(b => b && b.classList.add('busy'));
+    setStatus('Analisando...', 'warn');
+    setProgress(12);
 
     const payload = {
-        filePath: MEDIA_PATH, // proxy MP4 — full quality não importa pra tracking via Python+cv2
-        points: [[trackPoint.x, trackPoint.y]],
+        filePath: MEDIA_PATH,
+        points: [[ref.x, ref.y]],
         options: {
-            startFrame,
-            endFrame,
+            startFrame: start,
+            endFrame: end,
             algorithm: document.getElementById('algorithm').value,
             smoothing: document.getElementById('smoothing').value,
             whittakerLambda: parseFloat(document.getElementById('lambda').value) || 100,
-            confidenceThreshold: parseFloat(document.getElementById('confThreshold')?.value) || 0.3,
-            bboxWidth: 40,
-            bboxHeight: 40,
+            bboxWidth: 40, bboxHeight: 40,
         }
     };
-    setProgress(15);
-
     let body;
     try {
-        // URL = nome do command em main.js (não /api)
-        const resp = await fetch(API + '/motion-tracker/track', {
-            method: 'POST',
-            headers: authHeaders(),
+        const resp = await fetch(API + '/motion-tracker/track', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        body = await resp.json();
+    } catch (e) { setStatus('Erro: ' + e.message, 'err'); setProgress(null); _endAnalyze(); return; }
+    if (!body.success) { setStatus('Falhou: ' + (body.errors || []).join(', '), 'err'); setProgress(null); _endAnalyze(); return; }
+    const track = body.tracks && body.tracks[0];
+    if (!track) { setStatus('Sem resultado', 'err'); setProgress(null); _endAnalyze(); return; }
+
+    _trackVideoSize = { w: body.metadata.width, h: body.metadata.height };
+    _mergeTrack(track.history);
+    if (!_editMode) _startEditMode(); else { scheduleDraw(); drawTimeline(); }
+    // Single-frame: move o playhead pro frame analisado
+    if (mode === 'fwd1') seekClamped((curFrame + 1) / FPS);
+    else if (mode === 'back1') seekClamped((curFrame - 1) / FPS);
+    setProgress(100);
+    setStatus('✓ ' + _trackHistory.length + ' frames no track.', 'ok');
+    setTimeout(() => setProgress(null), 700);
+    _endAnalyze();
+}
+anBtns[0].addEventListener('click', () => runAnalyze('backAll'));
+anBtns[1].addEventListener('click', () => runAnalyze('back1'));
+anBtns[2].addEventListener('click', () => runAnalyze('fwd1'));
+anBtns[3].addEventListener('click', () => runAnalyze('fwdAll'));
+
+// === Salvar Track: guarda no app pra colar depois via plugin ===
+document.getElementById('saveTrackBtn').addEventListener('click', async () => {
+    if (!_trackHistory || !_trackVideoSize) { setStatus('Nenhum track pra salvar', 'err'); return; }
+    const btn = document.getElementById('saveTrackBtn');
+    btn.disabled = true;
+    setStatus('Salvando track...', 'warn');
+    try {
+        const payload = {
+            session: SESSION,
+            name: (MEDIA_PATH.split(/[\\/]/).pop() || 'track'),
+            mode: document.getElementById('trackMode').value, // 'track' | 'stabilize'
+            fps: FPS,
+            videoWidth: _trackVideoSize.w,
+            videoHeight: _trackVideoSize.h,
+            history: _trackHistory,
+        };
+        const resp = await fetch(API + '/motion-tracker/save-track', {
+            method: 'POST', headers: authHeaders(),
             body: JSON.stringify(payload)
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        body = await resp.json();
+        setStatus('✓ Track salvo! No plugin do Premiere, selecione o clip que quiser e clique "Colar Track".', 'ok');
     } catch (e) {
-        setStatus('Erro: ' + e.message, 'err');
-        setProgress(null);
-        trackBtn.disabled = false;
-        return;
-    }
-    if (!body.success) {
-        setStatus('Tracking falhou: ' + (body.errors || []).join(', '), 'err');
-        setProgress(null);
-        trackBtn.disabled = false;
-        return;
-    }
-    const track = body.tracks?.[0];
-    if (!track) {
-        setStatus('Sem track no resultado', 'err');
-        setProgress(null);
-        trackBtn.disabled = false;
-        return;
-    }
-    // Salva a trajetoria pra renderizar o path no overlay
-    _trackHistory = track.history;
-    _trackVideoSize = { w: body.metadata.width, h: body.metadata.height };
-    drawPath();
-    setProgress(85);
-    setStatus('Aplicando ' + track.history.length + ' keyframes no Premiere...', 'warn');
-
-    // Envia pra plugin via main process (que vai queue pra plugin pegar via long-poll)
-    try {
-        const applyPayload = {
-            session: SESSION,
-            applyMode: document.getElementById('applyMode').value,
-            mode: document.getElementById('trackMode').value, // 'track' | 'stabilize'
-            clipInPointTicks: CLIP_IN_TICKS,
-            clipStartTicks: CLIP_START_TICKS,
-            trackIdx: TRACK_IDX,
-            fps: FPS,
-            videoWidth: body.metadata.width,
-            videoHeight: body.metadata.height,
-            history: track.history,
-        };
-        const resp2 = await fetch(API + '/motion-tracker/queue-apply', {
-            method: 'POST', headers: authHeaders(),
-            body: JSON.stringify(applyPayload)
-        });
-        if (!resp2.ok) throw new Error('HTTP ' + resp2.status);
-        setProgress(100);
-        setStatus('✓ Pronto! Confere o Premiere — Position deve estar animado.', 'ok');
-    } catch (e) {
-        setStatus('Apply err: ' + e.message, 'err');
+        setStatus('Erro salvando: ' + e.message, 'err');
     } finally {
-        setTimeout(() => { setProgress(null); trackBtn.disabled = false; }, 1500);
+        btn.disabled = false;
     }
 });
 
+// === Re-marcar: descarta o track atual e volta pro modo de escolha de ponto ===
+document.getElementById('rePickBtn').addEventListener('click', () => {
+    _exitEditMode();
+    setStatus('Clique no vídeo pra marcar um novo ponto.', '');
+    setAnalyzeEnabled(!!trackPoint);
+    canvas.style.cursor = 'crosshair';
+});
+
 // === Window controls ===
+// === Zoom / Pan do stage de vídeo ===
+const videoWrapEl = document.getElementById('videoWrap');
+// Scroll = zoom mirando no cursor
+videoWrapEl.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    _zoomAt(e.clientX, e.clientY, _zoom * factor);
+}, { passive: false });
+// Pan: Alt+arrasto ou botão do meio
+let _panning = false, _didPan = false, _panStartX = 0, _panStartY = 0, _panOrigX = 0, _panOrigY = 0;
+videoWrapEl.addEventListener('mousedown', e => {
+    if (!(e.altKey || e.button === 1)) return;
+    if (_zoom <= 1) return;
+    e.preventDefault(); e.stopPropagation();
+    _panning = true; _didPan = false;
+    _panStartX = e.clientX; _panStartY = e.clientY;
+    _panOrigX = _panX; _panOrigY = _panY;
+    videoWrapEl.style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', e => {
+    if (!_panning) return;
+    _panX = _panOrigX + (e.clientX - _panStartX);
+    _panY = _panOrigY + (e.clientY - _panStartY);
+    if (Math.abs(e.clientX - _panStartX) > 2 || Math.abs(e.clientY - _panStartY) > 2) _didPan = true;
+    _clampPan();
+    _applyZoomTransform();
+});
+window.addEventListener('mouseup', () => {
+    if (_panning) { _panning = false; videoWrapEl.style.cursor = ''; setTimeout(() => { _didPan = false; }, 50); }
+});
+document.getElementById('zoomInBtn').addEventListener('click', () => _zoomStep(1.4));
+document.getElementById('zoomOutBtn').addEventListener('click', () => _zoomStep(1 / 1.4));
+document.getElementById('zoomResetBtn').addEventListener('click', _zoomReset);
+// Atalhos: +/- e 0 pra resetar
+window.addEventListener('keydown', e => {
+    if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.key === '+' || e.key === '=') { _zoomStep(1.4); }
+    else if (e.key === '-' || e.key === '_') { _zoomStep(1 / 1.4); }
+    else if (e.key === '0') { _zoomReset(); }
+});
+
 document.getElementById('btnClose').addEventListener('click', () => { try { remoteWin?.close(); } catch(e) { window.close(); } });
 document.getElementById('btnMin').addEventListener('click', () => { try { remoteWin?.minimize(); } catch(e) {} });
 document.getElementById('btnMax').addEventListener('click', () => {

@@ -99,6 +99,8 @@
       "motion_tracker.py",
       "motion-tracker-editor.html",
       "build/icon.png",
+      "build/icon-lion-green.png",
+      "build/icon-lion-only.png",
       "node_modules/**/*",
       "!node_modules/**/*.{md,markdown,ts,tsx,map,d.ts,gypi}",
       "!node_modules/**/{test,tests,__tests__,examples,example,docs,doc}/**",

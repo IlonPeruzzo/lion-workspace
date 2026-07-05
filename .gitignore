@@ -6,4 +6,23 @@ dist/
 checkfg.ps1
 mt-editor.log
 mt-editor.log.err
+*.log
+*.log.err
 TIMEOUT/
+TIMEOUT
+
+# Python
+__pycache__/
+*.pyc
+
+# Segredos / ambiente
+.env
+.env.local
+*.secret
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

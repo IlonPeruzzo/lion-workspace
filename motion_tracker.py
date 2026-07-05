@@ -68,94 +68,119 @@ def _confidence(new_bbox, last_bbox, search_scale, init_size):
     return (dist_conf + size_conf) / 2.0
 
 
-def track_correlation_filter(cap, fps, width, height, point, opts):
-    """Track usando CSRT/KCF/MOSSE/MIL — funciona com bbox que muda de escala."""
+def _build_bbox(sx, sy, bbox_w, bbox_h, width, height):
+    return (
+        max(0, sx - bbox_w // 2),
+        max(0, sy - bbox_h // 2),
+        min(bbox_w, width - sx + bbox_w // 2),
+        min(bbox_h, height - sy + bbox_h // 2),
+    )
+
+def _cf_walk(cap, fps, width, height, point, opts, start_frame, last_frame, step):
+    """Inicializa o tracker no start_frame (no ponto marcado) e caminha numa direcao
+    (step=+1 forward, step=-1 backward) ate last_frame. Retorna history da faixa
+    percorrida (SEM incluir o start_frame — quem chama grava o start uma vez so).
+    Frames sao ABSOLUTOS (indice real no video), pra bater com o preview."""
     algo = opts['algorithm']
-    bbox_w = opts['bbox_width']
-    bbox_h = opts['bbox_height']
+    bbox_w = opts['bbox_width']; bbox_h = opts['bbox_height']
     conf_threshold = opts['confidence_threshold']
-    max_lost = opts['max_lost_frames']
     search_scale = opts['search_window_scale']
 
     tracker = _create_tracker(algo)
     if tracker is None:
         return None, f"Algoritmo {algo} nao disponivel no OpenCV instalado"
 
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    # Seek pro frame de referencia (onde o usuario marcou) e inicializa ali
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     ret, frame = cap.read()
     if not ret:
-        return None, "Nao consegui ler primeiro frame"
+        return None, "Nao consegui ler o frame de referencia"
 
     sx, sy = int(point[0]), int(point[1])
-    bbox = (
-        max(0, sx - bbox_w // 2),
-        max(0, sy - bbox_h // 2),
-        min(bbox_w, width - sx + bbox_w // 2),
-        min(bbox_h, height - sy + bbox_h // 2),
-    )
+    bbox = _build_bbox(sx, sy, bbox_w, bbox_h, width, height)
     init_size = (bbox[2], bbox[3])
     init_area = bbox[2] * bbox[3]
     if not tracker.init(frame, bbox):
         return None, "Falha ao inicializar tracker"
 
     history = []
-    history.append({
-        'frame': 0, 'time': 0.0,
-        'x': float(sx), 'y': float(sy),
-        'scale': 1.0, 'confidence': 1.0, 'lost': False,
-    })
-
     last_bbox = bbox
-    consecutive_lost = 0
-    frame_num = 0
-
+    idx = start_frame
     while True:
+        idx += step
+        if step > 0 and idx > last_frame:
+            break
+        if step < 0 and idx < last_frame:
+            break
+        # Forward: read sequencial (preciso). Backward: precisa seek por frame.
+        if step < 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
         if not ret:
             break
-        frame_num += 1
-        t = frame_num / fps if fps > 0 else frame_num
+        t = idx / fps if fps > 0 else idx
         success, new_bbox = tracker.update(frame)
         confidence = _confidence(new_bbox, last_bbox, search_scale, init_size) if success else 0.0
-
         if success and confidence >= conf_threshold:
             cx = new_bbox[0] + new_bbox[2] / 2
             cy = new_bbox[1] + new_bbox[3] / 2
             scale = (new_bbox[2] * new_bbox[3] / init_area) ** 0.5 if init_area > 0 else 1.0
             last_bbox = new_bbox
-            consecutive_lost = 0
             history.append({
-                'frame': frame_num, 'time': t,
+                'frame': idx, 'time': t,
                 'x': float(cx), 'y': float(cy),
                 'scale': float(scale), 'confidence': float(confidence), 'lost': False,
             })
         else:
-            consecutive_lost += 1
             history.append({
-                'frame': frame_num, 'time': t,
+                'frame': idx, 'time': t,
                 'x': None, 'y': None, 'scale': None,
                 'confidence': 0.0, 'lost': True,
             })
-            if consecutive_lost >= max_lost:
-                # Continua adicionando "lost" pra completar timeline
-                pass
-
     return history, None
 
+def track_correlation_filter(cap, fps, width, height, point, opts, start_frame=0, end_frame=-1, total_frames=0):
+    """Track CSRT/KCF/MOSSE/MIL — inicializa no frame marcado e caminha ATÉ end_frame,
+    na direção implícita (end > start = pra frente; end < start = pra trás).
+    Estilo After Effects: cada 'analisar' estende o track a partir do frame atual."""
+    if total_frames <= 0:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    start_frame = max(0, min(int(start_frame), total_frames - 1))
+    if end_frame < 0:
+        end_frame = total_frames - 1
+    end_frame = max(0, min(int(end_frame), total_frames - 1))
 
-def track_lucas_kanade(cap, fps, width, height, point, opts):
-    """Track usando KLT optical flow com forward-backward validation."""
+    sx, sy = int(point[0]), int(point[1])
+    ref = {
+        'frame': start_frame, 'time': (start_frame / fps if fps > 0 else start_frame),
+        'x': float(sx), 'y': float(sy),
+        'scale': 1.0, 'confidence': 1.0, 'lost': False,
+    }
+    if end_frame == start_frame:
+        return [ref], None
+    step = 1 if end_frame > start_frame else -1
+    walk, err = _cf_walk(cap, fps, width, height, point, opts, start_frame, end_frame, step)
+    if err:
+        return None, err
+    if step > 0:
+        return [ref] + walk, None
+    # walk vem decrescente → inverte pra ficar crescente, ref no fim
+    return list(reversed(walk)) + [ref], None
+
+
+def _lk_walk(cap, fps, width, height, point, opts, start_frame, last_frame, step):
+    """KLT optical flow numa direcao a partir do frame de referencia.
+    Retorna history da faixa percorrida (sem o start). Frames ABSOLUTOS."""
     conf_threshold = opts['confidence_threshold']
-    max_lost = opts['max_lost_frames']
     win_size = opts.get('window_size', 21)
     pyramid_levels = opts.get('pyramid_levels', 5)
     max_iter = opts.get('max_iterations', 30)
     quality = opts.get('tracking_quality', 0.03)
 
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     ret, frame = cap.read()
     if not ret:
-        return None, "Nao consegui ler primeiro frame"
+        return None, "Nao consegui ler o frame de referencia"
 
     old_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     lk_params = dict(
@@ -163,34 +188,30 @@ def track_lucas_kanade(cap, fps, width, height, point, opts):
         maxLevel=pyramid_levels,
         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, max_iter, quality),
     )
-
-    sx, sy = float(point[0]), float(point[1])
-    p0 = np.array([[[sx, sy]]], dtype=np.float32)
-
-    history = [{
-        'frame': 0, 'time': 0.0,
-        'x': sx, 'y': sy, 'scale': 1.0, 'confidence': 1.0, 'lost': False,
-    }]
-
-    consecutive_lost = 0
-    frame_num = 0
-
+    p0 = np.array([[[float(point[0]), float(point[1])]]], dtype=np.float32)
+    history = []
+    last_xy = (float(point[0]), float(point[1]))
+    idx = start_frame
     while True:
+        idx += step
+        if step > 0 and idx > last_frame:
+            break
+        if step < 0 and idx < last_frame:
+            break
+        if step < 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
         if not ret:
             break
-        frame_num += 1
-        t = frame_num / fps if fps > 0 else frame_num
+        t = idx / fps if fps > 0 else idx
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
         try:
-            p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
+            p1, stt, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, None, **lk_params)
         except Exception:
-            p1, st, err = None, None, None
+            p1, stt, err = None, None, None
 
-        # Forward-backward validation
         bf_err = 0.0
-        if p1 is not None and st is not None and len(st) > 0 and st[0][0] == 1:
+        if p1 is not None and stt is not None and len(stt) > 0 and stt[0][0] == 1:
             try:
                 p0r, st_back, _ = cv2.calcOpticalFlowPyrLK(frame_gray, old_gray, p1, None, **lk_params)
                 if p0r is not None and len(st_back) > 0 and st_back[0][0] == 1:
@@ -200,50 +221,57 @@ def track_lucas_kanade(cap, fps, width, height, point, opts):
             except Exception:
                 pass
 
-        valid = (
-            p1 is not None and st is not None and len(st) > 0
-            and st[0][0] == 1 and bf_err < 2.0
-        )
-
+        valid = (p1 is not None and stt is not None and len(stt) > 0 and stt[0][0] == 1 and bf_err < 2.0)
         if valid:
             new_x, new_y = float(p1[0][0][0]), float(p1[0][0][1])
             tracking_err = float(err[0][0]) if err is not None else 0.0
             err_conf = max(0.0, 1.0 - tracking_err / 100.0)
-            # Confidence motion: penaliza saltos
-            last = history[-1]
-            if last['x'] is not None:
-                motion = ((new_x - last['x']) ** 2 + (new_y - last['y']) ** 2) ** 0.5
-                motion_conf = max(0.0, 1.0 - motion / (width * 0.1))
-            else:
-                motion_conf = 1.0
+            motion = ((new_x - last_xy[0]) ** 2 + (new_y - last_xy[1]) ** 2) ** 0.5
+            motion_conf = max(0.0, 1.0 - motion / (width * 0.1))
             margin = 50
             boundary_conf = 0.5 if (new_x < margin or new_x > width - margin or new_y < margin or new_y > height - margin) else 1.0
             confidence = err_conf * 0.5 + motion_conf * 0.4 + boundary_conf * 0.1
-
             if 0 <= new_x < width and 0 <= new_y < height and confidence >= conf_threshold:
-                consecutive_lost = 0
                 history.append({
-                    'frame': frame_num, 'time': t,
+                    'frame': idx, 'time': t,
                     'x': new_x, 'y': new_y, 'scale': 1.0,
                     'confidence': float(confidence), 'lost': False,
                 })
                 p0 = p1.copy()
                 old_gray = frame_gray
+                last_xy = (new_x, new_y)
                 continue
-
-        # Lost
-        consecutive_lost += 1
         history.append({
-            'frame': frame_num, 'time': t,
+            'frame': idx, 'time': t,
             'x': None, 'y': None, 'scale': None,
             'confidence': 0.0, 'lost': True,
         })
         old_gray = frame_gray
-        if consecutive_lost > max_lost:
-            # nao reinicializa, continua marcando como lost
-            pass
-
     return history, None
+
+def track_lucas_kanade(cap, fps, width, height, point, opts, start_frame=0, end_frame=-1, total_frames=0):
+    """KLT optical flow — inicializa no frame marcado e caminha ATÉ end_frame na
+    direção implícita (end > start = pra frente; end < start = pra trás)."""
+    if total_frames <= 0:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    start_frame = max(0, min(int(start_frame), total_frames - 1))
+    if end_frame < 0:
+        end_frame = total_frames - 1
+    end_frame = max(0, min(int(end_frame), total_frames - 1))
+
+    ref = {
+        'frame': start_frame, 'time': (start_frame / fps if fps > 0 else start_frame),
+        'x': float(point[0]), 'y': float(point[1]), 'scale': 1.0, 'confidence': 1.0, 'lost': False,
+    }
+    if end_frame == start_frame:
+        return [ref], None
+    step = 1 if end_frame > start_frame else -1
+    walk, err = _lk_walk(cap, fps, width, height, point, opts, start_frame, end_frame, step)
+    if err:
+        return None, err
+    if step > 0:
+        return [ref] + walk, None
+    return list(reversed(walk)) + [ref], None
 
 
 # ====== SMOOTHING ======
@@ -418,6 +446,7 @@ def main():
     p.add_argument('--tracking-quality', type=float, default=0.03)
     p.add_argument('--start-frame', type=int, default=0)
     p.add_argument('--end-frame', type=int, default=-1)
+    p.add_argument('--direction', default='forward', choices=['forward', 'both'])
     args = p.parse_args()
 
     result = {
@@ -472,14 +501,18 @@ def main():
             'pyramid_levels': args.pyramid_levels,
             'max_iterations': args.max_iterations,
             'tracking_quality': args.tracking_quality,
+            'direction': args.direction,
         }
 
         for pi, point in enumerate(points):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             if args.algorithm == 'LUCAS_KANADE':
-                history, err = track_lucas_kanade(cap, fps, width, height, point, opts)
+                history, err = track_lucas_kanade(cap, fps, width, height, point, opts,
+                                                  start_frame=args.start_frame, end_frame=args.end_frame,
+                                                  total_frames=frame_count)
             else:
-                history, err = track_correlation_filter(cap, fps, width, height, point, opts)
+                history, err = track_correlation_filter(cap, fps, width, height, point, opts,
+                                                         start_frame=args.start_frame, end_frame=args.end_frame,
+                                                         total_frames=frame_count)
             if err:
                 result['errors'].append(f"Point {pi}: {err}")
                 continue

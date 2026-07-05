@@ -246,10 +246,7 @@ function createWindow() {
     mainWin = new BrowserWindow(opts);
     mainWin.loadFile('index.html');
     mainWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    // DEBUG: abre devtools embutido no bottom pra ver erros de JS
-    mainWin.webContents.once('did-finish-load', () => {
-        try { mainWin.webContents.openDevTools({ mode: 'bottom' }); } catch(e) { console.error('devtools open err:', e); }
-    });
+    // DevTools NÃO abre automático — só via F12 / Ctrl+Shift+I (atalhos abaixo)
     // Shortcuts pra DevTools: Ctrl+Shift+I / F12 / Ctrl+R (reload)
     mainWin.webContents.on('before-input-event', (event, input) => {
         if (input.type !== 'keyDown') return;
@@ -768,7 +765,7 @@ setTimeout(() => _sendBootPing().catch(() => {}), 3000);
 // Client secret NUNCA fica aqui — so na Edge Function do Supabase.
 const DISCORD_APP_CLIENT_ID = '1520130072483336312';
 const DISCORD_APP_GUILD_ID = '1515931707935686847';
-let _discordOAuthState = null; // CSRF token de OAuth pendente
+const _discordOAuthPendingStates = new Set(); // states de login em aberto (aceita varios — se o user clicar 2x, os 2 valem)
 const _discordOAuthConsumedStates = new Set(); // states ja processados (dedup callbacks duplicados do browser)
 
 function loadDiscordConfig() {
@@ -2971,6 +2968,9 @@ const { Worker } = require('worker_threads');
 let _bgWorker = null;
 let _ytPreviewWin = null;
 let _activeMtEditorWin = null; // singleton: so um motion tracker editor aberto por vez
+// Track salvo pelo editor — user cola no clip que quiser via "Colar Track" no plugin
+let _savedMotionTrack = null;
+const SAVED_TRACK_FILE = path.join(currentUD, 'lw-saved-track.json');
 const _bgPending = new Map();
 let _bgNextReqId = 0;
 
@@ -3063,6 +3063,9 @@ async function _runMotionTracker(filePath, ffmpegPath, ffprobePath, points, opti
         '--confidence-threshold', String(opts.confidenceThreshold || 0.3),
         '--max-lost-frames', String(opts.maxLostFrames || 5),
         '--whittaker-lambda', String(opts.whittakerLambda || 100.0),
+        '--start-frame', String(opts.startFrame != null ? opts.startFrame : 0),
+        '--end-frame', String(opts.endFrame != null ? opts.endFrame : -1),
+        '--direction', (opts.direction === 'both' ? 'both' : 'forward'),
     ];
 
     const { spawn } = require('child_process');
@@ -3103,6 +3106,48 @@ function startSyncServer() {
             return;
         }
 
+        // === Ícone do Lion (pros plugins CEP mostrarem o logo) ===
+        if (req.method === 'GET' && req.url.indexOf('/lion-icon') === 0) {
+            try {
+                // Serve a versao VERDE do leao (mesma silhueta, tingida com o verde do app).
+                // Tenta varios caminhos: __dirname funciona em dev E empacotado (asar) se o
+                // arquivo estiver no "files" do package.json; process.resourcesPath cobre extraResources.
+                const candidates = [
+                    path.join(__dirname, 'build', 'icon-lion-green.png'),
+                    path.join(process.resourcesPath || __dirname, 'build', 'icon-lion-green.png'),
+                    path.join(__dirname, 'build', 'icon-lion-only.png'),
+                    path.join(__dirname, 'build', 'icon.png'),
+                    path.join(process.resourcesPath || __dirname, 'build', 'icon.png'),
+                ];
+                const found = candidates.find(p => { try { return fs.existsSync(p); } catch (e) { return false; } });
+                if (!found) { res.writeHead(404); res.end(); return; }
+                const buf = fs.readFileSync(found);
+                res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' });
+                res.end(buf);
+            } catch (e) {
+                res.writeHead(404); res.end();
+            }
+            return;
+        }
+        // === Avatar do Discord (proxy — evita CSP/CDN bloqueado no CEP) ===
+        if (req.method === 'GET' && req.url.indexOf('/discord-avatar') === 0) {
+            (async () => {
+                try {
+                    const sess = loadDiscordSession();
+                    const url = sess && sess.avatar_url;
+                    if (!url) { res.writeHead(404); res.end(); return; }
+                    const r = await fetch(url);
+                    if (!r.ok) { res.writeHead(r.status); res.end(); return; }
+                    const ab = await r.arrayBuffer();
+                    res.writeHead(200, { 'Content-Type': r.headers.get('content-type') || 'image/png', 'Cache-Control': 'max-age=600' });
+                    res.end(Buffer.from(ab));
+                } catch (e) {
+                    res.writeHead(500); res.end();
+                }
+            })();
+            return;
+        }
+
         // === Discord OAuth endpoints (no token required) ===
         if (req.method === 'GET' && req.url.indexOf('/auth/discord/callback') === 0) {
             (async () => {
@@ -3120,7 +3165,7 @@ function startSyncServer() {
                                 mainWin.show(); mainWin.focus();
                             }
                         } catch (e) {}
-                        _discordOAuthState = null;
+                        try { if (state) _discordOAuthPendingStates.delete(state); } catch (e) {}
                         return;
                     }
                     // Sem code ou state: browser preload / CORS / etc — ignora silenciosamente
@@ -3135,23 +3180,19 @@ function startSyncServer() {
                         res.end(_discordCallbackHtml('Login OK', 'Ja processado, pode fechar.', false));
                         return;
                     }
-                    // State realmente nao bate = ataque/bug real
-                    if (state !== _discordOAuthState) {
+                    // State nao esta na lista de logins pendentes = callback velho/duplicado/estranho.
+                    // NAO manda erro pro app (isso clobava um login OK) — so mostra a pagina no browser.
+                    // O login legitimo vem por outro callback com state valido e dispara o sucesso.
+                    if (!_discordOAuthPendingStates.has(state)) {
                         res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-                        res.end(_discordCallbackHtml('Erro', 'state invalido. Tente novamente.', true));
-                        try {
-                            if (mainWin && !mainWin.isDestroyed()) {
-                                mainWin.webContents.send('discord-auth-error', { error: 'invalid_state', message: 'Login invalido. Tenta de novo.' });
-                                mainWin.show(); mainWin.focus();
-                            }
-                        } catch (e) {}
+                        res.end(_discordCallbackHtml('Login expirado', 'Esse link de login expirou. Volte ao app e tente de novo.', true));
                         return;
                     }
-                    // Marca state como consumido ANTES de processar (evita duplicate handling)
+                    // State valido — consome: tira dos pendentes, marca como consumido (dedup)
+                    _discordOAuthPendingStates.delete(state);
                     _discordOAuthConsumedStates.add(state);
                     // Auto-limpa depois de 5min pra nao acumular states velhos
                     setTimeout(() => { try { _discordOAuthConsumedStates.delete(state); } catch(e){} }, 300000);
-                    _discordOAuthState = null;
 
                     // SECURE MODE: envia code pra Edge Function do Supabase.
                     // Client_secret NUNCA sai do server, so o code (que e single-use).
@@ -3184,6 +3225,7 @@ function startSyncServer() {
                                     : proxyData.error === 'no_role' ? 'Sem cargo necessario'
                                     : proxyData.error === 'user_blocked' ? 'Conta bloqueada'
                                     : proxyData.error === 'device_blocked' ? 'Device bloqueado'
+                                    : proxyData.error === 'too_many_devices' ? 'Limite de dispositivos'
                                     : 'Erro';
                         res.end(_discordCallbackHtml(title, msg, true));
                         try {
@@ -3305,7 +3347,8 @@ function startSyncServer() {
                 res.end(JSON.stringify({ authenticated: false, app_version: app.getVersion() }));
             } else {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ authenticated: true, user: { email: session.email, name: session.name }, plan: session.plan, app_version: app.getVersion() }));
+                // Inclui username/avatar/discord_id pra que o re-check NAO apague o @handle no plugin.
+                res.end(JSON.stringify({ authenticated: true, user: { email: session.email, name: session.name, username: session.username || '', avatar_url: session.avatar_url || '', discord_id: session.discordId || '' }, plan: session.plan, app_version: app.getVersion() }));
             }
             return;
         }
@@ -4157,17 +4200,17 @@ function toggleLoop(){
                         const proxyPath = path.join(proxyDir, 'proxy-' + session + '.mp4');
                         console.log('[mt-editor] gerando proxy:', proxyPath);
                         await new Promise((resolve) => {
-                            // Downscale pra max 720p — tracking não precisa de 4K.
-                            // Acelera 5-10x: 4K→720p reduz frames de 8MB pra 1MB cada.
+                            // Downscale pra max 1080p — equilíbrio entre nitidez (zoom no editor +
+                            // precisão do tracking) e velocidade. Não passa da resolução original (upscale=0).
                             const ff = spawn(ffmpegBin, [
                                 '-y',
                                 '-ss', String(Math.max(0, inSec - 0.05)),
                                 '-i', data.mediaPath,
                                 '-t', String(dur + 0.1),
-                                '-vf', 'scale=-2:min(720\\,ih)', // mantém aspect, limita altura a 720
+                                '-vf', 'scale=-2:min(1080\\,ih)', // mantém aspect, limita altura a 1080
                                 '-c:v', 'libx264',
                                 '-preset', 'ultrafast',
-                                '-crf', '23',
+                                '-crf', '20',
                                 '-pix_fmt', 'yuv420p',
                                 '-movflags', '+faststart',
                                 '-an',
@@ -4242,6 +4285,64 @@ function toggleLoop(){
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message || String(e) }));
                     }
+                    return;
+                }
+                // ═══ Salvar track (novo fluxo: editor salva, user cola via plugin) ═══
+                if (command === 'motion-tracker/save-track' && data.history) {
+                    try {
+                        _savedMotionTrack = {
+                            name: data.name || 'track',
+                            mode: data.mode === 'stabilize' ? 'stabilize' : 'track',
+                            fps: data.fps || 30,
+                            videoWidth: data.videoWidth,
+                            videoHeight: data.videoHeight,
+                            history: data.history,
+                            savedAt: Date.now(),
+                        };
+                        try { fs.writeFileSync(SAVED_TRACK_FILE, JSON.stringify(_savedMotionTrack)); } catch (e) {}
+                        // Notifica o plugin (long-poll) pra mostrar o botao "Colar Track"
+                        pendingPluginCommands.push({
+                            id: 'mt-saved-' + Date.now(),
+                            type: 'motion-tracker/saved',
+                            payload: {
+                                name: _savedMotionTrack.name,
+                                mode: _savedMotionTrack.mode,
+                                count: _savedMotionTrack.history.length,
+                                savedAt: _savedMotionTrack.savedAt,
+                            }
+                        });
+                        if (typeof _notifyLongPollWaiters === 'function') _notifyLongPollWaiters();
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                if (command === 'motion-tracker/get-saved') {
+                    try {
+                        if (!_savedMotionTrack) {
+                            // Lazy-load do disco (sobrevive restart do app)
+                            try {
+                                if (fs.existsSync(SAVED_TRACK_FILE)) {
+                                    _savedMotionTrack = JSON.parse(fs.readFileSync(SAVED_TRACK_FILE, 'utf8'));
+                                }
+                            } catch (e) {}
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: true, saved: _savedMotionTrack || null }));
+                    } catch (e) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: e.message || String(e) }));
+                    }
+                    return;
+                }
+                if (command === 'motion-tracker/clear-saved') {
+                    _savedMotionTrack = null;
+                    try { fs.unlinkSync(SAVED_TRACK_FILE); } catch (e) {}
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
                     return;
                 }
                 if (command === 'motion-tracker/queue-apply' && data.history) {
@@ -4801,13 +4902,15 @@ ipcMain.handle('discord:start-login', () => {
     if (!cfg.client_id) return { ok: false, error: 'Discord nao configurado. Preencha Client ID no painel admin.' };
     if (!cfg.guild_id) return { ok: false, error: 'Server ID (guild) nao configurado.' };
     const state = crypto.randomBytes(16).toString('hex');
-    _discordOAuthState = state;
+    _discordOAuthPendingStates.add(state);
+    // Expira o state depois de 15min (evita acumular states velhos se o user desistir)
+    setTimeout(() => { try { _discordOAuthPendingStates.delete(state); } catch (e) {} }, 900000);
     const url = _discordBuildAuthUrl(state, cfg);
     try { shell.openExternal(url); } catch (e) { return { ok: false, error: 'Nao consegui abrir o browser: ' + e.message }; }
     return { ok: true };
 });
 ipcMain.handle('discord:cancel-login', () => {
-    _discordOAuthState = null;
+    _discordOAuthPendingStates.clear();
     return { ok: true };
 });
 // Revalida: chama API do Discord de novo pra ver se user ainda tem o role.
@@ -5303,31 +5406,59 @@ ipcMain.handle('adobe:detect-running', async () => {
 
 // IPC: Lista devices vinculados ao user Discord logado — consulta Supabase.
 // Aplica limite de MAX 2 devices por conta (retorna aviso se ultrapassar).
+const MAX_DEVICES_PER_ACCOUNT = 2;
 ipcMain.handle('discord:list-supabase-devices', async () => {
     try {
         const sess = loadDiscordSession();
         if (!sess || !sess.discord_user_id) return { ok: false, error: 'no_session' };
-        if (!supabase) return { ok: false, error: 'no_supabase' };
-        const { data, error } = await supabase
-            .from('discord_devices')
-            .select('*')
-            .eq('discord_id', sess.discord_user_id)
-            .order('last_seen', { ascending: false });
-        if (error) return { ok: false, error: error.message };
-        const MAX = 2;
-        const active = (data || []).filter(d => !d.blocked);
+        const uid = sess.discord_user_id;
         const myFp = getDeviceFingerprint();
-        const devices = (data || []).map(d => ({
-            fingerprint: d.fingerprint,
-            hostname: d.hostname || 'PC',
-            platform: d.platform || '',
-            arch: d.arch || '',
-            first_seen: d.first_seen,
-            last_seen: d.last_seen,
-            blocked: !!d.blocked,
-            is_this_pc: d.fingerprint === myFp,
-        }));
-        return { ok: true, devices, max: MAX, over_limit: active.length > MAX, active_count: active.length };
+        // Mescla por fingerprint: Supabase (outros PCs, via Edge Function) + registro LOCAL
+        // (garante que ESTE PC sempre apareça, mesmo se o Supabase estiver vazio/sem escrita).
+        const byFp = new Map();
+        // 1) Supabase (best-effort — RLS permite leitura)
+        try {
+            if (supabase) {
+                const { data } = await supabase
+                    .from('discord_devices').select('*')
+                    .eq('discord_id', uid).order('last_seen', { ascending: false });
+                (data || []).forEach(d => byFp.set(d.fingerprint, {
+                    fingerprint: d.fingerprint, hostname: d.hostname || 'PC',
+                    platform: d.platform || '', arch: d.arch || '',
+                    first_seen: d.first_seen, last_seen: d.last_seen, blocked: !!d.blocked,
+                }));
+            }
+        } catch (e) {}
+        // 2) Registro local (sempre tem o device atual)
+        try {
+            loadDiscordDevices()
+                .filter(d => d.discord_user_id === uid)
+                .forEach(d => {
+                    const prev = byFp.get(d.fingerprint) || {};
+                    byFp.set(d.fingerprint, {
+                        fingerprint: d.fingerprint,
+                        hostname: d.hostname || prev.hostname || os.hostname() || 'PC',
+                        platform: d.platform || prev.platform || '',
+                        arch: d.arch || prev.arch || '',
+                        first_seen: prev.first_seen || (d.first_seen ? new Date(d.first_seen).toISOString() : null),
+                        last_seen: prev.last_seen || (d.last_seen ? new Date(d.last_seen).toISOString() : null),
+                        blocked: prev.blocked || !!d.blocked,
+                    });
+                });
+        } catch (e) {}
+        // 3) Garante que o PC atual esteja na lista mesmo se nada registrou ainda
+        if (!byFp.has(myFp)) {
+            byFp.set(myFp, {
+                fingerprint: myFp, hostname: os.hostname() || 'Este PC',
+                platform: os.platform(), arch: os.arch(),
+                first_seen: new Date().toISOString(), last_seen: new Date().toISOString(), blocked: false,
+            });
+        }
+        const devices = Array.from(byFp.values())
+            .map(d => ({ ...d, is_this_pc: d.fingerprint === myFp }))
+            .sort((a, b) => (a.is_this_pc ? -1 : b.is_this_pc ? 1 : 0));
+        const active = devices.filter(d => !d.blocked);
+        return { ok: true, devices, max: MAX_DEVICES_PER_ACCOUNT, over_limit: active.length > MAX_DEVICES_PER_ACCOUNT, active_count: active.length };
     } catch (e) {
         return { ok: false, error: e.message };
     }
@@ -5352,6 +5483,44 @@ ipcMain.handle('discord:remote-block-device', async (_, fingerprint) => {
         return { ok: true };
     } catch (e) {
         return { ok: false, error: e.message };
+    }
+});
+
+// IPC: Gera PDF da invoice via printToPDF (vetorial, TEXTO SELECIONÁVEL) e salva direto
+// (sem passar pela impressora). Retorna { ok, path } ou { ok:false, canceled }.
+ipcMain.handle('invoice:save-pdf', async (event, opts) => {
+    const { dialog } = require('electron');
+    const html = (opts && opts.html) || '';
+    const suggested = ((opts && opts.filename) || 'invoice').replace(/[\\/:*?"<>|]/g, '_');
+    let win = null;
+    try {
+        const parent = mainWin && !mainWin.isDestroyed() ? mainWin : null;
+        const { canceled, filePath } = await dialog.showSaveDialog(parent, {
+            title: 'Salvar Invoice em PDF',
+            defaultPath: path.join(app.getPath('documents'), suggested + '.pdf'),
+            filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        });
+        if (canceled || !filePath) return { ok: false, canceled: true };
+
+        win = new BrowserWindow({
+            show: false,
+            webPreferences: { offscreen: false, sandbox: true, javascript: false },
+        });
+        const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+        await win.loadURL(dataUrl);
+        // Dá um tempinho pras fontes/CSS carregarem antes de renderizar o PDF
+        await new Promise(r => setTimeout(r, 500));
+        const pdf = await win.webContents.printToPDF({
+            printBackground: true,
+            pageSize: 'A4',
+            margins: { marginType: 'default' },
+        });
+        fs.writeFileSync(filePath, pdf);
+        return { ok: true, path: filePath };
+    } catch (e) {
+        return { ok: false, error: e.message || String(e) };
+    } finally {
+        try { if (win && !win.isDestroyed()) win.destroy(); } catch (e) {}
     }
 });
 
