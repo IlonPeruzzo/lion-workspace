@@ -21,7 +21,8 @@
       {
         "provider": "github",
         "owner": "IlonPeruzzo",
-        "repo": "lion-workspace"
+        "repo": "lion-workspace",
+        "releaseType": "release"
       }
     ],
     "win": {
