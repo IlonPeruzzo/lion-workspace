@@ -104,6 +104,27 @@
         .onb-clickable:hover .onb-cta{filter:brightness(1.05)}
         .onb-arrow{display:flex;align-items:center;color:var(--text3);flex-shrink:0;opacity:.5}
         @media(max-width:720px){.onb-arrow{transform:rotate(90deg)}}
+        /* ── Motion dos passos do onboarding (tela inicial) ── */
+        @keyframes onbIn{0%{opacity:0;transform:translateY(18px) scale(.95)}100%{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes onbFadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes onbFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+        @keyframes onbGlow{0%,100%{box-shadow:0 6px 16px -8px rgba(190,242,100,.3);border-color:rgba(190,242,100,.12)}50%{box-shadow:0 0 24px 2px rgba(190,242,100,.3),0 8px 20px -8px rgba(190,242,100,.45);border-color:rgba(190,242,100,.45)}}
+        @keyframes onbNumPop{0%,90%,100%{transform:scale(1)}95%{transform:scale(1.18)}}
+        @keyframes onbArrowPulse{0%,100%{opacity:.28}50%{opacity:.85}}
+        .onb-steps>.onb-step{animation:onbIn .6s cubic-bezier(.2,.85,.3,1) backwards}
+        .onb-steps>.onb-step:nth-child(1){animation-delay:.05s}
+        .onb-steps>.onb-step:nth-child(3){animation-delay:.2s}
+        .onb-steps>.onb-step:nth-child(5){animation-delay:.35s}
+        .onb-steps>.onb-step .onb-ico{animation:onbFloat 3.4s ease-in-out infinite,onbGlow 3.4s ease-in-out infinite;will-change:transform}
+        .onb-steps>.onb-step:nth-child(3) .onb-ico{animation-delay:.5s,.5s}
+        .onb-steps>.onb-step:nth-child(5) .onb-ico{animation-delay:1s,1s}
+        .onb-steps>.onb-step .onb-num{animation:onbNumPop 4s ease-in-out infinite}
+        .onb-steps>.onb-step:nth-child(3) .onb-num{animation-delay:.6s}
+        .onb-steps>.onb-step:nth-child(5) .onb-num{animation-delay:1.2s}
+        .onb-arrow{animation:onbFadeIn .5s ease .3s backwards,onbArrowPulse 2.6s ease-in-out infinite .8s}
+        .onb-step .onb-ico svg{transition:transform .25s ease,filter .25s ease}
+        .onb-clickable:hover .onb-ico svg{transform:scale(1.12);filter:drop-shadow(0 0 6px rgba(190,242,100,.7))}
+        @media(prefers-reduced-motion:reduce){.onb-steps>.onb-step,.onb-steps>.onb-step .onb-ico,.onb-steps>.onb-step .onb-num,.onb-arrow{animation:none!important}}
         .info-panel{display:none;position:absolute;top:32px;left:6px;background:rgba(12,12,12,.98);border:1px solid rgba(190,242,100,.18);border-radius:12px;padding:14px;min-width:260px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,.7);font-size:.74rem;line-height:1.5;color:var(--text2);text-transform:none;letter-spacing:0;cursor:default}
         .info-panel.open{display:block}
         .info-panel .ip-title{font-weight:700;color:var(--accent);margin-bottom:8px;font-size:.78rem;display:flex;align-items:center;gap:4px}
@@ -789,7 +810,7 @@
 #meiBar{border-radius:5px!important;background:linear-gradient(90deg,#22c55e,#bef264)!important}
 #meiPercent{color:#22c55e!important;font-weight:800!important;font-size:1.15rem!important}
 /* Alerta MEI cleaner (nao mais banner vermelho gritante) */
-#meiAlertaPrevio{margin-top:14px!important;padding:12px 16px!important;background:rgba(248,113,113,.05)!important;border:1px solid rgba(248,113,113,.18)!important;border-radius:10px!important;color:#fca5a5!important;font-size:.82rem!important;display:flex!important;align-items:center!important;gap:10px!important}
+#meiAlertaPrevio{margin-top:14px!important;padding:12px 16px!important;background:rgba(248,113,113,.05)!important;border:1px solid rgba(248,113,113,.18)!important;border-radius:10px!important;color:#fca5a5!important;font-size:.82rem!important}
 /* Meta Mensal — branco/cinza como a referência (sem laranja) */
 #metaCard{background:rgba(20,20,20,.55)!important;border:1px solid rgba(255,255,255,.06)!important;position:relative;overflow:hidden}
 #metaAtual{font-size:1.8rem!important;transition:color .3s ease}
@@ -1115,14 +1136,14 @@ var I18N = {
         'setup.regime_title': 'Regime Tributário',
         'setup.regime_desc': 'Escolha seu regime para calcular corretamente impostos e taxas. Você pode alterar depois nas Configurações.',
         'setup.plugins_title': 'Plugins Adobe',
-        'setup.plugins_desc': 'Integra o Lion Workspace diretamente em Premiere Pro e After Effects. Marque os que você usa.',
+        'setup.plugins_desc': 'Integre o Lion Workspace ao Premiere Pro e ao After Effects. Marque os que você usa.',
         'setup.detecting': 'Detectando...',
-        'setup.premiere_title': 'Plugin Premiere Pro',
-        'setup.premiere_desc': 'LION SEARCH, easing, copy/paste de imagens',
-        'setup.ae_title': 'Plugin After Effects',
-        'setup.ae_desc': 'Ferramentas extras pra AE CC 2019+',
+        'setup.premiere_title': 'Premiere Pro',
+        'setup.premiere_desc': 'LION SEARCH, easing e copy/paste de imagens.',
+        'setup.ae_title': 'After Effects',
+        'setup.ae_desc': 'Ferramentas extras para o AE CC 2019+',
         'setup.skip_title': 'Pular',
-        'setup.skip_desc': 'Não uso Adobe ou quero instalar depois',
+        'setup.skip_desc': 'Não uso Adobe ou instalo depois',
         'setup.plugin_installed': 'Plugin já instalado',
         'setup.adobe_detected': 'Adobe detectado',
         'setup.adobe_not_found': 'Adobe não detectado',
@@ -2024,9 +2045,9 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
         <!-- Step 2: Plugins (Premiere + After Effects) -->
         <div class="setup-step" id="setupStep1">
-            <div style="font-size:.88rem;font-weight:600;color:#f5f5f5;margin-bottom:6px" data-i18n="setup.plugins_title">Adobe Plugins</div>
+            <div style="font-size:.88rem;font-weight:600;color:#f5f5f5;margin-bottom:6px" data-i18n="setup.plugins_title">Plugins Adobe</div>
             <div style="font-size:.78rem;color:#737373;margin-bottom:14px" data-i18n="setup.plugins_desc">
-                Integra o Lion Workspace diretamente em Premiere Pro e After Effects. Marque os que você usa.
+                Integre o Lion Workspace ao Premiere Pro e ao After Effects. Marque os que você usa.
             </div>
 
             <div id="premiereStatus" style="margin-bottom:14px">
@@ -2035,12 +2056,15 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
             <!-- Premiere plugin -->
             <div class="setup-option selected" id="optInstallPlugin" onclick="togglePluginOption('pr', !installPrChoice)">
-                <div class="opt-icon" style="background:rgba(155,89,182,.1)">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9b59f6" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <div class="opt-icon" style="background:transparent;padding:0;box-shadow:0 3px 8px rgba(0,0,0,.35)">
+                    <svg width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="Premiere Pro">
+                        <rect x=".5" y=".5" width="39" height="39" rx="9" fill="#2A0634" stroke="rgba(255,255,255,.09)"/>
+                        <text x="20" y="20" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="15" letter-spacing="-.3" fill="#E39BFF">Pr</text>
+                    </svg>
                 </div>
                 <div class="opt-text">
-                    <h4 data-i18n="setup.premiere_title">Premiere Pro Plugin</h4>
-                    <p data-i18n="setup.premiere_desc">LION SEARCH, easing, copy/paste de imagens</p>
+                    <h4 data-i18n="setup.premiere_title">Premiere Pro</h4>
+                    <p data-i18n="setup.premiere_desc">LION SEARCH, easing e copy/paste de imagens.</p>
                 </div>
                 <div class="opt-check">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -2049,12 +2073,15 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
             <!-- After Effects plugin -->
             <div class="setup-option selected" id="optInstallPluginAE" onclick="togglePluginOption('ae', !installAeChoice)">
-                <div class="opt-icon" style="background:rgba(118,191,231,.1)">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#76bfe7" stroke-width="2"><polygon points="12 2 22 19 2 19 12 2"/></svg>
+                <div class="opt-icon" style="background:transparent;padding:0;box-shadow:0 3px 8px rgba(0,0,0,.35)">
+                    <svg width="40" height="40" viewBox="0 0 40 40" role="img" aria-label="After Effects">
+                        <rect x=".5" y=".5" width="39" height="39" rx="9" fill="#00005B" stroke="rgba(255,255,255,.09)"/>
+                        <text x="20" y="20" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="15" letter-spacing="-.3" fill="#9D9DFF">Ae</text>
+                    </svg>
                 </div>
                 <div class="opt-text">
-                    <h4 data-i18n="setup.ae_title">After Effects Plugin</h4>
-                    <p data-i18n="setup.ae_desc">Ferramentas extras pra AE CC 2019+</p>
+                    <h4 data-i18n="setup.ae_title">After Effects</h4>
+                    <p data-i18n="setup.ae_desc">Ferramentas extras para o AE CC 2019+</p>
                 </div>
                 <div class="opt-check">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -2068,7 +2095,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 </div>
                 <div class="opt-text">
                     <h4 data-i18n="setup.skip_title">Pular</h4>
-                    <p data-i18n="setup.skip_desc">Não uso Adobe ou quero instalar depois</p>
+                    <p data-i18n="setup.skip_desc">Não uso Adobe ou instalo depois</p>
                 </div>
                 <div class="opt-check">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -3254,7 +3281,12 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 <div style="display:flex;flex-direction:column;gap:10px">
                     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
                         <div style="display:flex;align-items:center;gap:12px">
-                            <div style="width:38px;height:38px;border-radius:9px;background:#00005B;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.86rem;color:#9999FF;font-family:'Adobe Clean',Arial,sans-serif;letter-spacing:-.5px">Pr</div>
+                            <div style="width:38px;height:38px;flex-shrink:0;border-radius:9px;box-shadow:0 3px 8px rgba(0,0,0,.35)">
+                                <svg width="38" height="38" viewBox="0 0 38 38" role="img" aria-label="Adobe Premiere Pro">
+                                    <rect x=".5" y=".5" width="37" height="37" rx="9" fill="#2A0634" stroke="rgba(255,255,255,.09)"/>
+                                    <text x="19" y="19" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" letter-spacing="-.3" fill="#E39BFF">Pr</text>
+                                </svg>
+                            </div>
                             <div>
                                 <div style="font-size:.85rem;font-weight:600;color:#f5f5f5">Adobe Premiere Pro</div>
                                 <div id="cfgIntegPrStatus" style="font-size:.72rem;color:#737373;margin-top:3px;display:flex;align-items:center;gap:6px">Verificando…</div>
@@ -3269,7 +3301,12 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     </div>
                     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
                         <div style="display:flex;align-items:center;gap:12px">
-                            <div style="width:38px;height:38px;border-radius:9px;background:#00005B;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.86rem;color:#D291FF;font-family:'Adobe Clean',Arial,sans-serif;letter-spacing:-.5px">Ae</div>
+                            <div style="width:38px;height:38px;flex-shrink:0;border-radius:9px;box-shadow:0 3px 8px rgba(0,0,0,.35)">
+                                <svg width="38" height="38" viewBox="0 0 38 38" role="img" aria-label="After Effects">
+                                    <rect x=".5" y=".5" width="37" height="37" rx="9" fill="#00005B" stroke="rgba(255,255,255,.09)"/>
+                                    <text x="19" y="19" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" letter-spacing="-.3" fill="#9D9DFF">Ae</text>
+                                </svg>
+                            </div>
                             <div>
                                 <div style="font-size:.85rem;font-weight:600;color:#f5f5f5">After Effects</div>
                                 <div id="cfgIntegAeStatus" style="font-size:.72rem;color:#737373;margin-top:3px;display:flex;align-items:center;gap:6px">Verificando…</div>

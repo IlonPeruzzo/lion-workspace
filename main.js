@@ -5606,6 +5606,15 @@ function autoInstallCepPlugin(srcFolderName, extensionId) {
         }
         if (!fs.existsSync(pluginSrc)) return false;
 
+        // Só instala se o Adobe já existir nesta máquina.
+        // Sem esta checagem, o mkdirSync recursivo abaixo FABRICA a pasta do Adobe
+        // em quem nem tem Premiere/AE — e aí a tela de setup mostraria "Plugin já
+        // instalado" sem o usuário ter Adobe. Sem Adobe, não faz nada.
+        const adobeRoot = isMac
+            ? path.join(os.homedir(), 'Library', 'Application Support', 'Adobe')
+            : path.join(process.env.APPDATA || '', 'Adobe');
+        if (!fs.existsSync(adobeRoot)) return false;
+
         // Determine CEP extensions folder
         let cepDir;
         if (isMac) {
