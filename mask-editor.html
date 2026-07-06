@@ -40,6 +40,18 @@
     }
     .topbar h1 { font-size:.88rem; font-weight:700; letter-spacing:-.2px; color:var(--text); }
     .topbar h1 span { color:var(--accent); }
+    /* Marca: logo do leao em circulo (identidade do app) */
+    .brand-lock { display:flex; align-items:center; gap:9px; }
+    .brand {
+        width:26px; height:26px; border-radius:50%; flex-shrink:0;
+        background:radial-gradient(circle at 32% 26%, #21360c, #060a02 70%);
+        border:1.5px solid rgba(190,242,100,0.55);
+        box-shadow:0 0 0 1px rgba(0,0,0,.55), 0 0 13px -2px rgba(190,242,100,0.55);
+        overflow:hidden; display:flex; align-items:center; justify-content:center;
+        -webkit-app-region:no-drag;
+    }
+    .brand img { width:100%; height:100%; object-fit:cover; display:block; }
+    .brand img[src=""], .brand img:not([src]) { display:none; }
     .spacer { flex:1; }
     .meta {
         font-size:.7rem; color:var(--text3);
@@ -129,6 +141,8 @@
     }
     .slider-row input[type=range] {
         flex:1;
+        min-width:0;    /* deixa o range encolher no flex — sem isso a largura intrinseca
+                           (~129px) empurrava o valor "100" pra fora do painel (cortado) */
         -webkit-appearance:none; appearance:none;
         height:4px; background:#222; border-radius:2px;
         outline:none;
@@ -226,7 +240,10 @@
 </head>
 <body>
     <div class="topbar">
-        <h1>Editor de <span>Máscara</span></h1>
+        <div class="brand-lock">
+            <div class="brand"><img id="brandLogo" alt=""></div>
+            <h1>Editor de <span>Máscara</span></h1>
+        </div>
         <span class="meta" id="dims">—</span>
         <div class="spacer"></div>
         <span class="meta" id="zoomMeta" style="margin-right:6px">100%</span>
@@ -349,6 +366,26 @@ const ipc = (() => {
 })();
 const fs = (() => { try { return require('fs'); } catch(e) { return null; } })();
 const path = (() => { try { return require('path'); } catch(e) { return null; } })();
+
+// Logo do leao (verde) na topbar — lida do disco e embutida como data URI.
+(function loadBrandLogo() {
+    if (!fs) return;
+    const cands = [];
+    try { if (typeof __dirname === 'string' && path) cands.push(path.join(__dirname, 'build', 'icon-lion-green.png')); } catch(e) {}
+    try {
+        const dir = decodeURIComponent(location.pathname).replace(/^\/+/, '').replace(/mask-editor\.html$/i, '');
+        cands.push(dir + 'build/icon-lion-green.png');
+        cands.push(dir + 'build/icon-lion-only.png');
+    } catch(e) {}
+    for (let i = 0; i < cands.length; i++) {
+        try {
+            const buf = fs.readFileSync(cands[i]);
+            const b64 = Buffer.from(buf).toString('base64');
+            const el = document.getElementById('brandLogo');
+            if (el) { el.src = 'data:image/png;base64,' + b64; return; }
+        } catch(e) {}
+    }
+})();
 
 // Estado global
 const state = {
@@ -717,8 +754,12 @@ function getViewportPos(e) {
 wrap.addEventListener('mousemove', (e) => {
     const v = getViewportPos(e);
     brushCursor.style.display = 'block';
-    brushCursor.style.left = e.clientX + 'px';
-    brushCursor.style.top = e.clientY + 'px';
+    // brushCursor e' position:absolute DENTRO do .canvas-wrap (que comeca abaixo da
+    // topbar). Posicionar por clientX/clientY (viewport) jogava o circulo pra baixo do
+    // mouse real → o usuario mirava com o circulo e a pincelada saia ACIMA dele.
+    // Usa coords relativas ao wrap (v.x/v.y) pra o circulo ficar exatamente no mouse.
+    brushCursor.style.left = v.x + 'px';
+    brushCursor.style.top = v.y + 'px';
     updateBrushCursor();
 
     if (state.isPanning) {

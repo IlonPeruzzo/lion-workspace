@@ -156,6 +156,19 @@ body{display:flex;flex-direction:column}
     box-shadow:0 0 0 1px rgba(190,242,100,.08), 0 2px 8px rgba(190,242,100,.1) inset
 }
 
+/* Slider de suavização (substitui o campo "Lambda" técnico) */
+.lw-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(190,242,100,.5),rgba(190,242,100,.15));
+    outline:none;cursor:pointer;display:block
+}
+.lw-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--accent);border:2px solid #0a0a0a;box-shadow:0 0 0 1px rgba(190,242,100,.4), 0 2px 6px rgba(0,0,0,.5);
+    transition:transform .12s
+}
+.lw-slider::-webkit-slider-thumb:hover{transform:scale(1.15)}
+
 /* Botões de análise (estilo After Effects: tudo/1 pra trás e pra frente) */
 .analyze-row{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
 .an-btn{
@@ -220,18 +233,21 @@ body{display:flex;flex-direction:column}
                 <canvas id="pickerCanvas"></canvas>
                 <canvas id="pathCanvas"></canvas>
                 <div class="marker" id="marker" style="display:none">
-                    <svg viewBox="0 0 100 100" width="100" height="100">
+                    <!-- Mira VERMELHA (verde sumia em cenas verdes). O tamanho do elemento e
+                         dinamico: a feature region (rect interno, 32/100 do total) cobre EXATAMENTE
+                         a area que o tracker segue. vector-effect mantem as linhas finas no zoom. -->
+                    <svg viewBox="0 0 100 100" width="100%" height="100%">
                         <!-- Search region (outer, tracejado) -->
-                        <rect x="18" y="18" width="64" height="64" fill="none" stroke="rgba(190,242,100,.5)" stroke-width="1" stroke-dasharray="4 3"/>
-                        <!-- Feature region (inner) -->
-                        <rect x="34" y="34" width="32" height="32" fill="none" stroke="#bef264" stroke-width="1.5"/>
+                        <rect x="18" y="18" width="64" height="64" fill="none" stroke="rgba(255,59,59,.55)" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+                        <!-- Feature region (inner) = area real trackeada -->
+                        <rect x="34" y="34" width="32" height="32" fill="none" stroke="#ff3b3b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                         <!-- Crosshair -->
-                        <line x1="50" y1="2" x2="50" y2="30" stroke="#bef264" stroke-width="1.5"/>
-                        <line x1="50" y1="70" x2="50" y2="98" stroke="#bef264" stroke-width="1.5"/>
-                        <line x1="2" y1="50" x2="30" y2="50" stroke="#bef264" stroke-width="1.5"/>
-                        <line x1="70" y1="50" x2="98" y2="50" stroke="#bef264" stroke-width="1.5"/>
+                        <line x1="50" y1="2" x2="50" y2="30" stroke="#ff3b3b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+                        <line x1="50" y1="70" x2="50" y2="98" stroke="#ff3b3b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+                        <line x1="2" y1="50" x2="30" y2="50" stroke="#ff3b3b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+                        <line x1="70" y1="50" x2="98" y2="50" stroke="#ff3b3b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                         <!-- Centro -->
-                        <circle cx="50" cy="50" r="2.2" fill="#fff"/>
+                        <circle cx="50" cy="50" r="1.6" fill="#fff"/>
                     </svg>
                 </div>
             </div>
@@ -293,28 +309,27 @@ body{display:flex;flex-direction:column}
                     <button type="button" class="preset-btn" data-preset="smooth">Suave</button>
                 </div>
             </div>
-            <div class="row">
-                <label>Algoritmo</label>
-                <select id="algorithm">
-                    <option value="CSRT" selected>CSRT (preciso, com scale)</option>
-                    <option value="KCF">KCF (rápido)</option>
-                    <option value="MOSSE">MOSSE (super rápido)</option>
-                    <option value="MIL">MIL (resistente)</option>
-                    <option value="LUCAS_KANADE">Lucas-Kanade (ponto puro)</option>
-                </select>
+            <!-- Tamanho do alvo: controla a caixa que o tracker segue. A mira mostra o tamanho REAL. -->
+            <div style="margin-bottom:10px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+                    <label style="font-size:.74rem;color:var(--text2)">Tamanho do alvo</label>
+                    <span id="targetSizeLbl" style="font-size:.7rem;color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums">—</span>
+                </div>
+                <input type="range" id="targetSize" min="16" max="200" value="54" step="2" class="lw-slider">
+                <div style="display:flex;justify-content:space-between;font-size:.58rem;color:var(--text3);margin-top:3px">
+                    <span>Detalhe pequeno</span><span>Objeto grande</span>
+                </div>
             </div>
-            <div class="row">
-                <label>Suavização</label>
-                <select id="smoothing">
-                    <option value="whittaker">Whittaker</option>
-                    <option value="kalman">Kalman</option>
-                    <option value="supersmoother">Supersmoother</option>
-                    <option value="none">Nenhuma (cru)</option>
-                </select>
-            </div>
-            <div class="row">
-                <label>Lambda <span style="opacity:.5;font-size:.65rem">(Whittaker)</span></label>
-                <input type="number" id="lambda" value="100" min="0" max="10000" step="10">
+            <!-- Suavização em linguagem de gente: um slider. Nada de "lambda". -->
+            <div style="margin-bottom:10px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+                    <label style="font-size:.74rem;color:var(--text2)">Suavização</label>
+                    <span id="smoothLbl" style="font-size:.7rem;color:var(--accent);font-weight:600">Média</span>
+                </div>
+                <input type="range" id="smoothSlider" min="0" max="100" value="35" step="1" class="lw-slider">
+                <div style="display:flex;justify-content:space-between;font-size:.58rem;color:var(--text3);margin-top:3px">
+                    <span>Cru (fiel)</span><span>Bem suave</span>
+                </div>
             </div>
             <div class="row">
                 <label>Modo de aplicação</label>
@@ -328,6 +343,33 @@ body{display:flex;flex-direction:column}
                 <select id="applyMode">
                     <option value="selected">Clip selecionado</option>
                 </select>
+            </div>
+            <!-- Avançado (colapsado) — pra quem sabe o que é CSRT/Whittaker -->
+            <div style="margin-top:8px">
+                <button type="button" id="advToggle" style="background:none;border:0;color:var(--text3);font-size:.66rem;cursor:pointer;padding:2px 0;display:flex;align-items:center;gap:4px;font-family:inherit">
+                    <svg id="advChevron" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="transition:transform .15s"><polyline points="9 18 15 12 9 6"/></svg>
+                    Avançado
+                </button>
+                <div id="advSection" style="display:none;margin-top:6px">
+                    <div class="row">
+                        <label>Algoritmo</label>
+                        <select id="algorithm">
+                            <option value="CSRT" selected>Preciso (recomendado)</option>
+                            <option value="KCF">Rápido</option>
+                            <option value="MOSSE">Super rápido</option>
+                            <option value="MIL">Resistente a oclusão</option>
+                            <option value="LUCAS_KANADE">Ponto exato (mov. suave)</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>Filtro de suavização</label>
+                        <select id="smoothing">
+                            <option value="whittaker">Whittaker (padrão)</option>
+                            <option value="kalman">Kalman</option>
+                            <option value="supersmoother">Supersmoother</option>
+                        </select>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -418,6 +460,7 @@ const pointInfo = document.getElementById('pointInfo');
 
 let trackPoint = null; // { x, y } em coords do vídeo
 let videoMeta = { width: 0, height: 0 };
+let _bboxSize = 54; // tamanho do alvo em px de vídeo (ajustável pelo slider; default = ~5% da menor dimensão)
 let pythonOk = false; // setado pelo check inicial — bloqueia track se false
 let _trackHistory = null; // historico completo do tracking pra desenhar o path
 let _trackVideoSize = null; // {w, h} do video onde tracking rodou (proxy)
@@ -568,6 +611,7 @@ let _editMode = false;
 let _dragIdx = null;      // índice em _trackHistory sendo arrastado
 let _hoverIdx = null;     // índice em hover (feedback visual)
 let _dragSnapshot = null; // cópia dos pontos afetados no início do drag
+let _justDragged = false; // acabou de soltar um drag — o 'click' seguinte não re-marca ponto
 
 function _mouseToVideoCoords(e){
     const r = canvas.getBoundingClientRect();
@@ -695,22 +739,70 @@ window.addEventListener('mouseup', () => {
     if(_markerDragPre){ _markerDragPre = false; }
     if(_dragIdx !== null){
         _dragIdx = null; _dragSnapshot = null;
+        _justDragged = true; // o 'click' que vem em seguida não deve re-marcar o ponto
+        setTimeout(() => { _justDragged = false; }, 80);
         drawPath();
     }
 });
 
+// === Tamanho do alvo: slider em px de vídeo; a mira reflete o tamanho na hora ===
+const targetSizeEl = document.getElementById('targetSize');
+const targetSizeLbl = document.getElementById('targetSizeLbl');
+function _setBboxSize(v) {
+    _bboxSize = Math.max(10, Math.round(v));
+    targetSizeLbl.textContent = _bboxSize + ' px';
+    updateMarkerPos(); // mira cresce/encolhe ao vivo
+}
+targetSizeEl.addEventListener('input', () => _setBboxSize(parseInt(targetSizeEl.value, 10) || 54));
+// Default + range adaptados à resolução do vídeo (setados quando os metadados carregam)
+function _initTargetSizeForVideo() {
+    const minDim = Math.min(videoMeta.width, videoMeta.height) || 1080;
+    const def = Math.max(40, Math.round(minDim * 0.05));
+    targetSizeEl.min = 16;
+    targetSizeEl.max = Math.max(120, Math.round(minDim * 0.4));
+    targetSizeEl.value = def;
+    _setBboxSize(def);
+}
+
+// === Suavização: slider 0-100 → lambda do Whittaker (escala exponencial) ===
+// 0 = desligada (dados crus). 35 (default) ≈ lambda 47. 100 ≈ lambda 3100.
+const smoothSlider = document.getElementById('smoothSlider');
+const smoothLbl = document.getElementById('smoothLbl');
+function _smoothLambda() {
+    const s = parseInt(smoothSlider.value, 10) || 0;
+    if (s <= 0) return 0;
+    return Math.round(5 * Math.pow(10, (s / 100) * 2.8));
+}
+function _smoothLabelText(s) {
+    if (s <= 0) return 'Desligada';
+    if (s <= 20) return 'Leve';
+    if (s <= 50) return 'Média';
+    if (s <= 80) return 'Forte';
+    return 'Máxima';
+}
+function _updateSmoothLbl() { smoothLbl.textContent = _smoothLabelText(parseInt(smoothSlider.value, 10) || 0); }
+smoothSlider.addEventListener('input', _updateSmoothLbl);
+
+// === Avançado (colapsável) ===
+document.getElementById('advToggle').addEventListener('click', () => {
+    const sec = document.getElementById('advSection');
+    const open = sec.style.display === 'none';
+    sec.style.display = open ? 'block' : 'none';
+    document.getElementById('advChevron').style.transform = open ? 'rotate(90deg)' : '';
+});
+
 // === Presets ===
 const PRESETS = {
-    accurate: { algorithm: 'CSRT',         smoothing: 'whittaker',     lambda: 50   },
-    balanced: { algorithm: 'CSRT',         smoothing: 'whittaker',     lambda: 100  },
-    fast:     { algorithm: 'MOSSE',        smoothing: 'whittaker',     lambda: 100  },
-    smooth:   { algorithm: 'CSRT',         smoothing: 'kalman',        lambda: 500  },
+    accurate: { algorithm: 'CSRT',  smooth: 30 },
+    balanced: { algorithm: 'CSRT',  smooth: 45 },
+    fast:     { algorithm: 'MOSSE', smooth: 45 },
+    smooth:   { algorithm: 'CSRT',  smooth: 75 },
 };
 function applyPreset(key) {
     const p = PRESETS[key]; if (!p) return;
     document.getElementById('algorithm').value = p.algorithm;
-    document.getElementById('smoothing').value = p.smoothing;
-    document.getElementById('lambda').value = p.lambda;
+    smoothSlider.value = p.smooth;
+    _updateSmoothLbl();
     document.querySelectorAll('.preset-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.preset === key);
     });
@@ -788,6 +880,7 @@ function loadVideo() {
     vid.addEventListener('loadedmetadata', () => {
         videoMeta.width = vid.videoWidth;
         videoMeta.height = vid.videoHeight;
+        _initTargetSizeForVideo(); // default do tamanho do alvo ~5% da menor dimensão
         // Seek pro in-point
         vid.currentTime = IN_SEC;
         layoutCanvas();
@@ -952,11 +1045,18 @@ window.addEventListener('mousemove', e => { if (scrubbing) seekToTimelineX(e.cli
 window.addEventListener('mouseup', () => scrubbing = false);
 window.addEventListener('resize', drawTimeline);
 
-// === Click no canvas pra marcar ponto (só fora do modo edição) ===
+// === Click no canvas pra marcar ponto ===
+// Em modo edição: clique em cima de um ponto do path = editar; clique numa área NOVA =
+// re-marca o ponto na hora (sem precisar fechar a janela nem clicar "Re-marcar").
 canvas.addEventListener('click', e => {
     if (!videoMeta.width) return;
     if (e.altKey || _didPan) return; // pan não marca ponto
-    if (_editMode) return; // em modo edição, cliques são pra arrastar pontos do path
+    if (_justDragged) { _justDragged = false; return; } // soltou um drag de ponto — não re-marca
+    if (_editMode) {
+        if (_hitTestPoint(e) !== null) return; // clique num ponto do path = interação de edição
+        _exitEditMode(); // área nova = novo alvo: descarta o track e re-marca já
+        setStatus('Novo ponto marcado — track anterior descartado. Use os botões de análise.', 'warn');
+    }
     const r = canvas.getBoundingClientRect();
     const x = (e.clientX - r.left) * (videoMeta.width / r.width);
     const y = (e.clientY - r.top) * (videoMeta.height / r.height);
@@ -966,12 +1066,18 @@ canvas.addEventListener('click', e => {
     setAnalyzeEnabled(true);
 });
 // Coloca a mira (DOM) num ponto em coords intrínsecas (px,py) da referência refW×refH.
-// Offset-based (dentro do #zoomWrap transformado) + counter-scale 1/zoom = tamanho constante.
+// O TAMANHO reflete a área real trackeada (_bboxSize px de vídeo): a feature region
+// (32/100 do SVG) cobre exatamente _bboxSize. Escala junto com o zoom (igual AE) —
+// as linhas ficam finas via vector-effect no SVG.
 function _placeMarkerDisplay(px, py, refW, refH) {
     marker.style.display = 'block';
     marker.style.left = (vid.offsetLeft + (px / refW) * vid.offsetWidth) + 'px';
     marker.style.top = (vid.offsetTop + (py / refH) * vid.offsetHeight) + 'px';
-    marker.style.transform = 'translate(-50%,-50%) scale(' + (1 / (_zoom || 1)) + ')';
+    const k = vid.offsetWidth / refW; // px de vídeo → px de tela (pré-zoom)
+    const sz = Math.max(10, _bboxSize * k * (100 / 32));
+    marker.style.width = sz + 'px';
+    marker.style.height = sz + 'px';
+    marker.style.transform = 'translate(-50%,-50%)';
 }
 // Posição interpolada do track no frame atual (coords do proxy) — null se não tem track.
 function _trackPointAtCurrentFrame() {
@@ -1038,6 +1144,10 @@ async function runAnalyze(mode) {
     setStatus('Analisando...', 'warn');
     setProgress(12);
 
+    // Suavização vem do slider: 0 = crua ('none'), >0 = filtro escolhido no Avançado com lambda mapeado
+    const lam = _smoothLambda();
+    // Bbox = tamanho do alvo escolhido no slider (a mira mostra exatamente essa área)
+    const bboxSz = _bboxSize || Math.max(40, Math.round(Math.min(videoMeta.width, videoMeta.height) * 0.05));
     const payload = {
         filePath: MEDIA_PATH,
         points: [[ref.x, ref.y]],
@@ -1045,9 +1155,9 @@ async function runAnalyze(mode) {
             startFrame: start,
             endFrame: end,
             algorithm: document.getElementById('algorithm').value,
-            smoothing: document.getElementById('smoothing').value,
-            whittakerLambda: parseFloat(document.getElementById('lambda').value) || 100,
-            bboxWidth: 40, bboxHeight: 40,
+            smoothing: lam <= 0 ? 'none' : document.getElementById('smoothing').value,
+            whittakerLambda: lam > 0 ? lam : 100,
+            bboxWidth: bboxSz, bboxHeight: bboxSz,
         }
     };
     let body;

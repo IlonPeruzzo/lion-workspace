@@ -75,7 +75,18 @@
         .section-title{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:8px;font-weight:600}
 
         .proj-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:8px;padding-right:2px}
-        .proj-empty{text-align:center;font-size:.7rem;color:#555;padding:14px 0}
+        /* Empty state do timer — cronometro animado + aneis pulsando */
+        .proj-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:20px 10px 16px;text-align:center}
+        .pe-orb{position:relative;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#bef264;
+            background:radial-gradient(circle at 50% 38%, rgba(190,242,100,.16), rgba(190,242,100,.02) 70%)}
+        .pe-orb::before,.pe-orb::after{content:'';position:absolute;inset:2px;border-radius:50%;border:1px solid rgba(190,242,100,.38);animation:peRing 2.8s ease-out infinite}
+        .pe-orb::after{animation-delay:1.4s}
+        @keyframes peRing{0%{transform:scale(.72);opacity:.55}100%{transform:scale(1.75);opacity:0}}
+        .pe-orb svg{width:23px;height:23px;position:relative;z-index:1}
+        .pe-hand{transform-box:view-box;transform-origin:12px 13.5px;animation:peHand 2.4s cubic-bezier(.45,0,.55,1) infinite}
+        @keyframes peHand{to{transform:rotate(360deg)}}
+        .pe-title{font-size:.72rem;font-weight:700;color:#c4c4c4;letter-spacing:-.1px}
+        .pe-sub{font-size:.56rem;color:#5f5f5f;font-weight:500;max-width:190px;line-height:1.4}
         .pc{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);cursor:pointer;transition:all .15s}
         .pc:hover{border-color:rgba(190,242,100,.18);background:rgba(190,242,100,.03)}
         .pc.sel{border-color:#bef264;background:rgba(190,242,100,.07)}
@@ -210,6 +221,23 @@
         .login-overlay::after{content:'';position:absolute;width:240px;height:240px;background:radial-gradient(circle,rgba(190,242,100,.05) 0%,transparent 70%);bottom:-80px;left:-60px;pointer-events:none;animation:loginGlowPulse 6s ease-in-out infinite 3s}
         @keyframes loginGlowPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
         .login-overlay.hidden{display:none}
+        .login-overlay .login-logo{width:60px;height:60px;display:block;margin:0 auto 12px;border-radius:15px;object-fit:contain;box-shadow:0 10px 26px -6px rgba(190,242,100,.32),0 0 0 1px rgba(190,242,100,.14);animation:loginLogoFloat 5s ease-in-out infinite}
+        @keyframes loginLogoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-4px) rotate(-2deg)}}
+        /* Popup "Login OK" (igual ao app) */
+        .lw-loginpop{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(6,6,9,.7);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);opacity:0;pointer-events:none;transition:opacity .3s}
+        .lw-loginpop.active{opacity:1;pointer-events:auto}
+        .lw-loginpop .lp-card{position:relative;width:210px;padding:24px 20px 22px;text-align:center;background:linear-gradient(180deg,rgba(30,30,33,.97),rgba(18,18,21,.98));border:1px solid rgba(190,242,100,.16);border-radius:16px;box-shadow:0 22px 55px -12px rgba(0,0,0,.75);transform:scale(.86) translateY(10px);transition:transform .42s cubic-bezier(.34,1.56,.64,1)}
+        .lw-loginpop.active .lp-card{transform:scale(1) translateY(0)}
+        .lw-loginpop .lp-close{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#888;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;padding:0}
+        .lw-loginpop .lp-close:hover{background:rgba(244,63,94,.15);border-color:rgba(244,63,94,.4);color:#f87171}
+        .lw-loginpop .lp-badge{width:58px;height:58px;margin:2px auto 12px;border-radius:50%;overflow:hidden;background:rgba(190,242,100,.08);box-shadow:0 0 0 2px rgba(190,242,100,.35),0 8px 20px -6px rgba(190,242,100,.4);display:flex;align-items:center;justify-content:center}
+        .lw-loginpop .lp-badge img{width:100%;height:100%;object-fit:cover;display:block;animation:lpAvatarIn .55s cubic-bezier(.3,.9,.4,1.4) .1s both}
+        @keyframes lpAvatarIn{0%{opacity:0;transform:scale(0) rotate(-20deg)}70%{opacity:1;transform:scale(1.15) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+        .lw-loginpop .lp-title{font-size:1.05rem;font-weight:800;color:#bef264;letter-spacing:-.3px;margin:0 0 4px;text-shadow:0 0 18px rgba(190,242,100,.25)}
+        .lw-loginpop .lp-msg{font-size:.68rem;color:#a3a3a3;margin:0;line-height:1.45}
+        .lw-loginpop .lp-confetti{position:absolute;top:36%;left:50%;width:0;height:0;pointer-events:none}
+        .lw-loginpop .lp-c{position:absolute;top:0;left:0;border-radius:1px;opacity:0;animation:lpConf 1.4s cubic-bezier(.15,.6,.3,1) .2s forwards}
+        @keyframes lpConf{0%{opacity:0;transform:translate(0,0) rotate(0)}15%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(var(--dx),calc(var(--dy) + 60px)) rotate(var(--rot))}}
         .login-overlay .login-card{position:relative;width:100%;max-width:280px;background:linear-gradient(180deg,rgba(28,28,28,.9) 0%,rgba(20,20,20,.95) 100%);border:1px solid rgba(190,242,100,.08);border-radius:16px;padding:28px 22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02) inset;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
         .login-overlay .logo{font-size:1.3rem;margin-bottom:4px;color:#f5f5f5;text-align:center;font-weight:800;letter-spacing:-.4px}
         .login-overlay .logo span{color:#bef264}
@@ -259,6 +287,7 @@
     <!-- Plugin Login Screen -->
     <div class="login-overlay" id="pluginLogin">
         <div class="login-card">
+            <img class="login-logo" src="data:image/png;base64,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" alt="Lion Workspace">
             <div class="logo">Lion <span>Workspace</span></div>
             <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
             <div class="login-form">
@@ -340,7 +369,7 @@
             <svg id="timerChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="timerBody">
-            <div class="proj-list" id="projList"><div class="proj-empty">Nenhum servico ativo</div></div>
+            <div class="proj-list" id="projList"><div class="proj-empty"><div class="pe-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h6"/><circle cx="12" cy="13.5" r="7.5"/><line class="pe-hand" x1="12" y1="13.5" x2="12" y2="8.6"/></svg></div><div class="pe-title">Nenhum serviço ativo</div></div></div>
             <div class="timer-display" id="tDisp">00:00:00</div>
             <div class="timer-sub" id="tSub">Parado</div>
             <div class="controls">
@@ -585,6 +614,51 @@
             xhr.onerror = function(){ if (imgEl) imgEl.style.display = 'none'; };
             xhr.send();
         } catch(e){ if (imgEl) imgEl.style.display = 'none'; }
+    }
+    // ═══ Popup "Login OK" (foto + confetti + X) — mostrado no login/reconexao real ═══
+    function closeLoginPop(){
+        var p = document.getElementById('lwLoginPop');
+        if (!p) return;
+        p.classList.remove('active');
+        if (window._lwLpTimer) { clearTimeout(window._lwLpTimer); window._lwLpTimer = null; }
+        setTimeout(function(){ if (p && p.parentNode && !p.classList.contains('active')) p.parentNode.removeChild(p); }, 340);
+    }
+    function showLoginPop(user){
+        try {
+            // Evita popup duplicado: pluginShowApp pode disparar 2x (reconexao pisca login->app). Ignora repeticao em ~6s.
+            if (window._lwLpShownAt && (Date.now() - window._lwLpShownAt) < 6000) return;
+            window._lwLpShownAt = Date.now();
+            var name = (user && user.username) ? ('@' + user.username) : ((user && user.name) || 'editor');
+            var old = document.getElementById('lwLoginPop');
+            if (old && old.parentNode) old.parentNode.removeChild(old);
+            var p = document.createElement('div');
+            p.id = 'lwLoginPop'; p.className = 'lw-loginpop';
+            var colors = ['#bef264','#5865F2','#3b9df5','#fbbf24','#f5f5f5'];
+            var conf = '';
+            for (var i=0;i<22;i++){
+                var ang = (i/22)*Math.PI*2 + (Math.random()-0.5)*0.4;
+                var dist = 58 + Math.random()*78;
+                var dx = (Math.cos(ang)*dist).toFixed(1), dy = (Math.sin(ang)*dist-20).toFixed(1);
+                var rot = ((Math.random()-0.5)*720).toFixed(0);
+                var sz = (4+Math.random()*4).toFixed(1);
+                conf += '<span class="lp-c" style="--dx:'+dx+'px;--dy:'+dy+'px;--rot:'+rot+'deg;background:'+colors[i%colors.length]+';width:'+sz+'px;height:'+(sz*0.6).toFixed(1)+'px;animation-delay:'+(i*8)+'ms"></span>';
+            }
+            var safe = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            p.innerHTML = '<div class="lp-card">'
+                + '<button class="lp-close" title="Fechar" onclick="closeLoginPop()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
+                + '<div class="lp-badge" id="lwLpBadge"></div>'
+                + '<h2 class="lp-title">Login OK</h2>'
+                + '<p class="lp-msg">Bem-vindo, ' + safe + '!</p>'
+                + '<div class="lp-confetti">' + conf + '</div>'
+                + '</div>';
+            document.body.appendChild(p);
+            var badge = document.getElementById('lwLpBadge');
+            if (badge) { var im = document.createElement('img'); badge.appendChild(im); loadImgViaXhr(API + '/discord-avatar?t=' + Date.now(), im); }
+            void p.offsetWidth;
+            p.classList.add('active');
+            if (window._lwLpTimer) clearTimeout(window._lwLpTimer);
+            window._lwLpTimer = setTimeout(function(){ closeLoginPop(); }, 4500);
+        } catch(e){}
     }
     var PLUGIN_VERSION='1.3.53-AE';
     var csInterface=new CSInterface();
@@ -897,7 +971,11 @@
 
     // Try to get a plugin token automatically using the app's Supabase session.
     // No credentials needed — the app server validates the local session.
+    var _autoLoginInFlight = false; // evita XHRs de auto-login sobrepostos (watchdog + poll + botao)
     function pluginTryAutoLogin(onFail) {
+        if (_autoLoginInFlight) { if (onFail) onFail(); return; }
+        _autoLoginInFlight = true;
+        function _fail() { _autoLoginInFlight = false; if (onFail) onFail(); }
         var xhr = new XMLHttpRequest();
         xhr.timeout = 8000;
         xhr.open('POST', API + '/auth/local-session', true);
@@ -907,6 +985,7 @@
                 try {
                     var r = JSON.parse(xhr.responseText || '{}');
                     if (r && r.token) {
+                        _autoLoginInFlight = false;
                         pluginToken = r.token;
                         localStorage.setItem('lw_plugin_token', r.token);
                         pluginUser = r.user;
@@ -918,11 +997,44 @@
                 } catch(e) {}
             }
             LWLog.info('auth', 'Auto-login unavailable (status=' + xhr.status + ')');
-            if (onFail) onFail();
+            _fail();
         };
-        xhr.ontimeout = function() { if (onFail) onFail(); };
-        xhr.onerror = function() { if (onFail) onFail(); };
-        try { xhr.send('{}'); } catch(e) { if (onFail) onFail(); }
+        xhr.ontimeout = _fail;
+        xhr.onerror = _fail;
+        try { xhr.send('{}'); } catch(e) { _fail(); }
+    }
+
+    // Watchdog de reconexao: enquanto NAO estiver logado, tenta auto-login a cada ~3.5s.
+    // Cobre app aberto depois do plugin, app reiniciado, queda de rede e estado "Conectando" preso.
+    var _lwReconnectTimer = null;
+    function lwStartReconnectWatchdog() {
+        if (_lwReconnectTimer) return;
+        _lwReconnectTimer = setInterval(function() {
+            var loginEl = document.getElementById('pluginLogin');
+            var loggedIn = !!pluginToken && loginEl && loginEl.classList.contains('hidden');
+            if (loggedIn) {
+                // Conectado: verifica se a sessao do app ainda vale (detecta logout/expiracao em ~3.5s).
+                try {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', API + '/auth/check', true);
+                    xhr.timeout = 4000;
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + pluginToken);
+                    xhr.onload = function(){
+                        var ok = false;
+                        if (xhr.status === 200) { try { ok = !!JSON.parse(xhr.responseText || '{}').authenticated; } catch(e){} }
+                        if (!ok) { // 401 ou authenticated:false = deslogado no app
+                            pluginToken = ''; try { localStorage.removeItem('lw_plugin_token'); } catch(e){}
+                            _authExpiredShown = true;
+                            pluginShowLogin();
+                        }
+                    };
+                    xhr.onerror = function(){}; xhr.ontimeout = function(){}; // rede caiu: tolera, nao desloga
+                    xhr.send();
+                } catch(e){}
+                return;
+            }
+            pluginTryAutoLogin(function(){});  // desconectado — reconecta silenciosamente
+        }, 3500);
     }
 
     function pluginCheckSession() {
@@ -1091,6 +1203,8 @@
     }
 
     function pluginShowApp(user, plan) {
+        var _lgnEl = document.getElementById('pluginLogin');
+        var _wasLoggedOut = _lgnEl && !_lgnEl.classList.contains('hidden');
         document.getElementById('pluginLogin').classList.add('hidden');
         document.getElementById('pluginUserBar').style.display = '';
         window._lwPlan = plan || '';
@@ -1120,6 +1234,7 @@
             if (starEl) starEl.style.display = '';
             if (gearEl) gearEl.style.display = '';
         } catch(e) {}
+        try { if (_wasLoggedOut) showLoginPop(user); } catch(e){}
         setTimeout(function() { poll(); }, 300);
     }
 
@@ -1163,6 +1278,7 @@
     // Check session on load
     LWInit.start('session-check');
     pluginCheckSession();
+    lwStartReconnectWatchdog(); // reconecta sozinho se cair / se o app reiniciar
 
     function toggleSection(id){
         var el=document.getElementById(id);
@@ -1190,7 +1306,7 @@
         if(json===lastCardsJSON)return;
         lastCardsJSON=json;
         if(!cards||!cards.length){
-            el.innerHTML='<div class="proj-empty">Nenhum servico ativo</div>';
+            el.innerHTML='<div class="proj-empty"><div class="pe-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h6"/><circle cx="12" cy="13.5" r="7.5"/><line class="pe-hand" x1="12" y1="13.5" x2="12" y2="8.6"/></svg></div><div class="pe-title">Nenhum serviço ativo</div></div>';
             selProj='';
             return;
         }

@@ -2261,6 +2261,19 @@ function lwApplyPresetData(presetName, dataJsonStr) {
         var qeSeq = qe.project.getActiveSequence();
         if (!qeSeq) return 'ERR:no_qe_sequence';
 
+        // Lista de NOMES de efeitos registrados (1x por apply) — usada pra montar
+        // candidatos de lookup sem cair em colisao de nome (ex: "Gaussian Blur"
+        // do Impact roubou o nome do nativo; o nativo legacy fica em "(Legacy)")
+        var _fxNameList = null;
+        try { _fxNameList = qe.project.getVideoEffectList(); } catch(eFl) {}
+        var _fxListHas = function(name) {
+            if (!_fxNameList || !name) return false;
+            for (var fli = 0; fli < _fxNameList.length; fli++) {
+                if (String(_fxNameList[fli]) === name) return true;
+            }
+            return false;
+        };
+
         // Acha selection — com recovery via snapshot
         var sel = _lwFindSelectedQEClips(qeSeq, true, seq);
         var selKind = 'video';
@@ -2367,6 +2380,7 @@ function lwApplyPresetData(presetName, dataJsonStr) {
                 var clip = stdSel[ci2];
                 var qeClip = sel[ci2];
                 var targetComp = null;
+                var _equivalentOnly = false; // true = efeito equivalente (legacy): props SO por nome
 
                 if (isBuiltin) {
                     // Built-in: usa component existente (NÃO addVideoEffect)
@@ -2381,61 +2395,97 @@ function lwApplyPresetData(presetName, dataJsonStr) {
                     if (!targetComp) { _lwDbgPreset('    NO_BUILTIN_COMP for ' + mn); continue; }
                     _lwDbgPreset('    builtin component found: ' + (function(){try{return targetComp.displayName;}catch(e){return '?';}})());
                 } else {
-                    // Custom effect: addVideoEffect
-                    var fxObj = null;
-                    var lookups = ['getVideoEffectByName', 'getVideoEffectByMatchName'];
-                    for (var lk = 0; lk < lookups.length && !fxObj; lk++) {
+                    // Custom effect: addVideoEffect com VERIFICACAO do matchName.
+                    // BUGS antigos: (1) lookup por nome trazia efeito de TERCEIRO com o mesmo
+                    // displayName (ex: Impact Blur "Gaussian Blur" no lugar do nativo) e o preset
+                    // escrevia parametros aleatorios nele; (2) o match por displayName pegava um
+                    // component PRE-EXISTENTE do clip (ex: Transform antigo) e sobrescrevia ele.
+                    // Agora: tenta identifiers em ordem (matchName primeiro — o QE resolve
+                    // matchName no addVideoEffect), acha o component NOVO por diff da lista,
+                    // e SO usa se o matchName bater. Errado = nao escreve nada nele.
+                    var _compMatchNames = function() {
+                        var arr = [];
                         try {
-                            if (typeof qe.project[lookups[lk]] === 'function') {
-                                fxObj = qe.project[lookups[lk]](nm);
-                                if (!fxObj) fxObj = qe.project[lookups[lk]](mn);
+                            for (var s = 0; s < clip.components.numItems; s++) {
+                                var t = '';
+                                try { t = String(clip.components[s].matchName || ''); } catch(eT) {}
+                                arr.push(t);
                             }
-                        } catch(eLk) {}
+                        } catch(eS) {}
+                        return arr;
+                    };
+                    var humanNm = String(mn).replace(/^AE\.ADBE\s*/, '').replace(/^AE\./, '').replace(/^ADBE\s*/, '');
+                    // Candidatos em ordem esperta:
+                    // - Se o matchName termina em digito (versao moderna, ex "Gaussian Blur 2")
+                    //   E existe "<nome> (Legacy)" na lista, tenta o LEGACY antes do nome puro —
+                    //   evita adicionar o efeito de terceiro que roubou o nome (Impact "Gaussian Blur").
+                    //   O legacy e' aceito por EQUIVALENCIA (mesma familia, mesmos parametros).
+                    var tries = [mn];
+                    var legacyNm = nm ? (nm + ' (Legacy)') : '';
+                    var mnModern = /\d\s*$/.test(String(mn));
+                    if (nm) {
+                        if (mnModern && legacyNm && _fxListHas(legacyNm)) tries.push(legacyNm);
+                        tries.push(nm);
+                        if (!mnModern && legacyNm && _fxListHas(legacyNm)) tries.push(legacyNm);
                     }
-                    if (!fxObj) { _lwDbgPreset('    NO_FX_OBJ: ' + mn); errors.push('no_fx:' + mn); continue; }
-                    // Count antes
-                    var beforeN = 0;
-                    try { beforeN = clip.components.numItems; } catch(eC) {}
-                    // Adiciona
-                    try {
-                        if (selKind === 'audio') qeClip.addAudioEffect(fxObj);
-                        else qeClip.addVideoEffect(fxObj);
-                    } catch(eAdd) { _lwDbgPreset('    addEffect ERR: ' + eAdd); errors.push('addEffect:' + eAdd); continue; }
-
-                    // Espera Premiere registrar o novo component (pode demorar)
-                    var afterN = beforeN;
-                    for (var poll = 0; poll < 10; poll++) {
-                        try { afterN = clip.components.numItems; } catch(ePN) {}
-                        if (afterN > beforeN) break;
-                        $.sleep(30);
+                    if (humanNm && humanNm !== nm) {
+                        tries.push(humanNm);
+                        if (_fxListHas(humanNm + ' (Legacy)')) tries.push(humanNm + ' (Legacy)');
                     }
-                    _lwDbgPreset('    components: before=' + beforeN + ' after=' + afterN);
-
-                    // ACHA o component recém-adicionado por MATCHNAME, não só "último idx"
-                    // (Premiere pode reordenar ou adicionar em posição inesperada)
+                    // Base da familia: tira "(Legacy)" e digitos finais → "AE.ADBE Gaussian Blur 2"
+                    // e "AE.ADBE Gaussian Blur" tem a MESMA base (parametros identicos)
+                    var _fxBase = function(s) {
+                        return String(s || '').replace(/\s*\(legacy\)\s*$/i, '').replace(/\s*\d+$/, '').replace(/\s+$/, '');
+                    };
                     targetComp = null;
-                    try {
-                        // Dump dos components pra debug + busca por matchName
-                        for (var ck = 0; ck < clip.components.numItems; ck++) {
-                            var cmp = clip.components[ck];
-                            var cmn = ''; var cdn = '';
-                            try { cmn = String(cmp.matchName || ''); } catch(eMn) {}
-                            try { cdn = String(cmp.displayName || ''); } catch(eDn) {}
-                            _lwDbgPreset('      comp[' + ck + ']: matchName=' + cmn + ' displayName=' + cdn);
-                            // Match por matchName (mais confiável)
-                            if (!targetComp && cmn === mn) targetComp = cmp;
-                            // Match por displayName
-                            if (!targetComp && cdn && cdn === nm) targetComp = cmp;
+                    for (var lk = 0; lk < tries.length && !targetComp; lk++) {
+                        var ident = tries[lk];
+                        if (!ident) continue;
+                        var fxObj = null;
+                        try { fxObj = qe.project.getVideoEffectByName(ident); } catch(eLk) {}
+                        if (!fxObj) continue;
+                        var beforeList = _compMatchNames();
+                        try {
+                            if (selKind === 'audio') qeClip.addAudioEffect(fxObj);
+                            else qeClip.addVideoEffect(fxObj);
+                        } catch(eAdd) { _lwDbgPreset('    addEffect("' + ident + '") ERR: ' + eAdd); continue; }
+                        // Espera o Premiere registrar o novo component
+                        var afterN = beforeList.length;
+                        for (var poll = 0; poll < 10; poll++) {
+                            try { afterN = clip.components.numItems; } catch(ePN) {}
+                            if (afterN > beforeList.length) break;
+                            $.sleep(30);
                         }
-                    } catch(eDump) { _lwDbgPreset('      dump err: ' + eDump); }
-
-                    // Fallback: pega o último (provavelmente correto)
-                    if (!targetComp && clip.components.numItems > beforeN) {
-                        targetComp = clip.components[clip.components.numItems - 1];
-                        _lwDbgPreset('    fallback: usando ultimo component idx=' + (clip.components.numItems - 1));
+                        if (afterN <= beforeList.length) { _lwDbgPreset('    "' + ident + '": add nao registrou component (identifier invalido?)'); continue; }
+                        // Acha o component NOVO: primeiro indice onde a lista diverge da antiga
+                        var newComp = null;
+                        try {
+                            for (var ck = 0; ck < clip.components.numItems; ck++) {
+                                var cmn = '';
+                                try { cmn = String(clip.components[ck].matchName || ''); } catch(eMn) {}
+                                if (ck >= beforeList.length || cmn !== beforeList[ck]) { newComp = clip.components[ck]; break; }
+                            }
+                        } catch(eNw) {}
+                        if (!newComp) { try { newComp = clip.components[clip.components.numItems - 1]; } catch(eLast) {} }
+                        var newMn = '';
+                        try { newMn = String(newComp.matchName || ''); } catch(eNm2) {}
+                        if (newMn === mn) {
+                            targetComp = newComp;
+                            _equivalentOnly = false;
+                            _lwDbgPreset('    ✓ efeito correto via "' + ident + '" → ' + newMn);
+                        } else if (_fxBase(newMn) && _fxBase(newMn) === _fxBase(mn)) {
+                            // Mesma FAMILIA (ex: Transform obsoleto vs Geometry2, Gaussian legacy vs 2):
+                            // parametros identicos → aceita, mas aplica props SO por nome (sem indice)
+                            targetComp = newComp;
+                            _equivalentOnly = true;
+                            _lwDbgPreset('    ✓ efeito EQUIVALENTE via "' + ident + '" → ' + newMn + ' (pedido: ' + mn + ')');
+                        } else {
+                            // Veio efeito ERRADO (colisao de nome). NAO escreve params nele —
+                            // era isso que gerava "blur fantasma" com valores aleatorios.
+                            _lwDbgPreset('    ✗ colisao: pedi ' + mn + ', veio ' + newMn + ' via "' + ident + '" — ignorando esse component');
+                        }
                     }
-
-                    if (!targetComp) { _lwDbgPreset('    NO_NEW_COMP after addVideoEffect'); continue; }
+                    if (!targetComp) { _lwDbgPreset('    NO_FX: nenhum identifier resultou em ' + mn); errors.push('no_fx:' + mn); continue; }
                     _lwDbgPreset('    target component: matchName=' + (function(){try{return targetComp.matchName;}catch(e){return '?';}})() + ' displayName=' + (function(){try{return targetComp.displayName;}catch(e){return '?';}})());
 
                     // Dump das properties do target component pra ver nomes reais
@@ -2457,18 +2507,65 @@ function lwApplyPresetData(presetName, dataJsonStr) {
                 }
 
                 // ── SETA cada propriedade ──
-                // CRÍTICO: tempos no JSON do Excalibur são ABSOLUTOS (do clip onde preset foi salvo).
-                // _anchor.AnchorInPoint marca o INÍCIO desse clip-fonte.
-                // Pra aplicar no clip atual, convertemos pra tempo CLIP-RELATIVO (0 = início do clip).
+                // Tempos no preset sao ABSOLUTOS (do clip-fonte do autor). AnchorIn/OutPoint
+                // delimitam esse clip-fonte. O TYPE do preset define como reancorar aqui:
+                //   0 = Scale to Clip Length (estica os tempos pro tamanho DESTE clip)
+                //   1 = Anchor to In Point   (offset a partir do inicio do clip)
+                //   2 = Anchor to Out Point  (offset a partir do FIM do clip)
                 var anchorInTicks = 0;
                 try {
                     if (effect._anchor && effect._anchor.AnchorInPoint) {
                         anchorInTicks = parseFloat(effect._anchor.AnchorInPoint);
                     }
                 } catch(eAnc) {}
-                _lwDbgPreset('    anchorInTicks=' + anchorInTicks + ' (' + _ticksToSec(anchorInTicks).toFixed(3) + 's)');
+                var anchorOutTicks = anchorInTicks;
+                try {
+                    if (effect._anchor && effect._anchor.AnchorOutPoint) {
+                        anchorOutTicks = parseFloat(effect._anchor.AnchorOutPoint) || anchorInTicks;
+                    }
+                } catch(eAo) {}
+                var presetType = 1;
+                try {
+                    if (effect._anchor && effect._anchor.Type != null && effect._anchor.Type !== '') {
+                        presetType = parseInt(effect._anchor.Type, 10);
+                        if (isNaN(presetType)) presetType = 1;
+                    }
+                } catch(eTp) {}
+                var clipInPointTicks = 0, clipOutTicks = 0;
+                try { if (clip.inPoint && clip.inPoint.ticks != null) clipInPointTicks = parseFloat(clip.inPoint.ticks); } catch(eIp0) {}
+                try { if (clip.outPoint && clip.outPoint.ticks != null) clipOutTicks = parseFloat(clip.outPoint.ticks); } catch(eOp0) {}
+                if (clipOutTicks <= clipInPointTicks) clipOutTicks = clipInPointTicks;
+                // Dimensoes da sequence (pra converter pontos normalizados → pixel quando preciso)
+                var seqW = 1920, seqH = 1080;
+                try { seqW = parseInt(seq.frameSizeHorizontal, 10) || 1920; } catch(eSw0) {}
+                try { seqH = parseInt(seq.frameSizeVertical, 10) || 1080; } catch(eSh0) {}
+                // Converte tempo ABSOLUTO do preset → tempo no clip atual conforme o Type
+                var _targetTicks = function(rawKfTicks) {
+                    if (presetType === 0 && anchorOutTicks > anchorInTicks && clipOutTicks > clipInPointTicks) {
+                        var frac = (rawKfTicks - anchorInTicks) / (anchorOutTicks - anchorInTicks);
+                        return clipInPointTicks + frac * (clipOutTicks - clipInPointTicks);
+                    }
+                    if (presetType === 2) {
+                        return clipOutTicks - (anchorOutTicks - rawKfTicks);
+                    }
+                    var off = rawKfTicks - anchorInTicks;
+                    if (off < 0) off = 0;
+                    return clipInPointTicks + off;
+                };
+                _lwDbgPreset('    anchor in=' + _ticksToSec(anchorInTicks).toFixed(3) + 's out=' + _ticksToSec(anchorOutTicks).toFixed(3) + 's type=' + presetType + ' | clip in=' + _ticksToSec(clipInPointTicks).toFixed(3) + 's out=' + _ticksToSec(clipOutTicks).toFixed(3) + 's | seq=' + seqW + 'x' + seqH);
 
-                for (var pi = 0; pi < props.length; pi++) {
+                // ORDEM: props ESTATICAS primeiro (Uniform Scale precisa estar setado
+                // ANTES dos keyframes de Scale — senao o zoom aplica com o uniform
+                // errado e estica torto), depois as animadas.
+                var propOrder = [];
+                for (var oi1 = 0; oi1 < props.length; oi1++) {
+                    if (props[oi1] && !(props[oi1].IsTimeVarying && props[oi1].Keyframes)) propOrder.push(oi1);
+                }
+                for (var oi2 = 0; oi2 < props.length; oi2++) {
+                    if (props[oi2] && props[oi2].IsTimeVarying && props[oi2].Keyframes) propOrder.push(oi2);
+                }
+                for (var oi = 0; oi < propOrder.length; oi++) {
+                    var pi = propOrder[oi];
                     var prop = props[pi];
                     if (!prop) continue;
                     // Excalibur às vezes omite Name (ex: Uniform Scale). Fallback: usa o
@@ -2479,8 +2576,9 @@ function lwApplyPresetData(presetName, dataJsonStr) {
                     if (prop.Name) {
                         ppObj = _findProp(targetComp, prop.Name);
                     }
-                    if (!ppObj) {
-                        // Fallback por índice
+                    if (!ppObj && !_equivalentOnly) {
+                        // Fallback por índice — NUNCA em efeito equivalente (a ordem das props
+                        // pode divergir entre versoes; por nome e' seguro, por indice nao)
                         try {
                             if (targetComp.properties && pi < targetComp.properties.numItems) {
                                 ppObj = targetComp.properties[pi];
@@ -2493,22 +2591,32 @@ function lwApplyPresetData(presetName, dataJsonStr) {
 
                     try {
                         if (prop.IsTimeVarying && prop.Keyframes) {
-                            // KEYFRAMES animados. Premiere Property API não expõe setter
-                            // de interpolação bezier — então:
-                            // 1. Adiciona os keyframes originais
-                            // 2. Pra cada par adjacente onde Excalibur marcou bezier (interp!=0),
-                            //    SAMPLA N intermediários ao longo da curva pra simular o ease.
-                            //    (mesma técnica que applyBezierEasing já usa)
+                            // KEYFRAMES animados — replica fiel do preset:
+                            // 1. Keys originais SNAPADOS no grid de frames da sequence
+                            //    (keys fora do grid deixavam shakes com amplitude errada)
+                            // 2. Interpolacao REAL via setInterpolationTypeAtKey (linear/hold/bezier)
+                            // 3. Simula keyframes por frame (igual easing system) SO quando o ease
+                            //    do preset e' forte (influence > 35%) e o trecho e' longo — com a
+                            //    curva reconstruida do speed/influence REAL do preset.
+                            //    (antes: 5 samples de curva generica em TODO segmento = distorcia tudo)
                             try { ppObj.setTimeVarying(true); } catch(eTv) {}
-                            var clipInPointTicks = 0;
-                            try {
-                                if (clip.inPoint && clip.inPoint.ticks != null) {
-                                    clipInPointTicks = parseFloat(clip.inPoint.ticks);
-                                }
-                            } catch(eIp) {}
-                            _lwDbgPreset('    clipInPointTicks=' + clipInPointTicks + ' (' + _ticksToSec(clipInPointTicks).toFixed(3) + 's)');
+                            var seqFrameTicks = 0;
+                            try { seqFrameTicks = parseFloat(seq.timebase) || 0; } catch(eTb) {}
+                            // PONTOS (Position/Anchor): preset guarda NORMALIZADO (0..1), mas a
+                            // property pode ser pixel-space (ex: Transform). Auto-detect pelo valor
+                            // atual (igual o motion tracker) — sem isso o shake virava sub-pixel
+                            // e o clip ia parar no canto da tela.
+                            var pxScale = null;
+                            if (prop.ParameterControlType === 6) {
+                                try {
+                                    var curV = ppObj.getValue();
+                                    if (curV && curV.length >= 2 && (Math.abs(curV[0]) > 2 || Math.abs(curV[1]) > 2)) pxScale = [seqW, seqH];
+                                } catch(ePd) {}
+                                _lwDbgPreset('      point-space: ' + (pxScale ? 'PIXEL (converte ×' + seqW + 'x' + seqH + ')' : 'normalizado'));
+                            }
 
-                            // PASS 1: parse todos os keyframes (time, value, interpIn, interpOut)
+                            // PASS 1: parse (t, valor, interp, ease in/out) — formato do keyframe:
+                            // [ticks, valor, interpMode, ?, inSpeed, inInfluence, outSpeed, outInfluence]
                             var parsedKfs = [];
                             var kfStrs = String(prop.Keyframes).split(';');
                             for (var ki = 0; ki < kfStrs.length; ki++) {
@@ -2517,18 +2625,37 @@ function lwApplyPresetData(presetName, dataJsonStr) {
                                 var fields = kfS.split(',');
                                 if (fields.length < 2) continue;
                                 var rawTicks = parseFloat(fields[0]);
-                                var offsetTicks = rawTicks - anchorInTicks;
-                                if (offsetTicks < 0) offsetTicks = 0;
-                                var absTicks = clipInPointTicks + offsetTicks;
+                                // Reancora conforme o TYPE do preset (scale / anchor in / anchor out)
+                                var absTicks = _targetTicks(rawTicks);
+                                if (absTicks < clipInPointTicks) absTicks = clipInPointTicks;
+                                // Snap no grid de frames da sequence (relativo ao in-point)
+                                if (seqFrameTicks > 0) absTicks = clipInPointTicks + Math.round((absTicks - clipInPointTicks) / seqFrameTicks) * seqFrameTicks;
                                 var val = _parseVal(fields[1], prop.ParameterControlType);
-                                var interpIn = fields.length > 2 ? parseInt(fields[2], 10) || 0 : 0;
-                                var interpOut = fields.length > 3 ? parseInt(fields[3], 10) || 0 : 0;
-                                parsedKfs.push({ ticks: absTicks, val: val, interpIn: interpIn, interpOut: interpOut });
+                                if (pxScale && val instanceof Array && val.length >= 2) val = [val[0] * pxScale[0], val[1] * pxScale[1]];
+                                parsedKfs.push({
+                                    ticks: absTicks, val: val,
+                                    interp: fields.length > 2 ? (parseInt(fields[2], 10) || 0) : 0,
+                                    inSpd:  fields.length > 4 ? (parseFloat(fields[4]) || 0) : 0,
+                                    inInf:  fields.length > 5 ? (parseFloat(fields[5]) || 0) : 0,
+                                    outSpd: fields.length > 6 ? (parseFloat(fields[6]) || 0) : 0,
+                                    outInf: fields.length > 7 ? (parseFloat(fields[7]) || 0) : 0
+                                });
                             }
-                            // Ordena por tempo (segurança)
                             parsedKfs.sort(function(a, b) { return a.ticks - b.ticks; });
+                            // Dedupe: o snap pode juntar 2 keys no mesmo frame — mantem o ultimo
+                            var dedupKfs = [];
+                            for (var dk = 0; dk < parsedKfs.length; dk++) {
+                                if (dedupKfs.length && Math.abs(dedupKfs[dedupKfs.length - 1].ticks - parsedKfs[dk].ticks) < 1) {
+                                    dedupKfs[dedupKfs.length - 1] = parsedKfs[dk];
+                                } else {
+                                    dedupKfs.push(parsedKfs[dk]);
+                                }
+                            }
+                            parsedKfs = dedupKfs;
 
-                            // PASS 2: adiciona keyframes originais
+                            // PASS 2: adiciona keys originais + interpolacao nativa
+                            var canSetInterp = false;
+                            try { canSetInterp = (typeof ppObj.setInterpolationTypeAtKey === 'function'); } catch(eCk) {}
                             var addedCount = 0;
                             for (var pi2 = 0; pi2 < parsedKfs.length; pi2++) {
                                 var kf = parsedKfs[pi2];
@@ -2537,71 +2664,105 @@ function lwApplyPresetData(presetName, dataJsonStr) {
                                     ppObj.addKey(kfTime);
                                     var setTime = new Time(); setTime.ticks = String(Math.round(kf.ticks));
                                     ppObj.setValueAtKey(setTime, kf.val);
+                                    if (canSetInterp) {
+                                        // kfInterpMode: 0=Linear, 4=Hold, 5=Bezier
+                                        var itp = (kf.interp === 4) ? 4 : ((kf.interp === 5) ? 5 : 0);
+                                        try {
+                                            var itT = new Time(); itT.ticks = String(Math.round(kf.ticks));
+                                            ppObj.setInterpolationTypeAtKey(itT, itp, true);
+                                        } catch(eIt) {}
+                                    }
                                     addedCount++;
-                                    _lwDbgPreset('        kf@' + _ticksToSec(kf.ticks).toFixed(3) + 's = ' + kf.val + ' (in=' + kf.interpIn + ',out=' + kf.interpOut + ')');
-                                } catch(eKf) { _lwDbgPreset('      kf err: ' + eKf); }
+                                    _lwDbgPreset('        kf@' + _ticksToSec(kf.ticks).toFixed(3) + 's = ' + kf.val + ' (interp=' + kf.interp + ')');
+                                } catch(eKf) { _lwDbgPreset('      kf err @' + _ticksToSec(kf.ticks).toFixed(3) + 's: ' + eKf); }
                             }
 
-                            // PASS 3: sampling de intermediários pra simular bezier ease
-                            // Premiere não expõe setInterpolationAtKey via ExtendScript, então
-                            // criamos N kfs lineares ao longo de uma curva ease-in-out.
-                            // Default ease curve: cp1=(0.42,0), cp2=(0.58,1) (CSS "ease")
-                            var SAMPLE_STEPS = 6;
-                            var EPS = 0.0001;
-                            function _valsEqual(a, b) {
-                                if (typeof a === 'number' && typeof b === 'number') {
-                                    return Math.abs(a - b) < EPS;
-                                }
-                                if (a instanceof Array && b instanceof Array) {
-                                    if (a.length !== b.length) return false;
-                                    for (var i = 0; i < a.length; i++) {
-                                        if (Math.abs((a[i] || 0) - (b[i] || 0)) >= EPS) return false;
-                                    }
-                                    return true;
-                                }
-                                return false;
-                            }
+                            // PASS 3: ease FORTE → simula a curva com 1 key por frame,
+                            // reconstruida do speed/influence do preset (estilo AE):
+                            // influence = fracao do tempo do trecho; speed = valor/segundo.
                             var samplesAdded = 0;
-                            for (var pp1 = 0; pp1 < parsedKfs.length - 1; pp1++) {
-                                var kA = parsedKfs[pp1];
-                                var kB = parsedKfs[pp1 + 1];
-                                // Skip se valores iguais (não há nada pra interpolar — evita
-                                // padrão tracejado feio entre kfs com mesmo valor)
-                                if (_valsEqual(kA.val, kB.val)) continue;
-                                // Skip se ambos lados são lineares (interp 0)
-                                if (kA.interpOut === 0 && kB.interpIn === 0) continue;
-                                var durTicks = kB.ticks - kA.ticks;
-                                if (durTicks <= 0) continue;
-                                for (var s = 1; s < SAMPLE_STEPS; s++) {
-                                    var frac = s / SAMPLE_STEPS;
-                                    var eased = evalBezierCurve(frac, 0.42, 0, 0.58, 1);
-                                    var midTicks = kA.ticks + durTicks * frac;
-                                    var midVal;
-                                    if (typeof kA.val === 'number') {
-                                        midVal = kA.val + (kB.val - kA.val) * eased;
-                                    } else if (kA.val instanceof Array && kB.val instanceof Array) {
-                                        midVal = [];
-                                        for (var d = 0; d < kA.val.length; d++) {
-                                            midVal.push(kA.val[d] + ((kB.val[d] || 0) - kA.val[d]) * eased);
+                            if (seqFrameTicks > 0) {
+                                for (var pp1 = 0; pp1 < parsedKfs.length - 1; pp1++) {
+                                    var kA = parsedKfs[pp1];
+                                    var kB = parsedKfs[pp1 + 1];
+                                    if (kA.interp === 4) continue; // hold: sem interpolacao no trecho
+                                    var durTicks = kB.ticks - kA.ticks;
+                                    if (durTicks <= 0) continue;
+                                    var segFrames = durTicks / seqFrameTicks;
+                                    if (segFrames < 3) continue; // trecho curto (shake): linear/bezier nativo e' exato
+                                    var maxInf = Math.max(kA.outInf || 0, kB.inInf || 0);
+                                    if (maxInf <= 0.35) continue; // ease fraco: bezier nativo resolve
+                                    var isNum = (typeof kA.val === 'number' && typeof kB.val === 'number');
+                                    var isVec = (kA.val instanceof Array && kB.val instanceof Array);
+                                    if (!isNum && !isVec) continue;
+                                    var dv;
+                                    if (isNum) { dv = kB.val - kA.val; }
+                                    else {
+                                        dv = 0;
+                                        for (var vd = 0; vd < kA.val.length; vd++) {
+                                            var dd = (kB.val[vd] || 0) - (kA.val[vd] || 0);
+                                            dv += dd * dd;
                                         }
-                                    } else { continue; }
-                                    try {
-                                        var mt = new Time(); mt.ticks = String(Math.round(midTicks));
-                                        ppObj.addKey(mt);
-                                        var st = new Time(); st.ticks = String(Math.round(midTicks));
-                                        ppObj.setValueAtKey(st, midVal);
-                                        samplesAdded++;
-                                    } catch(eSm) {}
+                                        dv = Math.sqrt(dv);
+                                    }
+                                    if (Math.abs(dv) < 0.000001) continue;
+                                    var durSec = durTicks / TICKS_PER_SEC;
+                                    var iA = Math.min(1, Math.max(0.01, kA.outInf || 0.1667));
+                                    var iB = Math.min(1, Math.max(0.01, kB.inInf || 0.1667));
+                                    var cp1x = iA, cp2x = 1 - iB;
+                                    var cp1y = ((kA.outSpd || 0) * iA * durSec) / dv;
+                                    var cp2y = 1 - (((kB.inSpd || 0) * iB * durSec) / dv);
+                                    if (!isFinite(cp1y)) cp1y = cp1x;
+                                    if (!isFinite(cp2y)) cp2y = cp2x;
+                                    cp1y = Math.max(-2, Math.min(3, cp1y));
+                                    cp2y = Math.max(-2, Math.min(3, cp2y));
+                                    // 1 sample por frame (se o trecho for muito longo, pula frames — cap ~90)
+                                    var stepFrames = Math.max(1, Math.ceil(segFrames / 90));
+                                    for (var sf = stepFrames; sf < segFrames - 0.5; sf += stepFrames) {
+                                        var frac = sf / segFrames;
+                                        var eased = evalBezierCurve(frac, cp1x, cp1y, cp2x, cp2y);
+                                        var midTicks = kA.ticks + Math.round(sf) * seqFrameTicks;
+                                        var midVal;
+                                        if (isNum) { midVal = kA.val + (kB.val - kA.val) * eased; }
+                                        else {
+                                            midVal = [];
+                                            for (var d2 = 0; d2 < kA.val.length; d2++) {
+                                                midVal.push(kA.val[d2] + ((kB.val[d2] || 0) - kA.val[d2]) * eased);
+                                            }
+                                        }
+                                        try {
+                                            var mt = new Time(); mt.ticks = String(Math.round(midTicks));
+                                            ppObj.addKey(mt);
+                                            var st = new Time(); st.ticks = String(Math.round(midTicks));
+                                            ppObj.setValueAtKey(st, midVal);
+                                            if (canSetInterp) {
+                                                try {
+                                                    var st2 = new Time(); st2.ticks = String(Math.round(midTicks));
+                                                    ppObj.setInterpolationTypeAtKey(st2, 0, true); // samples = linear
+                                                } catch(eIl) {}
+                                            }
+                                            samplesAdded++;
+                                        } catch(eSm) {}
+                                    }
                                 }
                             }
-                            _lwDbgPreset('      ✓ ' + prop.Name + ' = TimeVarying (' + addedCount + ' kfs + ' + samplesAdded + ' eased samples)');
+                            _lwDbgPreset('      ✓ ' + propLabel + ' = TimeVarying (' + addedCount + ' kfs + ' + samplesAdded + ' samples ease-forte, interp ' + (canSetInterp ? 'nativa' : 'INDISPONIVEL') + ')');
                         } else if (prop.StartKeyframe) {
-                            // Excalibur prioriza StartKeyframe pra valor REAL da prop.
-                            // CurrentValue costuma ter "0" como placeholder pra props não-modificadas.
+                            // StartKeyframe = valor estatico REAL da prop (CurrentValue e' so o
+                            // ultimo valor de UI e pode estar stale).
                             var skFields = String(prop.StartKeyframe).split(',');
                             if (skFields.length >= 2) {
                                 var skVal = _parseVal(skFields[1], prop.ParameterControlType);
-                                try { ppObj.setValue(skVal, true); _lwDbgPreset('      ✓ ' + prop.Name + ' = (start) ' + skFields[1]); }
+                                // Pontos: mesma conversao normalizado→pixel dos keyframes
+                                if (prop.ParameterControlType === 6 && skVal instanceof Array && skVal.length >= 2) {
+                                    try {
+                                        var curS = ppObj.getValue();
+                                        if (curS && curS.length >= 2 && (Math.abs(curS[0]) > 2 || Math.abs(curS[1]) > 2)) {
+                                            skVal = [skVal[0] * seqW, skVal[1] * seqH];
+                                        }
+                                    } catch(ePs) {}
+                                }
+                                try { ppObj.setValue(skVal, true); _lwDbgPreset('      ✓ ' + propLabel + ' = (start) ' + skFields[1] + (skVal instanceof Array ? ' → [' + skVal.join(',') + ']' : '')); }
                                 catch(eSk) { _lwDbgPreset('      setVal (start) err: ' + eSk); }
                             }
                         } else if (prop.CurrentValue !== null && prop.CurrentValue !== undefined && String(prop.CurrentValue) !== '0' && String(prop.CurrentValue) !== '') {

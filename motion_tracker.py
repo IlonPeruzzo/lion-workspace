@@ -76,6 +76,84 @@ def _build_bbox(sx, sy, bbox_w, bbox_h, width, height):
         min(bbox_h, height - sy + bbox_h // 2),
     )
 
+
+def _redetect(gray, template, last_bbox, lost_streak, width, height):
+    """Re-deteccao quando o tracker perde o alvo: template matching numa janela
+    ao redor da ultima posicao conhecida. A janela CRESCE com frames perdidos
+    consecutivos (alvo pode ter se movido). Retorna (x, y, score) do canto
+    superior-esquerdo do match, ou None se nao achou com score suficiente."""
+    if template is None:
+        return None
+    th, tw = template.shape[:2]
+    if th < 5 or tw < 5:
+        return None
+    lcx = last_bbox[0] + last_bbox[2] / 2.0
+    lcy = last_bbox[1] + last_bbox[3] / 2.0
+    grow = 1.0 + 0.35 * min(lost_streak, 8)
+    half_w = int(tw * 2.2 * grow)
+    half_h = int(th * 2.2 * grow)
+    x0 = max(0, int(lcx) - half_w); x1 = min(width, int(lcx) + half_w)
+    y0 = max(0, int(lcy) - half_h); y1 = min(height, int(lcy) + half_h)
+    if x1 - x0 < tw + 2 or y1 - y0 < th + 2:
+        return None
+    region = gray[y0:y1, x0:x1]
+    try:
+        resmap = cv2.matchTemplate(region, template, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(resmap)
+    except Exception:
+        return None
+    if max_val < 0.60:
+        return None
+    return (x0 + max_loc[0], y0 + max_loc[1], float(max_val))
+
+
+def _subpixel_peak(resmap, loc):
+    """Refina o pico do matchTemplate pra sub-pixel via interpolacao quadratica."""
+    x, y = loc
+    dx = dy = 0.0
+    try:
+        if 0 < x < resmap.shape[1] - 1:
+            l, c, r = float(resmap[y, x-1]), float(resmap[y, x]), float(resmap[y, x+1])
+            den = (l - 2*c + r)
+            if abs(den) > 1e-9:
+                dx = max(-0.5, min(0.5, 0.5 * (l - r) / den))
+        if 0 < y < resmap.shape[0] - 1:
+            t, c, b = float(resmap[y-1, x]), float(resmap[y, x]), float(resmap[y+1, x])
+            den = (t - 2*c + b)
+            if abs(den) > 1e-9:
+                dy = max(-0.5, min(0.5, 0.5 * (t - b) / den))
+    except Exception:
+        pass
+    return x + dx, y + dy
+
+
+def _refine_match(gray, template, bbox, width, height):
+    """ANTI-DRIFT: re-alinha o centro do tracker com a aparencia ORIGINAL do alvo.
+    Busca o template numa janela pequena ao redor da saida do tracker; se a
+    aparencia ainda bate (score alto), retorna o centro corrigido (sub-pixel).
+    E o que impede o escorregao gradual pra fora do alvo."""
+    if template is None:
+        return None
+    th, tw = template.shape[:2]
+    cx = bbox[0] + bbox[2] / 2.0
+    cy = bbox[1] + bbox[3] / 2.0
+    half_w = int(tw * 0.75) + tw // 2
+    half_h = int(th * 0.75) + th // 2
+    x0 = max(0, int(cx) - half_w); x1 = min(width, int(cx) + half_w)
+    y0 = max(0, int(cy) - half_h); y1 = min(height, int(cy) + half_h)
+    if x1 - x0 < tw + 2 or y1 - y0 < th + 2:
+        return None
+    region = gray[y0:y1, x0:x1]
+    try:
+        resmap = cv2.matchTemplate(region, template, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(resmap)
+        if max_val < 0.55:
+            return None  # aparencia mudou (rotacao/luz) — confia no tracker
+        px, py = _subpixel_peak(resmap, max_loc)
+        return (x0 + px + tw / 2.0, y0 + py + th / 2.0, float(max_val))
+    except Exception:
+        return None
+
 def _cf_walk(cap, fps, width, height, point, opts, start_frame, last_frame, step):
     """Inicializa o tracker no start_frame (no ponto marcado) e caminha numa direcao
     (step=+1 forward, step=-1 backward) ate last_frame. Retorna history da faixa
@@ -103,8 +181,21 @@ def _cf_walk(cap, fps, width, height, point, opts, start_frame, last_frame, step
     if not tracker.init(frame, bbox):
         return None, "Falha ao inicializar tracker"
 
+    # Template do alvo (grayscale, frame de referencia) — usado pra RE-DETECTAR
+    # quando o tracker perde. Sem isso, perdeu = perdido pra sempre.
+    template = None
+    try:
+        gray0 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        tx, ty = int(bbox[0]), int(bbox[1])
+        tw, th = int(bbox[2]), int(bbox[3])
+        if tw > 4 and th > 4:
+            template = gray0[ty:ty + th, tx:tx + tw].copy()
+    except Exception:
+        template = None
+
     history = []
     last_bbox = bbox
+    lost_streak = 0
     idx = start_frame
     while True:
         idx += step
@@ -121,17 +212,50 @@ def _cf_walk(cap, fps, width, height, point, opts, start_frame, last_frame, step
         t = idx / fps if fps > 0 else idx
         success, new_bbox = tracker.update(frame)
         confidence = _confidence(new_bbox, last_bbox, search_scale, init_size) if success else 0.0
-        if success and confidence >= conf_threshold:
+        ok = success and confidence >= conf_threshold
+
+        gray = None
+        if template is not None:
+            try:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            except Exception:
+                gray = None
+
+        if not ok and gray is not None:
+            # Tracker perdeu → tenta re-achar o alvo por template matching
+            found = _redetect(gray, template, last_bbox, lost_streak, width, height)
+            if found is not None:
+                nb = (float(found[0]), float(found[1]), float(template.shape[1]), float(template.shape[0]))
+                fresh = _create_tracker(algo)
+                if fresh is not None and fresh.init(frame, nb):
+                    tracker = fresh
+                    new_bbox = nb
+                    confidence = found[2] * 0.9  # score do match vira confidence
+                    ok = True
+
+        if ok:
             cx = new_bbox[0] + new_bbox[2] / 2
             cy = new_bbox[1] + new_bbox[3] / 2
+            # ANTI-DRIFT: enquanto a aparencia original do alvo estiver visivel,
+            # re-alinha o centro nela (sub-pixel). Peso cresce com o score do match:
+            # 0.55 = 0% (confia no tracker) ... 0.75+ = 100% (ancora total).
+            if gray is not None:
+                ref = _refine_match(gray, template, new_bbox, width, height)
+                if ref is not None:
+                    w_ref = min(1.0, (ref[2] - 0.55) / 0.20)
+                    if w_ref > 0:
+                        cx = cx * (1.0 - w_ref) + ref[0] * w_ref
+                        cy = cy * (1.0 - w_ref) + ref[1] * w_ref
             scale = (new_bbox[2] * new_bbox[3] / init_area) ** 0.5 if init_area > 0 else 1.0
             last_bbox = new_bbox
+            lost_streak = 0
             history.append({
                 'frame': idx, 'time': t,
                 'x': float(cx), 'y': float(cy),
                 'scale': float(scale), 'confidence': float(confidence), 'lost': False,
             })
         else:
+            lost_streak += 1
             history.append({
                 'frame': idx, 'time': t,
                 'x': None, 'y': None, 'scale': None,

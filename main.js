@@ -3168,10 +3168,12 @@ function startSyncServer() {
                         try { if (state) _discordOAuthPendingStates.delete(state); } catch (e) {}
                         return;
                     }
-                    // Sem code ou state: browser preload / CORS / etc — ignora silenciosamente
+                    // Sem code ou state: NAO e um callback OAuth de verdade — e o navegador
+                    // batendo na URL sem parametros (favicon / prefetch / preload). Antes isso
+                    // mostrava um "Erro" vermelho assustador em TODO login. Agora responde neutro.
                     if (!code || !state) {
-                        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-                        res.end(_discordCallbackHtml('Erro', 'state invalido ou code ausente. Tente novamente.', true));
+                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                        res.end(_discordCallbackHtml('Lion Workspace', 'Você já pode fechar esta aba e voltar ao app.', false));
                         return;
                     }
                     // State ja foi consumido por callback anterior (Chrome hita a URL duas vezes as vezes) — trata como sucesso silencioso
@@ -4170,18 +4172,9 @@ function toggleLoop(){
                 if (command === 'motion-tracker/open-editor' && data.mediaPath) {
                     try {
                         const { BrowserWindow } = require('electron');
-                        // Singleton: se ja tem editor aberto, foca nele em vez de criar novo
-                        if (_activeMtEditorWin && !_activeMtEditorWin.isDestroyed()) {
-                            try {
-                                if (_activeMtEditorWin.isMinimized()) _activeMtEditorWin.restore();
-                                _activeMtEditorWin.show();
-                                _activeMtEditorWin.focus();
-                                _activeMtEditorWin.moveTop();
-                            } catch(eF) {}
-                            res.writeHead(200, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ ok: true, focused: true }));
-                            return;
-                        }
+                        // Singleton: se ja tem editor aberto, RECARREGA ele com o clip novo
+                        // (antes so focava a janela velha — obrigava a fechar pra trocar de clip)
+                        const _reuseWin = (_activeMtEditorWin && !_activeMtEditorWin.isDestroyed()) ? _activeMtEditorWin : null;
                         // Extrai token do header Authorization pra passar pro editor
                         // (editor precisa autenticar /motion-tracker/track e /queue-apply)
                         let token = '';
@@ -4200,17 +4193,18 @@ function toggleLoop(){
                         const proxyPath = path.join(proxyDir, 'proxy-' + session + '.mp4');
                         console.log('[mt-editor] gerando proxy:', proxyPath);
                         await new Promise((resolve) => {
-                            // Downscale pra max 1080p — equilíbrio entre nitidez (zoom no editor +
-                            // precisão do tracking) e velocidade. Não passa da resolução original (upscale=0).
+                            // Mantém a resolução ORIGINAL (teto 2160p) + CRF 17 + veryfast.
+                            // O antigo (1080p + ultrafast + crf20) borrava no zoom E piorava o
+                            // tracking (roda neste mesmo proxy — artefato confunde o tracker).
                             const ff = spawn(ffmpegBin, [
                                 '-y',
                                 '-ss', String(Math.max(0, inSec - 0.05)),
                                 '-i', data.mediaPath,
                                 '-t', String(dur + 0.1),
-                                '-vf', 'scale=-2:min(1080\\,ih)', // mantém aspect, limita altura a 1080
+                                '-vf', 'scale=-2:min(2160\\,ih)', // mantém aspect; só limita acima de 4K
                                 '-c:v', 'libx264',
-                                '-preset', 'ultrafast',
-                                '-crf', '20',
+                                '-preset', 'veryfast',
+                                '-crf', '17',
                                 '-pix_fmt', 'yuv420p',
                                 '-movflags', '+faststart',
                                 '-an',
@@ -4250,37 +4244,47 @@ function toggleLoop(){
                             clipStartTicks: String(data.clipStartTicks || '0'),
                             trackIdx: String(data.trackIdx != null ? data.trackIdx : -1),
                         }).toString();
-                        const win = new BrowserWindow({
-                            width: 1280, height: 800,
-                            title: 'Motion Tracker',
-                            backgroundColor: '#0a0a0a',
-                            show: true,
-                            center: true,
-                            alwaysOnTop: false,
-                            skipTaskbar: false,
-                            // Frameless — o HTML ja tem .titlebar custom com drag region + win-btns.
-                            // Sem isso, Windows desenha tambem a barra nativa (com Edit menu) duplicando.
-                            frame: false,
-                            titleBarStyle: 'hidden',
-                            autoHideMenuBar: true,
-                            webPreferences: { nodeIntegration: true, contextIsolation: false }
-                        });
-                        try { win.setMenuBarVisibility(false); } catch (e) {}
-                        try { require('@electron/remote/main').enable(win.webContents); } catch (e) { console.warn('[mt-editor] remote enable err:', e.message); }
-                        _activeMtEditorWin = win;
-                        win.on('closed', () => { if (_activeMtEditorWin === win) _activeMtEditorWin = null; });
-                        // Debug: loga erros de load + crash
-                        win.webContents.on('did-fail-load', (_e, code, desc) => console.error('[mt-editor] load fail:', code, desc));
-                        win.webContents.on('render-process-gone', (_e, det) => console.error('[mt-editor] render gone:', det));
-                        win.webContents.on('console-message', (_e, lvl, msg) => console.log('[mt-editor:console]', msg));
-                        win.webContents.on('did-finish-load', () => {
-                            console.log('[mt-editor] loaded OK');
-                        });
                         const htmlPath = path.join(__dirname, 'motion-tracker-editor.html');
-                        console.log('[mt-editor] loading:', htmlPath, 'q:', q);
+                        let win;
+                        if (_reuseWin) {
+                            // Janela ja aberta: recarrega com o clip novo e traz pra frente
+                            win = _reuseWin;
+                            try {
+                                if (win.isMinimized()) win.restore();
+                                win.show(); win.focus(); win.moveTop();
+                            } catch (eF) {}
+                        } else {
+                            win = new BrowserWindow({
+                                width: 1280, height: 800,
+                                title: 'Motion Tracker',
+                                backgroundColor: '#0a0a0a',
+                                show: true,
+                                center: true,
+                                alwaysOnTop: false,
+                                skipTaskbar: false,
+                                // Frameless — o HTML ja tem .titlebar custom com drag region + win-btns.
+                                // Sem isso, Windows desenha tambem a barra nativa (com Edit menu) duplicando.
+                                frame: false,
+                                titleBarStyle: 'hidden',
+                                autoHideMenuBar: true,
+                                webPreferences: { nodeIntegration: true, contextIsolation: false }
+                            });
+                            try { win.setMenuBarVisibility(false); } catch (e) {}
+                            try { require('@electron/remote/main').enable(win.webContents); } catch (e) { console.warn('[mt-editor] remote enable err:', e.message); }
+                            _activeMtEditorWin = win;
+                            win.on('closed', () => { if (_activeMtEditorWin === win) _activeMtEditorWin = null; });
+                            // Debug: loga erros de load + crash
+                            win.webContents.on('did-fail-load', (_e, code, desc) => console.error('[mt-editor] load fail:', code, desc));
+                            win.webContents.on('render-process-gone', (_e, det) => console.error('[mt-editor] render gone:', det));
+                            win.webContents.on('console-message', (_e, lvl, msg) => console.log('[mt-editor:console]', msg));
+                            win.webContents.on('did-finish-load', () => {
+                                console.log('[mt-editor] loaded OK');
+                            });
+                        }
+                        console.log('[mt-editor] loading:', htmlPath, 'reuse:', !!_reuseWin, 'q:', q);
                         win.loadFile(htmlPath, { search: q });
                         res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ ok: true, session }));
+                        res.end(JSON.stringify({ ok: true, session, reused: !!_reuseWin }));
                     } catch (e) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message || String(e) }));
@@ -4803,6 +4807,27 @@ if (isMac) {
 
 const RELEASES_URL = 'https://github.com/IlonPeruzzo/lion-workspace/releases/latest';
 
+// Categoriza o erro do updater numa mensagem CURTA e amigavel.
+// O electron-updater joga a resposta HTTP inteira (headers/cookies/CSP) no err.message —
+// NUNCA repassar isso pra UI. Aqui a gente classifica e devolve so um texto limpo.
+function classifyUpdateError(err) {
+    const raw = (err && (err.message || String(err))) || '';
+    const s = raw.toLowerCase();
+    // 404 / sem release publicada / repo privado → sem update pra pegar agora
+    if (s.indexOf('404') >= 0 || s.indexOf('no published versions') >= 0 ||
+        s.indexOf('cannot find') >= 0 || s.indexOf('latest.yml') >= 0 ||
+        s.indexOf('releases.atom') >= 0 || s.indexOf('unable to find') >= 0) {
+        return { code: 'no-release', message: 'Nenhuma atualizacao disponivel.' };
+    }
+    // Problema de rede
+    if (s.indexOf('enotfound') >= 0 || s.indexOf('econnrefused') >= 0 || s.indexOf('econnreset') >= 0 ||
+        s.indexOf('etimedout') >= 0 || s.indexOf('getaddrinfo') >= 0 || s.indexOf('network') >= 0 ||
+        s.indexOf('offline') >= 0 || s.indexOf('timed out') >= 0) {
+        return { code: 'network', message: 'Sem conexao. Verifique sua internet e tente de novo.' };
+    }
+    return { code: 'error', message: 'Nao foi possivel verificar atualizacoes agora.' };
+}
+
 function setupAutoUpdater() {
     autoUpdater.on('checking-for-update', () => {
         sendUpdateStatus('checking');
@@ -4835,7 +4860,10 @@ function setupAutoUpdater() {
 
     autoUpdater.on('error', (err) => {
         console.error('Auto-updater error:', err);
-        sendUpdateStatus('error', { message: err.message });
+        const info = classifyUpdateError(err);
+        // 404/sem release = trata como "esta atualizado" (nao assusta o usuario)
+        if (info.code === 'no-release') { sendUpdateStatus('not-available'); return; }
+        sendUpdateStatus('error', { code: info.code, message: info.message });
     });
 
     // Check for updates after a short delay (let the app finish loading)
@@ -4871,7 +4899,10 @@ ipcMain.handle('check-for-updates', async () => {
         const result = await autoUpdater.checkForUpdates();
         return { success: true, version: result?.updateInfo?.version };
     } catch (err) {
-        return { success: false, error: err.message };
+        const info = classifyUpdateError(err);
+        // 404/sem release publicada → nao e' erro pro usuario: mostra "esta atualizado"
+        if (info.code === 'no-release') return { success: true, upToDate: true };
+        return { success: false, code: info.code, error: info.message };
     }
 });
 
@@ -4884,7 +4915,13 @@ ipcMain.handle('install-update', () => {
 ipcMain.handle('discord:get-config', () => loadDiscordConfig());
 ipcMain.handle('discord:save-config', (_, cfg) => saveDiscordConfigFile(cfg));
 ipcMain.handle('discord:get-session', () => loadDiscordSession());
-ipcMain.handle('discord:logout', () => { clearDiscordSession(); return true; });
+ipcMain.handle('discord:logout', () => {
+    clearDiscordSession();
+    // Derruba o plugin junto: invalida todos os tokens de plugin (senao o plugin
+    // continuaria logado com um token de 24h mesmo depois do logout no app).
+    try { pluginSessions.clear(); savePluginSessions(); } catch (e) {}
+    return true;
+});
 
 // Termos de uso — arquivo persistente por instalacao
 const TERMS_FLAG_FILE = path.join(currentUD, '.lw-terms-accepted');

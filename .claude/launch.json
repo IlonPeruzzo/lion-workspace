@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["http-server", "premiere-plugin/client", "-p", "8765", "-c-1"],
       "port": 8765
+    },
+    {
+      "name": "root-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", ".", "-p", "8766", "-c-1"],
+      "port": 8766
     }
   ]
 }
