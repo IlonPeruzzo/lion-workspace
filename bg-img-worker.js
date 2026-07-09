@@ -21,6 +21,7 @@ async function ensureModel() {
     }
     const MODEL_ID = 'onnx-community/BiRefNet_lite-ONNX';
     if (!model) {
+        // fp32: a variante q8 nao existe pra esse modelo (404) — fp32 e' o que funciona (~6s).
         model = await mod.AutoModel.from_pretrained(MODEL_ID, { dtype: 'fp32' });
     }
     if (!processor) {

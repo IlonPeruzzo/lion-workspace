@@ -7,7 +7,7 @@
         *{margin:0;padding:0;box-sizing:border-box}
         body{
             font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-            background:#232323;color:#f5f5f5;padding:10px;min-height:100vh;
+            background:#111;background:linear-gradient(180deg,#1a1a1a 0%,#121212 100%);background-attachment:fixed;color:#f5f5f5;padding:10px;min-height:100vh;
             user-select:none;-webkit-user-select:none;
             border:2.5px solid rgba(190,242,100,.45);border-radius:6px;
             box-shadow:inset 0 0 12px rgba(190,242,100,.05);
@@ -40,7 +40,7 @@
         .lw-st-success .lw-st-ring{stroke-dasharray:63;stroke-dashoffset:63;animation:lwDrawRing .4s ease .04s forwards}
         .lw-st-success .lw-st-check polyline{stroke-dasharray:22;stroke-dashoffset:22;animation:lwDraw .3s cubic-bezier(.65,0,.35,1) .34s forwards}
         .lw-st-success .lw-st-burst{transform-box:fill-box;transform-origin:center;opacity:0;animation:lwBurst .5s ease-out .46s}
-        .lw-st-loading{color:#a78bfa}
+        .lw-st-loading{color:#38bdf8}
         .lw-st-loading .lw-st-bar{position:relative;height:3px;border-radius:2px;background:rgba(255,255,255,.09);overflow:hidden;width:100%;max-width:170px;margin:6px auto 0}
         .lw-st-loading .lw-st-bar i{position:absolute;top:0;left:0;height:100%;width:38%;border-radius:2px;background:currentColor;animation:lwBar 1.05s ease-in-out infinite}
         @keyframes lwBar{0%{left:-42%}100%{left:100%}}
@@ -72,18 +72,6 @@
         .section-title{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:8px;font-weight:600}
 
         .proj-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:8px;padding-right:2px}
-        /* Empty state do timer — cronometro animado + aneis pulsando */
-        .proj-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:20px 10px 16px;text-align:center}
-        .pe-orb{position:relative;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#bef264;
-            background:radial-gradient(circle at 50% 38%, rgba(190,242,100,.16), rgba(190,242,100,.02) 70%)}
-        .pe-orb::before,.pe-orb::after{content:'';position:absolute;inset:2px;border-radius:50%;border:1px solid rgba(190,242,100,.38);animation:peRing 2.8s ease-out infinite}
-        .pe-orb::after{animation-delay:1.4s}
-        @keyframes peRing{0%{transform:scale(.72);opacity:.55}100%{transform:scale(1.75);opacity:0}}
-        .pe-orb svg{width:23px;height:23px;position:relative;z-index:1}
-        .pe-hand{transform-box:view-box;transform-origin:12px 13.5px;animation:peHand 2.4s cubic-bezier(.45,0,.55,1) infinite}
-        @keyframes peHand{to{transform:rotate(360deg)}}
-        .pe-title{font-size:.72rem;font-weight:700;color:#c4c4c4;letter-spacing:-.1px}
-        .pe-sub{font-size:.56rem;color:#5f5f5f;font-weight:500;max-width:190px;line-height:1.4}
         .pc{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:9px}
         .pc-avatar{width:30px;height:30px;border-radius:50%;flex-shrink:0;object-fit:cover;background:rgba(190,242,100,.08);border:1px solid rgba(190,242,100,.12)}
         .pc-avatar-fb{display:flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;color:#bef264}
@@ -232,6 +220,9 @@
         .yt-q:active{transform:translateY(0);box-shadow:none}
         .yt-q.active{background:rgba(190,242,100,.16);border-color:#bef264;color:#bef264;box-shadow:inset 0 0 8px rgba(190,242,100,.12)}
         .yt-q.active:hover{background:rgba(190,242,100,.22);transform:translateY(-1px)}
+        .rw-inp{width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:#ddd;padding:3px 5px;font-size:.64rem;font-family:inherit;text-align:center;outline:none;box-sizing:border-box}
+        .rw-inp:focus{border-color:rgba(190,242,100,.4)}
+        .rw-lbl{font-size:.5rem;color:#777;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;text-align:center}
         .plat-btn{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
         .plat-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
         .plat-btn.active{border-color:rgba(190,242,100,.4);background:rgba(190,242,100,.08)}
@@ -495,7 +486,7 @@
             <svg id="timerChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="timerBody">
-            <div class="proj-list" id="projList"><div class="proj-empty"><div class="pe-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h6"/><circle cx="12" cy="13.5" r="7.5"/><line class="pe-hand" x1="12" y1="13.5" x2="12" y2="8.6"/></svg></div><div class="pe-title">Nenhum serviço ativo</div></div></div>
+            <div class="proj-list" id="projList"></div>
             <div class="lw-timer-row">
                 <div class="lw-timer-info">
                     <div class="timer-display" id="tDisp">00:00:00</div>
@@ -853,7 +844,7 @@
             <!-- Position label & target mode -->
             <div style="text-align:center;font-size:.58rem;color:#888;margin-top:4px" id="anchorLabel">Centro</div>
 
-            <!-- Target mode buttons -->
+            <!-- Target mode buttons (relativo ao clip / sequence) -->
             <div class="anc-targets">
                 <div class="anc-tgt active" id="ancTgtClip" onclick="setAnchorTarget('clip')" title="Relativo ao Clip">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
@@ -861,22 +852,22 @@
                 <div class="anc-tgt" id="ancTgtSeq" onclick="setAnchorTarget('sequence')" title="Relativo a Sequence">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                 </div>
-                <div style="width:1px;height:16px;background:rgba(255,255,255,.08)"></div>
-                <div class="anc-tgt" id="ancTgtTransform" onclick="toggleAnchorTransform()" title="Aplicar no efeito Transform">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                    <span style="font-size:.38rem;position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);white-space:nowrap;color:inherit;opacity:.7">FX</span>
-                </div>
-                <div class="anc-tgt" id="ancTgtVector" onclick="toggleAnchorVector()" title="Usar Vector Motion (ambos Motion + Vector)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                </div>
             </div>
 
             <!-- Options row -->
-            <div style="display:flex;align-items:center;gap:6px;font-size:.58rem;color:#aaa;cursor:pointer;margin-top:8px;padding:5px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.05)" onclick="toggleCompensate()">
+            <div style="display:flex;align-items:center;gap:6px;font-size:.58rem;color:#aaa;cursor:pointer;margin-top:8px;padding:5px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.05)" onclick="toggleCompensate()" title="Ajusta a Posicao junto com a ancora pra o clip nao pular na tela ao mudar o ponto de ancoragem">
                 <div id="anchorCompCheck" class="mini-check active">
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <span>Compensar posicao</span>
+                <span>Compensar posição</span>
+            </div>
+
+            <!-- Destino: onde aplicar a ancora -->
+            <div class="rw-lbl" style="margin-top:9px">Aplicar em</div>
+            <div style="display:flex;gap:5px">
+                <button class="yt-q anc-dest active" data-d="motion" onclick="ancPickDest(this)" style="flex:1">Motion</button>
+                <button class="yt-q anc-dest" data-d="transform" onclick="ancPickDest(this)" style="flex:1">Transform</button>
+                <button class="yt-q anc-dest" data-d="vector" onclick="ancPickDest(this)" style="flex:1;font-size:.52rem">Vector Motion</button>
             </div>
 
             <!-- Apply Button -->
@@ -886,8 +877,127 @@
             </button>
 
             <div id="anchorMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
-            <button class="yt-q" onclick="debugAnchorClick()" style="width:100%;padding:4px;margin-top:4px;font-size:.55rem;opacity:.6">🔍 Debug Values</button>
-            <pre id="anchorDebug" style="font-size:.45rem;color:#888;margin-top:3px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;display:none"></pre>
+        </div>
+    </div>
+
+
+    <!-- Random Wiggler -->
+    <div class="section" id="sectionPRWiggle">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('prwBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/>
+                </svg>
+                Random Wiggler
+            </span>
+            <svg id="prwChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="prwBody">
+            <div class="rw-lbl" style="margin-top:6px">Modo</div>
+            <div style="display:flex;gap:5px;margin-bottom:7px">
+                <button class="yt-q active" id="prwModeWiggle" onclick="prwSetMode('wiggle')" style="flex:1">Wiggle</button>
+                <button class="yt-q" id="prwModeRandom" onclick="prwSetMode('random')" style="flex:1">Random</button>
+            </div>
+
+            <div class="rw-lbl">Propriedade</div>
+            <div style="display:flex;gap:4px;margin-bottom:7px;flex-wrap:wrap">
+                <button class="yt-q rw-tgt active" data-t="position" onclick="prwPickTarget(this)" style="flex:1">Posição</button>
+                <button class="yt-q rw-tgt" data-t="scale" onclick="prwPickTarget(this)" style="flex:1">Escala</button>
+                <button class="yt-q rw-tgt" data-t="rotation" onclick="prwPickTarget(this)" style="flex:1">Rotação</button>
+                <button class="yt-q rw-tgt" data-t="opacity" onclick="prwPickTarget(this)" style="flex:1">Opacidade</button>
+            </div>
+
+            <div class="rw-lbl">Aplicar em</div>
+            <div id="prwCompRow" style="display:flex;gap:5px;margin-bottom:7px">
+                <button class="yt-q prw-comp active" data-c="motion" onclick="prwPickComp(this)" style="flex:1">Motion</button>
+                <button class="yt-q prw-comp" data-c="vector" onclick="prwPickComp(this)" style="flex:1;font-size:.52rem">Vector Motion</button>
+                <button class="yt-q prw-comp" data-c="transform" onclick="prwPickComp(this)" style="flex:1">Transform</button>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:6px;font-size:.58rem;color:#aaa;cursor:pointer;margin-bottom:7px;padding:5px 8px;background:rgba(255,255,255,.02);border-radius:5px;border:1px solid rgba(190,242,100,.05)" onclick="prwToggleMB()">
+                <div id="prwMBCheck" class="mini-check">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <span>Motion Blur (obturador 360°) — usa Transform</span>
+            </div>
+
+            <!-- Params WIGGLE -->
+            <div id="prwWiggleParams">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                    <div><div class="rw-lbl">Frequência</div><input class="rw-inp" id="prwFreq" type="number" step="0.1" value="2"></div>
+                    <div><div class="rw-lbl">Amplitude</div><input class="rw-inp" id="prwAmp" type="number" step="1" value="30"></div>
+                    <div><div class="rw-lbl">Octaves</div><input class="rw-inp" id="prwOct" type="number" step="1" value="1"></div>
+                    <div><div class="rw-lbl">Detalhe (mult)</div><input class="rw-inp" id="prwMult" type="number" step="0.1" value="0.5"></div>
+                </div>
+                <div id="prwAxisRow" style="display:flex;gap:5px;margin-top:7px">
+                    <button class="yt-q active" id="prwAxisX" onclick="prwToggleAxis('x')" style="flex:1">Eixo X</button>
+                    <button class="yt-q active" id="prwAxisY" onclick="prwToggleAxis('y')" style="flex:1">Eixo Y</button>
+                </div>
+            </div>
+
+            <!-- Params RANDOM -->
+            <div id="prwRandomParams" style="display:none">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                    <div><div class="rw-lbl">Mín</div><input class="rw-inp" id="prwMin" type="number" step="1" value="60"></div>
+                    <div><div class="rw-lbl">Máx</div><input class="rw-inp" id="prwMax" type="number" step="1" value="100"></div>
+                    <div><div class="rw-lbl">Intervalo (s)</div><input class="rw-inp" id="prwInterval" type="number" step="0.1" value="0.5"></div>
+                    <div>
+                        <div class="rw-lbl">Interpolação</div>
+                        <div style="display:flex;gap:4px">
+                            <button class="yt-q active" id="prwInterpHold" onclick="prwSetInterp('hold')" style="flex:1;font-size:.52rem">Hold</button>
+                            <button class="yt-q" id="prwInterpLinear" onclick="prwSetInterp('linear')" style="flex:1;font-size:.52rem">Linear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-go" onclick="prwApply()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-top:9px;display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/></svg>
+                Aplicar Wiggler
+            </button>
+            <div style="text-align:center;font-size:.5rem;color:#555;margin-top:5px;line-height:1.4">Selecione clip(s) na timeline. Gera keyframes de movimento (não usa expressão).</div>
+            <div id="prwMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- Looper -->
+    <div class="section" id="sectionPRLoop">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('prlBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                </svg>
+                Looper
+            </span>
+            <svg id="prlChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="prlBody">
+            <div class="rw-lbl" style="margin-top:6px">Propriedade</div>
+            <div style="display:flex;gap:4px;margin-bottom:7px;flex-wrap:wrap">
+                <button class="yt-q prl-tgt active" data-t="position" onclick="prlPickTarget(this)" style="flex:1">Posição</button>
+                <button class="yt-q prl-tgt" data-t="scale" onclick="prlPickTarget(this)" style="flex:1">Escala</button>
+                <button class="yt-q prl-tgt" data-t="rotation" onclick="prlPickTarget(this)" style="flex:1">Rotação</button>
+                <button class="yt-q prl-tgt" data-t="opacity" onclick="prlPickTarget(this)" style="flex:1">Opacidade</button>
+            </div>
+
+            <div class="rw-lbl">Tipo de Loop</div>
+            <div style="display:flex;gap:5px;margin-bottom:7px">
+                <button class="yt-q prl-type active" data-ty="cycle" onclick="prlPickType(this)" style="flex:1">Ciclo</button>
+                <button class="yt-q prl-type" data-ty="pingpong" onclick="prlPickType(this)" style="flex:1">Ping-Pong</button>
+                <button class="yt-q prl-type" data-ty="offset" onclick="prlPickType(this)" style="flex:1">Offset</button>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+                <div style="flex:1"><div class="rw-lbl" style="text-align:left">Últimos N keyframes (0 = todos)</div></div>
+                <input class="rw-inp" id="prlKeys" type="number" step="1" min="0" value="0" style="width:56px">
+            </div>
+
+            <button class="btn btn-go" onclick="prlApply()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-top:9px;display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                Aplicar Loop
+            </button>
+            <div style="text-align:center;font-size:.5rem;color:#555;margin-top:5px;line-height:1.4">A propriedade já precisa ter keyframes. Repete eles até o fim do clip.</div>
+            <div id="prlMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
         </div>
     </div>
 
@@ -1438,6 +1548,8 @@
         { key: 'download', id: 'sectionDownload',  label: 'Downloader' },
         { key: 'easing',   id: 'sectionEasing',    label: 'Easing / Curvas' },
         { key: 'anchor',   id: 'sectionAnchor',    label: 'Anchor Point Pro' },
+        { key: 'prWiggle', id: 'sectionPRWiggle',  label: 'Random Wiggler' },
+        { key: 'prLoop',   id: 'sectionPRLoop',    label: 'Looper' },
         { key: 'motionTracker', id: 'sectionMotionTracker', label: 'Motion Tracker' },
         { key: 'lionSearch', id: 'sectionLionSearch', label: 'Lion Search' },
         { key: 'cp',       id: 'sectionCopyPaste', label: 'Copy / Paste' },
@@ -1983,7 +2095,7 @@
         if(json===lastCardsJSON)return;
         lastCardsJSON=json;
         if(!cards||!cards.length){
-            el.innerHTML='<div class="proj-empty"><div class="pe-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h6"/><circle cx="12" cy="13.5" r="7.5"/><line class="pe-hand" x1="12" y1="13.5" x2="12" y2="8.6"/></svg></div><div class="pe-title">Nenhum serviço ativo</div></div>';
+            el.innerHTML='';
             selProj='';
             return;
         }
@@ -4266,8 +4378,7 @@
     var anchorCompensate=true;
     var anchorCurrent='cc';
     var anchorTarget='clip'; // 'clip' or 'sequence'
-    var anchorVector=false;  // use Vector Motion too
-    var anchorTransform=false; // use Transform effect instead of Motion
+    var anchorDest='motion'; // onde aplicar: 'motion' | 'transform' | 'vector'
     var _ancBusy=false;
 
     // Position labels — main 9 + 16 sub-anchors
@@ -4303,14 +4414,12 @@
         document.getElementById('ancTgtSeq').className='anc-tgt'+(t==='sequence'?' active':'');
     }
 
-    function toggleAnchorTransform(){
-        anchorTransform=!anchorTransform;
-        document.getElementById('ancTgtTransform').className='anc-tgt'+(anchorTransform?' active':'');
-    }
-
-    function toggleAnchorVector(){
-        anchorVector=!anchorVector;
-        document.getElementById('ancTgtVector').className='anc-tgt'+(anchorVector?' active':'');
+    // Destino da ancora: Motion (padrao) | Transform (efeito) | Vector Motion
+    function ancPickDest(btn){
+        anchorDest=btn.getAttribute('data-d');
+        var g=document.querySelectorAll('.anc-dest');
+        for(var i=0;i<g.length;i++) g[i].classList.remove('active');
+        btn.classList.add('active');
     }
 
     function showAnchorMsg(msg,color){
@@ -4350,7 +4459,9 @@
         ancSetSpinner(true);
         showAnchorMsg('Aplicando...','#f59e0b');
 
-        var script='setClipAnchorPointPro('+coords[0]+','+coords[1]+','+(anchorCompensate?'true':'false')+',"'+anchorTarget+'",'+(anchorVector?'true':'false')+','+(anchorTransform?'true':'false')+')';
+        var useTransform=(anchorDest==='transform');
+        var useVector=(anchorDest==='vector');
+        var script='setClipAnchorPointPro('+coords[0]+','+coords[1]+','+(anchorCompensate?'true':'false')+',"'+anchorTarget+'",'+(useVector?'true':'false')+','+(useTransform?'true':'false')+')';
         csInterface.evalScript(script,function(result){
             _ancBusy=false;
             ancSetSpinner(false);
@@ -4372,6 +4483,134 @@
             } else {
                 showAnchorMsg(r||'Erro ao aplicar','#f43f5e');
             }
+        });
+    }
+
+    // ─── Random Wiggler + Looper (Premiere) ───
+    var prwMode = 'wiggle', prwTarget = 'position', prwInterp = 'hold';
+    var prwAxisX = true, prwAxisY = true;
+    var prwComponent = 'motion', prwMotionBlur = false;
+    var prlTarget = 'position', prlType = 'cycle';
+    var _prwBusy = false, _prlBusy = false;
+
+    function _prNum(id, def){
+        var el = document.getElementById(id);
+        if(!el) return def;
+        var v = parseFloat(el.value);
+        return isNaN(v) ? def : v;
+    }
+    function _prGroupActive(sel, el){
+        var g = document.querySelectorAll(sel);
+        for(var i=0;i<g.length;i++) g[i].classList.remove('active');
+        if(el) el.classList.add('active');
+    }
+    function prwMsg(m,c){ lwStatusRender(document.getElementById('prwMsg'), m, c); }
+    function prlMsg(m,c){ lwStatusRender(document.getElementById('prlMsg'), m, c); }
+
+    function prwSetMode(m){
+        prwMode = m;
+        document.getElementById('prwModeWiggle').classList.toggle('active', m==='wiggle');
+        document.getElementById('prwModeRandom').classList.toggle('active', m==='random');
+        document.getElementById('prwWiggleParams').style.display = (m==='wiggle')?'block':'none';
+        document.getElementById('prwRandomParams').style.display = (m==='random')?'block':'none';
+    }
+    function prwPickTarget(btn){
+        prwTarget = btn.getAttribute('data-t');
+        _prGroupActive('.rw-tgt', btn);
+        // eixos só fazem sentido em Posição (2D)
+        var axr = document.getElementById('prwAxisRow');
+        if(axr) axr.style.display = (prwTarget==='position')?'flex':'none';
+    }
+    function prwSetInterp(v){
+        prwInterp = v;
+        document.getElementById('prwInterpHold').classList.toggle('active', v==='hold');
+        document.getElementById('prwInterpLinear').classList.toggle('active', v==='linear');
+    }
+    function prwToggleAxis(ax){
+        if(ax==='x'){ prwAxisX=!prwAxisX; document.getElementById('prwAxisX').classList.toggle('active', prwAxisX); }
+        else { prwAxisY=!prwAxisY; document.getElementById('prwAxisY').classList.toggle('active', prwAxisY); }
+    }
+    function prwPickComp(btn){
+        if(prwMotionBlur) return; // motion blur trava no Transform
+        prwComponent = btn.getAttribute('data-c');
+        _prGroupActive('.prw-comp', btn);
+        _prwUpdateOpacityAvail();
+    }
+    // Vector Motion nao tem Opacity — desabilita o botao Opacidade nesse caso
+    function _prwUpdateOpacityAvail(){
+        var opBtn = document.querySelector('.rw-tgt[data-t="opacity"]');
+        if(!opBtn) return;
+        var block = (prwComponent === 'vector');
+        opBtn.style.opacity = block ? '.35' : '';
+        opBtn.style.pointerEvents = block ? 'none' : '';
+        if(block && prwTarget === 'opacity'){
+            var posBtn = document.querySelector('.rw-tgt[data-t="position"]');
+            if(posBtn){ prwTarget = 'position'; _prGroupActive('.rw-tgt', posBtn); }
+        }
+    }
+    function prwToggleMB(){
+        prwMotionBlur = !prwMotionBlur;
+        document.getElementById('prwMBCheck').classList.toggle('active', prwMotionBlur);
+        var row = document.getElementById('prwCompRow');
+        var btns = document.querySelectorAll('.prw-comp');
+        if(prwMotionBlur){
+            // motion blur -> forca Transform e trava o seletor
+            prwComponent = 'transform';
+            for(var i=0;i<btns.length;i++){
+                var isT = btns[i].getAttribute('data-c')==='transform';
+                btns[i].classList.toggle('active', isT);
+            }
+            if(row) row.style.opacity = '.45';
+        } else {
+            if(row) row.style.opacity = '';
+        }
+        _prwUpdateOpacityAvail();
+    }
+    function prlPickTarget(btn){ prlTarget = btn.getAttribute('data-t'); _prGroupActive('.prl-tgt', btn); }
+    function prlPickType(btn){ prlType = btn.getAttribute('data-ty'); _prGroupActive('.prl-type', btn); }
+
+    // mapeia retorno do jsx pra mensagem amigável
+    function _prResult(msgFn, result){
+        var r = String(result==null?'':result);
+        if(r.indexOf('OK')===0){
+            var n = (r.split(':')[1]||'1').split('|')[0]; // tira sufixo |modo
+            msgFn(n+' clip'+(n>1?'s':'')+' aplicado'+(n>1?'s':''), '#22c55e');
+        } else if(r==='NO_SEQUENCE'){ msgFn('Abra uma sequence', '#f43f5e'); }
+        else if(r==='NO_SELECTION'){ msgFn('Selecione clip(s) na timeline', '#f43f5e'); }
+        else if(r==='NO_PROP'){ msgFn('Propriedade não encontrada no clip', '#f43f5e'); }
+        else if(r==='NO_KEYS'){ msgFn('O clip não tem keyframes nessa propriedade', '#f43f5e'); }
+        else if(r.indexOf('ERROR')===0){ msgFn('Erro: '+r.substring(6), '#f43f5e'); }
+        else { msgFn(r||'Erro ao aplicar', '#f43f5e'); }
+    }
+
+    function prwApply(){
+        if(_prwBusy) return;
+        if(!csInterface){ prwMsg('Ambiente do plugin indisponível','#f43f5e'); return; }
+        var cfg = {
+            mode: prwMode, target: prwTarget,
+            component: prwComponent, motionBlur: prwMotionBlur,
+            freq: _prNum('prwFreq',2), amp: _prNum('prwAmp',30),
+            octaves: Math.max(1, Math.round(_prNum('prwOct',1))), ampMult: _prNum('prwMult',0.5),
+            axisX: prwAxisX, axisY: prwAxisY,
+            rmin: _prNum('prwMin',60), rmax: _prNum('prwMax',100),
+            interval: _prNum('prwInterval',0.5), interp: prwInterp
+        };
+        _prwBusy = true;
+        prwMsg('Aplicando...','#f59e0b');
+        csInterface.evalScript('lwPRRandomWiggle('+JSON.stringify(cfg)+')', function(result){
+            _prwBusy = false;
+            _prResult(prwMsg, result);
+        });
+    }
+    function prlApply(){
+        if(_prlBusy) return;
+        if(!csInterface){ prlMsg('Ambiente do plugin indisponível','#f43f5e'); return; }
+        var cfg = { target: prlTarget, type: prlType, keys: Math.max(0, Math.round(_prNum('prlKeys',0))) };
+        _prlBusy = true;
+        prlMsg('Aplicando loop...','#f59e0b');
+        csInterface.evalScript('lwPRLoop('+JSON.stringify(cfg)+')', function(result){
+            _prlBusy = false;
+            _prResult(prlMsg, result);
         });
     }
 

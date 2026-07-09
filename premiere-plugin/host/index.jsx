@@ -2345,7 +2345,15 @@ function lwApplyPresetData(presetName, dataJsonStr) {
         // Parse keyframe value baseado em ParameterControlType
         // type 2/3 = float, 4 = bool, 6 = point (x:y), 7 = enum
         function _parseVal(rawVal, ptype) {
-            if (ptype === 4) return (String(rawVal).toLowerCase() === 'true');
+            // bool: prfpset guarda como "true"/"1" (e ja vimos "1.0") — aceitar todos.
+            // Antes so aceitava "true", entao Uniform Scale=1 virava FALSE e o preset
+            // chegava com o uniform scale desativado.
+            if (ptype === 4) {
+                var _bs = String(rawVal).toLowerCase();
+                if (_bs === 'true') return true;
+                var _bn = parseFloat(_bs);
+                return (!isNaN(_bn) && _bn >= 0.5);
+            }
             if (ptype === 6) {
                 // Format "x:y" → array
                 var parts = String(rawVal).split(':');
@@ -5410,4 +5418,525 @@ function _lwSearchJsonWithFlags(items, debug, errors) {
     out += '],"debug":"' + _lwEscapeJson(debug || '') + '"';
     out += ',"error":"' + _lwEscapeJson((errors && errors.length) ? errors.join(' | ') : '') + '"}';
     return out;
+}
+
+
+// ============================================
+// RANDOM WIGGLER + LOOPER (Premiere) — assam / repetem keyframes
+// Premiere nao tem expressoes: geramos os keyframes na Motion/Opacity.
+// ============================================
+
+var _rwRotNames = ['Rotation', 'Rotacao', 'Rotacion', 'Drehung', 'Giro'];
+var _rwRotPrefixes = ['rota', 'dreh', 'giro'];
+var _rwOpacNames = ['Opacity', 'Opacidade', 'Opazitat', 'Opacite', 'Opacidad'];
+var _rwOpacPrefixes = ['opac', 'opaz'];
+
+// hash 1D deterministico -> [0,1) (estilo GLSL, sem overflow de int)
+function _rwHash(i, seed) {
+    var x = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+}
+// value-noise suave (smoothstep entre lattice points)
+function _rwNoise1(x, seed) {
+    var xi = Math.floor(x);
+    var xf = x - xi;
+    var u = xf * xf * (3 - 2 * xf);
+    return _rwHash(xi, seed) * (1 - u) + _rwHash(xi + 1, seed) * u;
+}
+// fractal noise (octaves), centrado em 0, ~[-1,1]
+function _rwFbm(x, seed, octaves, ampMult) {
+    var oc = (octaves && octaves > 0) ? octaves : 1;
+    var am = (ampMult != null) ? ampMult : 0.5;
+    var sum = 0, amp = 1, freq = 1;
+    for (var o = 0; o < oc; o++) {
+        sum += (_rwNoise1(x * freq, seed + o * 17.3) - 0.5) * 2 * amp;
+        amp *= am; freq *= 2;
+    }
+    return sum;
+}
+// random uniforme deterministico por (intervalo, dim)
+function _rwRand(idx, dim, seed) {
+    return _rwHash(idx * 7.13 + dim * 131.7 + 3.1, seed);
+}
+
+// nomes/props do obturador (motion blur) no efeito Transform
+var _rwShutterAngleNames = ['Shutter Angle', 'Angulo do Obturador', 'Winkel', 'Angle d\'obturation'];
+var _rwShutterPrefixes = ['shutter', 'obtura'];
+
+// acha o componente-base pelo tipo escolhido (motion | vector | transform)
+function _rwResolveComp(clip, component) {
+    if (component === 'vector')    return findVectorMotionComponent(clip);
+    if (component === 'transform') return findTransformComponent(clip);
+    return findMotionComponent(clip); // 'motion' (default)
+}
+
+// acha a prop-alvo no clip, respeitando o componente escolhido.
+// component: 'motion' (default) | 'vector' | 'transform'
+function _rwResolveProp(clip, target, component) {
+    // Motion intrinseco: Opacity vive num component proprio (fora da Motion)
+    if ((!component || component === 'motion') && target === 'opacity') {
+        var oc = findComponentByName(clip, _rwOpacNames);
+        if (oc) { var op = findProp(oc, _rwOpacNames, _rwOpacPrefixes); if (op) return op; }
+        try {
+            for (var i = 0; i < clip.components.numItems; i++) {
+                var p = findProp(clip.components[i], _rwOpacNames, _rwOpacPrefixes);
+                if (p) return p;
+            }
+        } catch (e) {}
+        return null;
+    }
+    var comp = _rwResolveComp(clip, component);
+    if (!comp) return null;
+    // Transform/Vector: todas as props (incl. Opacity) vivem dentro do proprio componente
+    if (target === 'opacity')  return findProp(comp, _rwOpacNames, _rwOpacPrefixes);
+    if (target === 'scale')    return findProp(comp, _scaleNames, _scalePrefixes);
+    if (target === 'rotation') return findProp(comp, _rwRotNames, _rwRotPrefixes);
+    return findProp(comp, _positionNames, _positionPrefixes); // position (default)
+}
+
+// checa (via QE) se o clip QE ja tem o efeito Transform.
+// retorna true/false, ou null se a API QE de componentes nao estiver disponivel.
+function _rwQEClipHasTransform(qeClip) {
+    try {
+        var n = qeClip.numComponents;
+        if (n == null) return null;
+        for (var i = 0; i < n; i++) {
+            var comp = null;
+            try { comp = qeClip.getComponentAt(i); } catch (eC) {}
+            if (!comp) continue;
+            var nm = ''; try { nm = String(comp.name || ''); } catch (e1) {}
+            var mn = ''; try { mn = String(comp.matchName || ''); } catch (e2) {}
+            if (/transform|transformar|geometry2/i.test(nm) || /geometry2/i.test(mn)) return true;
+        }
+        return false;
+    } catch (e) { return null; }
+}
+
+// garante que os clips selecionados tenham o efeito Transform (adiciona via QE se faltar).
+// NAO pareia por indice std<->QE (ordens/filtros diferentes): checa cada QE clip por si mesmo.
+// Retorna string de debug.
+function _rwEnsureTransformOnSelection(seq, clips) {
+    // conta so em clips de VIDEO (audio nao tem Motion nem Transform)
+    var videoCount = 0, missing = 0;
+    for (var i = 0; i < clips.length; i++) {
+        if (findMotionComponent(clips[i])) { videoCount++; if (!findTransformComponent(clips[i])) missing++; }
+    }
+    if (videoCount > 0 && missing === 0) return 'transform:ja-tinha';
+
+    var added = 0;
+    try {
+        app.enableQE();
+        if (typeof qe === 'undefined' || !qe.project) return 'transform:qe-indisponivel';
+        var qeSeq = qe.project.getActiveSequence();
+        if (!qeSeq) return 'transform:sem-qe-seq';
+        var qeClips = _lwFindSelectedQEClips(qeSeq, true, seq); // so-video
+        if (!qeClips || !qeClips.length) return 'transform:sem-qe-clips';
+        var fxObj = null;
+        var tryNames = ['Transform', 'AE.ADBE Geometry2', 'Transformar', 'Transformer'];
+        for (var t = 0; t < tryNames.length && !fxObj; t++) {
+            try { fxObj = qe.project.getVideoEffectByName(tryNames[t]); } catch (eG) {}
+        }
+        if (!fxObj) return 'transform:efeito-nao-encontrado';
+        for (var c = 0; c < qeClips.length; c++) {
+            // de-dup pelo PROPRIO QE clip (nao por indice no array std)
+            if (_rwQEClipHasTransform(qeClips[c]) === true) continue;
+            try { qeClips[c].addVideoEffect(fxObj); added++; } catch (eA) {}
+        }
+    } catch (e) { return 'transform:err:' + e.toString(); }
+    return 'transform:add=' + added;
+}
+
+// liga o motion blur do efeito Transform: obturador 360 + desmarca "usar da composicao".
+// Desambigua pelo NOME (props vivas do Premiere nao expoem ParameterControlType):
+//  - contem "composi"/"komposi" => checkbox "Usar obturador da composicao" -> false
+//  - contem "phase"/"fase"       => Shutter Phase -> nao mexe
+//  - senao                       => Shutter Angle -> 360
+function _rwSetMotionBlur(comp) {
+    if (!comp) return false;
+    var done = false;
+    try {
+        var props = comp.properties;
+        for (var p = 0; p < props.numItems; p++) {
+            var pr = props[p];
+            var nm = '';
+            try { nm = String(pr.displayName || '').toLowerCase(); } catch (e1) {}
+            if (nm.indexOf('shutter') < 0 && nm.indexOf('obtura') < 0) continue;
+            if (nm.indexOf('composi') >= 0 || nm.indexOf('komposi') >= 0) {
+                try { pr.setValue(false, true); done = true; } catch (e2) {}
+            } else if (nm.indexOf('phase') >= 0 || nm.indexOf('fase') >= 0) {
+                // Shutter Phase: deixa como esta
+            } else {
+                try { pr.setValue(360, true); done = true; } catch (e3) {}
+            }
+        }
+    } catch (e) {}
+    return done;
+}
+
+function _rwClamp(target, v) {
+    if (target === 'opacity') { if (v < 0) return 0; if (v > 100) return 100; }
+    return v;
+}
+
+// amp na unidade da prop (position em px -> normalizado se necessario)
+function _rwAmpFor(cfg, target, dim, isNorm, seqW, seqH) {
+    var a = cfg.amp || 0;
+    if (target === 'position' && isNorm) return a / (dim === 0 ? seqW : seqH);
+    return a;
+}
+
+// lwPRRandomWiggle(cfg) — assa keyframes de wiggle/random no clip selecionado.
+// cfg: { mode:'wiggle'|'random', target:'position'|'scale'|'rotation'|'opacity',
+//        component:'motion'|'vector'|'transform', motionBlur:bool,
+//        freq, amp, octaves, ampMult, axisX, axisY,
+//        rmin, rmax, interval, interp:'hold'|'linear', step }
+function lwPRRandomWiggle(cfgArg) {
+    try {
+        var cfg = (typeof cfgArg === 'string') ? eval('(' + cfgArg + ')') : cfgArg;
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        var clips = getSelectedClips();
+        if (!clips.length) return 'NO_SELECTION';
+
+        var TPS = 254016000000;
+        var fps = 30;
+        try { var st = seq.getSettings(); if (st && st.videoFrameRate) fps = 1 / parseFloat(st.videoFrameRate.seconds); } catch (eF) {}
+        if (!fps || fps <= 0) fps = 30;
+        var ticksPerFrame = TPS / fps;
+        var seqW = parseInt(seq.frameSizeHorizontal, 10) || 1920;
+        var seqH = parseInt(seq.frameSizeVertical, 10) || 1080;
+
+        var target = cfg.target || 'position';
+        var mode = cfg.mode || 'wiggle';
+        var component = cfg.component || 'motion';
+        var motionBlur = (cfg.motionBlur === true);
+        // motion blur so existe no efeito Transform -> forca Transform
+        if (motionBlur) component = 'transform';
+        var axisX = (cfg.axisX !== false);
+        var axisY = (cfg.axisY !== false);
+        var interpMode = (cfg.interp === 'hold') ? 4 : 0; // 4=hold, 0=linear
+        var step = (cfg.step && cfg.step > 0) ? Math.round(cfg.step) : 1;
+        var applied = 0;
+
+        // Se for pro Transform, garante que o efeito exista nos clips (adiciona via QE)
+        if (component === 'transform') { _rwEnsureTransformOnSelection(seq, clips); }
+
+        for (var ci = 0; ci < clips.length; ci++) {
+            var clip = clips[ci];
+            var prop = _rwResolveProp(clip, target, component);
+            // Transform recem-adicionado pode estar "stale" na colecao de components — poll curto
+            if (!prop && component === 'transform') {
+                for (var poll = 0; poll < 8 && !prop; poll++) {
+                    try { $.sleep(25); } catch (eSl) {}
+                    prop = _rwResolveProp(clip, target, component);
+                }
+            }
+            if (!prop) continue;
+            // motion blur: liga obturador 360 no Transform desse clip
+            if (motionBlur) { try { _rwSetMotionBlur(findTransformComponent(clip)); } catch (eMB) {} }
+
+            var inTicks, outTicks;
+            try { inTicks = Number(clip.inPoint.ticks); } catch (e1) { inTicks = 0; }
+            try { outTicks = Number(clip.outPoint.ticks); } catch (e2) { outTicks = inTicks + ticksPerFrame * 90; }
+            if (isNaN(inTicks)) inTicks = 0;
+            var durTicks = outTicks - inTicks;
+            if (!(durTicks > 0)) durTicks = ticksPerFrame * 90;
+            var nFrames = Math.max(1, Math.round(durTicks / ticksPerFrame));
+
+            var base = null;
+            try { base = prop.getValue(); } catch (eV) {}
+            if (base == null) {
+                // default ciente da dimensao (position e 2D — nunca escalar)
+                if (target === 'position') base = [seqW / 2, seqH / 2];
+                else if (target === 'opacity') base = 100;
+                else base = 0;
+            }
+            var isArr = (base instanceof Array);
+            var dims = isArr ? base.length : 1;
+
+            var isNorm = false;
+            if (target === 'position' && isArr) isNorm = (Math.abs(base[0]) < 5.0 && Math.abs(base[1]) < 5.0);
+
+            try { prop.setTimeVarying(true); } catch (eTV) {}
+            var canInterp = false;
+            try { canInterp = (typeof prop.setInterpolationTypeAtKey === 'function'); } catch (eCk) {}
+            var seed = 12.34 + ci * 4.77;
+
+            // gera lista de amostras {frame, val}
+            var samples = [];
+            if (mode === 'random') {
+                var iv = (cfg.interval && cfg.interval > 0) ? cfg.interval : 1;
+                var mn = (cfg.rmin != null) ? cfg.rmin : 0;
+                var mx = (cfg.rmax != null) ? cfg.rmax : 100;
+                var nInt = Math.max(1, Math.ceil((nFrames / fps) / iv));
+                for (var j = 0; j <= nInt; j++) {
+                    var fFrame = Math.round(j * iv * fps);
+                    if (fFrame > nFrames) fFrame = nFrames;
+                    var v;
+                    if (!isArr) {
+                        v = mn + _rwRand(j, 0, seed) * (mx - mn);
+                        v = _rwClamp(target, v);
+                    } else {
+                        v = [];
+                        for (var d = 0; d < dims; d++) {
+                            var useAx = (d === 0) ? axisX : (d === 1 ? axisY : true);
+                            v.push(useAx ? (mn + _rwRand(j, d, seed) * (mx - mn)) : base[d]);
+                        }
+                    }
+                    samples.push({ frame: fFrame, val: v });
+                    if (fFrame >= nFrames) break;
+                }
+            } else {
+                // wiggle: 1 key por 'step' frames
+                var fr = (cfg.freq || 1);
+                for (var f = 0; f <= nFrames; f += step) {
+                    var tSec = f / fps;
+                    var vv;
+                    if (!isArr) {
+                        var off = _rwFbm(tSec * fr, seed, cfg.octaves, cfg.ampMult) * _rwAmpFor(cfg, target, 0, isNorm, seqW, seqH);
+                        vv = _rwClamp(target, base + off);
+                    } else {
+                        vv = [];
+                        for (var d2 = 0; d2 < dims; d2++) {
+                            var useAx2 = (d2 === 0) ? axisX : (d2 === 1 ? axisY : true);
+                            if (useAx2) {
+                                var o2 = _rwFbm(tSec * fr, seed + d2 * 97.7, cfg.octaves, cfg.ampMult) * _rwAmpFor(cfg, target, d2, isNorm, seqW, seqH);
+                                vv.push(base[d2] + o2);
+                            } else vv.push(base[d2]);
+                        }
+                    }
+                    samples.push({ frame: f, val: vv });
+                }
+            }
+
+            // escreve keyframes
+            var wrote = false;
+            for (var s = 0; s < samples.length; s++) {
+                var kfTicks = inTicks + samples[s].frame * ticksPerFrame;
+                try {
+                    var kt = new Time(); kt.ticks = String(Math.round(kfTicks));
+                    prop.addKey(kt);
+                    var kt2 = new Time(); kt2.ticks = String(Math.round(kfTicks));
+                    prop.setValueAtKey(kt2, samples[s].val);
+                    wrote = true;
+                    if (canInterp) {
+                        var kt3 = new Time(); kt3.ticks = String(Math.round(kfTicks));
+                        try { prop.setInterpolationTypeAtKey(kt3, (mode === 'random' ? interpMode : 0), true); } catch (eIt) {}
+                    }
+                } catch (eKf) {}
+            }
+            if (wrote) applied++;
+        }
+        try { forceUIRefresh(); } catch (eR) {}
+        return applied > 0 ? ('OK:' + applied) : 'NO_PROP';
+    } catch (e) {
+        return 'ERROR:' + e.toString();
+    }
+}
+
+// acha a prop-alvo COM keyframes, procurando em Motion -> Transform -> Vector.
+// Retorna a prop que tiver >=2 keys, ou a ultima existente (pra reportar noKeys).
+function _rwResolvePropWithKeys(clip, target, prefComponent) {
+    var order = ['motion', 'transform', 'vector'];
+    if (prefComponent) { // tenta o preferido primeiro
+        order = [prefComponent];
+        var d = ['motion', 'transform', 'vector'];
+        for (var i = 0; i < d.length; i++) if (d[i] !== prefComponent) order.push(d[i]);
+    }
+    var fallback = null;
+    for (var o = 0; o < order.length; o++) {
+        var pr = _rwResolveProp(clip, target, order[o]);
+        if (!pr) continue;
+        if (!fallback) fallback = pr;
+        var tv = false;
+        try { tv = pr.isTimeVarying(); } catch (eT) { try { tv = pr.IsTimeVarying; } catch (eT2) {} }
+        if (!tv) continue;
+        var ks = null;
+        try { ks = pr.getKeys(); } catch (eG) {}
+        if (ks && ks.length >= 2) return pr;
+    }
+    return fallback;
+}
+
+// lwPRLoop(cfg) — repete os keyframes existentes ate o fim do clip.
+// cfg: { target:'position'|'scale'|'rotation'|'opacity',
+//        type:'cycle'|'pingpong'|'offset', keys:0 (todos) ou N (ultimos N),
+//        component?:'motion'|'transform'|'vector' (opcional; senao auto-detecta) }
+function lwPRLoop(cfgArg) {
+    try {
+        var cfg = (typeof cfgArg === 'string') ? eval('(' + cfgArg + ')') : cfgArg;
+        var seq = app.project.activeSequence;
+        if (!seq) return 'NO_SEQUENCE';
+        var clips = getSelectedClips();
+        if (!clips.length) return 'NO_SELECTION';
+
+        var target = cfg.target || 'position';
+        var type = cfg.type || 'cycle';
+        var useN = (cfg.keys && cfg.keys > 0) ? Math.round(cfg.keys) : 0; // 0 = todos
+        var applied = 0, noKeys = 0, usedMode = '';
+
+        var TPS = 254016000000;
+        var fps = 30;
+        try { var st = seq.getSettings(); if (st && st.videoFrameRate) fps = 1 / parseFloat(st.videoFrameRate.seconds); } catch (eF) {}
+        if (!fps || fps <= 0) fps = 30;
+        var ticksPerFrame = TPS / fps;
+
+        for (var ci = 0; ci < clips.length; ci++) {
+            var clip = clips[ci];
+            // auto-detecta o componente com keyframes (Motion -> Transform -> Vector)
+            var prop = _rwResolvePropWithKeys(clip, target, cfg.component);
+            if (!prop) continue;
+
+            var isTV = false;
+            try { isTV = prop.isTimeVarying(); } catch (eT) { try { isTV = prop.IsTimeVarying; } catch (eT2) {} }
+            if (!isTV) { noKeys++; continue; }
+
+            var keys = null;
+            try { keys = prop.getKeys(); } catch (eG) {}
+            if (!keys || keys.length < 2) { noKeys++; continue; }
+
+            // le todos os keys (ticks + valor)
+            var all = [];
+            for (var k = 0; k < keys.length; k++) {
+                var tk = Number(keys[k].ticks);
+                if (isNaN(tk)) continue;
+                var vl = null;
+                try { vl = prop.getValueAtKey(keys[k]); } catch (eVk) {}
+                all.push({ ticks: tk, val: vl });
+            }
+            all.sort(function (a, b) { return a.ticks - b.ticks; });
+            if (all.length < 2) { noKeys++; continue; }
+
+            // bloco a repetir (todos ou ultimos N)
+            var block = (useN > 0 && useN < all.length) ? all.slice(all.length - useN) : all;
+            if (block.length < 2) { noKeys++; continue; }
+            var blockStart = block[0].ticks;
+            var blockEnd = block[block.length - 1].ticks;
+            var D = blockEnd - blockStart;
+            if (!(D > 0)) { noKeys++; continue; }
+
+            // limite: fim do clip (source out-point)
+            var outTicks;
+            try { outTicks = Number(clip.outPoint.ticks); } catch (eO) { outTicks = blockEnd + D * 8; }
+            if (isNaN(outTicks) || outTicks <= blockEnd) outTicks = blockEnd + D * 8;
+
+            var isArr = (block[0].val instanceof Array);
+            var firstV = block[0].val, lastV = block[block.length - 1].val;
+
+            // ── AMOSTRAGEM DO BLOCO (pra clonar a curva de forma artificial) ──
+            // Detecta o melhor recurso disponivel em runtime:
+            //  bake  : getValueAtTime -> amostra a curva original quadro a quadro (fiel a qualquer ease)
+            //  anchor: copia so as ancoras, preservando o tipo de interpolacao (getInterpolationTypeAtKey)
+            // Detecta CHAMANDO o metodo (typeof e' instavel em host objects do Premiere)
+            var hasVAT = false;
+            try {
+                var _pT = new Time(); _pT.ticks = String(Math.round(blockStart));
+                var _pv = prop.getValueAtTime(_pT);
+                hasVAT = (_pv !== undefined && _pv !== null);
+            } catch (eVA) { hasVAT = false; }
+            var hasGetInterp = false;
+            try {
+                var _pk = new Time(); _pk.ticks = String(Math.round(block[0].ticks));
+                var _pi = prop.getInterpolationTypeAtKey(_pk);
+                hasGetInterp = (_pi !== undefined && _pi !== null);
+            } catch (eGI) { hasGetInterp = false; }
+            var canSetInterp = false;
+            try { canSetInterp = (typeof prop.setInterpolationTypeAtKey === 'function'); } catch (eSI) {}
+
+            var samples = []; // {rel, val, interp?}
+            var mode;
+            if (hasVAT) {
+                mode = 'bake';
+                var blockFrames = Math.max(1, Math.round(D / ticksPerFrame));
+                var stepF = Math.max(1, Math.ceil(blockFrames / 120)); // ate ~120 amostras por ciclo
+                for (var fr = 0; fr <= blockFrames; fr += stepF) {
+                    var stt = blockStart + fr * ticksPerFrame;
+                    if (stt > blockEnd) stt = blockEnd;
+                    var svv = null;
+                    try { var stT = new Time(); stT.ticks = String(Math.round(stt)); svv = prop.getValueAtTime(stT); } catch (eSv) {}
+                    if (svv == null) svv = (fr === 0) ? firstV : lastV;
+                    samples.push({ rel: stt - blockStart, val: svv });
+                    if (stt >= blockEnd) break;
+                }
+                // garante amostra final exatamente em rel=D (keys fora de frame inteiro)
+                if (samples.length && samples[samples.length - 1].rel < D) samples.push({ rel: D, val: lastV });
+            } else {
+                mode = 'anchor';
+                for (var a = 0; a < block.length; a++) {
+                    var itp = null;
+                    if (hasGetInterp) {
+                        try { var ktI = new Time(); ktI.ticks = String(Math.round(block[a].ticks)); itp = prop.getInterpolationTypeAtKey(ktI); } catch (eIt0) {}
+                    }
+                    samples.push({ rel: block[a].ticks - blockStart, val: block[a].val, interp: itp });
+                }
+            }
+            var nS = samples.length;
+            if (nS < 2) { noKeys++; continue; }
+            usedMode = mode;
+
+            var added = 0;
+            var rep = 1;
+            var guard = 0;
+            while ((blockStart + rep * D) < outTicks && guard < 500) {
+                guard++;
+                var baseTime = blockStart + rep * D;
+                var reverse = (type === 'pingpong' && (rep % 2 === 1));
+                // CYCLE: a costura em baseTime ja tem lastV (fim do ciclo anterior). Escreve o
+                // reset pro valor INICIAL 1 tick depois — senao (ex: bloco de 2 keys A->B no modo
+                // anchor) a animacao congela em lastV e nunca volta pra firstV.
+                if (type === 'cycle') {
+                    var rst = baseTime + 1;
+                    if (rst < outTicks) {
+                        try {
+                            var rsA = new Time(); rsA.ticks = String(Math.round(rst));
+                            prop.addKey(rsA);
+                            var rsB = new Time(); rsB.ticks = String(Math.round(rst));
+                            prop.setValueAtKey(rsB, isArr ? firstV : _rwClamp(target, firstV));
+                            if (mode === 'anchor' && samples[0] && samples[0].interp != null && canSetInterp) {
+                                try { var rsC = new Time(); rsC.ticks = String(Math.round(rst)); prop.setInterpolationTypeAtKey(rsC, samples[0].interp, true); } catch (eRi) {}
+                            }
+                            added++;
+                        } catch (eRk) {}
+                    }
+                }
+                for (var i = 1; i < nS; i++) { // i=1: pula a amostra da costura (rel 0 fwd / rel D rev)
+                    var src = reverse ? samples[nS - 1 - i] : samples[i];
+                    var rel = reverse ? (D - src.rel) : src.rel;
+                    var newTicks = baseTime + rel;
+                    if (newTicks > outTicks) newTicks = outTicks;
+
+                    var nv = src.val;
+                    if (type === 'offset') {
+                        if (isArr) {
+                            nv = [];
+                            for (var d = 0; d < src.val.length; d++) nv.push(src.val[d] + rep * (lastV[d] - firstV[d]));
+                        } else {
+                            nv = src.val + rep * (lastV - firstV);
+                        }
+                    }
+                    nv = isArr ? nv : _rwClamp(target, nv);
+                    try {
+                        var nt = new Time(); nt.ticks = String(Math.round(newTicks));
+                        prop.addKey(nt);
+                        var nt2 = new Time(); nt2.ticks = String(Math.round(newTicks));
+                        prop.setValueAtKey(nt2, nv);
+                        // anchor: replica o tipo de interpolacao da ancora original (bezier/hold/linear)
+                        if (mode === 'anchor' && src.interp != null && canSetInterp) {
+                            try { var nt3 = new Time(); nt3.ticks = String(Math.round(newTicks)); prop.setInterpolationTypeAtKey(nt3, src.interp, true); } catch (eIt) {}
+                        }
+                        added++;
+                    } catch (eK) {}
+                    if (newTicks >= outTicks) break;
+                }
+                rep++;
+            }
+            if (added > 0) applied++;
+        }
+        try { forceUIRefresh(); } catch (eR) {}
+        if (applied > 0) return 'OK:' + applied + (usedMode ? ('|' + usedMode) : '');
+        if (noKeys > 0) return 'NO_KEYS';
+        return 'NO_PROP';
+    } catch (e) {
+        return 'ERROR:' + e.toString();
+    }
 }

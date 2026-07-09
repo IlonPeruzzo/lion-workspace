@@ -75,18 +75,6 @@
         .section-title{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-bottom:8px;font-weight:600}
 
         .proj-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:8px;padding-right:2px}
-        /* Empty state do timer — cronometro animado + aneis pulsando */
-        .proj-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:20px 10px 16px;text-align:center}
-        .pe-orb{position:relative;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#bef264;
-            background:radial-gradient(circle at 50% 38%, rgba(190,242,100,.16), rgba(190,242,100,.02) 70%)}
-        .pe-orb::before,.pe-orb::after{content:'';position:absolute;inset:2px;border-radius:50%;border:1px solid rgba(190,242,100,.38);animation:peRing 2.8s ease-out infinite}
-        .pe-orb::after{animation-delay:1.4s}
-        @keyframes peRing{0%{transform:scale(.72);opacity:.55}100%{transform:scale(1.75);opacity:0}}
-        .pe-orb svg{width:23px;height:23px;position:relative;z-index:1}
-        .pe-hand{transform-box:view-box;transform-origin:12px 13.5px;animation:peHand 2.4s cubic-bezier(.45,0,.55,1) infinite}
-        @keyframes peHand{to{transform:rotate(360deg)}}
-        .pe-title{font-size:.72rem;font-weight:700;color:#c4c4c4;letter-spacing:-.1px}
-        .pe-sub{font-size:.56rem;color:#5f5f5f;font-weight:500;max-width:190px;line-height:1.4}
         .pc{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);cursor:pointer;transition:all .15s}
         .pc:hover{border-color:rgba(190,242,100,.18);background:rgba(190,242,100,.03)}
         .pc.sel{border-color:#bef264;background:rgba(190,242,100,.07)}
@@ -168,6 +156,8 @@
         .yt-q:active{transform:translateY(0);box-shadow:none}
         .yt-q.active{background:rgba(190,242,100,.16);border-color:#bef264;color:#bef264;box-shadow:inset 0 0 8px rgba(190,242,100,.12)}
         .yt-q.active:hover{background:rgba(190,242,100,.22);transform:translateY(-1px)}
+        .rw-inp{width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:#ddd;padding:3px 5px;font-size:.64rem;font-family:inherit;outline:none;text-align:center;box-sizing:border-box}
+        .rw-inp:focus{border-color:rgba(190,242,100,.4)}
         .plat-btn{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
         .plat-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
         .plat-btn.active{border-color:rgba(190,242,100,.4);background:rgba(190,242,100,.08)}
@@ -369,7 +359,7 @@
             <svg id="timerChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="timerBody">
-            <div class="proj-list" id="projList"><div class="proj-empty"><div class="pe-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h6"/><circle cx="12" cy="13.5" r="7.5"/><line class="pe-hand" x1="12" y1="13.5" x2="12" y2="8.6"/></svg></div><div class="pe-title">Nenhum serviço ativo</div></div></div>
+            <div class="proj-list" id="projList"></div>
             <div class="timer-display" id="tDisp">00:00:00</div>
             <div class="timer-sub" id="tSub">Parado</div>
             <div class="controls">
@@ -494,6 +484,89 @@
                 <button class="yt-q" onclick="aeApplyExpr('clear')" style="color:#f43f5e;border-color:rgba(244,63,94,.2)">Limpar</button>
             </div>
             <div id="aeExprMsg" style="text-align:center;font-size:.55rem;color:#555;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ RANDOM WIGGLER ═══════ -->
+    <div class="section" id="sectionAERW">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeRWBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round"><path d="M3 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/></svg>
+                Random Wiggler
+            </span>
+            <svg id="aeRWChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeRWBody">
+            <div style="display:flex;gap:3px;margin-bottom:6px">
+                <button class="yt-q active" id="rwModeWiggleBtn" onclick="rwSetMode('wiggle')" style="flex:1">Wiggle</button>
+                <button class="yt-q" id="rwModeRandomBtn" onclick="rwSetMode('random')" style="flex:1">Random</button>
+            </div>
+            <div style="font-size:.56rem;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Aplicar em</div>
+            <div style="display:flex;gap:3px;margin-bottom:7px;flex-wrap:wrap" id="rwTargets">
+                <button class="yt-q active" data-target="position" onclick="rwPickTarget(this)">Position</button>
+                <button class="yt-q" data-target="rotation" onclick="rwPickTarget(this)">Rotation</button>
+                <button class="yt-q" data-target="scale" onclick="rwPickTarget(this)">Scale</button>
+                <button class="yt-q" data-target="opacity" onclick="rwPickTarget(this)">Opacity</button>
+            </div>
+            <div id="rwWiggleParams" style="display:grid;grid-template-columns:auto 1fr auto 1fr;gap:5px 6px;align-items:center;margin-bottom:7px">
+                <span style="font-size:.6rem;color:#888">freq</span><input id="rwFreq" type="number" value="2" step="0.5" class="rw-inp">
+                <span style="font-size:.6rem;color:#888">amp</span><input id="rwAmp" type="number" value="30" step="1" class="rw-inp">
+                <span style="font-size:.6rem;color:#888">oct</span><input id="rwOct" type="number" value="1" min="1" step="1" class="rw-inp">
+                <span style="font-size:.6rem;color:#888">mult</span><input id="rwMult" type="number" value="0.5" step="0.1" class="rw-inp">
+            </div>
+            <div id="rwRandomParams" style="display:none;grid-template-columns:auto 1fr auto 1fr;gap:5px 6px;align-items:center;margin-bottom:7px">
+                <span style="font-size:.6rem;color:#888">min</span><input id="rwMin" type="number" value="0" step="1" class="rw-inp">
+                <span style="font-size:.6rem;color:#888">max</span><input id="rwMax" type="number" value="100" step="1" class="rw-inp">
+                <span style="font-size:.6rem;color:#888">a cada</span><input id="rwIntv" type="number" value="1" min="0.1" step="0.1" class="rw-inp">
+                <span style="font-size:.6rem;color:#888">seg</span>
+                <div style="grid-column:1/-1;display:flex;gap:3px;align-items:center"><span style="font-size:.6rem;color:#888;margin-right:2px">interp</span>
+                    <button class="yt-q active" id="rwIntpHold" onclick="rwSetInterp('hold')" style="flex:1">Hold</button>
+                    <button class="yt-q" id="rwIntpLinear" onclick="rwSetInterp('linear')" style="flex:1">Linear</button>
+                    <button class="yt-q" id="rwIntpEase" onclick="rwSetInterp('ease')" style="flex:1">Ease</button>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
+                <span style="font-size:.6rem;color:#888">eixo</span>
+                <button class="yt-q active" id="rwAxisX" onclick="rwToggleAxis('x')" style="width:30px">X</button>
+                <button class="yt-q active" id="rwAxisY" onclick="rwToggleAxis('y')" style="width:30px">Y</button>
+                <span style="width:1px;height:14px;background:#333;margin:0 2px"></span>
+                <label style="display:inline-flex;align-items:center;gap:4px;font-size:.62rem;color:#aaa;cursor:pointer"><input type="checkbox" id="rwLoop" style="accent-color:#bef264"> loop</label>
+                <input id="rwLoopDur" type="number" value="30" min="1" step="1" class="rw-inp" style="width:40px"><span style="font-size:.6rem;color:#888">seg</span>
+            </div>
+            <button class="btn btn-go" onclick="aeApplyRandomWiggle()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem">Aplicar Wiggler</button>
+            <div id="aeRWMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
+        </div>
+    </div>
+
+    <!-- ═══════ LOOPER ═══════ -->
+    <div class="section" id="sectionAELooper">
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleSection('aeLooperBody')">
+            <span style="display:flex;align-items:center;gap:5px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                Looper
+            </span>
+            <svg id="aeLooperChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="aeLooperBody">
+            <div style="font-size:.56rem;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:600">Tipo de loop</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:7px" id="looperTypes">
+                <button class="yt-q active" data-type="cycle" onclick="looperPickType(this)">Cycle</button>
+                <button class="yt-q" data-type="pingpong" onclick="looperPickType(this)">PingPong</button>
+                <button class="yt-q" data-type="offset" onclick="looperPickType(this)">Offset</button>
+                <button class="yt-q" data-type="continue" onclick="looperPickType(this)">Continue</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
+                <span style="font-size:.6rem;color:#888">direção</span>
+                <button class="yt-q active" id="looperDirOut" onclick="looperSetDir('out')">Depois (Out)</button>
+                <button class="yt-q" id="looperDirIn" onclick="looperSetDir('in')">Antes (In)</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
+                <span style="font-size:.62rem;color:#aaa">keys: últimos</span>
+                <input id="looperKeys" type="number" value="0" min="0" step="1" class="rw-inp" style="width:44px">
+                <span style="font-size:.58rem;color:#666">(0 = todos)</span>
+            </div>
+            <button class="btn btn-go" onclick="aeApplyLoop()" style="width:100%;justify-content:center;padding:8px;font-size:.75rem;font-weight:700">LOOP</button>
+            <div id="aeLooperMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:5px;min-height:11px"></div>
         </div>
     </div>
 
@@ -796,6 +869,8 @@
         { key: 'aeAnchor', id: 'sectionAEAnchor',  label: 'Anchor Point' },
         { key: 'aeEasing', id: 'sectionAEEasing',  label: 'Easing' },
         { key: 'aeExpr',   id: 'sectionAEExpr',    label: 'Expressions' },
+        { key: 'aeRW',     id: 'sectionAERW',      label: 'Random Wiggler' },
+        { key: 'aeLooper', id: 'sectionAELooper',  label: 'Looper' },
         { key: 'aeRigs',   id: 'sectionAERigs',    label: 'Rigs' },
         { key: 'aeAlign',  id: 'sectionAEAlign',   label: 'Align' },
         { key: 'aeColor',  id: 'sectionAEColor',   label: 'Color' }
@@ -1306,7 +1381,7 @@
         if(json===lastCardsJSON)return;
         lastCardsJSON=json;
         if(!cards||!cards.length){
-            el.innerHTML='<div class="proj-empty"><div class="pe-orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h6"/><circle cx="12" cy="13.5" r="7.5"/><line class="pe-hand" x1="12" y1="13.5" x2="12" y2="8.6"/></svg></div><div class="pe-title">Nenhum serviço ativo</div></div>';
+            el.innerHTML='';
             selProj='';
             return;
         }
@@ -1528,6 +1603,77 @@
             if(r.indexOf('OK:')===0) _msg('aeExprMsg', kind+' aplicado em '+r.substring(3)+' layer(s)','#22c55e');
             else if(r==='NO_SELECTION') _msg('aeExprMsg','Selecione layer(s)','#f59e0b');
             else _msg('aeExprMsg', r,'#f43f5e');
+        });
+    }
+
+    // ─── Random Wiggler ───
+    var rwMode='wiggle', rwTarget='position', rwInterp='hold';
+    function rwSetMode(m){
+        rwMode=m;
+        document.getElementById('rwModeWiggleBtn').classList.toggle('active', m==='wiggle');
+        document.getElementById('rwModeRandomBtn').classList.toggle('active', m==='random');
+        document.getElementById('rwWiggleParams').style.display = m==='wiggle' ? 'grid' : 'none';
+        document.getElementById('rwRandomParams').style.display = m==='random' ? 'grid' : 'none';
+    }
+    function rwPickTarget(btn){
+        document.querySelectorAll('#rwTargets .yt-q').forEach(function(b){b.classList.remove('active')});
+        btn.classList.add('active'); rwTarget=btn.getAttribute('data-target');
+    }
+    function rwSetInterp(v){
+        rwInterp=v;
+        ['hold','linear','ease'].forEach(function(k){
+            var el=document.getElementById('rwIntp'+k.charAt(0).toUpperCase()+k.slice(1));
+            if(el) el.classList.toggle('active', k===v);
+        });
+    }
+    function rwToggleAxis(ax){ document.getElementById('rwAxis'+ax.toUpperCase()).classList.toggle('active'); }
+    function _num(id, def){ var v=parseFloat(document.getElementById(id).value); return isNaN(v)?def:v; }
+    function aeApplyRandomWiggle(){
+        if(!csInterface){_msg('aeRWMsg','Ambiente indisponível','#f43f5e');return}
+        var ax=document.getElementById('rwAxisX').classList.contains('active');
+        var ay=document.getElementById('rwAxisY').classList.contains('active');
+        if(!ax&&!ay){_msg('aeRWMsg','Ative pelo menos um eixo (X ou Y)','#f59e0b');return}
+        var cfg={ mode:rwMode, target:rwTarget, axisX:ax, axisY:ay };
+        if(rwMode==='wiggle'){
+            cfg.freq=_num('rwFreq',2); cfg.amp=_num('rwAmp',30); cfg.octaves=_num('rwOct',1); cfg.ampMult=_num('rwMult',0.5);
+            cfg.loop=document.getElementById('rwLoop').checked; cfg.loopDur=_num('rwLoopDur',30);
+        } else {
+            cfg.rmin=_num('rwMin',0); cfg.rmax=_num('rwMax',100); cfg.interval=_num('rwIntv',1); cfg.interp=rwInterp;
+        }
+        csInterface.evalScript('lwAERandomWiggle('+JSON.stringify(cfg)+')', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0) _msg('aeRWMsg', (rwMode==='wiggle'?'Wiggle':'Random')+' aplicado em '+r.substring(3)+' layer(s)','#22c55e');
+            else if(r==='NO_SELECTION') _msg('aeRWMsg','Selecione layer(s)','#f59e0b');
+            else if(r==='NO_COMP') _msg('aeRWMsg','Abra uma composição','#f59e0b');
+            else _msg('aeRWMsg', r,'#f43f5e');
+        });
+    }
+
+    // ─── Looper ───
+    var looperType='cycle', looperDir='out';
+    function looperPickType(btn){
+        document.querySelectorAll('#looperTypes .yt-q').forEach(function(b){b.classList.remove('active')});
+        btn.classList.add('active'); looperType=btn.getAttribute('data-type');
+    }
+    function looperSetDir(d){
+        looperDir=d;
+        document.getElementById('looperDirOut').classList.toggle('active', d==='out');
+        document.getElementById('looperDirIn').classList.toggle('active', d==='in');
+    }
+    function aeApplyLoop(){
+        if(!csInterface){_msg('aeLooperMsg','Ambiente indisponível','#f43f5e');return}
+        var keys=parseInt(document.getElementById('looperKeys').value,10)||0;
+        var cfg={ type:looperType, dir:looperDir, keys:keys };
+        csInterface.evalScript('lwAELoop('+JSON.stringify(cfg)+')', function(r){
+            r=String(r||'');
+            if(r.indexOf('OK:')===0){
+                var n=r.substring(3);
+                if(n==='0') _msg('aeLooperMsg','Nenhuma propriedade com keyframes na seleção','#f59e0b');
+                else _msg('aeLooperMsg','Loop "'+looperType+'" em '+n+' propriedade(s)','#22c55e');
+            }
+            else if(r==='NO_SELECTION') _msg('aeLooperMsg','Selecione layer(s) com keyframes','#f59e0b');
+            else if(r==='NO_COMP') _msg('aeLooperMsg','Abra uma composição','#f59e0b');
+            else _msg('aeLooperMsg', r,'#f43f5e');
         });
     }
 

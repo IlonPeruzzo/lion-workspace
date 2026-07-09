@@ -16,7 +16,15 @@ contextBridge.exposeInMainWorld('focusMode', {
 contextBridge.exposeInMainWorld('electronAPI', {
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     copyImageToClipboard: (arrayBuf) => ipcRenderer.invoke('copy-image-to-clipboard', arrayBuf),
-    saveInvoicePdf: (html, filename) => ipcRenderer.invoke('invoice:save-pdf', { html, filename })
+    saveInvoicePdf: (html, filename) => ipcRenderer.invoke('invoice:save-pdf', { html, filename }),
+    removeBgImage: (buffer, ext) => ipcRenderer.invoke('bg-remove-image', { buffer, ext })
+});
+
+// Render Watch: deteccao de renderizacao (AME/AE/Premiere) feita no main via CPU dos processos
+contextBridge.exposeInMainWorld('renderWatch', {
+    get: () => ipcRenderer.invoke('render-watch-get'),
+    onStatus: (cb) => ipcRenderer.on('render-status', (event, data) => cb(data)),
+    onFinished: (cb) => ipcRenderer.on('render-finished', (event, data) => cb(data))
 });
 
 contextBridge.exposeInMainWorld('ytDownloader', {
@@ -45,6 +53,12 @@ contextBridge.exposeInMainWorld('appUpdater', {
     installUpdate: () => ipcRenderer.invoke('install-update'),
     openReleasesPage: () => ipcRenderer.invoke('open-releases-page'),
     onUpdateStatus: (cb) => ipcRenderer.on('update-status', (event, data) => cb(data))
+});
+
+// Cloud Sync — dados do usuario na nuvem (clientes, registros, config, hotkey...)
+contextBridge.exposeInMainWorld('cloudSync', {
+    pull: () => ipcRenderer.invoke('cloud-sync-pull'),
+    push: (sections) => ipcRenderer.invoke('cloud-sync-push', sections),
 });
 
 contextBridge.exposeInMainWorld('auth', {
@@ -110,4 +124,13 @@ contextBridge.exposeInMainWorld('discordAuth', {
 contextBridge.exposeInMainWorld('terms', {
     hasAccepted: () => ipcRenderer.invoke('terms:has-accepted'),
     accept: () => ipcRenderer.invoke('terms:accept'),
+});
+
+// Job Finder — envio de e-mail via SMTP (Gmail com senha de app)
+contextBridge.exposeInMainWorld('jobMailer', {
+    saveSmtp: (creds) => ipcRenderer.invoke('jobmail:save-smtp', creds),
+    smtpStatus: () => ipcRenderer.invoke('jobmail:smtp-status'),
+    clearSmtp: () => ipcRenderer.invoke('jobmail:clear-smtp'),
+    verify: () => ipcRenderer.invoke('jobmail:verify'),
+    send: (msg) => ipcRenderer.invoke('jobmail:send', msg),
 });

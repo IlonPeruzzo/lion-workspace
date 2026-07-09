@@ -601,6 +601,114 @@ ipcMain.handle('open-external', (event, url) => {
     return true;
 });
 
+// ═══════ RENDER WATCH — detecta renderizacao (Media Encoder / After Effects / Premiere) ═══════
+// Estrategia: poll a cada 6s do CPU ACUMULADO por processo (PowerShell no Win, ps no Mac).
+// delta CPU / delta tempo = "nucleos em uso". Esquentou por N amostras seguidas = render comecou;
+// esfriou por N (ou processo fechou) = terminou. Renderer recebe eventos e cronometra/loga.
+// AME/aerender: threshold baixo (idle usam ~0). Premiere/AE (UI): threshold alto + mais amostras,
+// pra nao confundir com playback/preview (deteccao heuristica).
+const RW_POLL_MS = 6000;
+const RW_MIN_SECS = 25; // sessao menor que isso e transiente (descarta)
+const RW_GROUPS = {
+    ame:      { label: 'Media Encoder',        procs: ['adobe media encoder', 'ameencodingserver'], start: 0.7, end: 0.25, needStart: 2, needEnd: 3 },
+    aerender: { label: 'After Effects (fila)', procs: ['aerender'],                                  start: 0.5, end: 0.2,  needStart: 2, needEnd: 3 },
+    ae:       { label: 'After Effects',        procs: ['afterfx'],                                   start: 2.2, end: 0.7,  needStart: 3, needEnd: 3 },
+    ppro:     { label: 'Premiere Pro',         procs: ['adobe premiere pro'],                        start: 2.2, end: 0.7,  needStart: 3, needEnd: 3 },
+};
+const _rwState = {};
+let _rwBusy = false;
+function _rwParseCputime(s) { // "MM:SS.xx" | "HH:MM:SS" | "D-HH:MM:SS" (ps do macOS)
+    s = String(s || '').trim();
+    let days = 0;
+    if (s.includes('-')) { const p = s.split('-'); days = parseInt(p[0], 10) || 0; s = p[1]; }
+    let sec = 0;
+    for (const part of s.split(':')) sec = sec * 60 + (parseFloat(part) || 0);
+    return days * 86400 + sec;
+}
+function _rwListProcs(cb) {
+    try {
+        const { spawn: rwSpawn } = require('child_process');
+        if (process.platform === 'win32') {
+            const ps = rwSpawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+                "Get-Process | ForEach-Object { try { $_.ProcessName + '|' + [math]::Round($_.TotalProcessorTime.TotalSeconds,2) } catch {} }"], { windowsHide: true });
+            let out = '';
+            ps.stdout.on('data', d => out += d);
+            ps.on('close', () => {
+                cb(out.split(/\r?\n/).map(l => {
+                    const i = l.lastIndexOf('|'); if (i < 1) return null;
+                    return { name: l.slice(0, i).toLowerCase(), cpuSec: parseFloat(l.slice(i + 1)) || 0 };
+                }).filter(Boolean));
+            });
+            ps.on('error', () => cb([]));
+        } else {
+            const ps = rwSpawn('ps', ['-A', '-o', 'comm=,cputime=']);
+            let out = '';
+            ps.stdout.on('data', d => out += d);
+            ps.on('close', () => {
+                cb(out.split(/\r?\n/).map(l => {
+                    const m = l.trim().match(/^(.*?)\s+([\d:.-]+)$/); if (!m) return null;
+                    return { name: m[1].toLowerCase(), cpuSec: _rwParseCputime(m[2]) };
+                }).filter(Boolean));
+            });
+            ps.on('error', () => cb([]));
+        }
+    } catch (e) { cb([]); }
+}
+function _rwActiveList() {
+    return Object.keys(_rwState).filter(k => _rwState[k].active)
+        .map(k => ({ app: k, label: RW_GROUPS[k].label, startedAt: _rwState[k].startedAt }));
+}
+function _rwTick() {
+    if (_rwBusy || !mainWin || mainWin.isDestroyed()) return;
+    _rwBusy = true;
+    _rwListProcs((list) => {
+        _rwBusy = false;
+        const now = Date.now();
+        let changed = false;
+        for (const key in RW_GROUPS) {
+            const g = RW_GROUPS[key];
+            const matches = list.filter(p => g.procs.some(n => p.name.includes(n)));
+            const present = matches.length > 0;
+            const cpu = matches.reduce((s, p) => s + p.cpuSec, 0);
+            const st = _rwState[key] || (_rwState[key] = { prevCpu: null, prevT: 0, hot: 0, cold: 0, active: false, startedAt: 0, lastHot: 0 });
+            let cores = 0;
+            if (st.prevCpu != null && present && cpu >= st.prevCpu && now > st.prevT) {
+                cores = (cpu - st.prevCpu) / ((now - st.prevT) / 1000);
+            }
+            if (present) { st.prevCpu = cpu; st.prevT = now; } else { st.prevCpu = null; }
+            if (st.active) {
+                if (!present || cores < g.end) {
+                    st.cold++;
+                    if (!present || st.cold >= g.needEnd) {
+                        const end = st.lastHot || now;
+                        const secs = Math.round((end - st.startedAt) / 1000);
+                        st.active = false; st.hot = 0; st.cold = 0; changed = true;
+                        if (secs >= RW_MIN_SECS && mainWin && !mainWin.isDestroyed()) {
+                            mainWin.webContents.send('render-finished', { app: key, label: g.label, startedAt: st.startedAt, endedAt: end, secs });
+                        }
+                    }
+                } else { st.cold = 0; st.lastHot = now; }
+            } else {
+                if (present && cores >= g.start) {
+                    st.hot++;
+                    if (st.hot >= g.needStart) {
+                        st.active = true;
+                        st.startedAt = now - g.needStart * RW_POLL_MS; // comecou ~quando esquentou a 1a amostra
+                        st.lastHot = now; st.cold = 0; changed = true;
+                    }
+                } else st.hot = 0;
+            }
+        }
+        const active = _rwActiveList();
+        // manda quando muda E a cada tick enquanto ativo (sobrevive a Ctrl+R do renderer)
+        if ((changed || active.length) && mainWin && !mainWin.isDestroyed()) {
+            mainWin.webContents.send('render-status', { active });
+        }
+    });
+}
+setInterval(_rwTick, RW_POLL_MS);
+ipcMain.handle('render-watch-get', () => ({ active: _rwActiveList() }));
+
 // Copy image to OS clipboard (works on Win/Mac/Linux uniformly).
 // Used as fallback when navigator.clipboard.write is blocked (sandbox no Mac).
 ipcMain.handle('copy-image-to-clipboard', (event, arrayBuf) => {
@@ -628,6 +736,86 @@ ipcMain.handle('open-folder', () => {
 });
 
 /* ═══════════════════════════════════════════════════════════════════
+   JOB FINDER — envio de e-mail via SMTP (Gmail com senha de app).
+   Credencial guardada CRIPTOGRAFADA (safeStorage/DPAPI) em lw-jobmail.json.
+   Nunca em texto puro no localStorage, nunca sincronizada pra nuvem.
+   ═══════════════════════════════════════════════════════════════════ */
+const JOBMAIL_FILE = path.join(currentUD, 'lw-jobmail.json');
+
+function _jmLoadCreds() {
+    try {
+        const raw = JSON.parse(fs.readFileSync(JOBMAIL_FILE, 'utf8'));
+        if (!raw || !raw.user || !raw.pass) return null;
+        const { safeStorage } = require('electron');
+        if (raw.enc) {
+            // Só descriptografa se o cofre do SO estiver disponível. Se não, NÃO
+            // decodifica o ciphertext como texto (geraria senha corrompida) — retorna null.
+            if (!safeStorage.isEncryptionAvailable()) return null;
+            return { user: raw.user, pass: safeStorage.decryptString(Buffer.from(raw.pass, 'base64')) };
+        }
+        return { user: raw.user, pass: Buffer.from(raw.pass, 'base64').toString('utf8') }; // legado (não gravamos mais assim)
+    } catch (e) { return null; }
+}
+
+function _jmErr(e) {
+    const m = (e && e.message) || String(e);
+    if (/Invalid login|Username and Password not accepted|BadCredentials|5\.7\.8/i.test(m))
+        return 'Login recusado. Use uma SENHA DE APP do Gmail (16 dígitos), não a senha normal — e confira o e-mail. Precisa ter verificação em 2 etapas ligada na conta.';
+    if (/ECONNECTION|ETIMEDOUT|ENOTFOUND|getaddrinfo|ECONNREFUSED/i.test(m))
+        return 'Sem conexão com o servidor do Gmail. Cheque sua internet/firewall e tente de novo.';
+    return m;
+}
+
+function _jmTransport(creds) {
+    const nodemailer = require('nodemailer');
+    return nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user: creds.user, pass: creds.pass } });
+}
+
+ipcMain.handle('jobmail:save-smtp', (event, creds) => {
+    try {
+        const user = ((creds && creds.user) || '').trim();
+        const pass = ((creds && creds.pass) || '').replace(/\s+/g, ''); // senha de app costuma vir com espacos
+        if (!user || !pass) return { ok: false, error: 'Preencha o e-mail e a senha de app.' };
+        const { safeStorage } = require('electron');
+        // Exige criptografia real. NUNCA grava a senha do Gmail em base64 (reversível).
+        if (!safeStorage.isEncryptionAvailable()) return { ok: false, error: 'Seu sistema não consegue guardar a senha com segurança agora (cofre de credenciais indisponível). Não vou salvar em texto puro — tente reiniciar o app/PC.' };
+        const stored = safeStorage.encryptString(pass).toString('base64');
+        fs.writeFileSync(JOBMAIL_FILE, JSON.stringify({ user, pass: stored, enc: true }, null, 2));
+        return { ok: true, user };
+    } catch (e) { return { ok: false, error: 'Não foi possível salvar a credencial.' }; }
+});
+
+ipcMain.handle('jobmail:smtp-status', () => {
+    const c = _jmLoadCreds();
+    return { configured: !!c, user: c ? c.user : '' };
+});
+
+ipcMain.handle('jobmail:clear-smtp', () => {
+    try { fs.unlinkSync(JOBMAIL_FILE); } catch (e) {}
+    return { ok: true };
+});
+
+ipcMain.handle('jobmail:verify', async () => {
+    const c = _jmLoadCreds();
+    if (!c) return { ok: false, error: 'Nenhuma conta configurada.' };
+    try { await _jmTransport(c).verify(); return { ok: true, user: c.user }; }
+    catch (e) { return { ok: false, error: _jmErr(e) }; }
+});
+
+ipcMain.handle('jobmail:send', async (event, msg) => {
+    const c = _jmLoadCreds();
+    if (!c) return { ok: false, error: 'Configure seu Gmail nas Configurações → Integrações antes de enviar.' };
+    const to = ((msg && msg.to) || '').trim();
+    const subject = ((msg && msg.subject) || '').trim();
+    const body = (msg && msg.body) || '';
+    if (!to) return { ok: false, error: 'Sem destinatário.' };
+    try {
+        const info = await _jmTransport(c).sendMail({ from: c.user, to, subject, text: body });
+        return { ok: true, id: info.messageId };
+    } catch (e) { return { ok: false, error: _jmErr(e) }; }
+});
+
+/* ═══════════════════════════════════════════════════════════════════
    DISCORD AUTH — login via OAuth + verificacao de role em guild especifica
    Config em lw-discord-config.json (client_id, client_secret, guild_id,
    allowed_role_ids). Sessao em lw-discord-session.json.
@@ -642,12 +830,16 @@ const DISCORD_AUTH_PROXY_URL = 'https://rxwprlqskwylhvpjiung.supabase.co/functio
 // Roda so no app instalado (nao alarma em dev). Detecta indicios de reverse engineering
 // e envia alerta pro canal de logs via Edge Function.
 let _tamperLastAlertTs = 0;
+// Nomes-BASE de processos de reverse-engineering (sem .exe). O match e' por nome
+// EXATO da imagem (ou prefixo "base-"), NUNCA substring — 'ce.exe' via substring
+// pegava "service.exe"/"source.exe" etc. e alarmava a cada login (falso positivo).
+// Removidos os curtos/ambiguos (ce, r2) e os comuns/legitimos (procexp, processexplorer).
 const _tamperSuspiciousProcs = [
-    'x64dbg', 'x32dbg', 'ollydbg', 'ida64', 'ida.exe', 'ghidra', 'radare2', 'r2.exe',
-    'frida', 'cheatengine', 'ce.exe', 'wireshark', 'fiddler', 'charles',
-    'processhacker', 'processexplorer', 'procexp', 'httpdebugger',
+    'x64dbg', 'x32dbg', 'ollydbg', 'ida64', 'ida', 'ghidra', 'radare2',
+    'frida', 'cheatengine', 'wireshark', 'fiddler', 'charles',
+    'processhacker', 'httpdebugger',
     'dnspy', 'ilspy', 'reflector', 'jd-gui', 'jadx', 'apktool',
-    'binaryninja', 'binaryninja.exe', 'hopperv4', 'hexrays',
+    'binaryninja', 'hopperv4', 'hexrays',
 ];
 
 async function _runTamperChecks() {
@@ -673,10 +865,18 @@ async function _runTamperChecks() {
         const running = await new Promise((resolve) => {
             require('child_process').exec('tasklist /FO CSV /NH', { timeout: 4000, windowsHide: true }, (err, stdout) => {
                 if (err) return resolve([]);
-                const lower = stdout.toLowerCase();
                 const found = new Set();
-                for (const t of _tamperSuspiciousProcs) {
-                    if (lower.includes(t.toLowerCase())) found.add(t);
+                // CSV: "Nome da Imagem","PID",... — pega a 1a coluna (nome exato) por linha.
+                for (const line of String(stdout).split(/\r?\n/)) {
+                    const m = line.match(/^"([^"]+)"/);
+                    if (!m) continue;
+                    let img = m[1].toLowerCase();
+                    if (img.endsWith('.exe')) img = img.slice(0, -4);   // ex.: "cheatengine-x86_64"
+                    for (const t of _tamperSuspiciousProcs) {
+                        const tok = t.toLowerCase();
+                        // nome EXATO, ou variante "base-..." (ex.: cheatengine-x86_64). Nunca substring solta.
+                        if (img === tok || img.startsWith(tok + '-')) { found.add(m[1]); break; }
+                    }
                 }
                 resolve([...found]);
             });
@@ -691,7 +891,10 @@ async function _runTamperChecks() {
     _tamperLastAlertTs = now;
 
     try {
-        const session = loadValidDiscordSession();
+        // loadValidDiscordSession e' ASYNC e retorna { session, valid } — sem await
+        // o alerta saia com username/avatar "undefined".
+        const _r = await loadValidDiscordSession();
+        const session = _r && _r.valid ? _r.session : null;
         const payload = {
             action: 'tamper_alert',
             detections,
@@ -734,7 +937,8 @@ async function _sendBootPing() {
     if (fs.existsSync(flagFile)) return;
     try { fs.writeFileSync(flagFile, new Date().toISOString()); } catch { }
     try {
-        const session = loadValidDiscordSession();
+        const _r = await loadValidDiscordSession();
+        const session = _r && _r.valid ? _r.session : null;
         await fetch(DISCORD_AUTH_PROXY_URL, {
             method: 'POST',
             headers: {
@@ -2412,24 +2616,72 @@ function ytIsDrmError(stderr) {
     return /DRM protected|DRM-protected|drm protected/i.test(stderr);
 }
 
+// Erro que cookies PODEM resolver (idade/membros/login/bot/"video unavailable" sem auth).
+// Inclui "Video unavailable"/"is not available": sem cookies, costuma ser sintoma de falta de auth.
+function ytNeedsCookies(stderr) {
+    if (!stderr) return false;
+    return /Sign in to confirm|not a bot|cookies-from-browser|Use --cookies|confirm your age|age-restricted|inappropriate for some users|members-only|member of this channel|Join this channel|available to this channel's members|Private video|This video is private|Video unavailable|This video is not available|is not available/i.test(stderr);
+}
+// Vídeo genuinamente indisponível — cookie NÃO resolve, não adianta re-tentar.
+function ytIsGenuinelyUnavailable(stderr) {
+    if (!stderr) return false;
+    return /removed by the uploader|removed for violating|account associated with this video has been terminated|no longer available due to a copyright|not available in your country|uploader has not made this video available|This live event has ended/i.test(stderr);
+}
+// Falha de leitura de cookies do Chromium (App-Bound Encryption do Chrome 127+ no Windows).
+function ytIsDpapiError(stderr) {
+    if (!stderr) return false;
+    return /Failed to decrypt with DPAPI|could not find|unable to open browser cookie|NoneType' object has no attribute 'decode'/i.test(stderr);
+}
+// Transforma o stderr cru do yt-dlp numa mensagem amigável em pt-BR pro usuário.
+function ytFriendlyError(stderr) {
+    const s = String(stderr || '');
+    if (/removed by the uploader|removed for violating|account associated with this video has been terminated|copyright/i.test(s))
+        return 'Este vídeo não está mais disponível (removido, ou o canal foi encerrado).';
+    if (/not available in your country|uploader has not made this video available/i.test(s))
+        return 'Este vídeo não está disponível na sua região (bloqueio geográfico). Precisaria de um proxy/VPN.';
+    if (/Private video|This video is private/i.test(s))
+        return 'Vídeo privado. Só dá pra baixar com uma conta que o autor autorizou.';
+    if (/confirm your age|age-restricted|inappropriate for some users/i.test(s))
+        return 'Vídeo com restrição de idade. Faça login no YouTube pelo navegador (no Windows, o Firefox funciona melhor) e tente de novo.';
+    if (/members-only|Join this channel|member of this channel|available to this channel's members/i.test(s))
+        return 'Vídeo exclusivo para membros do canal. Faça login com uma conta que seja membro.';
+    if (ytIsDpapiError(s))
+        return 'Não consegui ler os cookies do Chrome/Edge (proteção nova do Windows). Instale o Firefox e faça login no YouTube por ele — daí o download funciona.';
+    if (/Sign in to confirm you're not a bot|not a bot/i.test(s))
+        return 'O YouTube pediu verificação. Faça login no YouTube pelo navegador (Firefox de preferência) e tente novamente.';
+    if (/Video unavailable|This video is not available|is not available/i.test(s))
+        return 'Vídeo indisponível. Pode ser privado, com restrição, ou exigir login — tente entrar no YouTube pelo Firefox e baixar de novo.';
+    const m = s.match(/ERROR:\s*(.+)/i);
+    return m ? m[1].trim().replace(/\s+/g, ' ').slice(0, 160) : 'Não foi possível baixar o vídeo.';
+}
+
 // Roda yt-dlp com bypass + retry com cookies se cair em bot error.
 // onProc(proc, attemptIdx) chamado quando spawn → opção pra hooked progress parsing
 // ou para registrar em ytDownloadProc, etc.
 async function runYtDlpRobust(userArgs, opts = {}) {
     const { onProc, onStdoutLine, onStderrLine, timeout } = opts;
-    const browsersToTry = detectInstalledBrowsers();
+    // Firefox PRIMEIRO: no Windows o Chrome/Edge/Brave (Chromium 127+) usam App-Bound Encryption
+    // e dão "Failed to decrypt with DPAPI". O Firefox não tem esse problema — é o mais confiável.
+    const CHROMIUM = new Set(['chrome', 'edge', 'brave', 'opera']);
+    const browsersToTry = detectInstalledBrowsers().sort((a, b) => (a === 'firefox' ? -1 : b === 'firefox' ? 1 : 0));
     // 1ª tentativa: sem cookies, com bypass clients ideais
     // 2ª: alt clients (pra DRM)
-    // 3ª+: cookies de cada browser
+    // 3ª+: cookies de cada browser (firefox primeiro)
     const attempts = [
         { args: [...ytBypassArgs()], label: 'bypass-default' },
         { args: [...ytBypassArgsAltDRM()], label: 'bypass-alt-drm' },
-        ...browsersToTry.map(b => ({ args: ['--cookies-from-browser', b, ...ytBypassArgs()], label: 'cookies-' + b })),
+        ...browsersToTry.map(b => ({ args: ['--cookies-from-browser', b, ...ytBypassArgs()], label: 'cookies-' + b, browser: b })),
     ];
+    let _dpapiHit = false; // se um Chromium já deu DPAPI, pula os outros Chromium (todos têm ABE)
 
     let lastResult = null;
     for (let i = 0; i < attempts.length; i++) {
         const att = attempts[i];
+        // Se um Chromium já falhou por DPAPI, pula os outros Chromium (mesma App-Bound Encryption).
+        if (_dpapiHit && att.browser && CHROMIUM.has(att.browser)) {
+            console.log('[yt-dlp] pulando', att.label, '(DPAPI já falhou em Chromium)');
+            continue;
+        }
         const fullArgs = [...att.args, ...userArgs];
         console.log('[yt-dlp]', att.label, fullArgs.join(' '));
         const result = await new Promise((resolve) => {
@@ -2469,15 +2721,22 @@ async function runYtDlpRobust(userArgs, opts = {}) {
         lastResult = result;
         if (result.code === 0) return result;
 
-        // Bot error: tenta próxima (com cookies)
-        // DRM error: tenta próxima (alt clients)
-        // Outro erro: retorna direto
-        if (ytIsBotError(result.stderr)) {
-            console.log('[yt-dlp] bot error detected, trying next strategy...');
+        // Vídeo genuinamente indisponível (removido/banido/geo): cookie não resolve, aborta já.
+        if (ytIsGenuinelyUnavailable(result.stderr)) return result;
+        // Cookie do Chromium falhou por DPAPI: marca pra pular os outros Chromium e segue (Firefox etc.).
+        if (att.browser && CHROMIUM.has(att.browser) && ytIsDpapiError(result.stderr)) {
+            _dpapiHit = true;
+            console.log('[yt-dlp] DPAPI em', att.browser, '— pulando os outros Chromium');
+            continue;
+        }
+        // Precisa de cookies (idade/membros/login/bot/indisponível-sem-auth): tenta o próximo browser.
+        // DRM: tenta alt clients. Outro erro qualquer: não adianta retry.
+        if (ytNeedsCookies(result.stderr)) {
+            console.log('[yt-dlp] pode precisar de cookies, tentando próxima estratégia...');
         } else if (ytIsDrmError(result.stderr)) {
-            console.log('[yt-dlp] DRM error detected, trying alt clients...');
+            console.log('[yt-dlp] DRM error, tentando alt clients...');
         } else {
-            return result; // Erro diferente — não adianta retry
+            return result;
         }
     }
     return lastResult;
@@ -2496,7 +2755,7 @@ ipcMain.handle('yt-get-info', async (event, url) => {
     if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
     args.push(url);
     const result = await runYtDlpRobust(args, { timeout: 45000 });
-    if (result.code !== 0) return { error: result.stderr || 'Erro ao obter info' };
+    if (result.code !== 0) return { error: ytFriendlyError(result.stderr) };
     try {
         const info = JSON.parse(result.stdout);
         const formats = (info.formats || [])
@@ -2669,11 +2928,7 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
         } else {
             ytProgress.status = 'error';
             ytProgress.active = false;
-            if (!ytProgress.error || ytIsBotError(result.stderr)) {
-                ytProgress.error = ytIsBotError(result.stderr)
-                    ? 'YouTube bloqueou o download — verifique se está logado no Chrome/Edge/Firefox e tente de novo'
-                    : (result.stderr || 'Download falhou (código ' + code + ')');
-            }
+            ytProgress.error = ytFriendlyError(result.stderr || ytProgress.error);
         }
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
     }).catch(e => {
@@ -3019,6 +3274,26 @@ async function _removeBgBiRefNet(imagePath) {
         throw new Error('worker output missing: ' + e.message);
     }
 }
+
+// ═══ Removedor de fundo do APP (renderer) → roda no worker Node (onnxruntime NATIVO) ═══
+// O onnxruntime-web (WASM) no renderer aborta a inferencia do BiRefNet nesse setup do Electron
+// (erro numerico cru tipo "247159984"). O worker Node e' confiavel (~6s) — mesmo que o plugin usa.
+ipcMain.handle('bg-remove-image', async (event, payload) => {
+    try {
+        const buffer = payload && payload.buffer;
+        if (!buffer) return { ok: false, error: 'sem imagem' };
+        const rawExt = String((payload && payload.ext) || 'png').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'png';
+        const inExt = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff', 'gif'].includes(rawExt) ? rawExt : 'png';
+        const tmpIn = path.join(currentUD, 'bg-appin-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + inExt);
+        fs.writeFileSync(tmpIn, Buffer.from(buffer));
+        let outBuf;
+        try { outBuf = await _removeBgBiRefNet(tmpIn); }
+        finally { try { fs.unlinkSync(tmpIn); } catch (e) {} }
+        return { ok: true, buffer: outBuf };
+    } catch (e) {
+        return { ok: false, error: (e && e.message) ? e.message : String(e) };
+    }
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // MOTION TRACKER — spawn Python com motion_tracker.py.
@@ -4061,11 +4336,7 @@ function toggleLoop(){
                                 ytProgress.percent = 100; ytProgress.status = 'done'; ytProgress.active = false; ytProgress.file = lastFile;
                             } else {
                                 ytProgress.status = 'error'; ytProgress.active = false;
-                                if (!ytProgress.error || ytIsBotError(rdl.stderr)) {
-                                    ytProgress.error = ytIsBotError(rdl.stderr)
-                                        ? 'YouTube bloqueou — faça login no Chrome/Edge/Firefox e tente de novo'
-                                        : (rdl.stderr || 'Falhou (código ' + code + ')');
-                                }
+                                ytProgress.error = ytFriendlyError(rdl.stderr || ytProgress.error);
                             }
                             if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('yt-progress', ytProgress);
                         }).catch(e => {
@@ -4910,6 +5181,37 @@ ipcMain.handle('check-for-updates', async () => {
 ipcMain.handle('install-update', () => {
     autoUpdater.quitAndInstall(false, true);
 });
+
+/* ═══════ Cloud Sync IPC — dados do usuario na nuvem ═══════ */
+// Fala com a Edge Function (dynamic-service) usando o sync_token da sessao Discord.
+async function _cloudSyncCall(action, extra = {}) {
+    // loadValidDiscordSession e' ASYNC e retorna { session, valid } (wrapper)
+    const r = await loadValidDiscordSession();
+    const session = r && r.session;
+    if (!r || !r.valid || !session || !session.sync_token || !session.discord_user_id) {
+        return { ok: false, error: 'not_logged_in' };
+    }
+    try {
+        const resp = await fetch(DISCORD_AUTH_PROXY_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + (process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY),
+            },
+            body: JSON.stringify({
+                action,
+                discord_user_id: session.discord_user_id,
+                sync_token: session.sync_token,
+                ...extra,
+            }),
+        });
+        return await resp.json().catch(() => ({ ok: false, error: 'bad_response' }));
+    } catch (e) {
+        return { ok: false, error: 'network', message: e.message };
+    }
+}
+ipcMain.handle('cloud-sync-pull', async () => _cloudSyncCall('sync_pull'));
+ipcMain.handle('cloud-sync-push', async (_e, sections) => _cloudSyncCall('sync_push', { sections }));
 
 /* ═══════ Discord Auth IPC ═══════ */
 ipcMain.handle('discord:get-config', () => loadDiscordConfig());

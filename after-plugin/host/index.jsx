@@ -557,6 +557,102 @@ function lwAEApplyLUT(filePath) {
     }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// RANDOM WIGGLER (AE) — aplica expressao wiggle()/random() ao vivo.
+// cfg (objeto): mode 'wiggle'|'random', target, freq, amp, octaves, ampMult,
+//   axisX, axisY, loop(bool), loopDur, rmin, rmax, interval, interp('hold'|'linear'|'ease')
+// ────────────────────────────────────────────────────────────────────────────
+function _rwBuildExpr(c) {
+    var ax = (c.axisX !== false), ay = (c.axisY !== false);
+    var body;
+    if (c.mode === 'random') {
+        var mn = (c.rmin != null ? c.rmin : 0), mx = (c.rmax != null ? c.rmax : 100);
+        var iv = c.interval || 1, interp = c.interp || 'hold';
+        body = 'mn=' + mn + ';mx=' + mx + ';iv=' + iv + ';' +
+            'dims=(value instanceof Array)?value.length:1;' +
+            'function _rnd(sd){seedRandom(sd,true);var o=[];for(var i=0;i<dims;i++)o.push(random(mn,mx));return o;}' +
+            's=Math.floor(time/iv);a=_rnd(s);';
+        if (interp === 'hold') body += 'r=a;';
+        else {
+            var fn = (interp === 'ease') ? 'ease' : 'linear';
+            body += 'b=_rnd(s+1);r=[];for(var i=0;i<dims;i++)r.push(' + fn + '(time%iv,0,iv,a[i],b[i]));';
+        }
+        body += '_r=(dims==1)?r[0]:r;';
+    } else {
+        var f = (c.freq != null ? c.freq : 2), a = (c.amp != null ? c.amp : 30);
+        var oc = c.octaves || 1, mu = (c.ampMult != null ? c.ampMult : 0.5);
+        if (c.loop && c.loopDur) {
+            var L = c.loopDur;
+            // Loop perfeito (Dan Ebberts): crossfade linear entre wiggle(t) e wiggle(t-loopDur)
+            body = '_t=time%' + L + ';_w1=wiggle(' + f + ',' + a + ',' + oc + ',' + mu + ',_t);' +
+                '_w2=wiggle(' + f + ',' + a + ',' + oc + ',' + mu + ',_t-' + L + ');' +
+                '_r=linear(_t,0,' + L + ',_w1,_w2);';
+        } else {
+            body = '_r=wiggle(' + f + ',' + a + ',' + oc + ',' + mu + ');';
+        }
+    }
+    // Combina eixos: mantem 'value' no eixo travado
+    var tail;
+    if (ax && ay) tail = '_r;';
+    else if (ax && !ay) tail = '(value instanceof Array)?[(_r instanceof Array?_r[0]:_r),value[1]]:_r;';
+    else if (!ax && ay) tail = '(value instanceof Array)?[value[0],(_r instanceof Array?_r[1]:_r)]:_r;';
+    else tail = 'value;';
+    return body + tail;
+}
+function lwAERandomWiggle(cfg) {
+    app.beginUndoGroup('Lion Workspace — Random Wiggler');
+    try {
+        var comp = _activeComp();
+        if (!comp) { app.endUndoGroup(); return 'NO_COMP'; }
+        var layers = _selectedLayers(comp);
+        if (!layers.length) { app.endUndoGroup(); return 'NO_SELECTION'; }
+        var c = cfg || {};
+        var expr = _rwBuildExpr(c);
+        var n = 0;
+        for (var i = 0; i < layers.length; i++) {
+            var prop = _resolveTargetProp(layers[i], c.target || 'position');
+            if (prop && prop.canSetExpression) {
+                try { prop.expression = expr; prop.expressionEnabled = true; n++; } catch (e) {}
+            }
+        }
+        app.endUndoGroup();
+        return 'OK:' + n;
+    } catch (e) { app.endUndoGroup(); return 'ERROR:' + e.toString(); }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// LOOPER (AE) — loopOut/loopIn com type (cycle/pingpong/offset/continue).
+// cfg: type, dir('out'|'in'), keys (ultimos N keyframes; 0 = todos)
+// ────────────────────────────────────────────────────────────────────────────
+function lwAELoop(cfg) {
+    app.beginUndoGroup('Lion Workspace — Looper');
+    try {
+        var comp = _activeComp();
+        if (!comp) { app.endUndoGroup(); return 'NO_COMP'; }
+        var layers = _selectedLayers(comp);
+        if (!layers.length) { app.endUndoGroup(); return 'NO_SELECTION'; }
+        var c = cfg || {};
+        var type = c.type || 'cycle';
+        var dir = (c.dir === 'in') ? 'loopIn' : 'loopOut';
+        var keys = (c.keys != null ? c.keys : 0);
+        // "last N keyframes" → numKeyframes conta SEGMENTOS (N keyframes = N-1 segmentos); 0 = todos
+        var seg = keys > 0 ? Math.max(0, keys - 1) : 0;
+        var expr = (type === 'continue') ? (dir + '("continue");') : (dir + '("' + type + '", ' + seg + ');');
+        var n = 0;
+        for (var i = 0; i < layers.length; i++) {
+            var props = _collectAnimatedProps(layers[i]); // só props com keyframes
+            for (var p = 0; p < props.length; p++) {
+                var pr = props[p];
+                if (pr.canSetExpression && pr.numKeys > 1) {
+                    try { pr.expression = expr; pr.expressionEnabled = true; n++; } catch (e) {}
+                }
+            }
+        }
+        app.endUndoGroup();
+        return 'OK:' + n;
+    } catch (e) { app.endUndoGroup(); return 'ERROR:' + e.toString(); }
+}
+
 // Adiciona Curves preset rápido (lift, contrast, fade)
 function lwAEColorPreset(preset) {
     app.beginUndoGroup('Lion Workspace — Color: ' + preset);
