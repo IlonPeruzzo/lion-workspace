@@ -40,6 +40,9 @@
     }
     .topbar h1 { font-size:.88rem; font-weight:700; letter-spacing:-.2px; color:var(--text); }
     .topbar h1 span { color:var(--accent); }
+    /* macOS: traffic lights nativos ficam na esquerda (titleBarStyle hidden) */
+    body.is-mac .topbar { padding-left:78px; }
+    body.is-mac .win-controls { display:none; }
     /* Marca: logo do leao em circulo (identidade do app) */
     .brand-lock { display:flex; align-items:center; gap:9px; }
     .brand {
@@ -345,6 +348,7 @@
 
 <script>
 'use strict';
+try { if (process.platform === 'darwin') document.body.classList.add('is-mac'); } catch (e) {}
 
 // ════════════════════════════════════════════════════════════════════
 // MASK EDITOR — Lion Workspace

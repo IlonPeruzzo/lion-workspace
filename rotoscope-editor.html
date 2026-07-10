@@ -33,6 +33,9 @@
     }
     .topbar h1 { font-size:.88rem; font-weight:700; letter-spacing:-.2px; }
     .topbar h1 span { color:var(--accent); }
+    /* macOS: traffic lights nativos ficam na esquerda (titleBarStyle hidden) */
+    body.is-mac .topbar { padding-left:78px; }
+    body.is-mac .win-controls { display:none; }
     .spacer { flex:1; }
     .meta { font-size:.7rem; color:var(--text3); font-family:'JetBrains Mono', monospace; }
     .win-controls { display:flex; -webkit-app-region: no-drag; }
@@ -262,6 +265,7 @@
 
 <script>
 'use strict';
+try { if (process.platform === 'darwin') document.body.classList.add('is-mac'); } catch (e) {}
 
 const params = new URLSearchParams(location.search);
 const TOKEN = params.get('token') || '';

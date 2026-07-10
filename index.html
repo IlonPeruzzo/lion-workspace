@@ -320,7 +320,12 @@
 
         /* Check */
         .chk{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.86rem;color:var(--text2);padding:10px 0}
-        .chk input[type="checkbox"]{width:18px;height:18px;accent-color:#a3e635;cursor:pointer}
+        /* Checkbox custom: o nativo desenhava um quadrado BRANCO desmarcado que
+           destoava do tema escuro (ex: "Sem data fixa" no form de cliente) */
+        .chk input[type="checkbox"]{width:16px;height:16px;appearance:none;-webkit-appearance:none;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18);border-radius:5px;cursor:pointer;position:relative;flex-shrink:0;margin:0;transition:border-color .15s,background .15s}
+        .chk input[type="checkbox"]:hover{border-color:rgba(190,242,100,.45)}
+        .chk input[type="checkbox"]:checked{background:#bef264;border-color:#bef264}
+        .chk input[type="checkbox"]:checked::after{content:'';position:absolute;left:4.5px;top:1.5px;width:4px;height:8px;border:solid #0a0a0a;border-width:0 2px 2px 0;transform:rotate(45deg)}
 
         /* Info */
         .info-box{background:rgba(190,242,100,.04);border-radius:12px;padding:14px 18px;margin-top:14px;border:1px solid rgba(190,242,100,.06)}
@@ -3126,6 +3131,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 <li><b>Crie um projeto</b> (nome qualquer, ex: "lion") e selecione ele.</li>
                 <li>Vá em <b>APIs e serviços → Biblioteca</b>, procure <b>"YouTube Data API v3"</b> e clique em <b>Ativar</b>.<br><button class="btn btn-g" onclick="jfOpen('https://console.cloud.google.com/apis/library/youtube.googleapis.com')" style="margin-top:7px;padding:6px 12px;font-size:.72rem">Ativar a API ↗</button></li>
                 <li>Vá em <b>Credenciais → Criar credenciais → Chave de API</b>.</li>
+                <li>No final, em <b>Restringir chave</b>, marque a <b>"YouTube Data API v3"</b> na lista de APIs e salve.</li>
                 <li><b>Copie a chave</b> gerada e cole no campo abaixo.</li>
             </ol>
             <div style="display:flex;gap:8px;margin-top:16px">
@@ -5499,6 +5505,7 @@ function jfApplyFilters() {
     const min = jfSubsMinVal || 0;
     const max = isFinite(jfSubsMaxVal) ? jfSubsMaxVal : Infinity;
     jfLastResults = jfAllResults.filter(c => {
+        if (jfList.some(l => l.id === c.id)) return false; // já está na Minha lista → sai dos resultados
         if (c.subs === -1) return min === 0; // inscritos ocultos: só passam sem filtro de mínimo
         return c.subs >= min && c.subs <= max;
     });
@@ -5522,7 +5529,7 @@ function jfSaveGuideKey() {
     if (!v) { showToast('Cole a chave primeiro', 'warn'); return; }
     jfSetKey(v);
     jfCloseGuide();
-    showToast('Conectado! Agora é só buscar. 🚀', 'success');
+    showToast('Conectado! Agora é só buscar.', 'success');
     if (document.getElementById('jfQuery') && document.getElementById('jfQuery').value.trim()) jfSearch();
 }
 // Salva a chave em um lugar só (cfg.ytApiKey) e atualiza toda a UI que a mostra
@@ -5847,6 +5854,8 @@ async function jfSearch() {
         // dezenas de canais válidos fora. A busca já vem enviesada pra região (regionCode),
         // então os "sem país" são quase todos do lugar certo. Só corta quem é de OUTRO país.
         if (region) channels = channels.filter(c => !c.country || c.country === region);
+        // Corta canais que não são clientes (canal OFICIAL do termo buscado + " - Topic")
+        channels = channels.filter(c => !jfIsNonClient(c, [q]));
         await jfEnrichContacts(channels, vidByChannel, st);
         channels.sort((a, b) => b.subs - a.subs);
         jfAllResults = channels;
@@ -6034,6 +6043,8 @@ async function jfSimilarSearch(ref) {
                 channels.push(p);
             });
         }
+        // Corta canais que não são clientes (oficiais dos termos gerados + " - Topic")
+        channels = channels.filter(c => !jfIsNonClient(c, queries.concat([src.title])));
         await jfEnrichContacts(channels, vidByChannel, st);
         channels.forEach(c => { c._sim = jfSimScore(c, src); });
         channels.sort((a, b) => b._sim - a._sim); // mais similar primeiro (não por inscritos)
@@ -6085,6 +6096,18 @@ async function jfEnrichContacts(channels, vidByChannel, st) {
     } catch (e) {}
 }
 
+// Canais que NÃO são clientes em potencial:
+// - o canal OFICIAL do termo buscado (buscar "minecraft" trazia o canal Minecraft,
+//   "roblox" trazia o Roblox — marcas não contratam editor freelancer por email)
+// - canais " - Topic" (auto-gerados pelo YouTube, nem dono têm)
+function jfIsNonClient(c, terms) {
+    const title = String(c.title || '');
+    if (/\s-\sTopic$/i.test(title)) return true;
+    const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const t = norm(title);
+    if (!t) return false;
+    return (terms || []).some(q => { const nq = norm(q); return nq && t === nq; });
+}
 function jfParseChannel(c) {
     const sn = c.snippet || {}, stt = c.statistics || {}, bs = (c.brandingSettings && c.brandingSettings.channel) || {};
     const desc = (sn.description || '') + '\n' + (bs.description || '') + '\n' + (bs.keywords || '');
@@ -6220,20 +6243,16 @@ function jfAddToList(id) {
     if (!ch || jfList.some(p => p.id === id)) return;
     jfList.push({ id: ch.id, title: ch.title, avatar: ch.avatar, url: ch.url, subs: ch.subs, videos: ch.videos, country: ch.country, socials: ch.socials, _desc: (ch._desc || '').slice(0, 1200), _sent: false, addedAt: new Date().toISOString() });
     jfPersistList();
-    jfUpdateCounts();
-    // atualiza o card na hora
-    const card = document.getElementById('jfc-' + id);
-    if (card) { const b = card.querySelector('.jf-cardbtn'); if (b) { b.className = 'jf-cardbtn added'; b.disabled = true; b.textContent = '✓ Na lista'; } }
+    // some dos resultados na hora (quem está na Minha lista não é mais "achado")
+    jfApplyFilters();
     showToast('Adicionado à lista (' + jfList.length + ')', 'success');
 }
 function jfRemoveFromList(id) {
     jfList = jfList.filter(p => p.id !== id);
     jfPersistList();
-    jfUpdateCounts();
     jfRenderList();
-    // se estiver nos resultados, reabilita o botão
-    const card = document.getElementById('jfc-' + id);
-    if (card && jfView === 'results') { const b = card.querySelector('.jf-cardbtn'); if (b) { b.className = 'jf-cardbtn'; b.disabled = false; b.textContent = '＋ Enviar para a lista'; } }
+    // volta pros resultados (o filtro esconde quem está na lista)
+    jfApplyFilters();
 }
 function jfPersistList() { try { localStorage.setItem('vc_jobfinder_list', JSON.stringify(jfList)); } catch(e) {} }
 function jfRenderList() {
@@ -7765,6 +7784,8 @@ var _meiAlertDismissed = false; // persiste durante a sessão pra o × do alerta
 function updMeiTracker(){
     const tracker=document.getElementById('meiTracker');
     if(cfg.tipoPessoa!=='MEI'){tracker.style.display='none';return}
+    // Sem clientes = onboarding na tela; a barra de limite ainda não faz sentido
+    if(!clientes.length){tracker.style.display='none';return}
     tracker.style.display='block';
     const limite=81000;
     const anoAtual=new Date().getFullYear();
@@ -8250,17 +8271,43 @@ function getCliBandeira(cl){
     if(cl.bandeira)return cl.bandeira;
     return cl.internacional?'US':'BR';
 }
+// Seletor de país no MESMO estilo dos chips da forma de pagamento (bp-item),
+// com colapso "+N mais" pra não ocupar 2 linhas do modal
+const FLAG_FORM_VISIBLE = 8;
+let _flagExp = {}; // expandido por picker
 function renderFlagPicker(targetId,selectedCode){
     const el=document.getElementById(targetId);if(!el)return;
-    el.innerHTML=Object.entries(countryFlagData).map(([code,f])=>
-        `<span onclick="selectFlag('${targetId}','${code}')" style="cursor:pointer;padding:3px 6px;border-radius:6px;background:rgba(190,242,100,.04);border:2px solid ${code===selectedCode?'var(--accent)':'rgba(190,242,100,.08)'};transition:all .15s;display:inline-flex;align-items:center;gap:3px" title="${f.name}">${f.svg}<span style="font-size:.6rem;color:var(--text3)">${code}</span></span>`
+    el.classList.add('bubble-pay');
+    const sel=el.dataset.selected||selectedCode;
+    const entries=Object.entries(countryFlagData);
+    const expanded=!!_flagExp[targetId];
+    let lista=entries;
+    let ocultos=0;
+    if(!expanded && entries.length>FLAG_FORM_VISIBLE+1){
+        lista=entries.slice(0,FLAG_FORM_VISIBLE);
+        if(sel && !lista.some(([c])=>c===sel)){
+            const cur=entries.find(([c])=>c===sel);
+            if(cur){ lista=lista.slice(0,FLAG_FORM_VISIBLE-1); lista.push(cur); }
+        }
+        ocultos=entries.length-lista.length;
+    }
+    let html=lista.map(([code,f])=>
+        `<div class="bp-item ${code===sel?'selected':''}" onclick="selectFlag('${targetId}','${code}')" style="border-color:${code===sel?'var(--accent)':'rgba(190,242,100,.1)'}" title="${f.name}">${f.svg} <span>${code}</span></div>`
     ).join('');
+    if(!expanded && ocultos>0){
+        html+=`<div class="bp-item" onclick="_flagExp['${targetId}']=true;renderFlagPicker('${targetId}','${sel}')" style="cursor:pointer;opacity:.75;border-style:dashed" title="Mostrar todos os países">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> <span>${ocultos} mais</span>
+        </div>`;
+    } else if(expanded){
+        html+=`<div class="bp-item" onclick="_flagExp['${targetId}']=false;renderFlagPicker('${targetId}','${sel}')" style="cursor:pointer;opacity:.75;border-style:dashed" title="Mostrar menos">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg> <span>menos</span>
+        </div>`;
+    }
+    el.innerHTML=html;
 }
 function selectFlag(targetId,code){
-    document.querySelectorAll('#'+targetId+' > span').forEach(s=>s.style.borderColor='rgba(190,242,100,.08)');
-    const el=document.querySelector(`#${targetId} > span[onclick*="'${code}'"]`);
-    if(el)el.style.borderColor='var(--accent)';
     document.getElementById(targetId).dataset.selected=code;
+    renderFlagPicker(targetId,code);
 }
 function renderCli(){
     const el=document.getElementById('clientGrid');

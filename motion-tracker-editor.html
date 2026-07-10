@@ -33,6 +33,11 @@ body{display:flex;flex-direction:column}
 .win-btn:hover{background:rgba(255,255,255,.06);color:var(--text)}
 .win-btn.close:hover{background:#e81123;color:#fff}
 .win-btn svg{width:11px;height:11px}
+/* macOS: traffic lights nativos (titleBarStyle hidden) ficam na esquerda —
+   afasta o titulo pra nao sobrepor e esconde os botoes custom estilo Windows */
+body.is-mac .titlebar{padding-left:78px}
+body.is-mac .win-btns{display:none}
+@keyframes mtspin{to{transform:rotate(360deg)}}
 
 /* Main layout: video stage + side panel */
 .main{display:flex;flex:1;min-height:0}
@@ -416,8 +421,11 @@ body{display:flex;flex-direction:column}
 'use strict';
 const ipc = (() => { try { return require('electron').ipcRenderer; } catch(e) { return null; } })();
 const remoteWin = (() => { try { return require('@electron/remote').getCurrentWindow(); } catch(e) { return null; } })();
+const IS_MAC = (() => { try { return process.platform === 'darwin'; } catch(e) { return false; } })();
+if (IS_MAC) document.body.classList.add('is-mac');
 
 const params = new URLSearchParams(location.search);
+const IS_PREPARING = params.get('loading') === '1'; // main ainda esta gerando o proxy
 const SESSION = params.get('session') || '';
 const TOKEN = params.get('token') || ''; // Bearer token herdado do plugin
 const MEDIA_PATH = decodeURIComponent(params.get('media') || '');         // proxy MP4 (preview)
@@ -461,7 +469,7 @@ const pointInfo = document.getElementById('pointInfo');
 let trackPoint = null; // { x, y } em coords do vídeo
 let videoMeta = { width: 0, height: 0 };
 let _bboxSize = 54; // tamanho do alvo em px de vídeo (ajustável pelo slider; default = ~5% da menor dimensão)
-let pythonOk = false; // setado pelo check inicial — bloqueia track se false
+let pythonOk = null; // null = check pendente; false = sem deps (bloqueia track); true = ok
 let _trackHistory = null; // historico completo do tracking pra desenhar o path
 let _trackVideoSize = null; // {w, h} do video onde tracking rodou (proxy)
 let _zoom = 1, _panX = 0, _panY = 0; // zoom/pan do stage de vídeo
@@ -816,22 +824,32 @@ async function checkPython() {
         const body = await r.json();
         pythonOk = !!body.ok;
         if (!pythonOk) showPythonBanner(body);
-    } catch (e) { pythonOk = false; showPythonBanner({ error: e.message }); }
+    } catch (e) { pythonOk = false; showPythonBanner({ netError: true, error: e.message }); }
 }
 function showPythonBanner(info) {
+    const old = document.getElementById('pyBanner'); if (old) old.remove();
     const banner = document.createElement('div');
+    banner.id = 'pyBanner';
     banner.style.cssText = 'position:fixed;top:34px;left:0;right:0;background:linear-gradient(90deg,rgba(244,63,94,.18),rgba(245,158,11,.14));border-bottom:1px solid rgba(244,63,94,.35);padding:10px 14px;display:flex;align-items:center;gap:10px;z-index:999;font-size:.74rem';
     banner.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="2"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg><span style="flex:1;color:#fca5a5">' +
-        (info.pythonFound ? 'Python OK, mas falta <b>opencv-python</b> e <b>numpy</b>.' : 'Python <b>nao instalado</b>. Motion Tracker usa Python+OpenCV nativo.') +
-        '</span><button id="installPyBtn" style="background:var(--accent);color:#0a0a0a;border:0;padding:6px 14px;border-radius:5px;font-weight:700;cursor:pointer">Instalar agora</button>';
+        (info.netError ? 'Nao consegui verificar as dependencias — o app Lion Workspace esta aberto?'
+            : info.pythonFound ? 'Python OK, mas falta <b>opencv-contrib-python</b> e <b>numpy</b>.'
+            : 'Python <b>nao instalado</b>. Motion Tracker usa Python+OpenCV nativo.') +
+        '</span><button id="installPyBtn" style="background:var(--accent);color:#0a0a0a;border:0;padding:6px 14px;border-radius:5px;font-weight:700;cursor:pointer">' +
+        (info.netError ? 'Tentar de novo' : 'Instalar agora') + '</button>';
     document.body.appendChild(banner);
     document.getElementById('installPyBtn').addEventListener('click', async () => {
         const btn = document.getElementById('installPyBtn');
+        if (info.netError) { banner.remove(); checkPython(); return; }
         if (!info.pythonFound) {
-            setStatus('Instale Python 3.10+ primeiro: https://python.org/downloads/ (marque "Add Python to PATH" no Windows)', 'err');
+            setStatus(IS_MAC
+                ? 'Instale o Python 3 primeiro em https://python.org/downloads/ e reabra o Motion Tracker.'
+                : 'Instale Python 3.10+ primeiro: https://python.org/downloads/ (marque "Add Python to PATH")', 'err');
+            // Re-checa: se o usuario acabou de instalar o Python, o banner novo ja vem com "Instalar agora"
+            banner.remove(); checkPython();
             return;
         }
-        btn.disabled = true; btn.textContent = 'Instalando (~30s)...';
+        btn.disabled = true; btn.textContent = 'Instalando… (pode levar minutos)';
         try {
             const r = await fetch(API + '/motion-tracker/install-deps', { method: 'POST', headers: authHeaders() });
             const body = await r.json();
@@ -849,7 +867,9 @@ function showPythonBanner(info) {
         }
     });
 }
-checkPython();
+// No splash (proxy ainda gerando) nao checa: o load final re-checa, e um banner
+// no splash deixava o usuario iniciar um pip que o reload da pagina orfanava.
+if (!IS_PREPARING) checkPython();
 applyPreset('accurate'); // default
 
 function fmtTime(s) {
@@ -876,7 +896,21 @@ function loadVideo() {
         '<strong>' + (MEDIA_PATH.split(/[\\/]/).pop() || '?') + '</strong><br>' +
         IN_SEC.toFixed(2) + 's → ' + OUT_SEC.toFixed(2) + 's<br>' +
         '@ ' + FPS.toFixed(2) + 'fps';
-    vid.src = 'file:///' + MEDIA_PATH.replace(/\\/g, '/').replace(/^\//, '');
+    // pathToFileURL faz o percent-encoding correto (#, ?, %, acentos, espacos)
+    try { vid.src = require('url').pathToFileURL(MEDIA_PATH).href; }
+    catch (e) { vid.src = 'file:///' + encodeURI(MEDIA_PATH.replace(/\\/g, '/').replace(/^\//, '')).replace(/#/g, '%23').replace(/\?/g, '%3F'); }
+    vid.addEventListener('error', () => {
+        setStatus('Video nao carregou — formato sem suporte no preview.', 'err');
+        if (document.getElementById('vidFailOverlay')) return;
+        const ov = document.createElement('div');
+        ov.id = 'vidFailOverlay';
+        ov.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#000;z-index:40;color:var(--text2);font-size:.8rem;text-align:center;padding:24px';
+        ov.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="2"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>' +
+            '<div style="color:#fca5a5;font-weight:600">Nao consegui gerar o preview deste formato</div>' +
+            '<div style="font-size:.7rem;opacity:.7;max-width:420px">O conversor de video (ffmpeg) nao esta disponivel neste computador. ' +
+            (IS_MAC ? 'Instale com <b>brew install ffmpeg</b> (ou instale o Rosetta) e reabra o Motion Tracker.' : 'Reabra o Motion Tracker pra tentar baixar de novo.') + '</div>';
+        document.getElementById('videoWrap').appendChild(ov);
+    }, { once: true });
     vid.addEventListener('loadedmetadata', () => {
         videoMeta.width = vid.videoWidth;
         videoMeta.height = vid.videoHeight;
@@ -1120,6 +1154,10 @@ function _endAnalyze() { _analyzing = false; anBtns.forEach(b => b && b.classLis
 
 async function runAnalyze(mode) {
     if (_analyzing) return;
+    if (pythonOk === false) {
+        setStatus('Instale as dependencias primeiro — use o botao "Instalar agora" no aviso acima.', 'err');
+        return;
+    }
     const curFrame = Math.round(vid.currentTime * FPS);
     // Ponto de referência no frame atual: usa o track existente nesse frame, senão o ponto marcado
     let ref = null;
@@ -1271,7 +1309,24 @@ document.getElementById('btnMax').addEventListener('click', () => {
     try { remoteWin?.isMaximized() ? remoteWin.unmaximize() : remoteWin?.maximize(); } catch(e) {}
 });
 
-loadVideo();
+// Splash enquanto o main gera o proxy (a janela abre na hora; o main recarrega
+// esta pagina com o video assim que o proxy fica pronto)
+function _showPrepSplash() {
+    const el = document.createElement('div');
+    el.id = 'prepSplash';
+    el.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#000;z-index:50;color:var(--text2);font-size:.8rem';
+    el.innerHTML = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" style="animation:mtspin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>' +
+        '<div>Preparando vídeo…</div>' +
+        '<div style="font-size:.68rem;opacity:.6">Na primeira vez pode baixar componentes (~1 min)</div>';
+    document.getElementById('videoWrap').appendChild(el);
+}
+
+if (IS_PREPARING) {
+    _showPrepSplash();
+    setStatus('Preparando vídeo…', 'warn');
+} else {
+    loadVideo();
+}
 </script>
 </body>
 </html>

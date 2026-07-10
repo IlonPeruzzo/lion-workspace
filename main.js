@@ -1402,15 +1402,31 @@ function openMaskEditor(origPath, processedPath) {
             minHeight: 600,
             title: 'Editor de Máscara — Lion Workspace',
             backgroundColor: '#050505',
-            show: true,
+            show: false,
             // Frameless: o titlebar nativo do Windows era redundante com a
             // topbar custom do editor (.topbar). Agora a topbar é drag region.
             frame: false,
             titleBarStyle: 'hidden',
+            ...(isMac ? { trafficLightPosition: { x: 12, y: 10 } } : {}),
             webPreferences: {
                 nodeIntegration: true,
                 contextIsolation: false,
             },
+        });
+        // Mac: showInactive nao ativa o app — ativar levantaria a main window
+        // por cima do Premiere (mesmo fix do Motion Tracker editor)
+        win.once('ready-to-show', () => {
+            _toolWinShownAt = Date.now();
+            try {
+                if (isMac) {
+                    win.setAlwaysOnTop(true, 'floating');
+                    win.showInactive();
+                    win.once('focus', () => { try { win.setAlwaysOnTop(false); } catch (e) {} });
+                    setTimeout(() => { try { if (!win.isDestroyed() && !win.isFocused()) win.setAlwaysOnTop(false); } catch (e) {} }, 15000);
+                } else {
+                    win.show();
+                }
+            } catch (e) { try { win.show(); } catch (e2) {} }
         });
         sess.win = win;
         _activeMaskEditorWin = win;
@@ -2458,10 +2474,33 @@ async function ensureYtDlp() {
 
 function ffprobeReady() { return fs.existsSync(ffprobeBin); }
 
+// O binario EXECUTA? (Apple Silicon sem Rosetta: o x86_64 da evermeet existe mas da EBADARCH)
+function _ffmpegRuns() {
+    return new Promise((resolve) => {
+        try {
+            const p = spawn(ffmpegBin, ['-version'], { stdio: ['ignore', 'ignore', 'ignore'] });
+            const t = setTimeout(() => { try { p.kill(); } catch (e) {} resolve(false); }, 10000);
+            p.on('close', c => { clearTimeout(t); resolve(c === 0); });
+            p.on('error', () => { clearTimeout(t); resolve(false); });
+        } catch (e) { resolve(false); }
+    });
+}
+let _ffmpegValidatedBoot = false; // valida binario pre-existente 1x por boot (mac)
+let _ffmpegDlArchBad = false;     // download validou e falhou — nao re-baixa em loop na mesma sessao
+
 async function ensureFfmpeg() {
     // Antes só checava ffmpeg — agora exige BOTH ffmpeg E ffprobe.
     // bg-remove de vídeo precisa do ffprobe pra detectar dimensões/fps.
-    if (ffmpegReady() && ffprobeReady()) return true;
+    if (ffmpegReady() && ffprobeReady()) {
+        if (!isMac || _ffmpegValidatedBoot) return true;
+        // Mac: binario baixado por versao antiga pode ser x86_64 num ARM sem Rosetta
+        _ffmpegValidatedBoot = true;
+        if (await _ffmpegRuns()) return true;
+        console.error('[ffmpeg] binario existente nao executa — removendo pra rebuscar');
+        try { fs.rmSync(ffmpegBin, { force: true }); } catch (e) {}
+        try { fs.rmSync(ffprobeBin, { force: true }); } catch (e) {}
+    }
+    if (_ffmpegDlArchBad) return false;
 
     // Try to find system ffmpeg/ffprobe first
     const findBin = (name) => new Promise(resolve => {
@@ -2507,7 +2546,8 @@ async function ensureFfmpeg() {
             }
         }
 
-        // 3) macOS: download ffmpeg + ffprobe from evermeet.cx (universal builds)
+        // 3) macOS: download ffmpeg + ffprobe from evermeet.cx (builds x86_64 —
+        //    em Apple Silicon rodam via Rosetta; sem Rosetta o binario nao executa)
         try {
             const dlDir = path.join(ytDlpDir, 'ff-extract');
             fs.mkdirSync(dlDir, { recursive: true });
@@ -2531,6 +2571,15 @@ async function ensureFfmpeg() {
             }
             // Cleanup
             try { fs.rmSync(dlDir, { recursive: true, force: true }); } catch {}
+            // Valida que o binario EXECUTA (Apple Silicon sem Rosetta: EBADARCH —
+            // o arquivo existe e ffmpegReady() daria true, mas todo spawn falharia)
+            if (ffmpegReady() && !(await _ffmpegRuns())) {
+                console.error('macOS ffmpeg baixado nao executa (arquitetura? Rosetta ausente?) — removendo');
+                try { fs.rmSync(ffmpegBin, { force: true }); } catch (e) {}
+                try { fs.rmSync(ffprobeBin, { force: true }); } catch (e) {}
+                _ffmpegDlArchBad = true; // nao adianta re-baixar o mesmo build nesta sessao
+                return false;
+            }
             return ffmpegReady() && ffprobeReady();
         } catch (e) { console.error('macOS ffmpeg download failed:', e.message); return false; }
     }
@@ -3241,6 +3290,7 @@ const { Worker } = require('worker_threads');
 let _bgWorker = null;
 let _ytPreviewWin = null;
 let _activeMtEditorWin = null; // singleton: so um motion tracker editor aberto por vez
+let _toolWinShownAt = 0; // quando um tool-window (mt/mask) apareceu — guard do 'activate' no mac
 // Track salvo pelo editor — user cola no clip que quiser via "Colar Track" no plugin
 let _savedMotionTrack = null;
 const SAVED_TRACK_FILE = path.join(currentUD, 'lw-saved-track.json');
@@ -3319,26 +3369,96 @@ ipcMain.handle('bg-remove-image', async (event, payload) => {
 // Suporta CSRT/KCF/MOSSE/MIL/LucasKanade + Whittaker/Kalman/Supersmoother.
 // ═══════════════════════════════════════════════════════════════════
 let _cachedPython = null;
-function _findPython() {
+let _mtInstallInFlight = false; // serializa install-deps (pips concorrentes corrompem site-packages)
+// Venv dedicado do Motion Tracker (userData/mt-venv) — imune ao PEP 668
+// ("externally-managed-environment") que bloqueia pip direto no Python do
+// Homebrew em macOS moderno. Criado pelo install-deps quando o pip direto falha.
+function _mtVenvPython() {
+    return isWin
+        ? path.join(currentUD, 'mt-venv', 'Scripts', 'python.exe')
+        : path.join(currentUD, 'mt-venv', 'bin', 'python3');
+}
+// Mac: Command Line Tools presentes? (cacheado) — sem CLT, o stub /usr/bin/python3
+// EXISTE mas executa-lo abre o dialogo nativo "instalar ferramentas de desenvolvedor".
+let _cltPresentCache = null;
+function _cltPresent() {
+    if (_cltPresentCache !== null) return _cltPresentCache;
+    try {
+        const { execSync } = require('child_process');
+        execSync('xcode-select -p', { timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] });
+        _cltPresentCache = true;
+    } catch (e) { _cltPresentCache = false; }
+    return _cltPresentCache;
+}
+async function _findPython() {
     if (_cachedPython) return _cachedPython;
-    const { execSync } = require('child_process');
-    const candidates = isWin
-        ? ['py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe']
-        : ['python3', '/usr/local/bin/python3', '/opt/homebrew/bin/python3', '/usr/bin/python3', 'python'];
+    let candidates;
+    if (isWin) {
+        candidates = [_mtVenvPython(), 'py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe'];
+    } else {
+        candidates = [_mtVenvPython(), '/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/Library/Frameworks/Python.framework/Versions/Current/bin/python3'];
+        if (_cltPresent()) candidates.push('/usr/bin/python3', 'python3', 'python');
+    }
+    // Probe exige cv2 CONTRIB (cv2.legacy) — o motion_tracker.py usa CSRT/KCF/MOSSE/MIL
+    // de cv2.legacy.*; opencv-python "puro" passava no check antigo e falhava no track.
+    const PROBE = "import cv2,numpy,sys;assert hasattr(cv2,'legacy');print(sys.executable)";
     for (const cmd of candidates) {
-        try {
-            const out = execSync(`${cmd} -c "import cv2,numpy,sys;print(sys.executable)"`, { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
-            if (out) { _cachedPython = cmd; console.log('[motion-tracker] using python:', cmd, '=>', out); return cmd; }
-        } catch (e) { /* tenta proximo */ }
+        // Path absoluto que nao existe: pula sem executar (evita ruido e o popup
+        // "instalar ferramentas de desenvolvedor" do /usr/bin/python3 sem CLT no Mac)
+        if (path.isAbsolute(cmd) && !fs.existsSync(cmd)) continue;
+        // 20s: o PRIMEIRO import de cv2 recem-instalado compila .pyc + antivirus escaneia
+        const r = await _pyRun(cmd, ['-c', PROBE], 20000);
+        const out = (r.out || '').trim();
+        if (r.code === 0 && out) { _cachedPython = cmd; console.log('[motion-tracker] using python:', cmd, '=>', out); return cmd; }
     }
     return null;
+}
+// Python "base" (sem exigir cv2) — usado pra criar venv / rodar pip.
+// No Mac so executa paths que EXISTEM; /usr/bin/python3 apenas com CLT instalado
+// (sem isso, executa-lo dispara o dialogo nativo de instalar developer tools).
+async function _findBasePython() {
+    let candidates;
+    if (isWin) {
+        candidates = ['py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe'];
+    } else {
+        candidates = ['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/Library/Frameworks/Python.framework/Versions/Current/bin/python3'];
+        if (_cltPresent()) candidates.push('/usr/bin/python3', 'python3');
+    }
+    for (const cmd of candidates) {
+        if (path.isAbsolute(cmd) && !fs.existsSync(cmd)) continue;
+        const r = await _pyRun(cmd, ['--version'], 5000);
+        if (r.code === 0) return cmd;
+    }
+    return null;
+}
+// Roda um comando python (pip/venv) e resolve {code, out, err} — nunca rejeita.
+// SEM shell: "py -3" vira spawn('py', ['-3', ...]). Com shell, o kill do timeout
+// matava so o cmd.exe e o pip orfao continuava instalando (corrupcao concorrente).
+function _pyRun(py, args, timeoutMs) {
+    return new Promise((resolve) => {
+        const { spawn } = require('child_process');
+        let file = py, finalArgs = args;
+        if (py.indexOf(' ') !== -1 && !fs.existsSync(py)) {
+            const parts = py.split(' ');
+            file = parts[0];
+            finalArgs = parts.slice(1).concat(args);
+        }
+        const proc = spawn(file, finalArgs, { windowsHide: true });
+        let out = '', err = '', done = false;
+        const finish = (code) => { if (!done) { done = true; resolve({ code, out, err }); } };
+        const killer = setTimeout(() => { try { proc.kill(); } catch (e) {} finish(-2); }, timeoutMs || 600000);
+        proc.stdout.on('data', d => { out += d.toString(); });
+        proc.stderr.on('data', d => { err += d.toString(); });
+        proc.on('close', code => { clearTimeout(killer); finish(code); });
+        proc.on('error', e => { clearTimeout(killer); err += String(e.message || e); finish(-1); });
+    });
 }
 
 // Spawn motion_tracker.py com pontos + opcoes. Retorna o JSON result.
 async function _runMotionTracker(filePath, ffmpegPath, ffprobePath, points, options) {
-    const py = _findPython();
+    const py = await _findPython();
     if (!py) {
-        throw new Error('Python+OpenCV nao instalados. Abra Configuracoes > Motion Tracker pra instalar.');
+        throw new Error('Python+OpenCV nao instalados. Use o botao "Instalar agora" no aviso do editor.');
     }
     const scriptPath = app.isPackaged
         ? path.join(process.resourcesPath, 'app.asar.unpacked', 'motion_tracker.py')
@@ -3362,11 +3482,15 @@ async function _runMotionTracker(filePath, ffmpegPath, ffprobePath, points, opti
     ];
 
     const { spawn } = require('child_process');
-    // No Windows "py -3" precisa de shell. Em Mac/Linux usa array direto.
-    const useShell = isWin && py.startsWith('py ');
-    const proc = useShell
-        ? spawn(py + ' ' + args.map(a => `"${String(a).replace(/"/g, '\\"')}"`).join(' '), { shell: true, windowsHide: true })
-        : spawn(py, args, { windowsHide: true });
+    // SEM shell: "py -3" vira spawn('py', ['-3', ...]) — paths com espaco funcionam
+    // e um kill mata o python de verdade (com shell so o cmd.exe morria).
+    let pyFile = py, pyArgs = args;
+    if (py.indexOf(' ') !== -1 && !fs.existsSync(py)) {
+        const parts = py.split(' ');
+        pyFile = parts[0];
+        pyArgs = parts.slice(1).concat(args);
+    }
+    const proc = spawn(pyFile, pyArgs, { windowsHide: true });
 
     return new Promise((resolve, reject) => {
         let stdout = '';
@@ -4479,55 +4603,20 @@ function toggleLoop(){
                         const outSec = parseFloat(data.outPointSec) || 0;
                         const dur = Math.max(0.5, outSec - inSec);
                         // ─── Proxy MP4 H.264 — HTML5 video não decodifica ProRes/HEVC/DNxHR ───
-                        // Tracking continua usando o ORIGINAL (full quality).
                         const proxyDir = path.join(currentUD, 'mt-proxies');
                         try { fs.mkdirSync(proxyDir, { recursive: true }); } catch (e) {}
                         const proxyPath = path.join(proxyDir, 'proxy-' + session + '.mp4');
-                        console.log('[mt-editor] gerando proxy:', proxyPath);
-                        await new Promise((resolve) => {
-                            // Mantém a resolução ORIGINAL (teto 2160p) + CRF 17 + veryfast.
-                            // O antigo (1080p + ultrafast + crf20) borrava no zoom E piorava o
-                            // tracking (roda neste mesmo proxy — artefato confunde o tracker).
-                            const ff = spawn(ffmpegBin, [
-                                '-y',
-                                '-ss', String(Math.max(0, inSec - 0.05)),
-                                '-i', data.mediaPath,
-                                '-t', String(dur + 0.1),
-                                '-vf', 'scale=-2:min(2160\\,ih)', // mantém aspect; só limita acima de 4K
-                                '-c:v', 'libx264',
-                                '-preset', 'veryfast',
-                                '-crf', '17',
-                                '-pix_fmt', 'yuv420p',
-                                '-movflags', '+faststart',
-                                '-an',
-                                proxyPath
-                            ], { stdio: ['ignore', 'ignore', 'pipe'] });
-                            let errBuf = '';
-                            ff.stderr.on('data', d => { errBuf += d.toString(); });
-                            ff.on('close', (code) => {
-                                if (code === 0 && fs.existsSync(proxyPath)) {
-                                    console.log('[mt-editor] proxy OK:', fs.statSync(proxyPath).size, 'bytes');
-                                } else {
-                                    console.error('[mt-editor] proxy FAIL code=' + code, errBuf.slice(-500));
-                                }
-                                resolve();
-                            });
-                            ff.on('error', e => { console.error('[mt-editor] ffmpeg spawn err:', e); resolve(); });
-                        });
-                        const usingProxy = fs.existsSync(proxyPath) && fs.statSync(proxyPath).size > 1024;
-                        const previewPath = usingProxy ? proxyPath : data.mediaPath;
-                        // No proxy o vídeo começa em 0s (trecho cortado começa do 0)
-                        const editorInSec = usingProxy ? 0 : inSec;
-                        const editorOutSec = usingProxy ? dur : outSec;
-                        const q = new URLSearchParams({
+                        const buildQ = (previewPath, usingProxy, loading) => new URLSearchParams({
                             session,
                             token,
-                            media: encodeURIComponent(previewPath),
+                            media: encodeURIComponent(previewPath || ''),
                             origMedia: encodeURIComponent(data.mediaPath),
                             usingProxy: usingProxy ? '1' : '0',
+                            loading: loading ? '1' : '0',
                             fps: String(data.fps || 30),
-                            inSec: String(editorInSec),
-                            outSec: String(editorOutSec),
+                            // No proxy o vídeo começa em 0s (trecho cortado começa do 0)
+                            inSec: String(usingProxy ? 0 : inSec),
+                            outSec: String(usingProxy ? dur : outSec),
                             origInSec: String(inSec),
                             origOutSec: String(outSec),
                             // Plugin JSX envia `inPointTicks` (não clipInPointTicks).
@@ -4539,18 +4628,21 @@ function toggleLoop(){
                         const htmlPath = path.join(__dirname, 'motion-tracker-editor.html');
                         let win;
                         if (_reuseWin) {
-                            // Janela ja aberta: recarrega com o clip novo e traz pra frente
+                            // Janela ja aberta: recarrega com o clip novo e traz pra frente.
+                            // Mac: showInactive nao ativa o app (ativar levantaria TODAS as
+                            // janelas do Electron — incluindo a main — por cima do Premiere).
                             win = _reuseWin;
                             try {
                                 if (win.isMinimized()) win.restore();
-                                win.show(); win.focus(); win.moveTop();
+                                if (isMac) { win.showInactive(); win.moveTop(); }
+                                else { win.show(); win.focus(); win.moveTop(); }
                             } catch (eF) {}
                         } else {
                             win = new BrowserWindow({
                                 width: 1280, height: 800,
                                 title: 'Motion Tracker',
                                 backgroundColor: '#0a0a0a',
-                                show: true,
+                                show: false,
                                 center: true,
                                 alwaysOnTop: false,
                                 skipTaskbar: false,
@@ -4558,8 +4650,25 @@ function toggleLoop(){
                                 // Sem isso, Windows desenha tambem a barra nativa (com Edit menu) duplicando.
                                 frame: false,
                                 titleBarStyle: 'hidden',
+                                ...(isMac ? { trafficLightPosition: { x: 12, y: 10 } } : {}),
                                 autoHideMenuBar: true,
                                 webPreferences: { nodeIntegration: true, contextIsolation: false }
+                            });
+                            win.once('ready-to-show', () => {
+                                _toolWinShownAt = Date.now();
+                                try {
+                                    if (isMac) {
+                                        // showInactive: aparece SEM ativar o app (main window nao sobe).
+                                        // alwaysOnTop temporario garante que fica sobre o Premiere ate
+                                        // o usuario interagir; cai no primeiro foco (stacking normal).
+                                        win.setAlwaysOnTop(true, 'floating');
+                                        win.showInactive();
+                                        win.once('focus', () => { try { win.setAlwaysOnTop(false); } catch (e) {} });
+                                        setTimeout(() => { try { if (!win.isDestroyed() && !win.isFocused()) win.setAlwaysOnTop(false); } catch (e) {} }, 15000);
+                                    } else {
+                                        win.show();
+                                    }
+                                } catch (e) { try { win.show(); } catch (e2) {} }
                             });
                             try { win.setMenuBarVisibility(false); } catch (e) {}
                             try { require('@electron/remote/main').enable(win.webContents); } catch (e) { console.warn('[mt-editor] remote enable err:', e.message); }
@@ -4573,10 +4682,89 @@ function toggleLoop(){
                                 console.log('[mt-editor] loaded OK');
                             });
                         }
-                        console.log('[mt-editor] loading:', htmlPath, 'reuse:', !!_reuseWin, 'q:', q);
-                        win.loadFile(htmlPath, { search: q });
+                        // 1) Janela abre JÁ com splash "preparando vídeo" e o HTTP responde
+                        //    IMEDIATAMENTE. Antes, o proxy (ffmpeg, >5s em clipe longo/4K) rodava
+                        //    ANTES de responder → plugin estourava o timeout ("Falha ao abrir")
+                        //    e a janela só aparecia bem depois — no Mac parecia que nem abria.
+                        // Epoch de sessão: se o usuário reabrir com outro clip enquanto um proxy
+                        // antigo ainda transcoda, o job antigo NÃO pode recarregar a janela
+                        // (perderia o track em andamento e voltaria pro clip errado).
+                        win._mtSession = session;
+                        try { if (win._mtProxyProc && !win._mtProxyProc.killed) win._mtProxyProc.kill(); } catch (e) {}
+                        console.log('[mt-editor] loading (splash):', htmlPath, 'reuse:', !!_reuseWin);
+                        win.loadFile(htmlPath, { search: buildQ('', false, true) }).catch(() => {});
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ ok: true, session, reused: !!_reuseWin }));
+                        // Limpa proxies velhos (>24h) — sem isso o mt-proxies cresce sem limite
+                        setImmediate(() => {
+                            try {
+                                const now = Date.now();
+                                for (const f of fs.readdirSync(proxyDir)) {
+                                    try {
+                                        const fp = path.join(proxyDir, f);
+                                        if (now - fs.statSync(fp).mtimeMs > 24 * 60 * 60 * 1000) fs.rmSync(fp, { force: true });
+                                    } catch (e) {}
+                                }
+                            } catch (e) {}
+                        });
+
+                        // 2) Proxy em background; quando pronto, recarrega o editor com o vídeo.
+                        (async () => {
+                            try {
+                                // Mac: ffmpeg vem do downloader do YT (userData/yt-dlp) — se o
+                                // usuário nunca baixou, busca agora (PATH/Homebrew/evermeet).
+                                if (!ffmpegReady()) { try { await ensureFfmpeg(); } catch (e) { console.error('[mt-editor] ensureFfmpeg err:', e.message); } }
+                                if (ffmpegReady()) {
+                                    console.log('[mt-editor] gerando proxy:', proxyPath);
+                                    await new Promise((resolve) => {
+                                        // Mantém a resolução ORIGINAL (teto 2160p) + CRF 17 + veryfast.
+                                        // O antigo (1080p + ultrafast + crf20) borrava no zoom E piorava o
+                                        // tracking (roda neste mesmo proxy — artefato confunde o tracker).
+                                        const ff = spawn(ffmpegBin, [
+                                            '-y',
+                                            '-ss', String(Math.max(0, inSec - 0.05)),
+                                            '-i', data.mediaPath,
+                                            '-t', String(dur + 0.1),
+                                            '-vf', 'scale=-2:min(2160\\,ih)', // mantém aspect; só limita acima de 4K
+                                            '-c:v', 'libx264',
+                                            '-preset', 'veryfast',
+                                            '-crf', '17',
+                                            '-pix_fmt', 'yuv420p',
+                                            '-movflags', '+faststart',
+                                            '-an',
+                                            proxyPath
+                                        ], { stdio: ['ignore', 'ignore', 'pipe'] });
+                                        win._mtProxyProc = ff; // reuse com outro clip mata este job
+                                        let errBuf = '';
+                                        ff.stderr.on('data', d => { errBuf += d.toString(); });
+                                        ff.on('close', (code) => {
+                                            if (code === 0 && fs.existsSync(proxyPath)) {
+                                                console.log('[mt-editor] proxy OK:', fs.statSync(proxyPath).size, 'bytes');
+                                            } else {
+                                                console.error('[mt-editor] proxy FAIL code=' + code, errBuf.slice(-500));
+                                            }
+                                            resolve();
+                                        });
+                                        ff.on('error', e => { console.error('[mt-editor] ffmpeg spawn err:', e); resolve(); });
+                                    });
+                                } else {
+                                    console.warn('[mt-editor] sem ffmpeg — editor vai usar a mídia original');
+                                }
+                                let usingProxy = false;
+                                try { usingProxy = fs.existsSync(proxyPath) && fs.statSync(proxyPath).size > 1024; } catch (e) {}
+                                const previewPath = usingProxy ? proxyPath : data.mediaPath;
+                                // Guard de sessão: só recarrega se esta janela ainda pertence a ESTE job
+                                if (win && !win.isDestroyed() && win._mtSession === session) {
+                                    console.log('[mt-editor] loading (final):', 'proxy:', usingProxy);
+                                    win.loadFile(htmlPath, { search: buildQ(previewPath, usingProxy, false) }).catch(() => {});
+                                }
+                            } catch (e) {
+                                console.error('[mt-editor] preparo async err:', e);
+                                try {
+                                    if (win && !win.isDestroyed() && win._mtSession === session) win.loadFile(htmlPath, { search: buildQ(data.mediaPath, false, false) }).catch(() => {});
+                                } catch (e2) {}
+                            }
+                        })();
                     } catch (e) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message || String(e) }));
@@ -4696,18 +4884,14 @@ function toggleLoop(){
                     // Verifica se Python+OpenCV estao disponiveis. Resposta: {ok, python, error?}
                     try {
                         _cachedPython = null; // forca redetect
-                        const py = _findPython();
+                        _cltPresentCache = null; // usuario pode ter instalado CLT/Python agora
+                        const py = await _findPython();
                         if (py) {
                             res.writeHead(200, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ ok: true, python: py }));
                         } else {
                             // Detecta se ao menos Python existe (mesmo sem opencv)
-                            const { execSync } = require('child_process');
-                            let pyOnly = null;
-                            const candidates = isWin ? ['py -3', 'python', 'python3'] : ['python3', 'python'];
-                            for (const c of candidates) {
-                                try { execSync(`${c} --version`, { timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }); pyOnly = c; break; } catch {}
-                            }
+                            const pyOnly = await _findBasePython();
                             res.writeHead(200, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ ok: false, pythonFound: !!pyOnly, python: pyOnly, error: pyOnly ? 'Python OK mas falta opencv-python/numpy' : 'Python nao instalado' }));
                         }
@@ -4718,47 +4902,72 @@ function toggleLoop(){
                     return;
                 }
                 if (command === 'motion-tracker/install-deps' && req.method === 'POST') {
-                    // Roda pip install opencv-python numpy scipy via Python detectado.
+                    // Instala opencv-contrib-python + numpy.
+                    // 1a tentativa: pip direto no Python do sistema (funciona no Windows e em
+                    // Macs com Python da Apple/python.org). Se falhar — tipicamente PEP 668
+                    // "externally-managed-environment" no Python do Homebrew — cria um venv
+                    // dedicado em userData/mt-venv e instala nele (venv e imune ao PEP 668).
+                    if (_mtInstallInFlight) {
+                        // pips concorrentes no mesmo site-packages corrompem a instalacao
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ ok: false, error: 'Ja tem uma instalacao em andamento — aguarde ela terminar.' }));
+                        return;
+                    }
+                    _mtInstallInFlight = true;
                     try {
-                        const { execSync } = require('child_process');
-                        let py = null;
-                        const candidates = isWin ? ['py -3', 'python', 'python3'] : ['python3', 'python'];
-                        for (const c of candidates) {
-                            try { execSync(`${c} --version`, { timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }); py = c; break; } catch {}
-                        }
+                        const py = await _findBasePython();
                         if (!py) {
                             res.writeHead(400, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ ok: false, error: 'Python nao encontrado. Instale Python 3.10+ primeiro: https://python.org/downloads/' }));
                             return;
                         }
-                        const { spawn } = require('child_process');
-                        const useShell = isWin && py.startsWith('py ');
                         // opencv-contrib-python inclui CSRT/KCF/MOSSE/MIL via cv2.legacy.* (opencv-python nao tem)
-                        const args = ['-m', 'pip', 'install', '--upgrade', 'opencv-contrib-python', 'numpy', 'scipy'];
-                        const proc = useShell
-                            ? spawn(py + ' ' + args.join(' '), { shell: true, windowsHide: true })
-                            : spawn(py, args, { windowsHide: true });
-                        let out = '', err = '';
-                        proc.stdout.on('data', d => { out += d.toString(); });
-                        proc.stderr.on('data', d => { err += d.toString(); });
-                        proc.on('close', code => {
-                            _cachedPython = null; // forca redetect
-                            const verified = _findPython();
-                            if (code === 0 && verified) {
-                                res.writeHead(200, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ ok: true, python: verified, log: out.slice(-1000) }));
-                            } else {
-                                res.writeHead(500, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ ok: false, error: `pip exit ${code}`, log: (err + out).slice(-2000) }));
+                        const PKGS = ['opencv-contrib-python', 'numpy'];
+                        let log = '';
+                        const direct = await _pyRun(py, ['-m', 'pip', 'install', '--upgrade'].concat(PKGS), 600000);
+                        log += (direct.err + direct.out).slice(-1500);
+                        _cachedPython = null;
+                        let verified = (direct.code === 0) ? await _findPython() : null;
+                        if (!verified) {
+                            console.log('[motion-tracker] pip direto falhou (code=' + direct.code + '), tentando venv...');
+                            const venvDir = path.join(currentUD, 'mt-venv');
+                            const venvPy = _mtVenvPython();
+                            // "Vivo" = existe E executa. No Windows o Scripts\python.exe e um
+                            // launcher que EXISTE mas quebra se o Python base sumiu (venv zumbi).
+                            const venvAlive = fs.existsSync(venvPy) && (await _pyRun(venvPy, ['--version'], 15000)).code === 0;
+                            if (!venvAlive) {
+                                // venv corrompido/incompleto/zumbi: recria
+                                try { if (fs.existsSync(venvDir)) fs.rmSync(venvDir, { recursive: true, force: true }); } catch (e) {}
+                                const mk = await _pyRun(py, ['-m', 'venv', venvDir], 120000);
+                                if (mk.code !== 0 || !fs.existsSync(venvPy)) {
+                                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                                    res.end(JSON.stringify({ ok: false, error: 'Falha criando venv (code ' + mk.code + ')', log: (log + '\n' + mk.err + mk.out).slice(-2000) }));
+                                    return;
+                                }
                             }
-                        });
-                        proc.on('error', e => {
+                            await _pyRun(venvPy, ['-m', 'pip', 'install', '--upgrade', 'pip'], 180000); // best-effort
+                            const inst = await _pyRun(venvPy, ['-m', 'pip', 'install', '--upgrade'].concat(PKGS), 600000);
+                            log += '\n[venv] ' + (inst.err + inst.out).slice(-1500);
+                            _cachedPython = null;
+                            verified = await _findPython();
+                            if (inst.code !== 0 && !verified) {
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ ok: false, error: `pip (venv) exit ${inst.code}`, log: log.slice(-2000) }));
+                                return;
+                            }
+                        }
+                        if (verified) {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ ok: true, python: verified, log: log.slice(-1000) }));
+                        } else {
                             res.writeHead(500, { 'Content-Type': 'application/json' });
-                            res.end(JSON.stringify({ ok: false, error: e.message || String(e) }));
-                        });
+                            res.end(JSON.stringify({ ok: false, error: 'Instalou mas o import de cv2/numpy falhou', log: log.slice(-2000) }));
+                        }
                     } catch (e) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: e.message || String(e) }));
+                    } finally {
+                        _mtInstallInFlight = false;
                     }
                     return;
                 }
@@ -6220,17 +6429,25 @@ function _checkPremiereAlive(cb) {
             cb(!err && /Adobe Premiere/.test(stdout || ''));
         });
     } else if (isMac) {
-        exec('pgrep -x "Adobe Premiere Pro"', { timeout: 3000 }, (err, stdout) => {
+        // No Mac o processo tem o ano no nome ("Adobe Premiere Pro 2025") —
+        // pgrep -x (match exato) NUNCA achava e o watchdog fechava o editor
+        // em ate 5s (bug: "Motion Tracker fecha sozinho"). -f casa no argv completo;
+        // o [A] impede o proprio sh -c (cujo argv contem a string) de dar match.
+        exec('pgrep -f "[A]dobe Premiere Pro"', { timeout: 3000 }, (err, stdout) => {
             cb(!err && (stdout || '').trim().length > 0);
         });
     } else { cb(true); }
 }
+let _premiereMissCount = 0; // exige 2 checks seguidos sem Premiere (evita falso positivo transitorio)
 setInterval(() => {
     const maskOpen = !!(_activeMaskEditorWin && !_activeMaskEditorWin.isDestroyed());
     const mtOpen = !!(_activeMtEditorWin && !_activeMtEditorWin.isDestroyed());
-    if (!maskOpen && !mtOpen) return;
+    if (!maskOpen && !mtOpen) { _premiereMissCount = 0; return; }
     _checkPremiereAlive((alive) => {
-        if (alive) return;
+        if (alive) { _premiereMissCount = 0; return; }
+        _premiereMissCount++;
+        if (_premiereMissCount < 2) return;
+        _premiereMissCount = 0;
         console.log('[watchdog] Premiere fechou — fechando editores abertos');
         try { if (maskOpen) _activeMaskEditorWin.close(); } catch(e) {}
         try { if (mtOpen) _activeMtEditorWin.close(); } catch(e) {}
@@ -6602,6 +6819,14 @@ if (isMac) {
         if (_isNotifying) return;
         // Skip se LION SEARCH VISÍVEL (não só pre-criada)
         if (lionSearchWin && !lionSearchWin.isDestroyed() && lionSearchWin.isVisible()) return;
+        // Skip se uma janela-ferramenta (Motion Tracker / Mask Editor) acabou de
+        // aparecer: a ativação do app nesse instante daria mainWin.show() POR CIMA
+        // do editor — pro usuário parece que o editor "fechou sozinho". Fora dessa
+        // janela de tempo, clique no Dock volta a restaurar a mainWin normalmente.
+        const toolWinOpen = [_activeMtEditorWin, _activeMaskEditorWin].some(w => {
+            try { return w && !w.isDestroyed() && w.isVisible(); } catch (e) { return false; }
+        });
+        if (toolWinOpen && (Date.now() - _toolWinShownAt) < 3000) return;
         // Só recria mainWin se foi explicitamente fechada E user clicou no dock
         if (mainWin && !mainWin.isDestroyed() && !mainWin.isVisible()) {
             mainWin.show();

@@ -6316,10 +6316,10 @@
             if (!info || !info.mediaPath) { mtSetStatus('Sem mediaPath', '#f43f5e'); return; }
             mtSetStatus('Abrindo editor...', '#f59e0b');
             // Abre janela do editor via main process — URL = nome do command no main.js
-            LWHttp.post(API + '/motion-tracker/open-editor', info, { timeout: 5000 }, function(err, st, body) {
+            LWHttp.post(API + '/motion-tracker/open-editor', info, { timeout: 15000 }, function(err, st, body) {
                 if (err) { mtSetStatus('Falha ao abrir: ' + err, '#f43f5e'); return; }
                 if (st !== 200) { mtSetStatus('Falha ao abrir (HTTP ' + st + '): ' + (body || '').slice(0, 100), '#f43f5e'); return; }
-                mtSetStatus('✓ Editor aberto. Marque o ponto e clique trackear.', '#22c55e');
+                mtSetStatus('✓ Editor aberto. Aguarde o video preparar e marque o ponto.', '#22c55e');
             });
         });
     }
