@@ -2245,6 +2245,12 @@ function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
 // applies each effect via addVideoEffect + setValue/addKey.
 // ═══════════════════════════════════════════════════════════════════
 function lwApplyPresetData(presetName, dataJsonStr) {
+    // wrapper: garante que o log bufferizado seja gravado 1x no fim (rapido),
+    // em vez de 1 escrita em disco por linha (lento)
+    try { return _lwApplyPresetDataInner(presetName, dataJsonStr); }
+    finally { _lwFlushPresetDbg(); }
+}
+function _lwApplyPresetDataInner(presetName, dataJsonStr) {
     try {
         _lwDbgPreset('═══ ApplyData: ' + presetName + ' ═══');
         if (!dataJsonStr) return 'ERR:no_data';
@@ -3703,14 +3709,21 @@ function _lwScanPresetFolder(folder, parentPath, items, seen, depth) {
 // LION SEARCH — APPLY PRESET (drag .prfpset no clip selecionado)
 // ═══════════════════════════════════════════════════════════════════
 // Helper: escreve debug pra arquivo (apply preset)
+// BUFFERIZADO: abrir/escrever/fechar arquivo POR LINHA deixava o apply de preset
+// segundos mais lento (loga por efeito/prop/keyframe = centenas de I/O sincronos).
+// Agora acumula e grava TUDO de uma vez no fim do apply (_lwFlushPresetDbg).
+var _lwPresetDbgBuf = [];
 function _lwDbgPreset(msg) {
+    _lwPresetDbgBuf.push('[' + (new Date()).toString() + '] ' + msg);
+    if (_lwPresetDbgBuf.length > 4000) _lwPresetDbgBuf.splice(0, 2000); // trava de memoria
+}
+function _lwFlushPresetDbg() {
+    if (_lwPresetDbgBuf.length === 0) return;
+    var blob = _lwPresetDbgBuf.join('\n') + '\n';
+    _lwPresetDbgBuf = [];
     try {
         var f = new File(Folder.temp.fsName + '/lion-search-apply-preset.txt');
-        if (f.open('a')) {
-            f.encoding = 'UTF-8';
-            f.write('[' + (new Date()).toString() + '] ' + msg + '\n');
-            f.close();
-        }
+        if (f.open('a')) { f.encoding = 'UTF-8'; f.write(blob); f.close(); }
     } catch(e) {}
 }
 
@@ -3780,6 +3793,10 @@ function _lwTryCall(obj, methodName, args, label) {
 }
 
 function _lwApplyPreset(presetIdentifier) {
+    try { return _lwApplyPresetInner(presetIdentifier); }
+    finally { _lwFlushPresetDbg(); }
+}
+function _lwApplyPresetInner(presetIdentifier) {
     try {
         _lwDbgPreset('═══ Apply Preset: ' + presetIdentifier + ' ═══');
         if (!presetIdentifier) return 'ERR:preset_id_empty';
@@ -5489,9 +5506,33 @@ function _rwResolveProp(clip, target, component) {
     if (!comp) return null;
     // Transform/Vector: todas as props (incl. Opacity) vivem dentro do proprio componente
     if (target === 'opacity')  return findProp(comp, _rwOpacNames, _rwOpacPrefixes);
-    if (target === 'scale')    return findProp(comp, _scaleNames, _scalePrefixes);
+    if (target === 'scale')    return _rwFindScaleProp(comp);
     if (target === 'rotation') return findProp(comp, _rwRotNames, _rwRotPrefixes);
     return findProp(comp, _positionNames, _positionPrefixes); // position (default)
+}
+
+// Acha a prop de ESCALA pulando o checkbox "Uniform Scale" — no Transform nao existe
+// "Scale" exato (so "Scale Height"/"Scale Width") e o match parcial generico pegava o
+// checkbox "Uniform Scale" primeiro (keyframe em checkbox = nada acontece).
+// Prefere exato ("Scale" da Motion), senao a primeira escala real ("Scale Height").
+function _rwFindScaleProp(comp) {
+    if (!comp) return null;
+    try {
+        var props = comp.properties;
+        var partial = null;
+        for (var p = 0; p < props.numItems; p++) {
+            var nm = '';
+            try { nm = String(props[p].displayName || '').toLowerCase(); } catch (e1) {}
+            if (!nm) continue;
+            if (nm.indexOf('uniform') >= 0 || nm.indexOf('uniforme') >= 0) continue;
+            var isScale = (nm.indexOf('scale') >= 0 || nm.indexOf('escala') >= 0 || nm.indexOf('skal') >= 0 || nm.indexOf('echelle') >= 0);
+            if (!isScale) continue;
+            if (nm === 'scale' || nm === 'escala') return props[p];
+            if (!partial) partial = props[p];
+        }
+        return partial;
+    } catch (e) {}
+    return null;
 }
 
 // checa (via QE) se o clip QE ja tem o efeito Transform.
@@ -5607,6 +5648,8 @@ function lwPRRandomWiggle(cfgArg) {
         var seqH = parseInt(seq.frameSizeVertical, 10) || 1080;
 
         var target = cfg.target || 'position';
+        // multi-propriedade (estilo S_Shake): cfg.targets = ['position','scale',...]
+        var targets = (cfg.targets && cfg.targets.length) ? cfg.targets : [target];
         var mode = cfg.mode || 'wiggle';
         var component = cfg.component || 'motion';
         var motionBlur = (cfg.motionBlur === true);
@@ -5623,17 +5666,6 @@ function lwPRRandomWiggle(cfgArg) {
 
         for (var ci = 0; ci < clips.length; ci++) {
             var clip = clips[ci];
-            var prop = _rwResolveProp(clip, target, component);
-            // Transform recem-adicionado pode estar "stale" na colecao de components — poll curto
-            if (!prop && component === 'transform') {
-                for (var poll = 0; poll < 8 && !prop; poll++) {
-                    try { $.sleep(25); } catch (eSl) {}
-                    prop = _rwResolveProp(clip, target, component);
-                }
-            }
-            if (!prop) continue;
-            // motion blur: liga obturador 360 no Transform desse clip
-            if (motionBlur) { try { _rwSetMotionBlur(findTransformComponent(clip)); } catch (eMB) {} }
 
             var inTicks, outTicks;
             try { inTicks = Number(clip.inPoint.ticks); } catch (e1) { inTicks = 0; }
@@ -5643,89 +5675,109 @@ function lwPRRandomWiggle(cfgArg) {
             if (!(durTicks > 0)) durTicks = ticksPerFrame * 90;
             var nFrames = Math.max(1, Math.round(durTicks / ticksPerFrame));
 
-            var base = null;
-            try { base = prop.getValue(); } catch (eV) {}
-            if (base == null) {
-                // default ciente da dimensao (position e 2D — nunca escalar)
-                if (target === 'position') base = [seqW / 2, seqH / 2];
-                else if (target === 'opacity') base = 100;
-                else base = 0;
-            }
-            var isArr = (base instanceof Array);
-            var dims = isArr ? base.length : 1;
+            var clipWrote = false;
+            var mbDone = false;
 
-            var isNorm = false;
-            if (target === 'position' && isArr) isNorm = (Math.abs(base[0]) < 5.0 && Math.abs(base[1]) < 5.0);
-
-            try { prop.setTimeVarying(true); } catch (eTV) {}
-            var canInterp = false;
-            try { canInterp = (typeof prop.setInterpolationTypeAtKey === 'function'); } catch (eCk) {}
-            var seed = 12.34 + ci * 4.77;
-
-            // gera lista de amostras {frame, val}
-            var samples = [];
-            if (mode === 'random') {
-                var iv = (cfg.interval && cfg.interval > 0) ? cfg.interval : 1;
-                var mn = (cfg.rmin != null) ? cfg.rmin : 0;
-                var mx = (cfg.rmax != null) ? cfg.rmax : 100;
-                var nInt = Math.max(1, Math.ceil((nFrames / fps) / iv));
-                for (var j = 0; j <= nInt; j++) {
-                    var fFrame = Math.round(j * iv * fps);
-                    if (fFrame > nFrames) fFrame = nFrames;
-                    var v;
-                    if (!isArr) {
-                        v = mn + _rwRand(j, 0, seed) * (mx - mn);
-                        v = _rwClamp(target, v);
-                    } else {
-                        v = [];
-                        for (var d = 0; d < dims; d++) {
-                            var useAx = (d === 0) ? axisX : (d === 1 ? axisY : true);
-                            v.push(useAx ? (mn + _rwRand(j, d, seed) * (mx - mn)) : base[d]);
-                        }
+            for (var ti = 0; ti < targets.length; ti++) {
+                var tgt = targets[ti];
+                var prop = _rwResolveProp(clip, tgt, component);
+                // Transform recem-adicionado pode estar "stale" na colecao de components — poll curto
+                if (!prop && component === 'transform') {
+                    for (var poll = 0; poll < 8 && !prop; poll++) {
+                        try { $.sleep(25); } catch (eSl) {}
+                        prop = _rwResolveProp(clip, tgt, component);
                     }
-                    samples.push({ frame: fFrame, val: v });
-                    if (fFrame >= nFrames) break;
                 }
-            } else {
-                // wiggle: 1 key por 'step' frames
-                var fr = (cfg.freq || 1);
-                for (var f = 0; f <= nFrames; f += step) {
-                    var tSec = f / fps;
-                    var vv;
-                    if (!isArr) {
-                        var off = _rwFbm(tSec * fr, seed, cfg.octaves, cfg.ampMult) * _rwAmpFor(cfg, target, 0, isNorm, seqW, seqH);
-                        vv = _rwClamp(target, base + off);
-                    } else {
-                        vv = [];
-                        for (var d2 = 0; d2 < dims; d2++) {
-                            var useAx2 = (d2 === 0) ? axisX : (d2 === 1 ? axisY : true);
-                            if (useAx2) {
-                                var o2 = _rwFbm(tSec * fr, seed + d2 * 97.7, cfg.octaves, cfg.ampMult) * _rwAmpFor(cfg, target, d2, isNorm, seqW, seqH);
-                                vv.push(base[d2] + o2);
-                            } else vv.push(base[d2]);
-                        }
-                    }
-                    samples.push({ frame: f, val: vv });
-                }
-            }
+                if (!prop) continue;
+                // motion blur: liga obturador 360 no Transform desse clip (1x por clip)
+                if (motionBlur && !mbDone) { try { _rwSetMotionBlur(findTransformComponent(clip)); mbDone = true; } catch (eMB) {} }
 
-            // escreve keyframes
-            var wrote = false;
-            for (var s = 0; s < samples.length; s++) {
-                var kfTicks = inTicks + samples[s].frame * ticksPerFrame;
-                try {
-                    var kt = new Time(); kt.ticks = String(Math.round(kfTicks));
-                    prop.addKey(kt);
-                    var kt2 = new Time(); kt2.ticks = String(Math.round(kfTicks));
-                    prop.setValueAtKey(kt2, samples[s].val);
-                    wrote = true;
-                    if (canInterp) {
-                        var kt3 = new Time(); kt3.ticks = String(Math.round(kfTicks));
-                        try { prop.setInterpolationTypeAtKey(kt3, (mode === 'random' ? interpMode : 0), true); } catch (eIt) {}
+                var base = null;
+                try { base = prop.getValue(); } catch (eV) {}
+                if (base == null) {
+                    // default ciente da dimensao (position e 2D — nunca escalar)
+                    if (tgt === 'position') base = [seqW / 2, seqH / 2];
+                    else if (tgt === 'opacity') base = 100;
+                    else base = 0;
+                }
+                var isArr = (base instanceof Array);
+                var dims = isArr ? base.length : 1;
+
+                var isNorm = false;
+                if (tgt === 'position' && isArr) isNorm = (Math.abs(base[0]) < 5.0 && Math.abs(base[1]) < 5.0);
+
+                try { prop.setTimeVarying(true); } catch (eTV) {}
+                var canInterp = false;
+                try { canInterp = (typeof prop.setInterpolationTypeAtKey === 'function'); } catch (eCk) {}
+                // seed distinto por clip E por propriedade (escala nao copia a fase da posicao)
+                var seed = 12.34 + ci * 4.77 + ti * 57.31;
+
+                // gera lista de amostras {frame, val}
+                var samples = [];
+                if (mode === 'random') {
+                    var iv = (cfg.interval && cfg.interval > 0) ? cfg.interval : 1;
+                    var mn = (cfg.rmin != null) ? cfg.rmin : 0;
+                    var mx = (cfg.rmax != null) ? cfg.rmax : 100;
+                    var nInt = Math.max(1, Math.ceil((nFrames / fps) / iv));
+                    for (var j = 0; j <= nInt; j++) {
+                        var fFrame = Math.round(j * iv * fps);
+                        if (fFrame > nFrames) fFrame = nFrames;
+                        var v;
+                        if (!isArr) {
+                            v = mn + _rwRand(j, 0, seed) * (mx - mn);
+                            v = _rwClamp(tgt, v);
+                        } else {
+                            v = [];
+                            for (var d = 0; d < dims; d++) {
+                                var useAx = (d === 0) ? axisX : (d === 1 ? axisY : true);
+                                v.push(useAx ? (mn + _rwRand(j, d, seed) * (mx - mn)) : base[d]);
+                            }
+                        }
+                        samples.push({ frame: fFrame, val: v });
+                        if (fFrame >= nFrames) break;
                     }
-                } catch (eKf) {}
+                } else {
+                    // wiggle: 1 key por 'step' frames
+                    var fr = (cfg.freq || 1);
+                    for (var f = 0; f <= nFrames; f += step) {
+                        var tSec = f / fps;
+                        var vv;
+                        if (!isArr) {
+                            var off = _rwFbm(tSec * fr, seed, cfg.octaves, cfg.ampMult) * _rwAmpFor(cfg, tgt, 0, isNorm, seqW, seqH);
+                            vv = _rwClamp(tgt, base + off);
+                        } else {
+                            vv = [];
+                            for (var d2 = 0; d2 < dims; d2++) {
+                                var useAx2 = (d2 === 0) ? axisX : (d2 === 1 ? axisY : true);
+                                if (useAx2) {
+                                    var o2 = _rwFbm(tSec * fr, seed + d2 * 97.7, cfg.octaves, cfg.ampMult) * _rwAmpFor(cfg, tgt, d2, isNorm, seqW, seqH);
+                                    vv.push(base[d2] + o2);
+                                } else vv.push(base[d2]);
+                            }
+                        }
+                        samples.push({ frame: f, val: vv });
+                    }
+                }
+
+                // escreve keyframes
+                var wrote = false;
+                for (var s = 0; s < samples.length; s++) {
+                    var kfTicks = inTicks + samples[s].frame * ticksPerFrame;
+                    try {
+                        var kt = new Time(); kt.ticks = String(Math.round(kfTicks));
+                        prop.addKey(kt);
+                        var kt2 = new Time(); kt2.ticks = String(Math.round(kfTicks));
+                        prop.setValueAtKey(kt2, samples[s].val);
+                        wrote = true;
+                        if (canInterp) {
+                            var kt3 = new Time(); kt3.ticks = String(Math.round(kfTicks));
+                            try { prop.setInterpolationTypeAtKey(kt3, (mode === 'random' ? interpMode : 0), true); } catch (eIt) {}
+                        }
+                    } catch (eKf) {}
+                }
+                if (wrote) clipWrote = true;
             }
-            if (wrote) applied++;
+            if (clipWrote) applied++;
         }
         try { forceUIRefresh(); } catch (eR) {}
         return applied > 0 ? ('OK:' + applied) : 'NO_PROP';

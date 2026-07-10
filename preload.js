@@ -52,7 +52,8 @@ contextBridge.exposeInMainWorld('appUpdater', {
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     installUpdate: () => ipcRenderer.invoke('install-update'),
     openReleasesPage: () => ipcRenderer.invoke('open-releases-page'),
-    onUpdateStatus: (cb) => ipcRenderer.on('update-status', (event, data) => cb(data))
+    onUpdateStatus: (cb) => ipcRenderer.on('update-status', (event, data) => cb(data)),
+    pluginsUpdatedOnBoot: () => ipcRenderer.invoke('plugins-updated-on-boot')
 });
 
 // Cloud Sync — dados do usuario na nuvem (clientes, registros, config, hotkey...)

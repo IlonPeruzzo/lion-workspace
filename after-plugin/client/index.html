@@ -211,8 +211,8 @@
         .login-overlay::after{content:'';position:absolute;width:240px;height:240px;background:radial-gradient(circle,rgba(190,242,100,.05) 0%,transparent 70%);bottom:-80px;left:-60px;pointer-events:none;animation:loginGlowPulse 6s ease-in-out infinite 3s}
         @keyframes loginGlowPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
         .login-overlay.hidden{display:none}
-        .login-overlay .login-logo{width:60px;height:60px;display:block;margin:0 auto 12px;border-radius:15px;object-fit:contain;box-shadow:0 10px 26px -6px rgba(190,242,100,.32),0 0 0 1px rgba(190,242,100,.14);animation:loginLogoFloat 5s ease-in-out infinite}
-        @keyframes loginLogoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-4px) rotate(-2deg)}}
+        .login-overlay .login-logo{width:72px;height:72px;display:block;margin:0 auto 20px;border-radius:18px;object-fit:contain;box-shadow:0 12px 30px -6px rgba(190,242,100,.35),0 0 0 1px rgba(190,242,100,.14);animation:loginLogoFloat 4.5s ease-in-out infinite}
+        @keyframes loginLogoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-7px) rotate(-2deg)}}
         /* Popup "Login OK" (igual ao app) */
         .lw-loginpop{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(6,6,9,.7);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);opacity:0;pointer-events:none;transition:opacity .3s}
         .lw-loginpop.active{opacity:1;pointer-events:auto}
@@ -229,9 +229,6 @@
         .lw-loginpop .lp-c{position:absolute;top:0;left:0;border-radius:1px;opacity:0;animation:lpConf 1.4s cubic-bezier(.15,.6,.3,1) .2s forwards}
         @keyframes lpConf{0%{opacity:0;transform:translate(0,0) rotate(0)}15%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(var(--dx),calc(var(--dy) + 60px)) rotate(var(--rot))}}
         .login-overlay .login-card{position:relative;width:100%;max-width:280px;background:linear-gradient(180deg,rgba(28,28,28,.9) 0%,rgba(20,20,20,.95) 100%);border:1px solid rgba(190,242,100,.08);border-radius:16px;padding:28px 22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02) inset;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-        .login-overlay .logo{font-size:1.3rem;margin-bottom:4px;color:#f5f5f5;text-align:center;font-weight:800;letter-spacing:-.4px}
-        .login-overlay .logo span{color:#bef264}
-        .login-overlay .login-subtitle{font-size:.66rem;color:#737373;margin-bottom:18px;text-align:center;font-weight:500}
         .login-overlay .login-form{width:100%;display:flex;flex-direction:column;gap:10px}
         .login-overlay .input-wrap{position:relative;display:flex;align-items:center}
         .login-overlay .input-icon{position:absolute;left:11px;display:flex;align-items:center;justify-content:center;color:#525252;pointer-events:none;transition:color .2s}
@@ -278,8 +275,6 @@
     <div class="login-overlay" id="pluginLogin">
         <div class="login-card">
             <img class="login-logo" src="data:image/png;base64,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" alt="Lion Workspace">
-            <div class="logo">Lion <span>Workspace</span></div>
-            <div class="login-subtitle">Entre com sua conta para usar o plugin</div>
             <div class="login-form">
                 <div class="login-error" id="pluginLoginError"></div>
                 <div class="input-wrap">
@@ -343,7 +338,6 @@
             <div class="header-name" id="headerName">Lion <span>Workspace</span></div>
             <div class="header-handle" id="headerHandle"></div>
         </div>
-        <svg class="premium-star" id="premiumStar" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><title>Lion Premium</title><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
         <span style="flex:1"></span>
         <img class="header-lion" id="headerLion" src="" alt="Lion" title="Lion Workspace" style="display:none">
         <button class="gear-btn" id="headerGear" onclick="openSettings()" title="Configurações" style="display:none">
@@ -1445,8 +1439,13 @@
 
     function showMsg(text){
         var old=document.getElementById('_toast');if(old)old.remove();
+        // Verde (sucesso) por padrao; vermelho so quando o texto e claramente erro/aviso
+        var isErr=/erro|falha|timeout|desconect|indispon|cole uma|não identificad|nao identificad|não encontrad|nao encontrad|vazio|sem resposta|inválid|invalid|selecione/i.test(text);
+        var col=isErr?'#f43f5e':'#22c55e';
+        var bg=isErr?'rgba(244,63,94,.14)':'rgba(34,197,94,.14)';
+        var bd=isErr?'rgba(244,63,94,.32)':'rgba(34,197,94,.32)';
         var d=document.createElement('div');d.id='_toast';
-        d.style.cssText='position:fixed;top:10px;left:10px;right:10px;padding:8px 12px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;font-size:.72rem;font-weight:600;text-align:center;z-index:999;animation:fadeIn .2s';
+        d.style.cssText='position:fixed;top:10px;left:10px;right:10px;padding:8px 12px;background:'+bg+';border:1px solid '+bd+';border-radius:8px;color:'+col+';font-size:.72rem;font-weight:600;text-align:center;z-index:999;animation:fadeIn .2s';
         d.textContent=text;document.body.appendChild(d);
         setTimeout(function(){d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(function(){d.remove()},300)},2500);
     }
@@ -1455,6 +1454,9 @@
         try{
             var on=document.getElementById('pluginPomoFocus').checked;
             localStorage.setItem('lw_plugin_pomo_focus', on?'1':'0');
+            // Avisa o app NA HORA — desligar o toggle com o pomodoro rodando
+            // tem que parar de minimizar imediatamente
+            LWHttp.post(API+'/pomodoro/focus',{fromPlugin:true,focusEnabled:on},{retries:1},function(){});
         }catch(e){}
     }
     function pluginPomoFocusOn(){
@@ -1473,9 +1475,9 @@
     },0);
 
     function pomoStart(){
-        if(pomoState.paused){
-            cmd('pomodoro/start');
-        } else if(!pomoState.running){
+        // Sempre manda a preferencia de foco — o retomar sem ela fazia o app usar o
+        // checkbox interno dele (podia estar ligado) e ligar o foco com o toggle OFF
+        if(pomoState.paused || !pomoState.running){
             LWConnection.resetPollRate();
             LWHttp.post(API+'/pomodoro/start',{fromPlugin:true,focusEnabled:pluginPomoFocusOn()},{retries:1},function(){});
             setTimeout(poll,300);
@@ -2689,18 +2691,52 @@
         try{localStorage.setItem('lw_easing_presets',JSON.stringify(savedPresets))}catch(e){}
     }
 
+    // Modal de texto estilizado (substitui o prompt() nativo feio do CEP)
+    function lwPromptText(opts, cb){
+        opts=opts||{};
+        var ov=document.createElement('div');
+        ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:99999;animation:fadeIn .15s';
+        var card=document.createElement('div');
+        card.style.cssText='width:84%;max-width:250px;background:linear-gradient(180deg,#1d1d1d,#151515);border:1px solid rgba(190,242,100,.16);border-radius:13px;padding:16px 15px 14px;box-shadow:0 22px 55px rgba(0,0,0,.65)';
+        var title=document.createElement('div');
+        title.textContent=opts.title||'Nome:';
+        title.style.cssText='font-size:.72rem;font-weight:700;color:#eee;margin-bottom:11px';
+        var inp=document.createElement('input');
+        inp.type='text'; inp.value=opts.value||''; inp.placeholder=opts.placeholder||'';
+        inp.style.cssText='width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);border:1px solid rgba(190,242,100,.22);border-radius:8px;color:#fff;padding:9px 11px;font-size:.72rem;font-family:inherit;outline:none;margin-bottom:13px';
+        var btns=document.createElement('div');
+        btns.style.cssText='display:flex;gap:8px;justify-content:flex-end';
+        var cancel=document.createElement('button');
+        cancel.textContent='Cancelar';
+        cancel.style.cssText='padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#aaa;font-family:inherit;font-size:.68rem;font-weight:600;cursor:pointer';
+        var ok=document.createElement('button');
+        ok.textContent=opts.okLabel||'Salvar';
+        ok.style.cssText='padding:7px 16px;border-radius:8px;border:none;background:#bef264;color:#0a0a0a;font-family:inherit;font-size:.68rem;font-weight:800;cursor:pointer';
+        var done=false;
+        function close(v){ if(done)return; done=true; ov.style.opacity='0'; ov.style.transition='opacity .15s'; setTimeout(function(){try{ov.remove()}catch(e){}},150); if(cb)cb(v); }
+        cancel.onclick=function(){close(null);};
+        ok.onclick=function(){close((inp.value||'').trim()||null);};
+        inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();ok.onclick();} else if(e.key==='Escape'){e.preventDefault();cancel.onclick();} });
+        ov.addEventListener('mousedown',function(e){ if(e.target===ov) cancel.onclick(); });
+        btns.appendChild(cancel);btns.appendChild(ok);
+        card.appendChild(title);card.appendChild(inp);card.appendChild(btns);
+        ov.appendChild(card);document.body.appendChild(ov);
+        setTimeout(function(){try{inp.focus();inp.select();}catch(e){}},30);
+    }
+
     function saveCurrentPreset(){
-        var name=prompt('Nome do preset:');
-        if(!name||!name.trim()) return;
-        savedPresets.push({
-            name:name.trim(),
-            cp1:{x:curveCP1.x,y:curveCP1.y},
-            cp2:{x:curveCP2.x,y:curveCP2.y},
-            dir:curveDir
+        lwPromptText({title:'Nome do preset:',placeholder:'Ex: Bounce suave',okLabel:'Salvar'},function(name){
+            if(!name) return;
+            savedPresets.push({
+                name:name,
+                cp1:{x:curveCP1.x,y:curveCP1.y},
+                cp2:{x:curveCP2.x,y:curveCP2.y},
+                dir:curveDir
+            });
+            saveSavedPresets();
+            renderSavedPresets();
+            showEasingMsg('Preset "'+name+'" salvo!','#22c55e');
         });
-        saveSavedPresets();
-        renderSavedPresets();
-        showEasingMsg('Preset "'+name.trim()+'" salvo!','#22c55e');
     }
 
     function loadPreset(idx){

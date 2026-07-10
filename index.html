@@ -103,11 +103,11 @@
         .jf-range{position:relative;flex:1;min-width:150px;max-width:280px;height:26px;display:flex;align-items:center}
         .jf-range-track{position:absolute;left:0;right:0;height:6px;border-radius:6px;background:rgba(0,0,0,.45);box-shadow:inset 0 1px 3px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.06)}
         .jf-range-fill{position:absolute;height:100%;border-radius:6px;background:linear-gradient(90deg,#84cc16,#bef264);box-shadow:0 0 10px rgba(190,242,100,.35);transition:left .06s linear,width .06s linear}
-        .jf-range input[type=range]{position:absolute;left:0;right:0;width:100%;margin:0;-webkit-appearance:none;appearance:none;background:transparent;pointer-events:none;height:26px}
-        .jf-range input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;pointer-events:auto;width:17px;height:17px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e9ffc2,#bef264 55%,#a3e635);border:2px solid #141414;box-shadow:0 0 0 2px rgba(190,242,100,.35),0 2px 8px rgba(0,0,0,.6);cursor:grab;margin-top:0;transition:box-shadow .15s,transform .12s}
-        .jf-range input[type=range]::-webkit-slider-thumb:hover{box-shadow:0 0 0 4px rgba(190,242,100,.22),0 0 12px rgba(190,242,100,.45),0 2px 8px rgba(0,0,0,.6);transform:scale(1.08)}
-        .jf-range input[type=range]::-webkit-slider-thumb:active{cursor:grabbing;transform:scale(1.18);box-shadow:0 0 0 5px rgba(190,242,100,.28),0 0 14px rgba(190,242,100,.55),0 2px 8px rgba(0,0,0,.6)}
-        .jf-range input[type=range]::-webkit-slider-runnable-track{height:26px;background:transparent}
+        /* Alcas customizadas (pointer events proprios) — os 2 <input type=range> empilhados
+           brigavam pelo mouse: o de cima capturava tudo e o drag nativo fazia o valor pular */
+        .jf-thumb{position:absolute;top:50%;width:17px;height:17px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#e9ffc2,#bef264 55%,#a3e635);border:2px solid #141414;box-shadow:0 0 0 2px rgba(190,242,100,.35),0 2px 8px rgba(0,0,0,.6);cursor:grab;transform:translate(-50%,-50%);transition:box-shadow .15s;touch-action:none;z-index:2}
+        .jf-thumb:hover{box-shadow:0 0 0 4px rgba(190,242,100,.22),0 0 12px rgba(190,242,100,.45),0 2px 8px rgba(0,0,0,.6)}
+        .jf-thumb.dragging{cursor:grabbing;box-shadow:0 0 0 5px rgba(190,242,100,.28),0 0 14px rgba(190,242,100,.55),0 2px 8px rgba(0,0,0,.6);z-index:3}
         /* barra de cota diária da API (canto do hero) */
         .jf-quota{width:168px;flex-shrink:0;cursor:default}
         .jf-quota-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px}
@@ -1417,7 +1417,7 @@ var I18N = {
         'cli.service_placeholder': 'Ex: Edição de Vídeo, Thumbnail...',
         'cli.add_social': '+ Redes Sociais', 'cli.add_address': '+ Endereço',
         'cli.address': 'Endereço', 'cli.address_placeholder': 'Rua, Cidade, País',
-        'cli.payment': 'Pagamento', 'cli.currency': 'Moeda',
+        'cli.payment': 'Forma de pagamento', 'cli.currency': 'Moeda',
         'cli.billing_type': 'Tipo de Cobrança',
         'cli.per_service': 'Por serviço', 'cli.per_hour': 'Por hora trabalhada',
         'cli.value_per_service': 'Valor por Serviço',
@@ -1611,7 +1611,7 @@ var I18N = {
         'cli.service_placeholder': 'Ex: Video Editing, Thumbnail...',
         'cli.add_social': '+ Social Media', 'cli.add_address': '+ Address',
         'cli.address': 'Address', 'cli.address_placeholder': 'Street, City, Country',
-        'cli.payment': 'Payment', 'cli.currency': 'Currency',
+        'cli.payment': 'Payment method', 'cli.currency': 'Currency',
         'cli.billing_type': 'Billing Type',
         'cli.per_service': 'Per service', 'cli.per_hour': 'Per hour worked',
         'cli.value_per_service': 'Value per Service',
@@ -2659,7 +2659,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <div style="margin-top:10px">
                 <div class="fg" style="margin-bottom:6px"><label data-i18n="cli.payment">Pagamento</label></div>
                 <div class="bubble-pay" id="bubbleCliPaySel"></div>
-                <select id="cliPagamento" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="stripe">Stripe</option><option value="payoneer">Payoneer</option><option value="deel">Deel</option><option value="revolut">Revolut</option><option value="skrill">Skrill</option><option value="venmo">Venmo</option><option value="ach">ACH</option><option value="sepa">SEPA</option><option value="pix">PIX</option><option value="ted">TED</option><option value="boleto">Boleto</option><option value="mercadopago">Mercado Pago</option><option value="pagseguro">PagSeguro</option><option value="cartao">Cartão</option><option value="crypto">Crypto</option><option value="usdt">USDT</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
+                <select id="cliPagamento" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="stripe">Stripe</option><option value="payoneer">Payoneer</option><option value="deel">Deel</option><option value="revolut">Revolut</option><option value="skrill">Skrill</option><option value="venmo">Venmo</option><option value="ach">ACH</option><option value="sepa">SEPA</option><option value="pix">PIX</option><option value="ted">TED</option><option value="mercadopago">Mercado Pago</option><option value="pagseguro">PagSeguro</option><option value="cartao">Cartão</option><option value="crypto">Crypto</option><option value="usdt">USDT</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
             </div>
             <div class="fr" style="margin-top:10px">
                 <div class="fg" style="max-width:140px"><label data-i18n="cli.currency">Moeda</label>
@@ -3020,7 +3020,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
             <!-- Barra de busca -->
             <div class="jf-searchbar" id="jfSearchbar">
-                <input id="jfQuery" type="text" placeholder="Nicho ou tema — ou cole um canal (@handle / link) pra achar canais similares" onkeydown="if(event.key==='Enter')jfSearch()">
+                <input id="jfQuery" type="text" placeholder="Nicho, tema ou o link de um canal pra achar similares" onkeydown="if(event.key==='Enter')jfSearch()">
                 <select id="jfRegion" title="Região">
                     <option value="">Global</option>
                     <option value="BR">Brasil</option>
@@ -3041,10 +3041,10 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <div class="jf-filters">
                 <span class="jf-flabel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Inscritos</span>
                 <input id="jfSubMinInp" class="jf-numinput" type="text" value="0" placeholder="mín" onchange="jfInpChange('min')" onkeydown="if(event.key==='Enter')jfInpChange('min')">
-                <div class="jf-range">
+                <div class="jf-range" id="jfRange">
                     <div class="jf-range-track"><div class="jf-range-fill" id="jfRangeFill"></div></div>
-                    <input type="range" id="jfSlMin" min="0" max="100" value="0" step="1" oninput="jfSlChange('min')">
-                    <input type="range" id="jfSlMax" min="0" max="100" value="100" step="1" oninput="jfSlChange('max')">
+                    <div class="jf-thumb" id="jfThumbMin"></div>
+                    <div class="jf-thumb" id="jfThumbMax"></div>
                 </div>
                 <input id="jfSubMaxInp" class="jf-numinput" type="text" value="∞" placeholder="máx" onchange="jfInpChange('max')" onkeydown="if(event.key==='Enter')jfInpChange('max')">
             </div>
@@ -3055,10 +3055,10 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     Gatilhos de busca <span class="jf-trg-count" id="jfTrgCount">0</span>
                 </button>
                 <div id="jfTrgPanel" style="display:none;margin-top:10px;padding:13px 15px;background:rgba(0,0,0,.22);border:1px solid var(--border);border-radius:11px">
-                    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.5">Cada gatilho vira uma busca separada (ex: <i>minecraft <b>shorts</b></i>) pra achar mais canais únicos. <span id="jfTrgCost" style="color:#fcd34d"></span></div>
+                    <div style="font-size:.72rem;color:var(--text3);margin-bottom:10px;line-height:1.5">Cada gatilho vira uma busca extra combinada com o seu termo (ex: <i>minecraft <b>shorts</b></i>) e traz mais canais únicos. <span id="jfTrgCost" style="color:var(--text2)"></span></div>
                     <div class="jf-trg-chips" id="jfTrgChips"></div>
                     <div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap">
-                        <input id="jfTrgInput" type="text" placeholder="Novo gatilho — ex: podcast, live, cortes, daily vlog" style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.78rem;outline:none" onkeydown="if(event.key==='Enter')jfAddTrigger()">
+                        <input id="jfTrgInput" type="text" placeholder="Novo gatilho (ex: podcast, live, cortes)" style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.78rem;outline:none" onkeydown="if(event.key==='Enter')jfAddTrigger()">
                         <button class="btn btn-g" onclick="jfAddTrigger()" style="padding:8px 16px;font-size:.74rem">Adicionar</button>
                         <button class="btn btn-o" onclick="jfResetTriggers()" style="padding:8px 12px;font-size:.74rem" title="Voltar aos gatilhos padrão">Padrão</button>
                     </div>
@@ -3066,9 +3066,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             </div>
             <!-- Estado da chave (só aparece se NÃO tiver chave) -->
             <div id="jfKeyHint" style="display:none;margin-top:11px;font-size:.76rem;color:var(--text3);align-items:center;gap:7px">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fcd34d" stroke-width="2" style="flex-shrink:0"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/></svg>
-                <span>Sem chave de API ainda —</span>
-                <a onclick="jfOpenKeyGuide()" style="color:#bef264;cursor:pointer;font-weight:700">conectar grátis em 2 min</a>
+                <span>Sem chave de API ainda?</span>
+                <a onclick="jfOpenKeyGuide()" style="color:#bef264;cursor:pointer;font-weight:700">Conectar grátis em 2 min</a>
             </div>
         </div>
 
@@ -3428,16 +3427,16 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <span style="font-size:.68rem;color:var(--text3);margin-top:4px;display:block">Valor já faturado este ano antes de usar o app</span>
                 </div>
             </div>
-            <div class="tax-info tax-warn">
+            <div class="tax-info tax-info-blue">
                 <div class="tax-info-header">
                     <span class="tax-info-icon">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                     </span>
                     <span class="tax-info-title">Limite MEI</span>
                     <span class="tax-info-stat" style="margin-left:auto">R$ 81.000/ano</span>
                 </div>
                 <div class="tax-info-body">
-                    Se passar do limite, você precisa migrar pra <strong>ME (Simples Nacional)</strong> e vai pagar imposto sobre tudo: <span class="tax-info-pct">6%</span> (Anexo III) ou <span class="tax-info-pct">15,5%</span> (Anexo V) — em vez de zero.
+                    Se passar do limite, você precisa migrar pra <strong>ME (Simples Nacional)</strong> e vai pagar imposto sobre tudo: <span class="tax-info-pct">6%</span> (Anexo III) ou <span class="tax-info-pct">15,5%</span> (Anexo V), em vez de zero.
                 </div>
                 <div class="tax-info-foot">
                     O app avisa quando você se aproxima do limite.
@@ -3655,8 +3654,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                         <div style="display:flex;align-items:center;gap:12px">
                             <div style="width:38px;height:38px;flex-shrink:0;border-radius:9px;box-shadow:0 3px 8px rgba(0,0,0,.35)">
                                 <svg width="38" height="38" viewBox="0 0 38 38" role="img" aria-label="Adobe Premiere Pro">
-                                    <rect x=".5" y=".5" width="37" height="37" rx="9" fill="#242424" stroke="rgba(255,255,255,.08)"/>
-                                    <text x="19" y="19" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" letter-spacing="-.3" fill="#d4d4d4">Pr</text>
+                                    <rect x=".5" y=".5" width="37" height="37" rx="9" fill="#00005B" stroke="rgba(153,153,255,.35)"/>
+                                    <text x="19" y="19" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" letter-spacing="-.3" fill="#9999FF">Pr</text>
                                 </svg>
                             </div>
                             <div>
@@ -3675,8 +3674,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                         <div style="display:flex;align-items:center;gap:12px">
                             <div style="width:38px;height:38px;flex-shrink:0;border-radius:9px;box-shadow:0 3px 8px rgba(0,0,0,.35)">
                                 <svg width="38" height="38" viewBox="0 0 38 38" role="img" aria-label="After Effects">
-                                    <rect x=".5" y=".5" width="37" height="37" rx="9" fill="#242424" stroke="rgba(255,255,255,.08)"/>
-                                    <text x="19" y="19" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" letter-spacing="-.3" fill="#d4d4d4">Ae</text>
+                                    <rect x=".5" y=".5" width="37" height="37" rx="9" fill="#00005B" stroke="rgba(210,145,255,.35)"/>
+                                    <text x="19" y="19" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" letter-spacing="-.3" fill="#D291FF">Ae</text>
                                 </svg>
                             </div>
                             <div>
@@ -3693,8 +3692,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     </div>
                     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
                         <div style="display:flex;align-items:center;gap:12px">
-                            <div style="width:36px;height:36px;border-radius:8px;background:#242424;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="#d4d4d4"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                            <div style="width:36px;height:36px;border-radius:8px;background:rgba(88,101,242,.14);border:1px solid rgba(88,101,242,.35);display:flex;align-items:center;justify-content:center">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="#5865F2"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
                             </div>
                             <div>
                                 <div style="font-size:.85rem;font-weight:600;color:#f5f5f5">Discord</div>
@@ -3707,8 +3706,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <div style="padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
                             <div style="display:flex;align-items:center;gap:12px">
-                                <div style="width:36px;height:36px;border-radius:8px;background:#242424;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#d4d4d4"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.5 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
+                                <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,0,0,.12);border:1px solid rgba(255,0,0,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.5 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
                                 </div>
                                 <div>
                                     <div style="font-size:.85rem;font-weight:600;color:#f5f5f5">YouTube Data API</div>
@@ -3728,8 +3727,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <div style="padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
                             <div style="display:flex;align-items:center;gap:12px">
-                                <div style="width:36px;height:36px;border-radius:8px;background:#242424;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#d4d4d4"><path d="M12 2l1.6 4.9L18.5 8l-4.9 1.6L12 14.5l-1.6-4.9L5.5 8l4.9-1.1L12 2zm6.5 10l.9 2.6L22 15.5l-2.6.9L18.5 19l-.9-2.6L15 15.5l2.6-.9.9-2.6z"/></svg>
+                                <div style="width:36px;height:36px;border-radius:8px;background:rgba(245,80,54,.12);border:1px solid rgba(245,80,54,.32);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#F55036"><path d="M12 2l1.6 4.9L18.5 8l-4.9 1.6L12 14.5l-1.6-4.9L5.5 8l4.9-1.1L12 2zm6.5 10l.9 2.6L22 15.5l-2.6.9L18.5 19l-.9-2.6L15 15.5l2.6-.9.9-2.6z"/></svg>
                                 </div>
                                 <div>
                                     <div style="font-size:.85rem;font-weight:600;color:#f5f5f5">Groq — IA principal <span style="font-size:.62rem;color:#bef264;font-weight:700;background:rgba(190,242,100,.12);padding:1px 6px;border-radius:20px;margin-left:4px">grátis</span></div>
@@ -3749,8 +3748,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <div style="padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
                             <div style="display:flex;align-items:center;gap:12px">
-                                <div style="width:36px;height:36px;border-radius:8px;background:#242424;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#d4d4d4"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2z"/></svg>
+                                <div style="width:36px;height:36px;border-radius:8px;background:rgba(138,180,248,.12);border:1px solid rgba(138,180,248,.32);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#8AB4F8"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2z"/></svg>
                                 </div>
                                 <div>
                                     <div style="font-size:.85rem;font-weight:600;color:#f5f5f5">Gemini — IA reserva <span style="font-size:.62rem;color:var(--text3);font-weight:600">(opcional)</span></div>
@@ -3770,8 +3769,8 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <div style="padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
                             <div style="display:flex;align-items:center;gap:12px">
-                                <div style="width:36px;height:36px;border-radius:8px;background:#242424;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#d4d4d4" d="M22 6.5V18a2 2 0 0 1-2 2h-1.5V9.9L12 14.3 5.5 9.9V20H4a2 2 0 0 1-2-2V6.5l1.8-.5L12 12l8.2-6 1.8.5z"/><path fill="#8a8a8a" d="M2 6a2 2 0 0 1 2-2h.4L12 9.3 19.6 4H20a2 2 0 0 1 2 2v.5L12 13 2 6.5V6z"/></svg>
+                                <div style="width:36px;height:36px;border-radius:8px;background:rgba(234,67,53,.12);border:1px solid rgba(234,67,53,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#EA4335" d="M22 6.5V18a2 2 0 0 1-2 2h-1.5V9.9L12 14.3 5.5 9.9V20H4a2 2 0 0 1-2-2V6.5l1.8-.5L12 12l8.2-6 1.8.5z"/><path fill="#C5221F" d="M2 6a2 2 0 0 1 2-2h.4L12 9.3 19.6 4H20a2 2 0 0 1 2 2v.5L12 13 2 6.5V6z"/></svg>
                                 </div>
                                 <div>
                                     <div style="font-size:.85rem;font-weight:600;color:#f5f5f5">Gmail (envio automático)</div>
@@ -3965,7 +3964,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         <div style="margin-top:8px">
             <div class="fg" style="margin-bottom:6px"><label data-i18n="cli.payment">Pagamento</label></div>
             <div class="bubble-pay" id="bubbleEditPaySel"></div>
-            <select id="editPag" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="stripe">Stripe</option><option value="payoneer">Payoneer</option><option value="deel">Deel</option><option value="revolut">Revolut</option><option value="skrill">Skrill</option><option value="venmo">Venmo</option><option value="ach">ACH</option><option value="sepa">SEPA</option><option value="pix">PIX</option><option value="ted">TED</option><option value="boleto">Boleto</option><option value="mercadopago">Mercado Pago</option><option value="pagseguro">PagSeguro</option><option value="cartao">Cartão</option><option value="crypto">Crypto</option><option value="usdt">USDT</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
+            <select id="editPag" style="display:none"><option value="paypal">PayPal</option><option value="wise">Wise</option><option value="stripe">Stripe</option><option value="payoneer">Payoneer</option><option value="deel">Deel</option><option value="revolut">Revolut</option><option value="skrill">Skrill</option><option value="venmo">Venmo</option><option value="ach">ACH</option><option value="sepa">SEPA</option><option value="pix">PIX</option><option value="ted">TED</option><option value="mercadopago">Mercado Pago</option><option value="pagseguro">PagSeguro</option><option value="cartao">Cartão</option><option value="crypto">Crypto</option><option value="usdt">USDT</option><option value="zelle">Zelle</option><option value="outro">Outro</option></select>
         </div>
         <div class="fr" style="margin-top:8px">
             <div class="fg" style="max-width:140px"><label>Moeda</label>
@@ -5424,36 +5423,75 @@ function jfFmtNum(n) {
     if (n >= 1e3) return (n / 1e3).toFixed(n % 1e3 ? 1 : 0).replace('.', ',') + 'k';
     return String(n);
 }
+// Posições das alças (0-100). Estado próprio — as alças são divs com pointer capture,
+// não <input type=range> (dois ranges empilhados brigavam pelo mouse).
+let jfPosMin = 0, jfPosMax = 100;
 function jfUpdateRangeUI(posMin, posMax) {
-    if (posMin == null) posMin = +document.getElementById('jfSlMin').value;
-    if (posMax == null) posMax = +document.getElementById('jfSlMax').value;
+    if (posMin == null) posMin = jfPosMin;
+    if (posMax == null) posMax = jfPosMax;
     const fill = document.getElementById('jfRangeFill');
     if (fill) { fill.style.left = posMin + '%'; fill.style.width = Math.max(0, posMax - posMin) + '%'; }
+    const tMin = document.getElementById('jfThumbMin'), tMax = document.getElementById('jfThumbMax');
+    if (tMin) tMin.style.left = posMin + '%';
+    if (tMax) tMax.style.left = posMax + '%';
 }
-function jfSlChange(which) {
-    const slMin = document.getElementById('jfSlMin'), slMax = document.getElementById('jfSlMax');
-    let posMin = +slMin.value, posMax = +slMax.value;
-    if (which === 'min' && posMin > posMax) { posMax = posMin; slMax.value = posMax; }
-    if (which === 'max' && posMax < posMin) { posMin = posMax; slMin.value = posMin; }
-    jfSubsMinVal = jfPosToSubs(posMin, false);
-    jfSubsMaxVal = jfPosToSubs(posMax, true);
+function jfSetPos(which, pos) {
+    pos = Math.max(0, Math.min(100, pos));
+    if (which === 'min') jfPosMin = Math.min(pos, jfPosMax);
+    else jfPosMax = Math.max(pos, jfPosMin);
+    jfSubsMinVal = jfPosToSubs(jfPosMin, false);
+    jfSubsMaxVal = jfPosToSubs(jfPosMax, true);
     document.getElementById('jfSubMinInp').value = jfFmtNum(jfSubsMinVal);
     document.getElementById('jfSubMaxInp').value = jfFmtNum(jfSubsMaxVal);
-    jfUpdateRangeUI(posMin, posMax);
+    jfUpdateRangeUI();
     jfApplyFilters();
 }
+// Arraste: pointerdown em qualquer lugar da barra pega a alça MAIS PRÓXIMA e segue o mouse
+(function jfRangeDragInit(){
+    const range = document.getElementById('jfRange');
+    if (!range) return;
+    let dragging = null; // 'min' | 'max'
+    const posFromEvent = (e) => {
+        const r = range.getBoundingClientRect();
+        return Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100));
+    };
+    range.addEventListener('pointerdown', (e) => {
+        const pos = posFromEvent(e);
+        // mais próxima ganha; empate (sobrepostas) → decide pela direção do clique
+        const dMin = Math.abs(pos - jfPosMin), dMax = Math.abs(pos - jfPosMax);
+        dragging = dMin < dMax ? 'min' : dMax < dMin ? 'max' : (pos < jfPosMin ? 'min' : 'max');
+        const th = document.getElementById(dragging === 'min' ? 'jfThumbMin' : 'jfThumbMax');
+        if (th) th.classList.add('dragging');
+        range.setPointerCapture(e.pointerId);
+        jfSetPos(dragging, pos);
+        e.preventDefault();
+    });
+    range.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        jfSetPos(dragging, posFromEvent(e));
+    });
+    const end = (e) => {
+        if (!dragging) return;
+        const th = document.getElementById(dragging === 'min' ? 'jfThumbMin' : 'jfThumbMax');
+        if (th) th.classList.remove('dragging');
+        dragging = null;
+        try { range.releasePointerCapture(e.pointerId); } catch(err) {}
+    };
+    range.addEventListener('pointerup', end);
+    range.addEventListener('pointercancel', end);
+    jfUpdateRangeUI(); // posiciona as alças no estado inicial (0-100)
+})();
 function jfInpChange(which) {
     const el = document.getElementById(which === 'min' ? 'jfSubMinInp' : 'jfSubMaxInp');
     let n = jfParseNum(el.value);
     if (n === null) { el.value = jfFmtNum(which === 'min' ? jfSubsMinVal : jfSubsMaxVal); return; } // inválido: restaura
     if (which === 'min') { if (!isFinite(n)) n = JF_SUB_HI; jfSubsMinVal = n; if (jfSubsMinVal > jfSubsMaxVal) jfSubsMaxVal = Infinity; }
     else { jfSubsMaxVal = n; if (isFinite(jfSubsMaxVal) && jfSubsMaxVal < jfSubsMinVal) jfSubsMinVal = 0; }
-    const posMin = Math.round(jfSubsToPos(jfSubsMinVal)), posMax = Math.round(jfSubsToPos(jfSubsMaxVal));
-    document.getElementById('jfSlMin').value = posMin;
-    document.getElementById('jfSlMax').value = posMax;
+    jfPosMin = jfSubsToPos(jfSubsMinVal);
+    jfPosMax = jfSubsToPos(jfSubsMaxVal);
     document.getElementById('jfSubMinInp').value = jfFmtNum(jfSubsMinVal);
     document.getElementById('jfSubMaxInp').value = jfFmtNum(jfSubsMaxVal);
-    jfUpdateRangeUI(posMin, posMax);
+    jfUpdateRangeUI();
     jfApplyFilters();
 }
 // Filtra jfAllResults pela faixa de inscritos e re-renderiza (instantâneo, sem nova busca)
@@ -5502,7 +5540,7 @@ function cfgYtKeyRefresh() {
     const st = document.getElementById('cfgYtKeyStatus');
     if (inp) inp.value = key;
     if (st) {
-        if (key) { st.textContent = '✓ Conectada'; st.style.color = '#4ade80'; }
+        if (key) { st.textContent = 'Conectada'; st.style.color = '#bef264'; }
         else { st.textContent = 'Não configurada'; st.style.color = '#737373'; }
     }
 }
@@ -5525,7 +5563,7 @@ function cfgGemKeyRefresh() {
     const inp = document.getElementById('cfgGemKeyInput');
     const st = document.getElementById('cfgGemKeyStatus');
     if (inp) inp.value = key;
-    if (st) { if (key) { st.textContent = '✓ Configurada'; st.style.color = '#4ade80'; } else { st.textContent = 'Não configurada'; st.style.color = '#737373'; } }
+    if (st) { if (key) { st.textContent = 'Configurada'; st.style.color = '#bef264'; } else { st.textContent = 'Não configurada'; st.style.color = '#737373'; } }
 }
 function cfgGemKeyToggle() {
     const inp = document.getElementById('cfgGemKeyInput'); const eye = document.getElementById('cfgGemEye');
@@ -5545,7 +5583,7 @@ function cfgGroqKeyRefresh() {
     const inp = document.getElementById('cfgGroqKeyInput');
     const st = document.getElementById('cfgGroqKeyStatus');
     if (inp) inp.value = key;
-    if (st) { if (key) { st.textContent = '✓ Configurada'; st.style.color = '#4ade80'; } else { st.textContent = 'Não configurada'; st.style.color = '#737373'; } }
+    if (st) { if (key) { st.textContent = 'Configurada'; st.style.color = '#bef264'; } else { st.textContent = 'Não configurada'; st.style.color = '#737373'; } }
 }
 function cfgGroqKeyToggle() {
     const inp = document.getElementById('cfgGroqKeyInput'); const eye = document.getElementById('cfgGroqEye');
@@ -5575,7 +5613,7 @@ async function cfgSmtpRefresh() {
     try {
         const s = await window.jobMailer.smtpStatus();
         if (s && s.configured) {
-            st.textContent = '✓ Conectado (' + s.user + ')'; st.style.color = '#4ade80';
+            st.textContent = 'Conectado (' + s.user + ')'; st.style.color = '#bef264';
             const u = document.getElementById('cfgSmtpUser'); if (u && !u.value) u.value = s.user;
         } else { st.textContent = 'Não conectado'; st.style.color = '#737373'; }
     } catch (e) { st.textContent = 'Não conectado'; st.style.color = '#737373'; }
@@ -5728,8 +5766,8 @@ function jfRenderTriggers() {
     if (!el) return;
     document.getElementById('jfTrgCount').textContent = jfTriggers.length;
     const searches = jfTriggers.length + 2; // gatilhos + termo puro + busca de canais
-    document.getElementById('jfTrgCost').textContent = '≈ ' + searches + ' buscas por pesquisa (~' + (searches * 100) + ' de cota).';
-    if (!jfTriggers.length) { el.innerHTML = '<span class="jf-trg-empty">Sem gatilhos — só o termo puro será buscado.</span>'; return; }
+    document.getElementById('jfTrgCost').textContent = 'Cada pesquisa vai fazer ' + searches + ' buscas e usar uns ' + (searches * 100) + ' pontos da cota.';
+    if (!jfTriggers.length) { el.innerHTML = '<span class="jf-trg-empty">Sem gatilhos: a pesquisa usa só o termo que você digitar.</span>'; return; }
     el.innerHTML = jfTriggers.map((t, i) => `<span class="jf-trg-chip">${jfEsc(t)}<span class="x" title="Remover" onclick="jfRemoveTrigger(${i})">✕</span></span>`).join('');
 }
 function jfAddTrigger() {
@@ -6384,42 +6422,121 @@ async function jfAICall(prompt, onStatus) {
     }
     throw lastErr || new Error('Falha na IA');
 }
+// Idioma do e-mail: país BR/PT → português; país conhecido → inglês; sem país →
+// adivinha pela DESCRIÇÃO do canal (antes, sem país caía sempre no "escreva em inglês"
+// dentro de um prompt em português e a IA derrapava pro português).
+function jfEmailLang(p) {
+    const c = p.country || '';
+    if (c === 'BR' || c === 'PT') return 'pt';
+    if (c) return 'en';
+    const d = ((p._desc || '') + ' ' + (p.title || '')).slice(0, 800);
+    return /[ãõçâêô]|\bvocê\b|\bvídeo|\binscreva|\bcanal\b|\bconteúdo\b/i.test(d) ? 'pt' : 'en';
+}
 function jfBuildEmailPrompt(p, tone) {
     const desc = (p._desc || '').replace(/\s+/g, ' ').trim().slice(0, 1000);
     const country = p.country || '';
-    const isEn = !(country === 'BR' || country === 'PT');
-    const lang = isEn ? 'inglês' : 'português (Brasil)';
+    const isEn = jfEmailLang(p) === 'en';
     const sender = (typeof cfg !== 'undefined' && ((cfg.meusDados && cfg.meusDados.nome) || cfg.empresa)) || '';
-    const subsTxt = (p.subs === -1 || p.subs == null) ? 'ocultos' : String(p.subs);
+    const subsTxt = (p.subs === -1 || p.subs == null) ? (isEn ? 'hidden' : 'ocultos') : String(p.subs);
     const isFormal = tone === 'formal';
+    const titles = (p._vidTitles || []).filter(Boolean).slice(0, 8);
+    // Canal gringo = prompt INTEIRO em inglês. Prompt em português pedindo "escreva em
+    // inglês" fazia o modelo derrapar pro português (segue o idioma dominante do prompt).
+    if (isEn) {
+        return [
+            'You are a freelance video editor writing a short outreach email to a YouTube channel. It must read like a REAL person who watches the channel and typed it quickly. Not a bot, not a template, not spam.',
+            '',
+            'REAL CHANNEL DATA (use only this, never invent anything):',
+            '- Channel name: ' + p.title,
+            '- Subscribers: ' + subsTxt,
+            '- Country: ' + (country || 'unknown'),
+            '- About/bio: ' + (desc || '(empty)'),
+            titles.length ? ('- Recent video titles: ' + titles.join(' | ')) : '- (no video list available)',
+            '',
+            'SENDER: ' + (sender || 'a freelance video editor (name not provided)'),
+            '',
+            'TONE: ' + (isFormal
+                ? 'PROFESSIONAL and polished, but still warm and human. Never stiff or corporate.'
+                : 'CASUAL, like a DM between two people in the same industry. Light, direct, with personality.'),
+            '',
+            'RULES (follow ALL of them):',
+            titles.length
+                ? '- Naturally mention ONE of the recent videos/topics from the list, like someone who actually watched it (comment on the subject itself; do NOT paste the full title in quotes).'
+                : '- Mention ONE specific thing from the bio/topics that shows you know the content.',
+            '- Get straight to the point. No "hope you are doing well", no long intro.',
+            '- NEVER invent numbers, video names, awards, or facts that are not in the data.',
+            '- Do NOT use em dashes (—) or loose hyphens between clauses ( - ). Separate ideas with a period or a comma. No bullet lists.',
+            '- BANNED cliche phrases: "take your videos to the next level", "I\'d love to chat", "you must be doing something right", "I\'ve been keeping up with your channel", "amazing content", "huge fan", "Dear creator". Nothing that sounds like that kind of template.',
+            '- Vary the rhythm: do not start 3 sentences in a row with "I". One short sentence in the middle keeps it human.',
+            '- Body of 3 to 5 sentences. A soft CTA at the end (showing your work or trading ideas), zero sales pressure.',
+            '- No placeholders like [name]. End with "Best,"' + (sender ? ' followed by the name "' + sender + '".' : ' with no invented name.'),
+            '- Reply with ONLY valid JSON, no markdown, no backticks: {"subject":"...","body":"..."} and use \\n for line breaks inside "body".',
+            '- THE ENTIRE EMAIL (subject and body) MUST BE IN ENGLISH. Not a single word in Portuguese.'
+        ].join('\n');
+    }
     return [
-        'Você é um copywriter NATIVO. Escreva um e-mail de prospecção de um editor de vídeo freelancer se oferecendo para editar os vídeos de um canal do YouTube. Precisa soar como uma PESSOA REAL do meio, não um robô nem um e-mail de spam.',
+        'Você é um editor de vídeo freelancer escrevendo um e-mail de prospecção pra um canal do YouTube. Tem que soar como uma PESSOA REAL que assiste o canal, digitando rápido. Não um robô, não um template, não spam.',
         '',
-        'ANALISE o canal e o histórico do criador a partir dos dados:',
+        'DADOS REAIS DO CANAL (só use o que está aqui, não invente nada):',
         '- Nome do canal: ' + p.title,
         '- Inscritos: ' + subsTxt,
         '- País: ' + (country || 'desconhecido'),
-        '- Sobre/bio/descrição (o que o criador escreveu, links, temas): ' + (desc || '(vazio)'),
+        '- Descrição/bio: ' + (desc || '(vazio)'),
+        titles.length ? ('- Títulos dos vídeos mais recentes: ' + titles.join(' | ')) : '- (sem lista de vídeos disponível)',
         '',
         'QUEM ENVIA: ' + (sender || 'um editor de vídeo freelancer (nome não informado)'),
         '',
         'TOM: ' + (isFormal
-            ? 'FORMAL e profissional — porém ainda humano e caloroso, nunca engessado nem robótico.'
-            : 'INFORMAL e descontraído, como uma DM entre pessoas do mesmo meio. Leve e direto.'),
+            ? 'FORMAL e profissional, mas humano e caloroso. Nunca engessado.'
+            : 'INFORMAL, como uma DM entre pessoas do mesmo meio. Leve, direto, com personalidade.'),
         '',
         'REGRAS (siga TODAS):',
-        '- Escreva em ' + lang + ', com naturalidade de falante nativo.',
-        '- Vá DIRETO ao ponto. Sem enrolação, sem introdução longa, sem "espero que esteja tudo bem".',
-        '- Diga de forma natural que você ACOMPANHA o canal.',
-        '- Cite UMA coisa ESPECÍFICA e verdadeira do canal/criador (um tema, o formato dos vídeos, um detalhe da bio) que mostre que você assiste de verdade — mas que NÃO soe forçado nem puxa-saco.',
-        '- Se os dados não derem base pra algo específico, seja natural e um pouco mais genérico — JAMAIS invente números (inscritos/views), nomes de vídeos, prêmios ou fatos que não estão nos dados.',
-        '- PROIBIDO soar como cold-email/spam de robô: nada de bajulação exagerada ("sou seu MAIOR fã", "amo TUDO que você faz"), nada de "Prezado(a)"/"Caro(a) criador", nada de frases genéricas de template, superlativos vazios ou aquele tom de e-mail traduzido/artificial. Escreva do jeito que um nativo escreveria de verdade.',
-        '- Corpo curto: 3 a 5 frases. Um CTA leve no fim (ex.: mostrar portfólio, trocar uma ideia).',
-        '- Não use placeholders tipo [nome]. Encerre com "' + (isEn ? 'Best,' : 'Abraço,') + '"' + (sender ? ' e o nome "' + sender + '".' : ' sem nome inventado.'),
-        '- Responda SOMENTE um JSON válido, sem markdown e sem crases: {"subject":"...","body":"..."} — use \\n para quebras de linha dentro de "body".'
+        titles.length
+            ? '- Mencione NATURALMENTE um dos vídeos/temas recentes da lista, como quem assistiu (comente algo do assunto do vídeo; NÃO cole o título inteiro entre aspas).'
+            : '- Cite UMA coisa específica da bio/temas do canal que mostre que você conhece o conteúdo.',
+        '- Vá direto ao ponto. Sem "espero que esteja bem", sem introdução longa.',
+        '- JAMAIS invente números, nomes de vídeos, prêmios ou fatos fora dos dados.',
+        '- PROIBIDO travessão (—) e hífen solto entre frases ( - ). Separe ideias com ponto ou vírgula. Sem listas com marcador.',
+        '- PROIBIDO frases prontas de IA/spam: "levar seu conteúdo pro próximo nível", "conteúdo incrível", "sou seu maior fã", "adoraria trocar uma ideia rapidinho", "Prezado(a)". Nada parecido com isso.',
+        '- Varie o ritmo: não comece 3 frases seguidas com "Eu". Uma frase curtinha no meio deixa humano.',
+        '- Corpo com 3 a 5 frases. CTA leve no fim (mostrar seu trabalho ou trocar uma ideia), sem pressão de vendas.',
+        '- Sem placeholders tipo [nome]. Encerre com "Abraço,"' + (sender ? ' e o nome "' + sender + '".' : ' sem nome inventado.'),
+        '- Responda SOMENTE um JSON válido, sem markdown e sem crases: {"subject":"...","body":"..."} e use \\n para quebras de linha dentro de "body".',
+        '- O E-MAIL INTEIRO (assunto e corpo) TEM QUE SER EM PORTUGUÊS DO BRASIL.'
     ].join('\n');
 }
+// Limpa cacoetes de IA que escapam mesmo com o prompt (travessões, hífens de emenda,
+// indentação fantasma no início das linhas)
+function jfHumanizeEmail(s, lang) {
+    let t = String(s || '')
+        .split('\n').map(l => l.replace(/^[ \t]+/, '').replace(/^[-–—•*]\s+/, '')).join('\n') // bullets/indent fantasma
+        .replace(/\s*[—–]\s*/g, ', ')   // travessão e meio-traço viram vírgula
+        .replace(/\s+-\s+/g, ', ')      // hífen solto emendando frases
+        .replace(/,\s*,/g, ',')
+        .replace(/\s+,/g, ',')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    if (lang === 'en') t = t.replace(/portf[óo]lio/gi, 'portfolio');
+    // assinatura colada na frase (", Best," no fim) → quebra de linha antes
+    t = t.replace(/[,.]\s*(Best|Cheers|Thanks|Abraço|Abraços|Valeu)([,.]?)\s*$/i, '.\n\n$1,');
+    return t;
+}
 async function jfGenEmailFor(p, tone, onStatus) {
+    // Pesquisa real: puxa os títulos dos vídeos recentes do canal (1-2 de cota, cacheado)
+    // pra IA comentar algo que o canal REALMENTE postou.
+    if (!p._vidTitles && typeof jfChannelVideoTitles === 'function' && jfHasKey() && !jfIsQuotaExhausted()) {
+        if (onStatus) onStatus('Espiando os vídeos recentes do canal…');
+        try {
+            // canais salvos na lista antes dessa feature não têm o _uploads guardado — busca
+            if (!p._uploads && p.id) {
+                const det = await jfApi('channels', { part: 'contentDetails', id: p.id });
+                p._uploads = (det.items && det.items[0] && det.items[0].contentDetails && det.items[0].contentDetails.relatedPlaylists && det.items[0].contentDetails.relatedPlaylists.uploads) || '';
+            }
+            p._vidTitles = p._uploads ? await jfChannelVideoTitles(p) : [];
+            try { jfPersistList(); } catch (e2) {}
+        } catch (e) { p._vidTitles = []; }
+    }
+    const lang = jfEmailLang(p);
     const raw = await jfAICall(jfBuildEmailPrompt(p, tone), onStatus);
     const cleaned = String(raw || '').replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/i, '').trim();
     let obj = null;
@@ -6428,7 +6545,7 @@ async function jfGenEmailFor(p, tone, onStatus) {
         if (m) { try { obj = JSON.parse(m[0]); } catch (_e) {} }
     }
     if (!obj || !obj.body) { try { console.warn('[jobfinder] resposta IA inesperada:', raw); } catch (_e) {} throw new Error('A IA respondeu num formato inesperado. Tente de novo.'); }
-    return { subject: (obj.subject || jfTpl.subject || '').trim(), body: (obj.body || '').trim() };
+    return { subject: jfHumanizeEmail(obj.subject || jfTpl.subject || '', lang), body: jfHumanizeEmail(obj.body || '', lang) };
 }
 
 /* ═══════════ Modal de e-mail — prévia + editar + enviar (sem abrir Gmail) ═══════════ */
@@ -6813,7 +6930,6 @@ const _ALL_PAY_METHODS=[
     {id:'sepa',nome:'SEPA',icon:'',color:'#003399',svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#003399"/><text x="12" y="16" text-anchor="middle" fill="#FFCC00" font-size="8" font-weight="700" font-family="sans-serif">SEPA</text></svg>'},
     {id:'pix',nome:'PIX',icon:'',color:'#32BCAD',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#32BCAD"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="8" font-weight="700" font-family="sans-serif">PIX</text></svg>'},
     {id:'ted',nome:'TED',icon:'',color:'#0EA5E9',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#0EA5E9"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="9" font-weight="700" font-family="sans-serif">TED</text></svg>'},
-    {id:'boleto',nome:'Boleto',icon:'',color:'#1F2937',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#1F2937"/><g stroke="#fff" stroke-width="1.5"><line x1="6" y1="6" x2="6" y2="18"/><line x1="9" y1="6" x2="9" y2="18"/><line x1="12" y1="6" x2="12" y2="18"/><line x1="15" y1="6" x2="15" y2="18"/><line x1="18" y1="6" x2="18" y2="18"/></g></svg>'},
     {id:'mercadopago',nome:'Mercado Pago',icon:'https://cdn.simpleicons.org/mercadopago/00B1EA',color:'#00B1EA',brOnly:true},
     {id:'pagseguro',nome:'PagSeguro',icon:'https://cdn.simpleicons.org/pagseguro/FFC107',color:'#FFC107',brOnly:true},
     {id:'cartao',nome:'Cartão',icon:'',color:'#7C3AED',brOnly:true,svg:'<svg viewBox="0 0 24 24" width="14" height="14"><rect width="24" height="24" rx="4" fill="#7C3AED"/><rect x="4" y="8" width="16" height="10" rx="1.5" fill="none" stroke="#fff" stroke-width="1.5"/><line x1="4" y1="11" x2="20" y2="11" stroke="#fff" stroke-width="1.5"/></svg>'},
@@ -8229,17 +8345,43 @@ function selectBubblePay(id){
     _payExpanded=false;
     renderBubblePay();
 }
+// Formulários de cliente: mostra só as principais + "mais" pra expandir (a lista
+// inteira aberta ocupava 3 linhas do modal)
+const PAY_FORM_VISIBLE = 8;
+let _payForExp = {}; // expandido por elemento
 function renderBubblePayFor(elId,selId,selectFn){
     const el=document.getElementById(elId);if(!el)return;
     const sel=document.getElementById(selId);
     const cur=sel?sel.value:'paypal';
-    el.innerHTML=payMethods.map(p=>{
+    const expanded=!!_payForExp[elId];
+    let lista=payMethods;
+    let ocultos=0;
+    if(!expanded && payMethods.length>PAY_FORM_VISIBLE+1){
+        lista=payMethods.slice(0,PAY_FORM_VISIBLE);
+        // o selecionado nunca some: se ficou de fora do corte, entra no lugar do último
+        if(cur && !lista.some(p=>p.id===cur)){
+            const curPm=payMethods.find(p=>p.id===cur);
+            if(curPm){ lista=lista.slice(0,PAY_FORM_VISIBLE-1); lista.push(curPm); }
+        }
+        ocultos=payMethods.length-lista.length;
+    }
+    let html=lista.map(p=>{
         const active=p.id===cur?'selected':'';
         const icon=p.svg||`<img src="${p.icon}" width="16" height="16" style="border-radius:2px" onerror="this.style.display='none'">`;
         return `<div class="bp-item ${active}" onclick="${selectFn}('${p.id}')" style="border-color:${p.id===cur?p.color+'55':'rgba(190,242,100,.1)'}">
             ${icon} <span>${p.nome}</span>
         </div>`;
     }).join('');
+    if(!expanded && ocultos>0){
+        html+=`<div class="bp-item" onclick="_payForExp['${elId}']=true;renderBubblePayFor('${elId}','${selId}','${selectFn}')" style="cursor:pointer;opacity:.75;border-style:dashed" title="Mostrar todas as formas de pagamento">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> <span>${ocultos} mais</span>
+        </div>`;
+    } else if(expanded){
+        html+=`<div class="bp-item" onclick="_payForExp['${elId}']=false;renderBubblePayFor('${elId}','${selId}','${selectFn}')" style="cursor:pointer;opacity:.75;border-style:dashed" title="Mostrar menos">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg> <span>menos</span>
+        </div>`;
+    }
+    el.innerHTML=html;
 }
 function selectCliPay(id){
     document.getElementById('cliPagamento').value=id;
@@ -10916,6 +11058,12 @@ function isPomoFocusEnabled(){
 }
 function savePomoFocusPref(){
     try{ localStorage.setItem('vc_pomo_focus_enabled', isPomoFocusEnabled()?'1':'0'); }catch(e){}
+    // Aplica NA HORA se o pomodoro ja esta rodando — desligar o toggle tem que
+    // PARAR de minimizar imediatamente (antes so valia no proximo start)
+    if(pomoT.running&&window.focusMode){
+        if(isPomoFocusEnabled()){syncFocusWhitelist();window.focusMode.startExternal();}
+        else window.focusMode.stop();
+    }
 }
 function startPomodoro(){
     if(pomoT.running)return;
@@ -10927,7 +11075,7 @@ function startPomodoro(){
         document.getElementById('btnPomoPause').style.display='';
         document.getElementById('btnPomoReset').style.display='';
         // Resume focus mode (only if user chose it)
-        if(focusOn && window.focusMode)window.focusMode.startExternal();
+        if(focusOn && window.focusMode){syncFocusWhitelist();window.focusMode.startExternal();}
         return;
     }
     const w=parseInt(document.getElementById('pomoWork').value)||25;
@@ -10941,6 +11089,7 @@ function startPomodoro(){
     document.getElementById('btnPomoReset').style.display='';
     // Focus mode — only if user enabled the checkbox
     if(focusOn && window.focusMode){
+        syncFocusWhitelist(); // garante que o main tem a lista ANTES de comecar a minimizar
         window.focusMode.startExternal();
     }
 }
@@ -11218,7 +11367,17 @@ function _getAllWhitelistApps(){
     customApps.forEach(a=>{if(!all.some(x=>x.process===a.id))all.push({name:a.name,process:a.processName||a.id,abbr:a.abbr||a.name.substring(0,2),color:a.color||'#888'})});
     return all;
 }
+// Empurra a whitelist atual pro processo main — é LÁ que o vigia do foco decide
+// quem minimizar. Sem esse push, o main fica com lista vazia e minimiza tudo
+// (bug: Chrome na whitelist sendo "fechado" mesmo assim após reiniciar o app).
+function syncFocusWhitelist(){
+    try{
+        const processNames=focusWhitelist.map(item=>typeof item==='object'?item.process:item);
+        if(window.focusMode?.setWhitelist)window.focusMode.setWhitelist(processNames);
+    }catch(e){}
+}
 function renderWhitelist(){
+    syncFocusWhitelist(); // sincroniza SEMPRE, mesmo sem a UI da whitelist na tela
     const el=document.getElementById('whitelistTags');if(!el)return;
     el.innerHTML=focusWhitelist.map((item,i)=>{
         const name=typeof item==='object'?item.name:item;
@@ -11352,6 +11511,17 @@ function handleSyncCommand(data){
             }break;
         case'pomodoro/pause':if(pomoT.running)pausePomodoro();break;
         case'pomodoro/reset':resetPomodoro();break;
+        case'pomodoro/focus':
+            // Toggle de foco mudou no plugin — aplica NA HORA (inclusive com pomodoro rodando)
+            if(typeof payload.focusEnabled==='boolean'){
+                const fcb=document.getElementById('pomoFocusEnabled');
+                if(fcb) fcb.checked=payload.focusEnabled;
+                try{localStorage.setItem('vc_pomo_focus_enabled',payload.focusEnabled?'1':'0')}catch(e){}
+                if(pomoT.running&&window.focusMode){
+                    if(payload.focusEnabled){syncFocusWhitelist();window.focusMode.startExternal();}
+                    else window.focusMode.stop();
+                }
+            }break;
     }
 }
 
@@ -12334,7 +12504,7 @@ function renderTaxasTable(){
     var userCur = (typeof getUserCurrency==='function') ? getUserCurrency() : 'BRL';
     var taxesHeader = (typeof LW_SHOW_FISCAL!=='undefined' && LW_SHOW_FISCAL==='1') ? T('fx.taxes_col') + ' (' + tp + ')' : T('fx.taxes_col');
     // calcula tudo primeiro e RANKEIA pelo líquido real (melhor primeiro)
-    const rows=Object.keys(payFees).filter(k=>k!=='outro').map(k=>{
+    const rows=Object.keys(payFees).filter(k=>k!=='outro'&&k!=='boleto').map(k=>{
         const r=calcTaxaMeio(taxaBase,k);
         const imp=calcImpDireto(r.recebidoBRL,tp);
         return {k,r,imp,liq:r.recebidoBRL-imp};
@@ -12540,12 +12710,32 @@ init();
 /* ═══════ Auto-Updater UI ═══════ */
 let updateReady = false;
 let manualUpdateCheck = false;
+let _updateDismissed = false;   // X clicado — não re-mostrar a cada tick de progresso
+let _lastDownloadedVer = '';
+
+// O check manual achou update de verdade → some com o "Verificando..." do botão
+// (antes o timer de 8s dizia "você está na mais recente" ENQUANTO baixava a nova)
+function _manualCheckConsumed() {
+    if (!manualUpdateCheck) return;
+    manualUpdateCheck = false;
+    const b = document.getElementById('btnCheckUpdate');
+    if (b) { b.disabled = false; b.innerHTML = defaultCheckBtnHTML(); }
+}
 
 // Show app version in settings
 if (window.appUpdater) {
     window.appUpdater.getVersion().then(v => {
         document.getElementById('appVersionLabel').textContent = 'Lion Workspace v' + v;
     });
+
+    // Boot atualizou os plugins CEP? Avisa que o Premiere/AE precisa reiniciar
+    // (o .jsx novo só carrega no restart do host Adobe — sem aviso, o painel ficava
+    // com client novo + jsx velho e as funções quebravam em silêncio)
+    try {
+        window.appUpdater.pluginsUpdatedOnBoot().then(r => {
+            if (r && r.updated) setTimeout(() => { try { showToast('Plugins do Premiere/AE atualizados. Reinicie o Premiere/After Effects pra aplicar.', 'info'); } catch (e) {} }, 4000);
+        }).catch(() => {});
+    } catch (e) {}
 
     window.appUpdater.onUpdateStatus((data) => {
         const banner = document.getElementById('updateBanner');
@@ -12556,10 +12746,11 @@ if (window.appUpdater) {
 
         switch (data.status) {
             case 'available':
-                banner.classList.add('show');
+                if (!_updateDismissed) banner.classList.add('show');
                 text.textContent = 'Nova versão ' + data.version + ' disponível! Baixando...';
                 progress.style.display = 'block';
                 actionBtn.style.display = 'none';
+                _manualCheckConsumed(); // update EXISTE — mata o "você está atualizado" do timer
                 break;
             case 'available-mac':
                 banner.classList.add('show');
@@ -12569,16 +12760,19 @@ if (window.appUpdater) {
                 actionBtn.textContent = 'Baixar atualização';
                 actionBtn.onclick = function() { window.appUpdater.openReleasesPage(); };
                 updateReady = false;
-                if (manualUpdateCheck) manualUpdateCheck = false;
+                _manualCheckConsumed();
                 break;
             case 'downloading':
-                banner.classList.add('show');
+                if (!_updateDismissed) banner.classList.add('show'); // X do usuário vale durante o download
                 text.textContent = 'Baixando atualização... ' + data.percent + '%';
                 progress.style.display = 'block';
                 progressBar.style.width = data.percent + '%';
                 actionBtn.style.display = 'none';
+                _manualCheckConsumed();
                 break;
             case 'downloaded':
+                _updateDismissed = false; // pronto pra instalar merece voltar a aparecer
+                _lastDownloadedVer = data.version || '';
                 banner.classList.add('show');
                 text.textContent = 'Versão ' + data.version + ' pronta para instalar!';
                 progress.style.display = 'none';
@@ -12586,9 +12780,19 @@ if (window.appUpdater) {
                 actionBtn.textContent = 'Reiniciar e atualizar';
                 actionBtn.onclick = function() { handleUpdateAction(); };
                 updateReady = true;
+                _manualCheckConsumed();
                 break;
             case 'error':
-                banner.classList.remove('show');
+                if (updateReady) {
+                    // update JÁ baixado e íntegro: um erro de check posterior (ex.: offline)
+                    // não pode sumir com o botão "Reiniciar e atualizar"
+                    banner.classList.add('show');
+                    text.textContent = 'Versão ' + (_lastDownloadedVer || 'nova') + ' pronta para instalar!';
+                    progress.style.display = 'none';
+                    actionBtn.style.display = 'inline-block';
+                } else {
+                    banner.classList.remove('show');
+                }
                 if (manualUpdateCheck) {
                     // data.message já vem curto e amigável do main.js; corta por segurança
                     showToast(String(data.message || 'Não foi possível verificar atualizações agora.').slice(0, 120), 'warn');
@@ -12597,6 +12801,7 @@ if (window.appUpdater) {
                 }
                 break;
             case 'not-available':
+                if (!updateReady) banner.classList.remove('show'); // defensivo: nunca deixar "Baixando..." fantasma
                 if (manualUpdateCheck) {
                     showToast('Você já está na versão mais recente!');
                     manualUpdateCheck = false;
@@ -12620,6 +12825,7 @@ function handleUpdateAction() {
 }
 
 function dismissUpdate() {
+    _updateDismissed = true; // senão o próximo tick de progresso re-mostrava em <1s
     document.getElementById('updateBanner').classList.remove('show');
 }
 
@@ -13275,13 +13481,18 @@ function manualCheckUpdate() {
             btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span style="color:#22c55e">Já está atualizado</span>';
             setTimeout(()=>{btn.innerHTML=defaultBtnHTML;},3000);
         }
-        // Timeout final: se nenhum evento disparou em 8s, avisa que verificação terminou
+        // Timeout final: se nenhum evento disparou em 8s, avisa que verificação terminou.
+        // NUNCA afirmar "está na mais recente" se o banner de update estiver visível
+        // (update achado/baixando) — era a contradição que o usuário via.
         setTimeout(()=>{
-            if(manualUpdateCheck){
+            const bannerVisible = (function(){ try { return document.getElementById('updateBanner').classList.contains('show'); } catch(e){ return false; } })();
+            if(manualUpdateCheck && !bannerVisible){
                 showToast('Verificação concluída. Você está na versão mais recente.');
                 manualUpdateCheck=false;
                 btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span style="color:#22c55e">Já está atualizado</span>';
                 setTimeout(()=>{btn.innerHTML=defaultBtnHTML;},3000);
+            } else if (manualUpdateCheck) {
+                manualUpdateCheck=false;
             }
         },8000);
     }).catch(function() {

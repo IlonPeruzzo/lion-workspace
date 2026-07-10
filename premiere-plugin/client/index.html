@@ -277,8 +277,8 @@
         @keyframes loginGlowPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.1)}}
         .login-overlay .login-card{position:relative;width:100%;max-width:280px;background:linear-gradient(180deg,rgba(28,28,28,.9) 0%,rgba(20,20,20,.95) 100%);border:1px solid rgba(190,242,100,.08);border-radius:16px;padding:28px 22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02) inset;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
         .login-overlay.hidden{display:none}
-        .login-overlay .login-logo{width:60px;height:60px;display:block;margin:0 auto 12px;border-radius:15px;object-fit:contain;box-shadow:0 10px 26px -6px rgba(190,242,100,.32),0 0 0 1px rgba(190,242,100,.14);animation:loginLogoFloat 5s ease-in-out infinite}
-        @keyframes loginLogoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-4px) rotate(-2deg)}}
+        .login-overlay .login-logo{width:72px;height:72px;display:block;margin:0 auto 20px;border-radius:18px;object-fit:contain;box-shadow:0 12px 30px -6px rgba(190,242,100,.35),0 0 0 1px rgba(190,242,100,.14);animation:loginLogoFloat 4.5s ease-in-out infinite}
+        @keyframes loginLogoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-7px) rotate(-2deg)}}
         /* Popup "Login OK" (igual ao app) */
         .lw-loginpop{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(6,6,9,.7);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);opacity:0;pointer-events:none;transition:opacity .3s}
         .lw-loginpop.active{opacity:1;pointer-events:auto}
@@ -294,9 +294,6 @@
         .lw-loginpop .lp-confetti{position:absolute;top:36%;left:50%;width:0;height:0;pointer-events:none}
         .lw-loginpop .lp-c{position:absolute;top:0;left:0;border-radius:1px;opacity:0;animation:lpConf 1.4s cubic-bezier(.15,.6,.3,1) .2s forwards}
         @keyframes lpConf{0%{opacity:0;transform:translate(0,0) rotate(0)}15%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(var(--dx),calc(var(--dy) + 60px)) rotate(var(--rot))}}
-        .login-overlay .logo{font-size:1.3rem;margin-bottom:4px;color:#f5f5f5;text-align:center;font-weight:800;letter-spacing:-.4px}
-        .login-overlay .logo span{color:#bef264}
-        .login-overlay .login-subtitle{font-size:.66rem;color:#737373;margin-bottom:18px;text-align:center;font-weight:500}
         .login-overlay .login-form{width:100%;display:flex;flex-direction:column;gap:10px}
         .login-overlay .input-wrap{position:relative;display:flex;align-items:center}
         .login-overlay .input-icon{position:absolute;left:11px;display:flex;align-items:center;justify-content:center;color:#525252;pointer-events:none;transition:color .2s}
@@ -421,8 +418,6 @@
     <div class="login-overlay" id="pluginLogin">
         <div class="login-card">
             <img class="login-logo" id="loginLogo" src="" alt="Lion Workspace">
-            <div class="logo">Lion <span>Workspace</span></div>
-            <div class="login-subtitle">Login pelo Discord no app Lion Workspace</div>
             <div class="login-form">
                 <div class="login-error" id="pluginLoginError"></div>
                 <button type="button" id="pluginAutoLoginBtn" class="auto-login-btn pulse" onclick="pluginManualAutoLogin()">
@@ -470,7 +465,6 @@
             <div class="header-name" id="headerName">Lion <span>Workspace</span></div>
             <div class="header-handle" id="headerHandle"></div>
         </div>
-        <svg class="premium-star" id="premiumStar" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><title>Lion Premium</title><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
         <span style="flex:1"></span>
         <img class="header-lion" id="headerLion" src="" alt="Lion" title="Lion Workspace" style="display:none">
         <button class="gear-btn" id="headerGear" onclick="openSettings()" title="Configurações" style="display:none">
@@ -899,7 +893,7 @@
                 <button class="yt-q" id="prwModeRandom" onclick="prwSetMode('random')" style="flex:1">Random</button>
             </div>
 
-            <div class="rw-lbl">Propriedade</div>
+            <div class="rw-lbl">Propriedades (pode marcar várias)</div>
             <div style="display:flex;gap:4px;margin-bottom:7px;flex-wrap:wrap">
                 <button class="yt-q rw-tgt active" data-t="position" onclick="prwPickTarget(this)" style="flex:1">Posição</button>
                 <button class="yt-q rw-tgt" data-t="scale" onclick="prwPickTarget(this)" style="flex:1">Escala</button>
@@ -918,7 +912,7 @@
                 <div id="prwMBCheck" class="mini-check">
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <span>Motion Blur (obturador 360°) — usa Transform</span>
+                <span>Motion Blur</span>
             </div>
 
             <!-- Params WIGGLE -->
@@ -933,6 +927,11 @@
                     <button class="yt-q active" id="prwAxisX" onclick="prwToggleAxis('x')" style="flex:1">Eixo X</button>
                     <button class="yt-q active" id="prwAxisY" onclick="prwToggleAxis('y')" style="flex:1">Eixo Y</button>
                 </div>
+
+                <!-- Presets: bolinhas — hover = preview animado, clique = aplica nos parametros -->
+                <div class="rw-lbl" style="margin-top:9px">Presets <span id="prwPresetName" style="text-transform:none;letter-spacing:0;color:#bef264"></span></div>
+                <div id="prwPresetRow" style="display:flex;gap:7px;flex-wrap:wrap;justify-content:center;align-items:center;padding:5px 6px 2px"></div>
+                <canvas id="prwPrev" width="230" height="54" style="width:100%;height:54px;margin-top:7px;border-radius:6px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.06);display:block"></canvas>
             </div>
 
             <!-- Params RANDOM -->
@@ -955,7 +954,6 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/></svg>
                 Aplicar Wiggler
             </button>
-            <div style="text-align:center;font-size:.5rem;color:#555;margin-top:5px;line-height:1.4">Selecione clip(s) na timeline. Gera keyframes de movimento (não usa expressão).</div>
             <div id="prwMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
         </div>
     </div>
@@ -980,6 +978,14 @@
                 <button class="yt-q prl-tgt" data-t="opacity" onclick="prlPickTarget(this)" style="flex:1">Opacidade</button>
             </div>
 
+            <div class="rw-lbl">Aplicar em</div>
+            <div style="display:flex;gap:4px;margin-bottom:7px">
+                <button class="yt-q prl-comp active" data-c="" onclick="prlPickComp(this)" style="flex:1">Auto</button>
+                <button class="yt-q prl-comp" data-c="motion" onclick="prlPickComp(this)" style="flex:1">Motion</button>
+                <button class="yt-q prl-comp" data-c="transform" onclick="prlPickComp(this)" style="flex:1;font-size:.52rem">Transform</button>
+                <button class="yt-q prl-comp" data-c="vector" onclick="prlPickComp(this)" style="flex:1;font-size:.52rem">Vector</button>
+            </div>
+
             <div class="rw-lbl">Tipo de Loop</div>
             <div style="display:flex;gap:5px;margin-bottom:7px">
                 <button class="yt-q prl-type active" data-ty="cycle" onclick="prlPickType(this)" style="flex:1">Ciclo</button>
@@ -996,7 +1002,6 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
                 Aplicar Loop
             </button>
-            <div style="text-align:center;font-size:.5rem;color:#555;margin-top:5px;line-height:1.4">A propriedade já precisa ter keyframes. Repete eles até o fim do clip.</div>
             <div id="prlMsg" style="text-align:center;font-size:.55rem;color:#555;margin-top:3px;min-height:11px"></div>
         </div>
     </div>
@@ -2167,8 +2172,13 @@
 
     function showMsg(text){
         var old=document.getElementById('_toast');if(old)old.remove();
+        // Verde (sucesso) por padrao; vermelho so quando o texto e claramente erro/aviso
+        var isErr=/erro|falha|timeout|desconect|indispon|cole uma|não identificad|nao identificad|não encontrad|nao encontrad|vazio|sem resposta|inválid|invalid|selecione/i.test(text);
+        var col=isErr?'#f43f5e':'#22c55e';
+        var bg=isErr?'rgba(244,63,94,.14)':'rgba(34,197,94,.14)';
+        var bd=isErr?'rgba(244,63,94,.32)':'rgba(34,197,94,.32)';
         var d=document.createElement('div');d.id='_toast';
-        d.style.cssText='position:fixed;top:10px;left:10px;right:10px;padding:8px 12px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:8px;color:#f59e0b;font-size:.72rem;font-weight:600;text-align:center;z-index:999;animation:fadeIn .2s';
+        d.style.cssText='position:fixed;top:10px;left:10px;right:10px;padding:8px 12px;background:'+bg+';border:1px solid '+bd+';border-radius:8px;color:'+col+';font-size:.72rem;font-weight:600;text-align:center;z-index:999;animation:fadeIn .2s';
         d.textContent=text;document.body.appendChild(d);
         setTimeout(function(){d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(function(){d.remove()},300)},2500);
     }
@@ -2177,6 +2187,9 @@
         try{
             var on=document.getElementById('pluginPomoFocus').checked;
             localStorage.setItem('lw_plugin_pomo_focus', on?'1':'0');
+            // Avisa o app NA HORA — desligar o toggle com o pomodoro rodando
+            // tem que parar de minimizar imediatamente
+            LWHttp.post(API+'/pomodoro/focus',{fromPlugin:true,focusEnabled:on},{retries:1},function(){});
         }catch(e){}
     }
     function pluginPomoFocusOn(){
@@ -2195,9 +2208,9 @@
     },0);
 
     function pomoStart(){
-        if(pomoState.paused){
-            cmd('pomodoro/start');
-        } else if(!pomoState.running){
+        // Sempre manda a preferencia de foco — o retomar sem ela fazia o app usar o
+        // checkbox interno dele (podia estar ligado) e ligar o foco com o toggle OFF
+        if(pomoState.paused || !pomoState.running){
             LWConnection.resetPollRate();
             LWHttp.post(API+'/pomodoro/start',{fromPlugin:true,focusEnabled:pluginPomoFocusOn()},{retries:1},function(){});
             setTimeout(poll,300);
@@ -3150,7 +3163,20 @@
     }
     function _lsReEsc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
+    // Cache do parse: ler + gunzip + indexar o .prfpset inteiro A CADA apply era
+    // parte da demora. Cacheia o resultado por arquivo+preset ate o arquivo mudar.
+    var _lsPrfpsetDataCache = {};
     function lsParsePrfpsetFull(filePath, presetName) {
+        var key = filePath + '#' + presetName;
+        var mt = 0;
+        try { mt = _lsFs.statSync(filePath).mtimeMs || 0; } catch(e) {}
+        var c = _lsPrfpsetDataCache[key];
+        if (c && c.mt === mt) return c.data;
+        var data = _lsParsePrfpsetFullInner(filePath, presetName);
+        if (data) _lsPrfpsetDataCache[key] = { mt: mt, data: data };
+        return data;
+    }
+    function _lsParsePrfpsetFullInner(filePath, presetName) {
         if (!_lsFs || !_lsZlib) return null;
         try {
             var data = _lsFs.readFileSync(filePath);
@@ -3274,14 +3300,21 @@
                     }
                     var kfs = (childText(par.text, 'Keyframes') || '').trim();
                     var tv = (childText(par.text, 'IsTimeVarying') || '').trim() === 'true';
+                    var pct = parseInt(childText(par.text, 'ParameterControlType') || '2', 10);
+                    var cv = (childText(par.text, 'CurrentValue') || '').trim();
+                    // CHECKBOX: normaliza pra 'true'/'false'. O .prfpset grava 0/1 e o jsx
+                    // PULA CurrentValue '0' (protecao contra placeholder do Excalibur) — mas
+                    // em checkbox 0 e' valor REAL (desmarcado). Sem isso, preset com motion
+                    // blur nao desmarcava o "Use Composition's Shutter Angle" e o blur morria.
+                    if (pct === 4 && cv !== '') cv = (cv === 'true' || parseFloat(cv) >= 0.5) ? 'true' : 'false';
                     props.push({
                         Name: (childText(par.text, 'Name') || '').trim(),
                         ParameterID: parseInt(childText(par.text, 'ParameterID') || '0', 10),
-                        ParameterControlType: parseInt(childText(par.text, 'ParameterControlType') || '2', 10),
+                        ParameterControlType: pct,
                         IsTimeVarying: !!(tv && kfs),
                         Keyframes: kfs,
                         StartKeyframe: (childText(par.text, 'StartKeyframe') || '').trim(),
-                        CurrentValue: (childText(par.text, 'CurrentValue') || '').trim(),
+                        CurrentValue: cv,
                     });
                 }
                 // Nomeia params SEM NOME que dá pra inferir: o .prfpset guarda o
@@ -4226,18 +4259,88 @@
         try{localStorage.setItem('lw_easing_presets',JSON.stringify(savedPresets))}catch(e){}
     }
 
+    // Modal de texto estilizado (substitui o prompt() nativo feio do CEP)
+    function lwPromptText(opts, cb){
+        opts=opts||{};
+        var ov=document.createElement('div');
+        ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:99999;animation:fadeIn .15s';
+        var card=document.createElement('div');
+        card.style.cssText='width:84%;max-width:250px;background:linear-gradient(180deg,#1d1d1d,#151515);border:1px solid rgba(190,242,100,.16);border-radius:13px;padding:16px 15px 14px;box-shadow:0 22px 55px rgba(0,0,0,.65)';
+        var title=document.createElement('div');
+        title.textContent=opts.title||'Nome:';
+        title.style.cssText='font-size:.72rem;font-weight:700;color:#eee;margin-bottom:11px';
+        var inp=document.createElement('input');
+        inp.type='text'; inp.value=opts.value||''; inp.placeholder=opts.placeholder||'';
+        inp.style.cssText='width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);border:1px solid rgba(190,242,100,.22);border-radius:8px;color:#fff;padding:9px 11px;font-size:.72rem;font-family:inherit;outline:none;margin-bottom:13px';
+        var btns=document.createElement('div');
+        btns.style.cssText='display:flex;gap:8px;justify-content:flex-end';
+        var cancel=document.createElement('button');
+        cancel.textContent='Cancelar';
+        cancel.style.cssText='padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#aaa;font-family:inherit;font-size:.68rem;font-weight:600;cursor:pointer';
+        var ok=document.createElement('button');
+        ok.textContent=opts.okLabel||'Salvar';
+        ok.style.cssText='padding:7px 16px;border-radius:8px;border:none;background:#bef264;color:#0a0a0a;font-family:inherit;font-size:.68rem;font-weight:800;cursor:pointer';
+        var done=false;
+        function close(v){ if(done)return; done=true; ov.style.opacity='0'; ov.style.transition='opacity .15s'; setTimeout(function(){try{ov.remove()}catch(e){}},150); if(cb)cb(v); }
+        cancel.onclick=function(){close(null);};
+        ok.onclick=function(){close((inp.value||'').trim()||null);};
+        inp.addEventListener('keydown',function(e){ if(e.key==='Enter'){e.preventDefault();ok.onclick();} else if(e.key==='Escape'){e.preventDefault();cancel.onclick();} });
+        ov.addEventListener('mousedown',function(e){ if(e.target===ov) cancel.onclick(); });
+        btns.appendChild(cancel);btns.appendChild(ok);
+        card.appendChild(title);card.appendChild(inp);card.appendChild(btns);
+        ov.appendChild(card);document.body.appendChild(ov);
+        setTimeout(function(){try{inp.focus();inp.select();}catch(e){}},30);
+    }
+
+    // Modal de confirmacao estilizado (OK/Cancelar) — mesmo visual do lwPromptText
+    function lwConfirmBox(opts, cb){
+        opts=opts||{};
+        var ov=document.createElement('div');
+        ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:99999;animation:fadeIn .15s';
+        var card=document.createElement('div');
+        card.style.cssText='width:84%;max-width:250px;background:linear-gradient(180deg,#1d1d1d,#151515);border:1px solid rgba(190,242,100,.16);border-radius:13px;padding:16px 15px 14px;box-shadow:0 22px 55px rgba(0,0,0,.65)';
+        var title=document.createElement('div');
+        title.textContent=opts.title||'Confirmar?';
+        title.style.cssText='font-size:.74rem;font-weight:700;color:#eee;margin-bottom:6px';
+        var sub=null;
+        if(opts.sub){
+            sub=document.createElement('div');
+            sub.textContent=opts.sub;
+            sub.style.cssText='font-size:.64rem;color:#999;line-height:1.45;margin-bottom:12px';
+        } else { title.style.marginBottom='13px'; }
+        var btns=document.createElement('div');
+        btns.style.cssText='display:flex;gap:8px;justify-content:flex-end';
+        var cancel=document.createElement('button');
+        cancel.textContent='Cancelar';
+        cancel.style.cssText='padding:7px 13px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#aaa;font-family:inherit;font-size:.68rem;font-weight:600;cursor:pointer';
+        var ok=document.createElement('button');
+        ok.textContent=opts.okLabel||'Confirmar';
+        ok.style.cssText='padding:7px 16px;border-radius:8px;border:none;background:'+(opts.danger?'#f43f5e':'#bef264')+';color:'+(opts.danger?'#fff':'#0a0a0a')+';font-family:inherit;font-size:.68rem;font-weight:800;cursor:pointer';
+        var done=false;
+        function close(v){ if(done)return; done=true; ov.style.opacity='0'; ov.style.transition='opacity .15s'; setTimeout(function(){try{ov.remove()}catch(e){}},150); if(cb)cb(v); }
+        cancel.onclick=function(){close(false);};
+        ok.onclick=function(){close(true);};
+        ov.addEventListener('mousedown',function(e){ if(e.target===ov) cancel.onclick(); });
+        document.addEventListener('keydown',function esc(e){ if(e.key==='Escape'){document.removeEventListener('keydown',esc);cancel.onclick();} });
+        btns.appendChild(cancel);btns.appendChild(ok);
+        card.appendChild(title); if(sub)card.appendChild(sub); card.appendChild(btns);
+        ov.appendChild(card);document.body.appendChild(ov);
+        setTimeout(function(){try{ok.focus()}catch(e){}},30);
+    }
+
     function saveCurrentPreset(){
-        var name=prompt('Nome do preset:');
-        if(!name||!name.trim()) return;
-        savedPresets.push({
-            name:name.trim(),
-            cp1:{x:curveCP1.x,y:curveCP1.y},
-            cp2:{x:curveCP2.x,y:curveCP2.y},
-            dir:curveDir
+        lwPromptText({title:'Nome do preset:',placeholder:'Ex: Bounce suave',okLabel:'Salvar'},function(name){
+            if(!name) return;
+            savedPresets.push({
+                name:name,
+                cp1:{x:curveCP1.x,y:curveCP1.y},
+                cp2:{x:curveCP2.x,y:curveCP2.y},
+                dir:curveDir
+            });
+            saveSavedPresets();
+            renderSavedPresets();
+            showEasingMsg('Preset "'+name+'" salvo!','#22c55e');
         });
-        saveSavedPresets();
-        renderSavedPresets();
-        showEasingMsg('Preset "'+name.trim()+'" salvo!','#22c55e');
     }
 
     function loadPreset(idx){
@@ -4487,10 +4590,11 @@
     }
 
     // ─── Random Wiggler + Looper (Premiere) ───
-    var prwMode = 'wiggle', prwTarget = 'position', prwInterp = 'hold';
+    var prwMode = 'wiggle', prwInterp = 'hold';
+    var prwTargets = ['position']; // multi-propriedade (estilo S_Shake)
     var prwAxisX = true, prwAxisY = true;
     var prwComponent = 'motion', prwMotionBlur = false;
-    var prlTarget = 'position', prlType = 'cycle';
+    var prlTarget = 'position', prlType = 'cycle', prlComponent = ''; // '' = auto-detecta
     var _prwBusy = false, _prlBusy = false;
 
     function _prNum(id, def){
@@ -4515,11 +4619,20 @@
         document.getElementById('prwRandomParams').style.display = (m==='random')?'block':'none';
     }
     function prwPickTarget(btn){
-        prwTarget = btn.getAttribute('data-t');
-        _prGroupActive('.rw-tgt', btn);
+        // multi-seleção: cada clique liga/desliga a propriedade (mínimo 1 marcada)
+        var t = btn.getAttribute('data-t');
+        var idx = prwTargets.indexOf(t);
+        if(idx >= 0){
+            if(prwTargets.length <= 1) return; // não deixa zerar
+            prwTargets.splice(idx, 1);
+            btn.classList.remove('active');
+        } else {
+            prwTargets.push(t);
+            btn.classList.add('active');
+        }
         // eixos só fazem sentido em Posição (2D)
         var axr = document.getElementById('prwAxisRow');
-        if(axr) axr.style.display = (prwTarget==='position')?'flex':'none';
+        if(axr) axr.style.display = (prwTargets.indexOf('position')>=0)?'flex':'none';
     }
     function prwSetInterp(v){
         prwInterp = v;
@@ -4543,9 +4656,17 @@
         var block = (prwComponent === 'vector');
         opBtn.style.opacity = block ? '.35' : '';
         opBtn.style.pointerEvents = block ? 'none' : '';
-        if(block && prwTarget === 'opacity'){
-            var posBtn = document.querySelector('.rw-tgt[data-t="position"]');
-            if(posBtn){ prwTarget = 'position'; _prGroupActive('.rw-tgt', posBtn); }
+        if(block){
+            var oi = prwTargets.indexOf('opacity');
+            if(oi >= 0){
+                prwTargets.splice(oi, 1);
+                opBtn.classList.remove('active');
+                if(!prwTargets.length){
+                    prwTargets = ['position'];
+                    var posBtn = document.querySelector('.rw-tgt[data-t="position"]');
+                    if(posBtn) posBtn.classList.add('active');
+                }
+            }
         }
     }
     function prwToggleMB(){
@@ -4568,6 +4689,7 @@
     }
     function prlPickTarget(btn){ prlTarget = btn.getAttribute('data-t'); _prGroupActive('.prl-tgt', btn); }
     function prlPickType(btn){ prlType = btn.getAttribute('data-ty'); _prGroupActive('.prl-type', btn); }
+    function prlPickComp(btn){ prlComponent = btn.getAttribute('data-c') || ''; _prGroupActive('.prl-comp', btn); }
 
     // mapeia retorno do jsx pra mensagem amigável
     function _prResult(msgFn, result){
@@ -4587,7 +4709,7 @@
         if(_prwBusy) return;
         if(!csInterface){ prwMsg('Ambiente do plugin indisponível','#f43f5e'); return; }
         var cfg = {
-            mode: prwMode, target: prwTarget,
+            mode: prwMode, target: prwTargets[0], targets: prwTargets.slice(),
             component: prwComponent, motionBlur: prwMotionBlur,
             freq: _prNum('prwFreq',2), amp: _prNum('prwAmp',30),
             octaves: Math.max(1, Math.round(_prNum('prwOct',1))), ampMult: _prNum('prwMult',0.5),
@@ -4602,10 +4724,167 @@
             _prResult(prwMsg, result);
         });
     }
+    // ─── Presets do Wiggler: bolinhas + preview animado ───
+    // MESMO noise do jsx — o preview mostra exatamente a curva que vai ser assada
+    function _pvHash(i,seed){var x=Math.sin(i*12.9898+seed*78.233)*43758.5453;return x-Math.floor(x);}
+    function _pvNoise1(x,seed){var xi=Math.floor(x),xf=x-xi,u=xf*xf*(3-2*xf);return _pvHash(xi,seed)*(1-u)+_pvHash(xi+1,seed)*u;}
+    function _pvFbm(x,seed,oct,mult){var oc=(oct&&oct>0)?oct:1;var m=(mult!=null)?mult:0.5;var s=0,a=1,f=1;for(var o=0;o<oc;o++){s+=(_pvNoise1(x*f,seed+o*17.3)-0.5)*2*a;a*=m;f*=2;}return s;}
+
+    var PRW_PRESETS=[
+        {n:'Sutil',f:1,a:8,o:1,m:.5},
+        {n:'Handheld',f:2,a:18,o:2,m:.55},
+        {n:'Câmera',f:4,a:35,o:2,m:.6},
+        {n:'Ação',f:8,a:60,o:2,m:.5},
+        {n:'Nervoso',f:16,a:22,o:1,m:.5},
+        {n:'Terremoto',f:12,a:110,o:3,m:.7}
+    ];
+    var _pvRaf=null, _pvHover=null, _pvDot=null;
+    var PRW_CUSTOM=[];
+    try{ var _pc=JSON.parse(localStorage.getItem('lw_wiggle_presets')||'[]'); if(_pc&&_pc.length)PRW_CUSTOM=_pc; }catch(e){}
+    function _prwSaveCustom(){ try{localStorage.setItem('lw_wiggle_presets',JSON.stringify(PRW_CUSTOM))}catch(e){} }
+
+    function _prwMakeDot(p, isCustom){
+        var size=10+Math.round(Math.min(p.a,120)/120*10); // 10-20px conforme a amplitude
+        var d=document.createElement('div');
+        d.title=p.n+' — freq '+p.f+' · amp '+p.a+(isCustom?'   (seu preset — botão direito remove)':'');
+        d.style.cssText='width:'+size+'px;height:'+size+'px;border-radius:50%;cursor:pointer;flex-shrink:0;transition:box-shadow .15s;'+
+            'background:radial-gradient(circle at 35% 30%, rgba(190,242,100,.55), rgba(190,242,100,.14) 70%);'+
+            'border:1px solid '+(isCustom?'#d9f99d':'rgba(190,242,100,.45)')+';';
+        if(isCustom) d.style.boxShadow='0 0 0 2px rgba(190,242,100,.13)';
+        d.onmouseenter=function(){
+            _pvHover=p; _pvDot=d;
+            var nm=document.getElementById('prwPresetName'); if(nm) nm.textContent='· '+p.n;
+            prwPrevPlay(p, d);
+        };
+        d.onmouseleave=function(){
+            _pvHover=null; _pvDot=null; d.style.transform='';
+            d.style.boxShadow=isCustom?'0 0 0 2px rgba(190,242,100,.13)':'';
+            var nm=document.getElementById('prwPresetName'); if(nm) nm.textContent='';
+            prwPrevStop();
+        };
+        d.onclick=function(){ prwApplyPreset(p); };
+        if(isCustom){ d.oncontextmenu=function(e){
+            e.preventDefault();
+            lwConfirmBox({title:'Apagar o preset "'+p.n+'"?',sub:'Freq '+p.f+' · amp '+p.a+'. Essa ação não tem volta.',okLabel:'Apagar',danger:true},function(ok){
+                if(!ok) return;
+                var i=PRW_CUSTOM.indexOf(p);
+                if(i>=0){ PRW_CUSTOM.splice(i,1); _prwSaveCustom(); prwRenderPresets(); prwMsg('Preset "'+p.n+'" removido','#22c55e'); }
+            });
+        }; }
+        return d;
+    }
+    function prwRenderPresets(){
+        var row=document.getElementById('prwPresetRow');
+        if(!row) return;
+        row.innerHTML='';
+        PRW_PRESETS.forEach(function(p){ row.appendChild(_prwMakeDot(p,false)); });
+        PRW_CUSTOM.forEach(function(p){ row.appendChild(_prwMakeDot(p,true)); });
+        // botao "+" — salva os parametros atuais como preset
+        var add=document.createElement('div');
+        add.title='Salvar preset com os parâmetros atuais';
+        add.textContent='+';
+        add.style.cssText='width:17px;height:17px;border-radius:50%;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#bef264;font-size:.95rem;font-weight:700;line-height:1;background:rgba(190,242,100,.06);border:1px dashed rgba(190,242,100,.4);transition:background .15s';
+        add.onmouseenter=function(){ add.style.background='rgba(190,242,100,.16)'; };
+        add.onmouseleave=function(){ add.style.background='rgba(190,242,100,.06)'; };
+        add.onclick=prwSavePreset;
+        row.appendChild(add);
+    }
+    function prwSavePreset(){
+        var q=_pvParams(null);
+        lwPromptText({title:'Nome do preset:',placeholder:'Ex: Meu shake',okLabel:'Salvar'},function(name){
+            if(!name) return;
+            PRW_CUSTOM.push({n:name,f:q.f,a:q.a,o:q.o,m:q.m});
+            _prwSaveCustom();
+            prwRenderPresets();
+            prwMsg('Preset "'+name+'" salvo!','#22c55e');
+        });
+    }
+    function prwApplyPreset(p){
+        document.getElementById('prwFreq').value=p.f;
+        document.getElementById('prwAmp').value=p.a;
+        document.getElementById('prwOct').value=p.o;
+        document.getElementById('prwMult').value=p.m;
+        prwSetMode('wiggle');
+        prwPrevStatic();
+        prwMsg('Preset "'+p.n+'" aplicado', '#22c55e');
+    }
+    function _pvParams(p){
+        if(p) return {f:p.f,a:p.a,o:p.o,m:p.m};
+        return {f:_prNum('prwFreq',2),a:_prNum('prwAmp',30),o:Math.max(1,Math.round(_prNum('prwOct',1))),m:_prNum('prwMult',0.5)};
+    }
+    // curva estática dos params ATUAIS (janela de 4s), tipo o gráfico do easing
+    function prwPrevStatic(){
+        var cv=document.getElementById('prwPrev'); if(!cv) return;
+        var ctx=cv.getContext('2d'); var W=cv.width,H=cv.height,cy=H/2;
+        ctx.clearRect(0,0,W,H);
+        ctx.strokeStyle='rgba(255,255,255,.07)';ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+        var q=_pvParams(null);
+        var norm=Math.min(1,q.a/130)*(H/2-5);
+        ctx.strokeStyle='rgba(190,242,100,.8)';ctx.lineWidth=1.4;ctx.beginPath();
+        for(var x=0;x<=W;x++){
+            var t=x/W*4;
+            var y=cy-_pvFbm(t*q.f,12.34,q.o,q.m)*norm;
+            if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+    }
+    // hover na bolinha: mini "clip" tremendo com os params do preset (eixos com seeds
+    // diferentes, igual o jsx faz na Posição)
+    function prwPrevPlay(p, dotEl){
+        if(_pvRaf){cancelAnimationFrame(_pvRaf);_pvRaf=null;}
+        var cv=document.getElementById('prwPrev'); if(!cv) return;
+        var ctx=cv.getContext('2d'); var W=cv.width,H=cv.height,cy=H/2,cx=W/2;
+        var q=_pvParams(p);
+        var norm=Math.min(1,q.a/130);
+        var t0=performance.now();
+        (function frame(){
+            if(_pvHover!==p){_pvRaf=null; if(dotEl)dotEl.style.transform=''; prwPrevStatic();return;}
+            var t=(performance.now()-t0)/1000;
+            ctx.clearRect(0,0,W,H);
+            ctx.strokeStyle='rgba(190,242,100,.22)';ctx.lineWidth=1;ctx.beginPath();
+            for(var x=0;x<=W;x++){
+                var tt=x/W*4;
+                var y=cy-_pvFbm(tt*q.f,12.34,q.o,q.m)*norm*(H/2-5);
+                if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+            var ax=_pvFbm(t*q.f,12.34,q.o,q.m)*norm*16;
+            var ay=_pvFbm(t*q.f,12.34+97.7,q.o,q.m)*norm*9;
+            var w=34,h=20,r=4;
+            ctx.save();
+            ctx.translate(cx+ax,cy+ay);
+            ctx.fillStyle='rgba(190,242,100,.16)';
+            ctx.strokeStyle='#bef264';ctx.lineWidth=1.4;
+            ctx.beginPath();
+            ctx.moveTo(-w/2+r,-h/2);
+            ctx.arcTo(w/2,-h/2,w/2,h/2,r);ctx.arcTo(w/2,h/2,-w/2,h/2,r);ctx.arcTo(-w/2,h/2,-w/2,-h/2,r);ctx.arcTo(-w/2,-h/2,w/2,-h/2,r);
+            ctx.closePath();ctx.fill();ctx.stroke();
+            ctx.restore();
+            // a propria bolinha treme junto (mesmo noise, seeds proprios) — cap em +-4.5px
+            if(dotEl){
+                var dx=_pvFbm(t*q.f,501.1,q.o,q.m)*norm*4.5;
+                var dy=_pvFbm(t*q.f,733.7,q.o,q.m)*norm*4.5;
+                dotEl.style.transform='scale(1.25) translate('+dx.toFixed(2)+'px,'+dy.toFixed(2)+'px)';
+            }
+            _pvRaf=requestAnimationFrame(frame);
+        })();
+    }
+    function prwPrevStop(){ if(_pvRaf){cancelAnimationFrame(_pvRaf);_pvRaf=null;} if(_pvDot){_pvDot.style.transform='';} prwPrevStatic(); }
+    // init: bolinhas + curva inicial + redesenha quando os params mudam
+    try{
+        prwRenderPresets();
+        ['prwFreq','prwAmp','prwOct','prwMult'].forEach(function(id){
+            var el=document.getElementById(id);
+            if(el) el.addEventListener('input', prwPrevStatic);
+        });
+        prwPrevStatic();
+    }catch(e){}
+
     function prlApply(){
         if(_prlBusy) return;
         if(!csInterface){ prlMsg('Ambiente do plugin indisponível','#f43f5e'); return; }
         var cfg = { target: prlTarget, type: prlType, keys: Math.max(0, Math.round(_prNum('prlKeys',0))) };
+        if(prlComponent) cfg.component = prlComponent; // sem = auto-detecta onde tem keyframes
         _prlBusy = true;
         prlMsg('Aplicando loop...','#f59e0b');
         csInterface.evalScript('lwPRLoop('+JSON.stringify(cfg)+')', function(result){
@@ -5846,11 +6125,13 @@
 
     function bgVideoCancel() {
         if (!bgVideoState.token) return;
-        if (!confirm('Cancelar processamento?')) return;
-        LWHttp.post(API + '/bg/remove-video/cancel', { token: bgVideoState.token }, { retries: 0 }, function() {});
-        if (bgVideoState.polling) { clearInterval(bgVideoState.polling); bgVideoState.polling = null; }
-        bgVideoHideProgress();
-        _bgVideoMsg('Cancelado', '#f59e0b');
+        lwConfirmBox({title:'Cancelar o processamento?',sub:'O progresso feito até aqui será perdido.',okLabel:'Cancelar processamento',danger:true},function(ok){
+            if (!ok || !bgVideoState.token) return;
+            LWHttp.post(API + '/bg/remove-video/cancel', { token: bgVideoState.token }, { retries: 0 }, function() {});
+            if (bgVideoState.polling) { clearInterval(bgVideoState.polling); bgVideoState.polling = null; }
+            bgVideoHideProgress();
+            _bgVideoMsg('Cancelado', '#f59e0b');
+        });
     }
 
     function bgVideoStartPolling(token) {

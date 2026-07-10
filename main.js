@@ -998,7 +998,16 @@ function loadDiscordSession() {
     catch (e) { return null; }
 }
 function saveDiscordSessionFile(s) {
-    try { fs.writeFileSync(DISCORD_SESSION_FILE, JSON.stringify(s, null, 2)); return true; }
+    try {
+        // saved_at: referencia local pro grace period offline
+        try { if (s && !s.saved_at) s.saved_at = Date.now(); } catch (e0) {}
+        // Escrita ATOMICA (tmp + rename): crash/energia no meio do write nao pode
+        // corromper a sessao e deslogar um cliente pagante
+        const tmp = DISCORD_SESSION_FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
+        fs.renameSync(tmp, DISCORD_SESSION_FILE);
+        return true;
+    }
     catch (e) { console.error('[discord] save session err:', e); return false; }
 }
 function clearDiscordSession() {
@@ -1189,11 +1198,20 @@ async function _postDiscordWebhook(url, payload) {
 
 // Sessao ja foi validada pela Edge Function no login. Aqui so checa se existe
 // e nao expirou. Revalidacao live contra Discord API seria via Edge Function tambem.
+// GRACE OFFLINE: expiracao local NAO deleta mais a sessao nem derruba o usuario
+// na hora — cliente pagante offline (viagem/queda de rede) ou com relogio errado
+// ficava trancado pra fora num loop sem saida (deletava o arquivo e o re-login
+// exige Discord online). Dentro do grace a sessao segue valida; depois dele o
+// usuario cai no login, mas o ARQUIVO fica (relogio consertado = volta sozinho).
+// Deleta so em logout explicito ou resposta explicita do servidor.
+const DISCORD_SESSION_GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
 async function loadValidDiscordSession() {
     const sess = loadDiscordSession();
     if (!sess || !sess.discord_user_id) return { session: null, valid: false, reason: 'no_session' };
     if (sess.expires_at && Date.now() > sess.expires_at) {
-        clearDiscordSession();
+        if (Date.now() <= sess.expires_at + DISCORD_SESSION_GRACE_MS) {
+            return { session: sess, valid: true, stale: true }; // grace: mantem acesso
+        }
         return { session: null, valid: false, reason: 'expired' };
     }
     return { session: sess, valid: true };
@@ -3479,6 +3497,9 @@ function startSyncServer() {
                     sendProgress('exchanging');
                     const deviceInfo = {
                         fingerprint: getDeviceFingerprint(),
+                        // fingerprint antigo (instável) — o backend usa pra RENOMEAR o registro
+                        // deste PC pro fingerprint novo em vez de contar como dispositivo extra
+                        legacy_fingerprint: getLegacyDeviceFingerprint(),
                         hostname: os.hostname(),
                         platform: os.platform(),
                         arch: os.arch(),
@@ -5084,10 +5105,14 @@ const RELEASES_URL = 'https://github.com/IlonPeruzzo/lion-workspace/releases/lat
 function classifyUpdateError(err) {
     const raw = (err && (err.message || String(err))) || '';
     const s = raw.toLowerCase();
-    // 404 / sem release publicada / repo privado → sem update pra pegar agora
-    if (s.indexOf('404') >= 0 || s.indexOf('no published versions') >= 0 ||
-        s.indexOf('cannot find') >= 0 || s.indexOf('latest.yml') >= 0 ||
-        s.indexOf('releases.atom') >= 0 || s.indexOf('unable to find') >= 0) {
+    // FEED QUEBRADO (latest.yml corrompido / sha nao bate) — NUNCA dizer "esta
+    // atualizado" nesses casos: e exatamente o modo de falha do incidente 1.5.2.
+    if (s.indexOf('cannot parse') >= 0 || s.indexOf('sha512') >= 0 || s.indexOf('checksum') >= 0) {
+        return { code: 'feed-broken', message: 'Nao foi possivel verificar atualizacoes agora.' };
+    }
+    // Sem release publicada / repo sem releases → benigno de verdade
+    if (s.indexOf('no published versions') >= 0 || s.indexOf('unable to find latest version') >= 0 ||
+        s.indexOf('404') >= 0 || s.indexOf('cannot find') >= 0 || s.indexOf('releases.atom') >= 0) {
         return { code: 'no-release', message: 'Nenhuma atualizacao disponivel.' };
     }
     // Problema de rede
@@ -5099,6 +5124,10 @@ function classifyUpdateError(err) {
     return { code: 'error', message: 'Nao foi possivel verificar atualizacoes agora.' };
 }
 
+// Estado do download em andamento — erro NO MEIO do download nunca pode virar
+// "not-available" (deixava o banner congelado em "Baixando X%" pra sempre)
+let _updDownloading = false;
+let _updDownloaded = false;
 function setupAutoUpdater() {
     autoUpdater.on('checking-for-update', () => {
         sendUpdateStatus('checking');
@@ -5109,6 +5138,7 @@ function setupAutoUpdater() {
             // Mac: tell frontend to show download link (no auto-install)
             sendUpdateStatus('available-mac', { version: info.version });
         } else {
+            _updDownloading = true; // autoDownload=true no Windows
             sendUpdateStatus('available', { version: info.version });
         }
     });
@@ -5118,6 +5148,7 @@ function setupAutoUpdater() {
     });
 
     autoUpdater.on('download-progress', (progress) => {
+        _updDownloading = true;
         sendUpdateStatus('downloading', {
             percent: Math.round(progress.percent),
             transferred: progress.transferred,
@@ -5126,11 +5157,19 @@ function setupAutoUpdater() {
     });
 
     autoUpdater.on('update-downloaded', (info) => {
+        _updDownloading = false;
+        _updDownloaded = true;
         sendUpdateStatus('downloaded', { version: info.version });
     });
 
     autoUpdater.on('error', (err) => {
         console.error('Auto-updater error:', err);
+        // Falhou DURANTE o download → sempre erro real (retry no proximo check)
+        if (_updDownloading) {
+            _updDownloading = false;
+            sendUpdateStatus('error', { code: 'download', message: 'Falha ao baixar a atualizacao. Nova tentativa automatica em 30 minutos.' });
+            return;
+        }
         const info = classifyUpdateError(err);
         // 404/sem release = trata como "esta atualizado" (nao assusta o usuario)
         if (info.code === 'no-release') { sendUpdateStatus('not-available'); return; }
@@ -5145,7 +5184,9 @@ function setupAutoUpdater() {
     }, 5000);
 
     // Re-check every 30 minutes (frequent during early releases)
+    // Pula se ja esta baixando (nao resetar o progresso) ou ja baixou (nao re-emitir)
     setInterval(() => {
+        if (_updDownloading || _updDownloaded) return;
         autoUpdater.checkForUpdates().catch(() => {});
     }, 30 * 60 * 1000);
 }
@@ -5356,8 +5397,38 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     }
 });
 
-// Device fingerprint (stable per machine)
+// ═══ Device fingerprint ═══
+// ESTÁVEL de verdade: usa o ID da máquina do SO (MachineGuid no Windows,
+// IOPlatformUUID no Mac), que não muda com rede/hostname/reinstalação do app.
+// O fingerprint ANTIGO misturava hostname + primeira MAC não-interna — a MAC
+// mudava com Wi-Fi/cabo/VPN (Radmin, Hamachi, TAP...) e o MESMO PC virava
+// "dispositivo novo", lotando o limite de 2 e trancando o usuário pra fora.
+let _machineIdCache = null;
+function getMachineId() {
+    if (_machineIdCache !== null) return _machineIdCache;
+    _machineIdCache = ''; // marca como tentado (evita re-exec em falha)
+    try {
+        const { execSync } = require('child_process');
+        if (isWin) {
+            const out = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid', { windowsHide: true, timeout: 5000 }).toString();
+            const m = out.match(/MachineGuid\s+REG_SZ\s+([0-9a-fA-F-]+)/);
+            if (m) _machineIdCache = m[1].toLowerCase();
+        } else if (isMac) {
+            const out = execSync('ioreg -rd1 -c IOPlatformExpertDevice', { timeout: 5000 }).toString();
+            const m = out.match(/"IOPlatformUUID"\s*=\s*"([0-9a-fA-F-]+)"/);
+            if (m) _machineIdCache = m[1].toLowerCase();
+        }
+    } catch (e) {}
+    return _machineIdCache;
+}
 function getDeviceFingerprint() {
+    const mid = getMachineId();
+    if (mid) return crypto.createHash('sha256').update('lw-machine-' + mid).digest('hex');
+    return getLegacyDeviceFingerprint(); // fallback raro (sem acesso ao id do SO)
+}
+// Fingerprint ANTIGO — mantido só pra MIGRAÇÃO: o login manda os dois e o backend
+// renomeia o registro antigo pro novo em vez de contar como dispositivo extra.
+function getLegacyDeviceFingerprint() {
     const cpus = os.cpus();
     const cpuModel = cpus.length > 0 ? cpus[0].model : 'unknown';
     const nets = os.networkInterfaces();
@@ -5654,24 +5725,19 @@ ipcMain.handle('detect-premiere', async () => {
 // IPC: Install plugins selectively. Receives { premiere: bool, ae: bool }
 ipcMain.handle('install-premiere-plugin', async (event, opts) => {
     try {
-        // Server-side license check before installing plugin
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return { success: false, error: 'not_authenticated' };
-
-        const { data: sub } = await supabase
-            .from('subscriptions')
-            .select('plan, status')
-            .eq('user_id', user.id)
-            .in('status', ['active', 'trialing'])
-            .limit(1)
-            .single();
-
-        if (!sub) return { success: false, error: 'no_subscription' };
+        // Gate pela sessao DISCORD (o login do app). O gate antigo usava
+        // supabase.auth (fluxo email/senha abandonado) e devolvia not_authenticated
+        // pra TODO assinante legitimo logado via Discord.
+        const _sess = await loadValidDiscordSession();
+        if (!_sess.valid) return { success: false, error: 'not_authenticated' };
 
         // Compat: se opts não vier, instala ambos (comportamento antigo)
         const installPr = !opts || opts.premiere !== false;
         const installAe = !opts || opts.ae !== false;
         let installed = { premiere: false, ae: false };
+        // Instalar manualmente CANCELA o opt-out daquele plugin
+        if (installPr) { try { fs.rmSync(_pluginOptOutFile('premiere'), { force: true }); fs.rmSync(_pluginOptOutFile(''), { force: true }); } catch (e0) {} }
+        if (installAe) { try { fs.rmSync(_pluginOptOutFile('ae'), { force: true }); fs.rmSync(_pluginOptOutFile(''), { force: true }); } catch (e1) {} }
         if (installPr) installed.premiere = autoInstallCepPlugin('premiere-plugin', 'com.lionworkspace.premiere');
         if (installAe) installed.ae = autoInstallCepPlugin('after-plugin', 'com.lionworkspace.after');
         // Enable CEP debug mode (covers both plugins)
@@ -5689,15 +5755,19 @@ ipcMain.handle('install-premiere-plugin', async (event, opts) => {
 });
 
 // IPC: Skip plugin installation (write flag)
+// Flag em userData: o local antigo (pasta do exe) era APAGADO pelo updater NSIS,
+// e o opt-out do usuario resetava a cada versao nova.
 ipcMain.handle('skip-premiere-plugin', () => {
     try {
-        const flagPath = path.join(path.dirname(process.execPath), 'skip-plugin.flag');
-        fs.writeFileSync(flagPath, 'true');
+        fs.writeFileSync(_pluginOptOutFile(''), 'true');
         return { success: true };
     } catch {
         return { success: true }; // non-critical
     }
 });
+
+// IPC: o boot atualizou plugins CEP? (renderer avisa "reinicie o Premiere/AE")
+ipcMain.handle('plugins-updated-on-boot', () => ({ updated: !!_pluginsUpdatedOnBoot }));
 
 // IPC: Uninstall CEP plugin — apaga a pasta em Adobe/CEP/extensions
 ipcMain.handle('uninstall-plugin', (event, which) => {
@@ -5710,6 +5780,9 @@ ipcMain.handle('uninstall-plugin', (event, which) => {
         if (fs.existsSync(target)) {
             fs.rmSync(target, { recursive: true, force: true });
         }
+        // Registra o opt-out — sem isso o auto-install do proximo boot RESSUSCITAVA
+        // o plugin que o usuario tinha acabado de remover
+        try { fs.writeFileSync(_pluginOptOutFile(which === 'ae' ? 'ae' : 'premiere'), new Date().toISOString()); } catch (e2) {}
         return { ok: true };
     } catch (e) {
         return { ok: false, error: e.message };
@@ -5963,25 +6036,26 @@ function autoInstallCepPlugin(srcFolderName, extensionId) {
         }
         const pluginDest = path.join(cepDir, extensionId);
 
-        // Check if plugin needs update (compare manifest or just overwrite)
-        if (!fs.existsSync(path.join(pluginDest, 'host', 'index.jsx')) ||
-            !fs.existsSync(path.join(pluginDest, 'client', 'index.html'))) {
-            // Plugin missing or incomplete — install it
-        } else {
-            // Check if source is newer
-            try {
-                const srcStat = fs.statSync(path.join(pluginSrc, 'client', 'index.html'));
-                const dstStat = fs.statSync(path.join(pluginDest, 'client', 'index.html'));
-                if (srcStat.mtimeMs <= dstStat.mtimeMs) return false; // Already up to date
-            } catch (e) { /* install anyway */ }
+        // GATE POR VERSAO (nao mais mtime de 1 arquivo!). O mtime era preservado de
+        // ponta a ponta pelo empacotamento, entao release que so mudava o host/index.jsx
+        // NUNCA chegava nos usuarios ("atualizei e o bug continua"). Agora: gravamos a
+        // versao do app dentro do plugin instalado e recopiamos sempre que divergir
+        // (cobre update E rollback).
+        const versionFile = path.join(pluginDest, 'lw-version.txt');
+        const complete = fs.existsSync(path.join(pluginDest, 'host', 'index.jsx')) &&
+                         fs.existsSync(path.join(pluginDest, 'client', 'index.html')) &&
+                         fs.existsSync(path.join(pluginDest, 'CSXS', 'manifest.xml'));
+        if (complete) {
+            let installedVer = '';
+            try { installedVer = fs.readFileSync(versionFile, 'utf8').trim(); } catch (e) {}
+            if (installedVer === app.getVersion()) return false; // ja esta nesta versao
         }
 
-        // Create directories
-        fs.mkdirSync(path.join(pluginDest, 'CSXS'), { recursive: true });
-        fs.mkdirSync(path.join(pluginDest, 'client'), { recursive: true });
-        fs.mkdirSync(path.join(pluginDest, 'host'), { recursive: true });
-
-        // Copy files recursively
+        // COPIA ATOMICA: monta tudo numa pasta .new e TROCA no fim. Falha no meio
+        // (Premiere segurando arquivo, antivirus, disco cheio) nunca mais deixa
+        // plugin "misto" (client novo + jsx velho) nem corrompe o instalado.
+        const stage = pluginDest + '.new';
+        try { fs.rmSync(stage, { recursive: true, force: true }); } catch (e) {}
         const copyDir = (src, dst) => {
             fs.mkdirSync(dst, { recursive: true });
             for (const item of fs.readdirSync(src)) {
@@ -5994,15 +6068,21 @@ function autoInstallCepPlugin(srcFolderName, extensionId) {
                 }
             }
         };
-        copyDir(path.join(pluginSrc, 'CSXS'), path.join(pluginDest, 'CSXS'));
-        copyDir(path.join(pluginSrc, 'client'), path.join(pluginDest, 'client'));
-        copyDir(path.join(pluginSrc, 'host'), path.join(pluginDest, 'host'));
-
-        // Copy .debug if exists
+        fs.mkdirSync(stage, { recursive: true });
+        copyDir(path.join(pluginSrc, 'CSXS'), path.join(stage, 'CSXS'));
+        copyDir(path.join(pluginSrc, 'client'), path.join(stage, 'client'));
+        copyDir(path.join(pluginSrc, 'host'), path.join(stage, 'host'));
         const debugFile = path.join(pluginSrc, '.debug');
-        if (fs.existsSync(debugFile)) fs.copyFileSync(debugFile, path.join(pluginDest, '.debug'));
+        if (fs.existsSync(debugFile)) fs.copyFileSync(debugFile, path.join(stage, '.debug'));
+        fs.writeFileSync(path.join(stage, 'lw-version.txt'), app.getVersion());
 
-        console.log(extensionId + ' installed to: ' + pluginDest);
+        // Troca: apaga a antiga e renomeia a nova (rename e instantaneo).
+        // Se a remocao falhar (arquivo em uso), o plugin antigo fica INTEIRO
+        // e tentamos de novo no proximo boot — nunca fica pela metade.
+        fs.rmSync(pluginDest, { recursive: true, force: true });
+        fs.renameSync(stage, pluginDest);
+
+        console.log(extensionId + ' installed/updated to v' + app.getVersion() + ' at: ' + pluginDest);
         return true;
     } catch (e) {
         console.log('Plugin auto-install skipped (' + extensionId + '):', e.message);
@@ -6010,16 +6090,34 @@ function autoInstallCepPlugin(srcFolderName, extensionId) {
     }
 }
 
+// true quando o boot copiou plugin novo — o renderer mostra "reinicie o Premiere/AE"
+// (o .jsx novo so carrega quando o host Adobe reinicia; sem aviso, client e jsx
+// ficavam dessincronizados por dias e as features quebravam em silencio)
+let _pluginsUpdatedOnBoot = false;
+// Opt-out por plugin em userData — o flag antigo morava na pasta de instalacao,
+// que o updater NSIS APAGA: quem recusou os plugins ganhava eles de volta a cada update.
+function _pluginOptOutFile(which) { return path.join(currentUD, 'skip-plugin' + (which ? '-' + which : '') + '.flag'); }
 function autoInstallPremierePlugin() {
-    // Check if user opted out
-    const skipFlag = path.join(path.dirname(process.execPath), 'skip-plugin.flag');
-    if (fs.existsSync(skipFlag)) {
+    // Migra o flag antigo (pasta do exe) pro userData uma unica vez
+    try {
+        const oldFlag = path.join(path.dirname(process.execPath), 'skip-plugin.flag');
+        if (fs.existsSync(oldFlag) && !fs.existsSync(_pluginOptOutFile(''))) {
+            fs.copyFileSync(oldFlag, _pluginOptOutFile(''));
+        }
+    } catch (e) {}
+    if (fs.existsSync(_pluginOptOutFile(''))) {
         console.log('Plugin installation skipped by user choice');
         return;
     }
-    // Install Premiere + After plugins
-    autoInstallCepPlugin('premiere-plugin', 'com.lionworkspace.premiere');
-    autoInstallCepPlugin('after-plugin',    'com.lionworkspace.after');
+    // Install Premiere + After plugins (respeitando opt-out individual do Desinstalar)
+    let updated = false;
+    if (!fs.existsSync(_pluginOptOutFile('premiere'))) {
+        if (autoInstallCepPlugin('premiere-plugin', 'com.lionworkspace.premiere')) updated = true;
+    }
+    if (!fs.existsSync(_pluginOptOutFile('ae'))) {
+        if (autoInstallCepPlugin('after-plugin', 'com.lionworkspace.after')) updated = true;
+    }
+    if (updated) _pluginsUpdatedOnBoot = true;
 
     // Enable CEP debug mode once (covers both plugins)
     if (isMac) {
