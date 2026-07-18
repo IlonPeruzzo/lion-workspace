@@ -124,6 +124,24 @@
     }
     .results-wrap * { -webkit-app-region: no-drag; }
     .palette:not(.typing) .results-wrap { display:none; }
+    /* Modo "Fixados": mostra a lista de favoritos mesmo sem digitar (ao abrir a paleta) */
+    .palette.pins .results-wrap { display:block; }
+    /* Menu de contexto (botao direito) — fixar/desafixar */
+    .ctx-menu {
+        position:fixed; z-index:100; min-width:158px;
+        background:#1c1c1f; border:1px solid rgba(255,255,255,.1); border-radius:7px;
+        box-shadow:0 12px 32px rgba(0,0,0,.6); padding:4px; -webkit-app-region:no-drag;
+        font-size:.82rem; color:var(--text);
+    }
+    .ctx-menu .ctx-item {
+        display:flex; align-items:center; gap:8px; padding:7px 11px; border-radius:5px; cursor:pointer; white-space:nowrap;
+    }
+    .ctx-menu .ctx-item:hover { background:var(--hover); }
+    .ctx-menu .ctx-item svg { width:13px; height:13px; flex-shrink:0; }
+    /* Estrela de fixado na linha + header da categoria Fixados */
+    .item .pin-star { flex-shrink:0; margin-right:7px; color:#bef264; display:inline-flex; }
+    .item .pin-star svg { width:12px; height:12px; }
+    .cat-header.pinned { color:#bef264; }
     .results-wrap::-webkit-scrollbar { width:5px; }
     .results-wrap::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:3px; }
 
@@ -320,6 +338,24 @@ const SIZE_EMPTY = { w: 440, h: 88 };
 const SIZE_TYPING = { w: 440, h: 440 };
 
 let allItems = [];
+// Fixados (favoritos) — persistidos no localStorage por kind|matchName
+let pinnedKeys = (function(){ try { return new Set(JSON.parse(localStorage.getItem('lw_ls_pins') || '[]')); } catch(e) { return new Set(); } })();
+function pinKey(it){ return (it.kind || '') + '|' + (it.matchName || it.name || ''); }
+function isPinned(it){ return pinnedKeys.has(pinKey(it)); }
+function savePins(){ try { localStorage.setItem('lw_ls_pins', JSON.stringify(Array.from(pinnedKeys))); } catch(e) {} }
+function pinnedItems(){
+    // Resolve as chaves fixadas pros itens reais do catalogo, na ORDEM de fixacao.
+    // Itens cujo preset/efeito nao existe mais somem sozinhos (self-cleaning).
+    const out = [];
+    pinnedKeys.forEach(k => { const it = allItems.find(x => pinKey(x) === k); if (it) out.push(it); });
+    return out;
+}
+function togglePin(it){
+    const k = pinKey(it);
+    if (pinnedKeys.has(k)) pinnedKeys.delete(k); else pinnedKeys.add(k);
+    savePins();
+    if ($input.value.trim()) filter(); else _renderPinsEmpty();
+}
 let filtered = [];
 let flatList = [];
 let selectedIdx = 0;
@@ -348,16 +384,21 @@ ipcRenderer.on('lion-search:reset', () => {
         ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: false }).then(r => _applyResult(r, false)).catch(()=>{});
         // Re-foca o input
         setTimeout(() => { try { $input.focus(); } catch(e) {} }, 30);
-        render();
+        // Mostra os fixados imediatamente ao abrir (se o catalogo ja estiver em memoria)
+        _renderPinsEmpty();
     } catch(e) { console.warn('reset err', e); }
 });
 
 function ensureFocus() {
-    setTimeout(() => { try { $input.focus(); } catch(e) {} }, 0);
+    // preventScroll: focar o input escondido SCROLLAVA a pagina -> o listener de scroll
+    // (que fecha o menu de contexto) matava o menu no MOUSEDOWN, antes do click completar
+    // -> "Fixar" nunca executava. (Achado com trace de eventos reais.)
+    setTimeout(() => { try { $input.focus({ preventScroll: true }); } catch(e) { try { $input.focus(); } catch(e2) {} } }, 0);
 }
 ensureFocus();
 document.addEventListener('mousedown', (e) => {
-    if (!e.target.closest('.close-btn')) ensureFocus();
+    // clicar no menu de contexto nao deve roubar foco/scrollar — deixa o click dele viver
+    if (!e.target.closest('.close-btn') && !e.target.closest('.ctx-menu')) ensureFocus();
 });
 
 function showToast(msg, kind) {
@@ -444,24 +485,55 @@ function score(item, query) {
 }
 
 let _lastTyping = null;
+// Sem query: mostra os FIXADOS (favoritos) no topo, ou o hero se nao houver nenhum.
+function _renderPinsEmpty() {
+    const pins = booted ? pinnedItems() : [];
+    if (!pins.length) {
+        $palette.classList.remove('pins');
+        filtered = []; flatList = []; selectedIdx = 0;
+        try { $results.innerHTML = '<div class="empty">Digite pra buscar</div>'; } catch(e) {}
+        resizeTo(false);
+        return;
+    }
+    $palette.classList.add('pins');
+    filtered = [{ catKey: 'pinned', catLabel: '★ Fixados', items: pins }];
+    flatList = pins.slice();
+    selectedIdx = 0;
+    // Altura sob medida pro numero de fixados (teto 440)
+    const h = Math.min(440, 112 + pins.length * 40);
+    ipcRenderer.send('lion-search:resize', { w: 440, h });
+    render();
+}
 function filter() {
     const q = $input.value.trim();
     $typed.innerHTML = escHtml(q) + '<span class="caret"></span>';
     const willType = q.length > 0;
     $palette.classList.toggle('typing', willType);
+    if (!willType) {
+        // Estado vazio: fixados (se houver) ou hero. _renderPinsEmpty cuida do resize.
+        $palette.classList.remove('typing');
+        _lastTyping = false;
+        _renderPinsEmpty();
+        return;
+    }
+    $palette.classList.remove('pins');
     // Força resize sempre que o estado muda (não confia no classList check)
     if (willType !== _lastTyping) {
         _lastTyping = willType;
         resizeTo(willType);
     }
 
-    if (!q) { return; }
-
     const byCat = {};
+    const pinnedMatched = [];
     for (const it of allItems) {
-        if (!isCompatibleWithSelection(it)) continue;
+        const pinned = isPinned(it);
+        // Fixado ignora o filtro de compatibilidade de selecao — atalho SEMPRE aparece
+        // (coerente com o modo vazio, que tambem nao filtra por compat)
+        if (!pinned && !isCompatibleWithSelection(it)) continue;
         const s = score(it, q);
         if (s > 0) {
+            // Fixados que casam com a busca vao pra categoria "★ Fixados" no topo
+            if (pinned) { pinnedMatched.push({ it, s }); continue; }
             const k = it.kind || 'preset';
             if (!byCat[k]) byCat[k] = [];
             byCat[k].push({ it, s });
@@ -469,6 +541,12 @@ function filter() {
     }
     filtered = [];
     flatList = [];
+    if (pinnedMatched.length) {
+        pinnedMatched.sort((a, b) => b.s - a.s);
+        const pit = pinnedMatched.slice(0, 50).map(x => x.it);
+        filtered.push({ catKey: 'pinned', catLabel: '★ Fixados', items: pit });
+        for (const it of pit) flatList.push(it);
+    }
     for (const k of CAT_ORDER) {
         if (!byCat[k]) continue;
         byCat[k].sort((a, b) => b.s - a.s);
@@ -482,7 +560,7 @@ function filter() {
 
 function render() {
     const q = $input.value.trim();
-    if (!q) { return; } // estado vazio é só hero
+    if (!q && !flatList.length) { return; } // vazio SEM fixados = só hero
 
     function debugBlock() {
         let html = '';
@@ -532,11 +610,14 @@ function render() {
     }
     let html = '';
     let idxCounter = 0;
+    const STAR = '<span class="pin-star"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 18.9 5.9 21.4l1.4-6.8L2.2 9.9l6.9-.8z"/></svg></span>';
     for (const grp of filtered) {
-        html += '<div class="cat-header">' + escHtml(grp.catLabel) + '</div>';
+        const isPinCat = grp.catKey === 'pinned';
+        html += '<div class="cat-header' + (isPinCat ? ' pinned' : '') + '">' + escHtml(grp.catLabel) + '</div>';
         for (const it of grp.items) {
             const isSel = idxCounter === selectedIdx;
             html += '<div class="item' + (isSel ? ' selected' : '') + '" data-idx="' + idxCounter + '">';
+            if (isPinned(it)) html += STAR;
             html += '<span class="item-name">' + escHtml(it.name) + '</span>';
             if (it.category) html += '<span class="item-cat">' + escHtml(it.category) + '</span>';
             html += '</div>';
@@ -560,6 +641,51 @@ $results.addEventListener('click', (e) => {
     selectedIdx = parseInt(item.dataset.idx);
     apply();
 });
+
+// ── Menu de contexto (botao direito) — Fixar / Desafixar ──
+let _ctxEl = null;
+function _hideCtx() { if (_ctxEl) { try { _ctxEl.remove(); } catch(e) {} _ctxEl = null; } }
+const _STAR_FILL = '<svg viewBox="0 0 24 24" fill="#bef264"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 18.9 5.9 21.4l1.4-6.8L2.2 9.9l6.9-.8z"/></svg>';
+const _STAR_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linejoin="round"><path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 18.9 5.9 21.4l1.4-6.8L2.2 9.9l6.9-.8z"/></svg>';
+$results.addEventListener('contextmenu', (e) => {
+    const row = e.target.closest('.item');
+    if (!row) return;
+    e.preventDefault();
+    const it = flatList[parseInt(row.dataset.idx)];
+    if (!it) return;
+    _hideCtx();
+    const pinned = isPinned(it);
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML = '<div class="ctx-item" id="ctxPin">' +
+        (pinned ? _STAR_OFF + 'Desafixar' : _STAR_FILL + 'Fixar no topo') + '</div>';
+    document.body.appendChild(menu);
+    // Clampa dentro da janela (menu nao pode vazar como o nativo)
+    let x = e.clientX, y = e.clientY;
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    if (x + mw > window.innerWidth - 4) x = window.innerWidth - mw - 4;
+    if (y + mh > window.innerHeight - 4) y = window.innerHeight - mh - 4;
+    menu.style.left = Math.max(4, x) + 'px';
+    menu.style.top = Math.max(4, y) + 'px';
+    _ctxEl = menu;
+    // Age no MOUSEDOWN: se qualquer listener global fechar o menu entre o down e o up,
+    // o 'click' nunca dispararia no item removido — era por isso que "Fixar" nao fixava.
+    var _ctxFired = false;
+    function _doPin(ev) {
+        if (_ctxFired) return;
+        if (typeof ev.button === 'number' && ev.button !== 0) return; // so botao esquerdo
+        _ctxFired = true;
+        try { ev.preventDefault(); ev.stopPropagation(); } catch(e2) {}
+        _hideCtx();
+        togglePin(it);
+    }
+    menu.querySelector('#ctxPin').addEventListener('mousedown', _doPin);
+    menu.querySelector('#ctxPin').addEventListener('click', _doPin); // backup (teclado/touch)
+});
+document.addEventListener('click', _hideCtx);
+document.addEventListener('scroll', _hideCtx, true);
+window.addEventListener('blur', _hideCtx);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _ctxEl) { _hideCtx(); e.stopPropagation(); } }, true);
 $results.addEventListener('mousemove', (e) => {
     const item = e.target.closest('.item');
     if (!item) return;
@@ -694,7 +820,7 @@ async function _applyResult(r, isFresh) {
         bootError = null;
     }
     updateBadge();
-    if ($input.value.trim()) filter();
+    if ($input.value.trim()) filter(); else _renderPinsEmpty();
     ensureFocus();
     return true;
 }
@@ -729,16 +855,20 @@ boot();
 let _refreshTimer = null;
 function _scheduleRefresh() {
     if (_refreshTimer) clearInterval(_refreshTimer);
-    // Se cache vazio: retry rápido (3s) — plugin pode estar carregando
-    // Se cache cheio: retry lento (30s) — só atualiza sfx novos
-    const interval = (allItems.length === 0) ? 3000 : 30000;
+    // Catalogo de efeitos NATIVOS quase nunca muda em runtime -> refresh raro.
+    // Cache vazio: 60s (plugin ainda carregando). Cheio: 5min (so pega sfx novos).
+    // Antes era 3s/30s: o scan pesado (getAudio/VideoEffectList) roda na MESMA engine
+    // ExtendScript do apply -> quase todo apply de efeito colidia com um scan em voo.
+    const interval = (allItems.length === 0) ? 60000 : 300000;
     _refreshTimer = setInterval(async () => {
         if (busy) return;
+        // Paleta escondida (fechada) nao precisa refazer scan — poupa a engine pro apply
+        if (document.hidden) return;
         try {
             const r = await ipcRenderer.invoke('lion-search:list-effects', { forceRefresh: true });
             if (r) await _applyResult(r, true);
             // Se interval mudou (passou de empty pra populated ou vice-versa), reagenda
-            const newInterval = (allItems.length === 0) ? 3000 : 30000;
+            const newInterval = (allItems.length === 0) ? 60000 : 300000;
             if (newInterval !== interval) _scheduleRefresh();
         } catch (e) {}
     }, interval);

@@ -147,15 +147,15 @@ body.is-mac .win-btns{display:none}
 
 /* Preset buttons — design minimalista sem emojis */
 .preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.preset-btn{
+.preset-btn,.mode-btn{
     padding:7px 4px;background:rgba(255,255,255,.03);
     border:1px solid rgba(255,255,255,.06);
     color:var(--text2);border-radius:6px;cursor:pointer;
     font-size:.7rem;font-weight:500;font-family:inherit;
     transition:all .15s;letter-spacing:.1px
 }
-.preset-btn:hover{background:rgba(190,242,100,.05);border-color:rgba(190,242,100,.15);color:var(--text)}
-.preset-btn.active{
+.preset-btn:hover,.mode-btn:hover{background:rgba(190,242,100,.05);border-color:rgba(190,242,100,.15);color:var(--text)}
+.preset-btn.active,.mode-btn.active{
     background:linear-gradient(135deg,rgba(190,242,100,.18),rgba(190,242,100,.08));
     border-color:rgba(190,242,100,.45);color:var(--accent);font-weight:600;
     box-shadow:0 0 0 1px rgba(190,242,100,.08), 0 2px 8px rgba(190,242,100,.1) inset
@@ -298,10 +298,8 @@ body.is-mac .win-btns{display:none}
             <div class="panel-info" id="clipInfo">—</div>
         </div>
 
-        <div class="panel-section">
-            <div class="panel-title">Ponto de tracking</div>
-            <div class="point-info" id="pointInfo">Clique no vídeo pra marcar</div>
-        </div>
+        <!-- pointInfo mantido oculto (JS usa pra guardar as coords do ponto); a instrucao "clique no video" era redundante -->
+        <div id="pointInfo" style="display:none"></div>
 
         <div class="panel-section">
             <div class="panel-title">Configurações</div>
@@ -336,18 +334,13 @@ body.is-mac .win-btns{display:none}
                     <span>Cru (fiel)</span><span>Bem suave</span>
                 </div>
             </div>
-            <div class="row">
-                <label>Modo de aplicação</label>
-                <select id="trackMode">
-                    <option value="track">Tracking — seguir ponto</option>
-                    <option value="stabilize">Estabilizar — travar ponto</option>
-                </select>
-            </div>
-            <div class="row" id="applyModeRow">
-                <label>Aplicar em</label>
-                <select id="applyMode">
-                    <option value="selected">Clip selecionado</option>
-                </select>
+            <div class="row" style="margin-bottom:0">
+                <label style="margin-bottom:6px">Modo de aplicação</label>
+                <div class="preset-grid">
+                    <button type="button" class="mode-btn active" data-mode="track">Rastrear</button>
+                    <button type="button" class="mode-btn" data-mode="stabilize">Estabilizar</button>
+                </div>
+                <input type="hidden" id="trackMode" value="track">
             </div>
             <!-- Avançado (colapsado) — pra quem sabe o que é CSRT/Whittaker -->
             <div style="margin-top:8px">
@@ -381,17 +374,17 @@ body.is-mac .win-btns{display:none}
         <div class="panel-section">
             <div class="panel-title">Analisar (a partir do frame atual)</div>
             <div class="analyze-row" id="analyzeRow">
-                <button class="an-btn" id="anBackAll" title="Analisar tudo pra trás" disabled>
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6z"/><path d="M20 5v14l-9-7z"/><path d="M11 5v14l-9-7z" opacity=".55"/></svg>
+                <button class="an-btn" id="anBackAll" title="Rastrear TUDO pra trás" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4.5" width="2.4" height="15" rx="0.6"/><path d="M14 4.5 L6.6 12 L14 19.5 Z"/><path d="M21.6 4.5 L14.2 12 L21.6 19.5 Z"/></svg>
                 </button>
-                <button class="an-btn" id="anBack1" title="Analisar 1 frame pra trás" disabled>
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h2v14H7z"/><path d="M19 5v14l-9-7z"/></svg>
+                <button class="an-btn" id="anBack1" title="Rastrear 1 frame pra trás" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 4.5 L6 12 L15.5 19.5 Z"/></svg>
                 </button>
-                <button class="an-btn" id="anFwd1" title="Analisar 1 frame pra frente" disabled>
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5v14l9-7z"/><path d="M15 5h2v14h-2z"/></svg>
+                <button class="an-btn" id="anFwd1" title="Rastrear 1 frame pra frente" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 4.5 L18 12 L8.5 19.5 Z"/></svg>
                 </button>
-                <button class="an-btn" id="anFwdAll" title="Analisar tudo pra frente" disabled>
-                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5v14l9-7z" opacity=".55"/><path d="M13 5v14l9-7z"/><path d="M16 5h2v14h-2z"/></svg>
+                <button class="an-btn" id="anFwdAll" title="Rastrear TUDO pra frente" disabled>
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.4 4.5 L9.8 12 L2.4 19.5 Z"/><path d="M10 4.5 L17.4 12 L10 19.5 Z"/><rect x="18.6" y="4.5" width="2.4" height="15" rx="0.6"/></svg>
                 </button>
             </div>
             <div class="progress-wrap" id="progressWrap" style="display:none">
@@ -816,6 +809,13 @@ function applyPreset(key) {
     });
 }
 document.querySelectorAll('.preset-btn').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.preset)));
+
+// Modo de aplicacao: toggle de botao (Rastrear / Estabilizar) — seta o input hidden #trackMode
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    var hid = document.getElementById('trackMode'); if (hid) hid.value = b.dataset.mode;
+}));
 
 // === Python check on boot ===
 async function checkPython() {

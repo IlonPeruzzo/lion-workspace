@@ -135,3 +135,12 @@ contextBridge.exposeInMainWorld('jobMailer', {
     verify: () => ipcRenderer.invoke('jobmail:verify'),
     send: (msg) => ipcRenderer.invoke('jobmail:send', msg),
 });
+
+// Aba Presets — store compartilhado com os plugins (Wiggler/Easing) + catálogo do Premiere
+contextBridge.exposeInMainWorld('lwPresets', {
+    get: () => ipcRenderer.invoke('presets:get'),
+    set: (data) => ipcRenderer.invoke('presets:set', data),
+    premiereCatalog: () => ipcRenderer.invoke('presets:premiere-catalog'),
+    premiereRefresh: () => ipcRenderer.invoke('presets:premiere-refresh'),
+    onChanged: (cb) => ipcRenderer.on('plugin-presets-changed', () => cb()),
+});

@@ -3114,12 +3114,39 @@ loadLionCatalogFromDisk();
 function queuePluginCommand(type, payload, timeoutMs = 15000) {
     const commandId = crypto.randomBytes(6).toString('hex');
     return new Promise((resolve, reject) => {
+        // APPLY tem prioridade ABSOLUTA. A engine ExtendScript e single-thread: um scan de
+        // catalogo (10-30s) na frente da fila fazia o apply do usuario "demorar um seculo".
+        // Scans enfileirados sao descartados (quem pediu recebe 'superseded' e usa o cache).
+        if (type === 'apply-effect') {
+            for (let i = pendingPluginCommands.length - 1; i >= 0; i--) {
+                const c = pendingPluginCommands[i];
+                if (c.type === 'list-effects') {
+                    pendingPluginCommands.splice(i, 1);
+                    const p = lionSearchPendingResults.get(c.id);
+                    if (p) { clearTimeout(p.timeout); lionSearchPendingResults.delete(c.id); p.resolve({ error: 'superseded_by_apply', items: [] }); }
+                }
+            }
+        }
         const timeout = setTimeout(() => {
             lionSearchPendingResults.delete(commandId);
+            // comando que estourou o timeout NAO pode ficar na fila — seria entregue depois
+            // e ocuparia a engine bem na hora que o usuario estivesse aplicando algo
+            const qi = pendingPluginCommands.findIndex(c => c.id === commandId);
+            if (qi >= 0) pendingPluginCommands.splice(qi, 1);
             reject(new Error('Timeout aguardando plugin (' + (timeoutMs/1000) + 's) — plugin tá rodando no Premiere?'));
         }, timeoutMs);
         lionSearchPendingResults.set(commandId, { resolve, reject, timeout });
-        pendingPluginCommands.push({ id: commandId, type, payload: payload || {} });
+        if (type === 'apply-effect') {
+            // Fura a fila, MAS fica atras de get-contexts e applies ja pendentes:
+            // o get-context captura o SNAPSHOT de selecao que este apply vai usar como alvo
+            // (e e rapido); applies anteriores mantem ordem FIFO entre si.
+            let ins = 0;
+            while (ins < pendingPluginCommands.length &&
+                   (pendingPluginCommands[ins].type === 'get-context' || pendingPluginCommands[ins].type === 'apply-effect')) ins++;
+            pendingPluginCommands.splice(ins, 0, { id: commandId, type, payload: payload || {} });
+        } else {
+            pendingPluginCommands.push({ id: commandId, type, payload: payload || {} });
+        }
         // Acorda qualquer long-poll esperando — comando vai chegar no plugin em ~0ms
         _notifyLongPollWaiters();
     });
@@ -3142,6 +3169,9 @@ ipcMain.handle('lion-search:list-effects', async (event, opts) => {
         // Background refresh — não bloqueia resposta
         setImmediate(() => {
             if (_lionListEffectsInFlight) return; // já tem outro em andamento
+            // NUNCA roda o scan pesado concorrente com um apply (mesma engine ExtendScript
+            // single-thread): senão o apply do usuário senta atrás do scan = "demora um século".
+            if (_isApplyInProgress || (Date.now() - _lastApplyAt < 3000)) return;
             _lionListEffectsInFlight = queuePluginCommand('list-effects', {}, 30000);
             _lionListEffectsInFlight.then(() => { _lionListEffectsInFlight = null; }).catch(() => { _lionListEffectsInFlight = null; });
         });
@@ -3179,8 +3209,11 @@ ipcMain.handle('lion-search:list-effects', async (event, opts) => {
 // IPC pra lion-search.html chamar: aplica efeito
 ipcMain.handle('lion-search:apply', async (event, payload) => {
     _isApplyInProgress = true;
+    _lastApplyAt = Date.now();
     try {
-        const result = await queuePluginCommand('apply-effect', payload, 15000);
+        // 30s: o apply em si e barato, mas pode esperar um scan de catalogo terminar
+        // na engine ExtendScript (single-thread). 15s dava timeout falso = "nao aplicou".
+        const result = await queuePluginCommand('apply-effect', payload, 30000);
         return result;
     } catch (e) { return { error: e.message }; }
     finally {
@@ -3202,6 +3235,7 @@ ipcMain.on('lion-search:close', () => {
 
 // Flag pra evitar que notificação/IPC apply traga mainWin pra frente no Mac
 let _isApplyInProgress = false;
+let _lastApplyAt = 0; // timestamp do ultimo apply — bloqueia scan de catalogo concorrente
 let _isNotifying = false;
 
 // IPC: mostra notificação nativa SÓ pra erros (sucesso é silencioso —
@@ -4128,6 +4162,7 @@ function toggleLoop(){
                 sfxFolder: _lionSettings.sfxFolder || '',
                 useLibraryOnly: _lionSettings.useLibraryOnly !== false, // default ON pra nova UX
                 registered: _registeredLionHotkey,
+                registerFailed: _lionHotkeyRegisterFailed, // so true em falha REAL (atalho em uso); nao em pausa por foco
             }));
             return;
         }
@@ -4180,6 +4215,12 @@ function toggleLoop(){
                 fetchedAt: lionSearchEffectsCachedAt,
                 age: lionSearchEffectsCachedAt ? (Date.now() - lionSearchEffectsCachedAt) : null,
             }));
+            return;
+        }
+        if (req.method === 'GET' && req.url === '/plugin-presets') {
+            // Plugin CEP puxa no boot (source of truth compartilhado com a aba Presets do app)
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(loadPluginPresets()));
             return;
         }
 
@@ -4283,6 +4324,7 @@ function toggleLoop(){
                         hotkey: _lionSettings.hotkey,
                         enabled: _lionSettings.enabled,
                         registered: _registeredLionHotkey,
+                        registerFailed: _lionHotkeyRegisterFailed,
                     }));
                     return;
                 }
@@ -4321,6 +4363,34 @@ function toggleLoop(){
                     }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ ok: true }));
+                    return;
+                }
+                // Plugin CEP sincroniza presets custom (Wiggler/Easing).
+                // Preferencial: ops POR ITEM ({ops:[{op:'add'|'remove',kind,item|name}]}) — nao
+                // sobrescreve o array inteiro (delecoes/renames feitos na aba do app sobrevivem).
+                // Full-array ({wiggler}/{easing}) so na migracao de primeira vez.
+                if (command === 'plugin-presets/update') {
+                    const cur = loadPluginPresets();
+                    if (Array.isArray(data.ops)) {
+                        for (const op of data.ops.slice(0, 200)) {
+                            if (!op || typeof op !== 'object') continue;
+                            const kind = op.kind === 'easing' ? 'easing' : (op.kind === 'wiggler' ? 'wiggler' : null);
+                            if (!kind) continue;
+                            const key = kind === 'wiggler' ? 'n' : 'name';
+                            if (op.op === 'add' && op.item && typeof op.item === 'object' && op.item[key]) {
+                                cur[kind] = cur[kind].filter(x => x && x[key] !== op.item[key]);
+                                cur[kind].push(op.item);
+                            } else if (op.op === 'remove' && typeof op.name === 'string') {
+                                cur[kind] = cur[kind].filter(x => x && x[key] !== op.name);
+                            }
+                        }
+                    }
+                    if (Array.isArray(data.wiggler)) cur.wiggler = data.wiggler;
+                    if (Array.isArray(data.easing)) cur.easing = data.easing;
+                    const ok = savePluginPresets(cur); // sanitiza shape/limites na gravacao
+                    try { BrowserWindow.getAllWindows().forEach(w => { try { w.webContents.send('plugin-presets-changed'); } catch(e) {} }); } catch(e) {}
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: ok, wiggler: cur.wiggler.length, easing: cur.easing.length }));
                     return;
                 }
                 // Limpa cache de audio (botão UI ou troca de profile)
@@ -6362,6 +6432,57 @@ function saveAudioLibrary(lib) {
     try { fs.writeFileSync(AUDIO_LIBRARY_FILE, JSON.stringify(lib, null, 2), 'utf8'); return true; }
     catch(e) { return false; }
 }
+// Presets dos plugins (Wiggler + Easing) — fonte única de verdade compartilhada entre o
+// painel CEP (via HTTP 9847) e a aba Presets do app (via IPC). Antes viviam só no
+// localStorage do CEP (perdiam se o cache do painel limpasse).
+const PLUGIN_PRESETS_FILE = path.join(currentUD, 'plugin-presets.json');
+// Sanitizacao: o payload vem do plugin CEP (localStorage pode estar corrompido) — um item
+// null/mal-formado persistido derrubaria o render da aba Presets E do painel em todo boot.
+// Dedup por nome (fica a ULTIMA ocorrencia — o save mais recente vence): o nome e a
+// chave das ops add/remove, entao duplicatas viravam itens fantasma indelectaveis.
+function _dedupeByKey(list, key) {
+    const idx = new Map();
+    for (const item of list) idx.set(item[key], item);
+    return Array.from(idx.values());
+}
+function _sanePresetWig(a) {
+    const out = [];
+    for (const x of (Array.isArray(a) ? a : [])) {
+        if (!x || typeof x !== 'object') continue;
+        const n = String(x.n == null ? '' : x.n).slice(0, 80);
+        if (!n) continue;
+        out.push({ n, f: +x.f || 0, a: +x.a || 0, o: +x.o || 0, m: +x.m || 0 });
+        if (out.length >= 500) break;
+    }
+    return _dedupeByKey(out, 'n');
+}
+function _sanePresetEase(a) {
+    const out = [];
+    const cp = (p) => ({ x: +(p && p.x) || 0, y: +(p && p.y) || 0 });
+    for (const x of (Array.isArray(a) ? a : [])) {
+        if (!x || typeof x !== 'object') continue;
+        const name = String(x.name == null ? '' : x.name).slice(0, 80);
+        if (!name) continue;
+        out.push({ name, cp1: cp(x.cp1), cp2: cp(x.cp2), dir: (['in','out','inout'].indexOf(x.dir) >= 0 ? x.dir : 'inout') });
+        if (out.length >= 500) break;
+    }
+    return _dedupeByKey(out, 'name');
+}
+function loadPluginPresets() {
+    try {
+        const j = JSON.parse(fs.readFileSync(PLUGIN_PRESETS_FILE, 'utf8'));
+        return {
+            wiggler: _sanePresetWig(j.wiggler),
+            easing: _sanePresetEase(j.easing),
+            initialized: true, // arquivo existe — plugin NAO deve rodar a migracao de primeira vez
+        };
+    } catch(e) { return { wiggler: [], easing: [], initialized: false }; }
+}
+function savePluginPresets(p) {
+    const clean = { wiggler: _sanePresetWig(p.wiggler), easing: _sanePresetEase(p.easing) };
+    try { fs.writeFileSync(PLUGIN_PRESETS_FILE, JSON.stringify(clean, null, 2), 'utf8'); return true; }
+    catch(e) { return false; }
+}
 const DEFAULT_LION_HOTKEY = 'Control+Shift+L';
 
 function loadLionSearchSettings() {
@@ -6568,16 +6689,18 @@ function openLionSearch(forceOpen) {
 
 let _lionSettings = loadLionSearchSettings();
 let _registeredLionHotkey = null;
+let _lionHotkeyRegisterFailed = false; // true = globalShortcut.register() falhou de verdade (atalho ja em uso), NAO so pausado por foco
 let _hotkeyFgWatcherTimer = null;
 
 function _doRegisterHotkey(hotkey) {
     if (!hotkey) return false;
     try {
         const ok = globalShortcut.register(hotkey, openLionSearch);
-        if (!ok) return false;
+        if (!ok) { _lionHotkeyRegisterFailed = true; return false; }
         _registeredLionHotkey = hotkey;
+        _lionHotkeyRegisterFailed = false;
         return true;
-    } catch (e) { return false; }
+    } catch (e) { _lionHotkeyRegisterFailed = true; return false; }
 }
 
 function _doUnregisterHotkey() {
@@ -6667,6 +6790,50 @@ app.on('will-quit', () => {
 });
 
 // IPC pra UI principal configurar hotkey + SFX folder
+// ═══ Aba Presets do app — le/edita o store compartilhado + catalogo do Premiere ═══
+ipcMain.handle('presets:get', () => loadPluginPresets());
+ipcMain.handle('presets:set', (event, data) => {
+    const cur = loadPluginPresets();
+    if (data && Array.isArray(data.wiggler)) cur.wiggler = data.wiggler;
+    if (data && Array.isArray(data.easing)) cur.easing = data.easing;
+    const ok = savePluginPresets(cur);
+    return { ok, presets: cur };
+});
+ipcMain.handle('presets:premiere-catalog', () => {
+    // So presets do catalogo do Lion Search (cacheado em disco; plugin escaneia e empurra)
+    const items = (lionSearchEffectsCache || []).filter(x => x && x.kind === 'preset');
+    return { items, cachedAt: lionSearchEffectsCachedAt || null };
+});
+ipcMain.handle('presets:premiere-refresh', async () => {
+    // Pede pro plugin re-escanear (so funciona com o Premiere aberto).
+    const presetsOf = (items) => (items || []).filter(x => x && x.kind === 'preset');
+    // NUNCA escanear concorrente com apply (engine ExtendScript single-thread)
+    if (_isApplyInProgress || (Date.now() - _lastApplyAt < 3000)) {
+        return { ok: false, error: 'busy', items: presetsOf(lionSearchEffectsCache), cachedAt: lionSearchEffectsCachedAt || null };
+    }
+    try {
+        // Dedup: reusa scan em andamento (mesma guarda do lion-search:list-effects).
+        // Usa result.items direto — e o catalogo COMPLETO fresco; o cache global so atualiza
+        // no POST effects-update, que chega DEPOIS do command-result (ler o cache aqui = stale).
+        let p = _lionListEffectsInFlight;
+        if (!p) {
+            p = queuePluginCommand('list-effects', {}, 30000);
+            _lionListEffectsInFlight = p;
+            const clear = () => { if (_lionListEffectsInFlight === p) _lionListEffectsInFlight = null; };
+            p.then(clear).catch(clear);
+        }
+        const result = await p;
+        const usedFresh = result && Array.isArray(result.items) && result.items.length > 0;
+        return {
+            ok: !(result && result.error),
+            error: (result && result.error) || null,
+            items: presetsOf(usedFresh ? result.items : lionSearchEffectsCache),
+            cachedAt: usedFresh ? Date.now() : (lionSearchEffectsCachedAt || null),
+        };
+    } catch (e) {
+        return { ok: false, error: 'Abra o Premiere com o painel do Lion Workspace pra importar.', items: presetsOf(lionSearchEffectsCache), cachedAt: lionSearchEffectsCachedAt || null };
+    }
+});
 ipcMain.handle('lion-search:get-settings', () => _lionSettings);
 ipcMain.handle('lion-search:set-settings', (event, settings) => {
     const oldHotkey = _lionSettings.hotkey;

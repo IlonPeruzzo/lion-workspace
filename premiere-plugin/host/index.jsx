@@ -1,4 +1,6 @@
 // ExtendScript for Adobe Premiere Pro — Lion Workspace Plugin
+// LW_DEBUG: liga writes de trace/debug em disco (sincronos, travam o apply) — OFF em producao
+var LW_DEBUG = false;
 
 // ════════════════════════════════════════════════════════════════════
 // MOTION TRACKER — JSX functions
@@ -2126,24 +2128,31 @@ function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
                 debugInfo.push('getSelection=' + selectedItems.length);
                 for (var gs = 0; gs < selectedItems.length; gs++) {
                     var si = selectedItems[gs];
-                    // Filtra video vs audio
-                    var isVid = false;
+                    // Filtra video vs audio — mediaType PRIMEIRO: a parte de AUDIO de um
+                    // clip A/V linkado tem projectItem.hasVideo()=true (mesma midia), entao
+                    // o sniff antigo classificava o audio como video e a busca de audio
+                    // nunca achava o clip (Studio Reverb "nao aplica" em voz com camera).
+                    var isVid = null;
                     try {
-                        // mediaType property: 1=video, 4=audio (varia por versão)
-                        // Tenta detectar por nodeId/parent track
-                        var p = si.projectItem || null;
-                        if (p) {
-                            try { isVid = p.hasVideo && p.hasVideo(); } catch(eHV) {}
-                            if (!isVid) {
-                                try {
-                                    var path = p.getMediaPath && p.getMediaPath();
-                                    if (path) isVid = !/\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff)$/i.test(path);
-                                } catch(eMP) {}
+                        var mts = String(si.mediaType || '').toLowerCase();
+                        if (mts.indexOf('video') >= 0) isVid = true;
+                        else if (mts.indexOf('audio') >= 0) isVid = false;
+                    } catch(eMts) {}
+                    if (isVid === null) {
+                        isVid = false;
+                        try {
+                            var p = si.projectItem || null;
+                            if (p) {
+                                try { isVid = p.hasVideo && p.hasVideo(); } catch(eHV) {}
+                                if (!isVid) {
+                                    try {
+                                        var path = p.getMediaPath && p.getMediaPath();
+                                        if (path) isVid = !/\.(mp3|wav|aac|m4a|flac|ogg|aif|aiff)$/i.test(path);
+                                    } catch(eMP) {}
+                                }
                             }
-                        }
-                    } catch(eMT) {}
-                    // Se não conseguiu detectar, assume baseado em isVideo solicitado
-                    if (isVid === undefined) isVid = isVideo;
+                        } catch(eMT) {}
+                    }
                     if ((isVideo && isVid) || (!isVideo && !isVid)) {
                         stdSelected.push(si);
                     }
@@ -2151,6 +2160,43 @@ function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
             }
         }
     } catch(eGS) { debugInfo.push('getSelection-err:' + eGS.toString().slice(0,40)); }
+
+    // ─── Estratégia 1.5 (RAPIDA): mapeia direto via parentTrackIndex + ticks ───
+    // Sem isso, caia no scan de QE isSelected() em TODOS os itens da timeline
+    // (~1ms/item = ~1-2s numa timeline de 7000+ clips, EM CADA apply).
+    if (stdSelected.length > 0) {
+        var fastMapped = [];
+        var fastOk = true;
+        for (var fm = 0; fm < stdSelected.length && fastOk; fm++) {
+            var sIt = stdSelected[fm];
+            var fIdx = -1;
+            try { if (typeof sIt.parentTrackIndex === 'number' && sIt.parentTrackIndex >= 0) fIdx = sIt.parentTrackIndex; } catch(eF1) {}
+            if (fIdx < 0) { fastOk = false; break; }
+            var qeTk = null;
+            try { qeTk = isVideo ? qeSeq.getVideoTrackAt(fIdx) : qeSeq.getAudioTrackAt(fIdx); } catch(eF2) {}
+            if (!qeTk) { fastOk = false; break; }
+            var sTicks = '', sSec = 0;
+            try { sTicks = String(sIt.start.ticks); } catch(eF3) {}
+            try { sSec = parseFloat(sIt.start.seconds); } catch(eF4) {}
+            var got = null;
+            var qn = 0; try { qn = qeTk.numItems; } catch(eF5) {}
+            for (var qf = 0; qf < qn; qf++) {
+                var qi = null; try { qi = qeTk.getItemAt(qf); } catch(eF6) {}
+                if (!qi) continue;
+                try { if (qi.type === 1) continue; } catch(eF7) {}
+                try {
+                    if ((sTicks && String(qi.start.ticks) === sTicks) || Math.abs(parseFloat(qi.start.seconds) - sSec) < 0.05) { got = qi; break; }
+                } catch(eF8) {}
+            }
+            if (!got) { fastOk = false; break; }
+            fastMapped.push(got);
+        }
+        if (fastOk && fastMapped.length === stdSelected.length && fastMapped.length > 0) {
+            debugInfo.push('fastQE=' + fastMapped.length);
+            if (typeof _lwDbgPreset === 'function') _lwDbgPreset('  _lwFindSelectedQEClips(' + (isVideo?'video':'audio') + '): ' + debugInfo.join(','));
+            return fastMapped;
+        }
+    }
 
     // Se não temos getSelection ou retornou vazio, fallback pra iterar tracks
     if (stdSelected.length === 0 && seq) {
@@ -2166,26 +2212,28 @@ function _lwFindSelectedQEClips(qeSeq, isVideo, seq) {
         debugInfo.push('stdIterate=' + stdSelected.length);
     }
 
-    // ─── Estratégia 2: QE isSelected() ───
-    var numTracks = isVideo ? qeSeq.numVideoTracks : qeSeq.numAudioTracks;
-    for (var i = 0; i < numTracks; i++) {
-        var t = null;
-        try { t = isVideo ? qeSeq.getVideoTrackAt(i) : qeSeq.getAudioTrackAt(i); } catch(e0) {}
-        if (!t) continue;
-        var n = 0;
-        try { n = t.numItems; } catch(eN) { n = 0; }
-        for (var j = 0; j < n; j++) {
-            var item = null;
-            try { item = t.getItemAt(j); } catch(eI) {}
-            if (!item) continue;
-            try { if (item.type === 1) continue; } catch(eT) {}
-            try { if (item.isSelected && item.isSelected()) { found.push(item); } } catch(eS) {}
+    // ─── Estratégia 2: QE isSelected() — SO se getSelection nao deu nada (scan pesado) ───
+    if (stdSelected.length === 0) {
+        var numTracks = isVideo ? qeSeq.numVideoTracks : qeSeq.numAudioTracks;
+        for (var i = 0; i < numTracks; i++) {
+            var t = null;
+            try { t = isVideo ? qeSeq.getVideoTrackAt(i) : qeSeq.getAudioTrackAt(i); } catch(e0) {}
+            if (!t) continue;
+            var n = 0;
+            try { n = t.numItems; } catch(eN) { n = 0; }
+            for (var j = 0; j < n; j++) {
+                var item = null;
+                try { item = t.getItemAt(j); } catch(eI) {}
+                if (!item) continue;
+                try { if (item.type === 1) continue; } catch(eT) {}
+                try { if (item.isSelected && item.isSelected()) { found.push(item); } } catch(eS) {}
+            }
         }
-    }
-    if (found.length > 0) {
-        debugInfo.push('qeIsSelected=' + found.length);
-        _lwDbgPreset && _lwDbgPreset('  _lwFindSelectedQEClips(' + (isVideo?'video':'audio') + '): ' + debugInfo.join(','));
-        return found;
+        if (found.length > 0) {
+            debugInfo.push('qeIsSelected=' + found.length);
+            _lwDbgPreset && _lwDbgPreset('  _lwFindSelectedQEClips(' + (isVideo?'video':'audio') + '): ' + debugInfo.join(','));
+            return found;
+        }
     }
 
     // ─── Estratégia 3: mapeia stdSelected → QE clips por start time ───
@@ -2280,30 +2328,102 @@ function _lwApplyPresetDataInner(presetName, dataJsonStr) {
             return false;
         };
 
-        // Acha selection — com recovery via snapshot
-        var sel = _lwFindSelectedQEClips(qeSeq, true, seq);
-        var selKind = 'video';
-        if (sel.length === 0) { sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio'; }
-        var stdSel = [];
-        if (sel.length === 0) {
-            var rec = _lwRecoverFromSnapshot(seq, qeSeq);
-            if (rec.qeClips.length > 0) {
-                sel = rec.qeClips;
-                stdSel = rec.stdClips;
-                selKind = rec.kind;
-                _lwDbgPreset('  recovery: ' + sel.length + ' clips');
-            } else {
-                return 'NO_CLIP_SELECTED';
-            }
-        }
-        if (stdSel.length === 0) {
-            var trackList = (selKind === 'video') ? seq.videoTracks : seq.audioTracks;
-            for (var ti = 0; ti < trackList.numTracks; ti++) {
-                var tk = trackList[ti];
-                for (var ci = 0; ci < tk.clips.numItems; ci++) {
-                    if (tk.clips[ci].isSelected()) stdSel.push(tk.clips[ci]);
+        // Classifica o preset pelo CONTEUDO (audio x video) ANTES de escolher o alvo.
+        // Preset de AUDIO (ex: Studio Reverb) num clip A/V LINKADO: o alvo tem 1 parte
+        // video + 1 audio, o tie-break ia pra video, o efeito de audio nunca resolvia e
+        // o preset "nao aplicava de jeito nenhum". Probe e barato (~0ms, medido ao vivo).
+        var wantKindPreset = null;
+        try {
+            for (var pk = 0; pk < data.length && !wantKindPreset; pk++) {
+                var pfx = data[pk]; if (!pfx) continue;
+                var pmn = String(pfx.matchName || '');
+                if (pmn.indexOf('AE.ADBE') === 0) continue; // builtins (Motion/Opacity) nao classificam
+                if (pmn.indexOf('AE.') === 0) { wantKindPreset = 'video'; break; } // AE.* = efeito de video
+                var pnm = String(pfx.displayName || pfx.name || '');
+                var cand = [pmn, pnm];
+                for (var pc = 0; pc < cand.length && !wantKindPreset; pc++) {
+                    if (!cand[pc]) continue;
+                    var aFx = null; try { aFx = qe.project.getAudioEffectByName(cand[pc]); } catch(ePA) {}
+                    if (aFx) { wantKindPreset = 'audio'; break; }
+                    var vFx = null; try { vFx = qe.project.getVideoEffectByName(cand[pc]); } catch(ePV) {}
+                    if (vFx) { wantKindPreset = 'video'; break; }
                 }
             }
+        } catch(eCls) {}
+        _lwDbgPreset('  kind do preset (conteudo): ' + (wantKindPreset || 'indefinido'));
+
+        // SNAPSHOT PRIMEIRO: alvo = selecao de quando a paleta abriu, nao a de agora
+        // (keyframes demoram; o usuario ja esta mexendo no proximo clip). Fallback: viva.
+        var sel = [], stdSel = [], selKind = 'video';
+        var rec = _lwRecoverFromSnapshot(seq, qeSeq, wantKindPreset);
+        if (rec.qeClips.length > 0) {
+            sel = rec.qeClips;
+            stdSel = rec.stdClips;
+            selKind = rec.kind;
+            _lwDbgPreset('  alvo via SNAPSHOT: ' + sel.length + ' clips (kind=' + selKind + ')');
+        } else {
+            if (wantKindPreset === 'audio') {
+                sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio';
+            } else {
+                sel = _lwFindSelectedQEClips(qeSeq, true, seq); selKind = 'video';
+                if (sel.length === 0) { sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio'; }
+            }
+            if (sel.length === 0) return 'NO_CLIP_SELECTED';
+            _lwDbgPreset('  alvo via selecao viva (kind=' + selKind + ')');
+        }
+        if (stdSel.length === 0) {
+            // RAPIDO: getSelection() filtrado por kind (mediaType) — o scan isSelected()
+            // na timeline inteira custava ~1s aqui. Fallback: scan completo.
+            try {
+                if (typeof seq.getSelection === 'function') {
+                    var gsel = seq.getSelection();
+                    if (gsel && gsel.length !== undefined) {
+                        for (var gi = 0; gi < gsel.length; gi++) {
+                            var gIt = gsel[gi]; if (!gIt) continue;
+                            var gKind = null;
+                            try {
+                                var gmt = String(gIt.mediaType || '').toLowerCase();
+                                if (gmt.indexOf('video') >= 0) gKind = 'video';
+                                else if (gmt.indexOf('audio') >= 0) gKind = 'audio';
+                            } catch(eGm) {}
+                            // kind DESCONHECIDO fica de fora — misturar um trackItem de video
+                            // num stdSel de audio pareava props com o QE clip errado
+                            if (gKind === selKind) stdSel.push(gIt);
+                        }
+                    }
+                }
+            } catch(eGf) { stdSel = []; }
+            // Fallback pelo RESULTADO (nao pela via): getSelection pode existir e voltar
+            // vazio justo no caso de foco perdido — sem o scan aqui, retornava
+            // OK:applied:0 "com sucesso" sem aplicar nada.
+            if (stdSel.length === 0) {
+                var trackList = (selKind === 'video') ? seq.videoTracks : seq.audioTracks;
+                for (var ti = 0; ti < trackList.numTracks; ti++) {
+                    var tk = trackList[ti];
+                    for (var ci = 0; ci < tk.clips.numItems; ci++) {
+                        if (tk.clips[ci].isSelected()) stdSel.push(tk.clips[ci]);
+                    }
+                }
+            }
+        }
+        // Alinha stdSel<->sel por start ticks: os consumidores pareiam por INDICE, e uma
+        // lista mais curta/reordenada que a outra escrevia keyframes no clip errado.
+        if (stdSel.length > 0 && sel.length > 0) {
+            var _pool = [];
+            for (var sp = 0; sp < sel.length; sp++) _pool.push(sel[sp]);
+            var aStd = [], aQe = [];
+            for (var ax = 0; ax < stdSel.length; ax++) {
+                var aT = ''; try { aT = String(stdSel[ax].start.ticks); } catch(eAT) {}
+                var hit = -1;
+                for (var ay = 0; ay < _pool.length; ay++) {
+                    if (!_pool[ay]) continue;
+                    var qT2 = ''; try { qT2 = String(_pool[ay].start.ticks); } catch(eQT3) {}
+                    if (aT && qT2 && aT === qT2) { hit = ay; break; }
+                }
+                if (hit >= 0) { aStd.push(stdSel[ax]); aQe.push(_pool[hit]); _pool[hit] = null; }
+            }
+            if (aStd.length > 0) { stdSel = aStd; sel = aQe; }
+            // nada casou por ticks -> mantem os arrays originais (comportamento antigo)
         }
         _lwDbgPreset('  ' + sel.length + ' QE + ' + stdSel.length + ' std (kind=' + selKind + ')');
 
@@ -2374,6 +2494,29 @@ function _lwApplyPresetDataInner(presetName, dataJsonStr) {
         function _ticksToSec(ticks) {
             return parseFloat(ticks) / TICKS_PER_SEC;
         }
+
+        // Resolve o effect object pelo nome na lista CERTA (audio x video) conforme a selecao.
+        // BUG: antes o loop de apply usava SEMPRE getVideoEffectByName — efeitos de AUDIO
+        // (ex: Studio Reverb) nunca resolviam num preset de audio, entao o preset
+        // "nao aplicava". Audio tenta getAudioEffectByName em qe.project/qe.app/qe.
+        var _getFxByName = function(ident) {
+            var o = null;
+            if (selKind === 'audio') {
+                // tenta getAudioEffectByName (displayName) E getAudioEffectByMatchName (matchName)
+                // em qe.project/qe.app/qe — o matchName e locale-proof (Premiere PT-BR), o
+                // displayName pode divergir. Espelha o lwSearchApply audio-fx que ja funciona.
+                var _cs = [qe.project, (qe && qe.app), qe];
+                for (var _ci = 0; _ci < _cs.length && !o; _ci++) {
+                    if (!_cs[_ci]) continue;
+                    try { if (typeof _cs[_ci].getAudioEffectByName === 'function') o = _cs[_ci].getAudioEffectByName(ident); } catch(e) {}
+                    if (!o) { try { if (typeof _cs[_ci].getAudioEffectByMatchName === 'function') o = _cs[_ci].getAudioEffectByMatchName(ident); } catch(e2) {} }
+                }
+            } else {
+                try { o = qe.project.getVideoEffectByName(ident); } catch(e) {}
+                if (!o) { try { if (typeof qe.project.getVideoEffectByMatchName === 'function') o = qe.project.getVideoEffectByMatchName(ident); } catch(e3) {} }
+            }
+            return o;
+        };
 
         // ── APLICA cada efeito ──
         var totalApplied = 0;
@@ -2455,8 +2598,7 @@ function _lwApplyPresetDataInner(presetName, dataJsonStr) {
                     for (var lk = 0; lk < tries.length && !targetComp; lk++) {
                         var ident = tries[lk];
                         if (!ident) continue;
-                        var fxObj = null;
-                        try { fxObj = qe.project.getVideoEffectByName(ident); } catch(eLk) {}
+                        var fxObj = _getFxByName(ident);
                         if (!fxObj) continue;
                         var beforeList = _compMatchNames();
                         try {
@@ -2805,15 +2947,16 @@ function _lwApplyPresetDataInner(presetName, dataJsonStr) {
 }
 
 function lwSearchApply(kind, matchName) {
-    // Debug top-level: registra TODO call que chega no host (independente do kind)
-    try {
-        var _fApply = new File(Folder.desktop.fsName + '/lion-apply-trace.txt');
+    // Debug top-level (so com LW_DEBUG): trace em Folder.temp. O Desktop e sincronizado
+    // pelo OneDrive no Win11 — open('a')+write sincrono la TRAVAVA todo apply (segundos).
+    if (LW_DEBUG) { try {
+        var _fApply = new File(Folder.temp.fsName + '/lion-apply-trace.txt');
         if (_fApply.open('a')) {
             _fApply.encoding = 'UTF-8';
             _fApply.write('[' + (new Date()).toString() + '] lwSearchApply kind="' + kind + '" matchName="' + String(matchName).slice(0,200) + '"\n');
             _fApply.close();
         }
-    } catch(eDbg) {}
+    } catch(eDbg) {} }
     try {
         if (!app.project || !app.project.activeSequence) return 'NO_SEQUENCE';
         var seq = app.project.activeSequence;
@@ -2823,39 +2966,45 @@ function lwSearchApply(kind, matchName) {
         if (!qeSeq) return 'ERR:no_qe_sequence';
 
         if (kind === 'video-fx') {
-            // Acha QE clips selecionados (video) — com recovery via snapshot
-            var selVideoClips = _lwFindSelectedQEClips(qeSeq, true, seq);
-            if (selVideoClips.length === 0) {
-                var rcV = _lwRecoverFromSnapshot(seq, qeSeq);
-                if (rcV.qeClips.length > 0 && rcV.kind === 'video') selVideoClips = rcV.qeClips;
-            }
+            // SNAPSHOT PRIMEIRO: o alvo e a selecao de quando a paleta ABRIU (get-context),
+            // nao a selecao de agora. O apply pode rodar segundos depois (fila/keyframes) e
+            // o usuario ja estar clicando no PROXIMO clip — aplicar na selecao viva metia o
+            // efeito no clip errado. Selecao viva vira fallback (snapshot vazio/stale/movido).
+            var rcV = _lwRecoverFromSnapshot(seq, qeSeq, 'video');
+            var selVideoClips = (rcV.qeClips.length > 0) ? rcV.qeClips : _lwFindSelectedQEClips(qeSeq, true, seq);
             if (selVideoClips.length === 0) return 'NO_CLIP_SELECTED';
             // Pega o effect object pelo nome
             var fxObj = null;
             try { fxObj = qe.project.getVideoEffectByName(matchName); } catch(e1) {}
             if (!fxObj) return 'ERR:effect_not_found:' + matchName;
             // Aplica em todos os clips selecionados
-            var appliedV = 0;
+            var appliedV = 0, lastErrV = '';
             for (var iv = 0; iv < selVideoClips.length; iv++) {
-                try { selVideoClips[iv].addVideoEffect(fxObj); appliedV++; } catch(eAv) {}
+                try { selVideoClips[iv].addVideoEffect(fxObj); appliedV++; } catch(eAv) { lastErrV = String(eAv); }
             }
-            if (appliedV === 0) return 'ERR:could_not_apply';
+            if (appliedV === 0) return 'ERR:could_not_apply:' + lastErrV;
             return 'OK:applied:' + appliedV;
         } else if (kind === 'audio-fx') {
-            var selAudioClips = _lwFindSelectedQEClips(qeSeq, false, seq);
-            if (selAudioClips.length === 0) {
-                var rcA = _lwRecoverFromSnapshot(seq, qeSeq);
-                if (rcA.qeClips.length > 0 && rcA.kind === 'audio') selAudioClips = rcA.qeClips;
-            }
+            // SNAPSHOT PRIMEIRO (ver video-fx acima) + CIENTE do kind: clip A/V linkado
+            // (voz gravada com a camera) tem 1 video + 1 audio no snapshot — o tie-break
+            // antigo empatava e ia pra 'video', rejeitando o audio. Forcamos 'audio'.
+            var rcA = _lwRecoverFromSnapshot(seq, qeSeq, 'audio');
+            var selAudioClips = (rcA.qeClips.length > 0) ? rcA.qeClips : _lwFindSelectedQEClips(qeSeq, false, seq);
             if (selAudioClips.length === 0) return 'NO_AUDIO_CLIP_SELECTED';
-            var afxObj = null;
-            try { afxObj = qe.project.getAudioEffectByName(matchName); } catch(e2) {}
-            if (!afxObj) return 'ERR:audio_effect_not_found:' + matchName;
-            var appliedA = 0;
-            for (var ia = 0; ia < selAudioClips.length; ia++) {
-                try { selAudioClips[ia].addAudioEffect(afxObj); appliedA++; } catch(eAa) {}
+            // Lookup com fallback de container (a lista pode ter vindo de qe.app/qe, nao qe.project)
+            // e por matchName, alem do displayName — evita audio_effect_not_found intermitente.
+            var afxObj = null, afxTry = [qe.project, (qe && qe.app), qe];
+            for (var ac = 0; ac < afxTry.length && !afxObj; ac++) {
+                if (!afxTry[ac]) continue;
+                try { if (typeof afxTry[ac].getAudioEffectByName === 'function') afxObj = afxTry[ac].getAudioEffectByName(matchName); } catch(e2) {}
+                if (!afxObj) { try { if (typeof afxTry[ac].getAudioEffectByMatchName === 'function') afxObj = afxTry[ac].getAudioEffectByMatchName(matchName); } catch(e3) {} }
             }
-            if (appliedA === 0) return 'ERR:could_not_apply';
+            if (!afxObj) return 'ERR:audio_effect_not_found:' + matchName;
+            var appliedA = 0, lastErrA = '';
+            for (var ia = 0; ia < selAudioClips.length; ia++) {
+                try { selAudioClips[ia].addAudioEffect(afxObj); appliedA++; } catch(eAa) { lastErrA = String(eAa); }
+            }
+            if (appliedA === 0) return 'ERR:could_not_apply:' + lastErrA;
             return 'OK:applied:' + appliedA;
         } else if (kind === 'video-tx' || kind === 'audio-tx') {
             return 'ERR:transitions_not_implemented_yet';
@@ -2881,50 +3030,97 @@ var _lwSelectionSnapshot = { clips: [], capturedAt: 0, seqRef: null };
 
 // Recupera clips do snapshot se selection atual está vazia (snapshot < 60s).
 // Retorna { stdClips: [...], qeClips: [...], kind: 'video'|'audio'|null }
-function _lwRecoverFromSnapshot(seq, qeSeq) {
+function _lwRecoverFromSnapshot(seq, qeSeq, wantKind) {
     if (!_lwSelectionSnapshot || !_lwSelectionSnapshot.clips || _lwSelectionSnapshot.clips.length === 0) {
         return { stdClips: [], qeClips: [], kind: null };
     }
     // Snapshot precisa ser RECENTE (60s) e MESMA sequência
     var ageSec = ((new Date()).getTime() - _lwSelectionSnapshot.capturedAt) / 1000;
     if (ageSec > 60) return { stdClips: [], qeClips: [], kind: null };
+    // MESMA sequencia de verdade: sem isso, trocar de sequencia com a paleta aberta podia
+    // casar um clip da sequencia ERRADA por posicao (V1 @ mesmo tempo e comum demais).
+    try {
+        var _curSeqId = String(seq.sequenceID || '');
+        if (_curSeqId && _lwSelectionSnapshot.seqId && _lwSelectionSnapshot.seqId !== _curSeqId) {
+            return { stdClips: [], qeClips: [], kind: null };
+        }
+    } catch(eSid) {}
     // Determina kind do snapshot
     var kindCount = { video: 0, audio: 0 };
     for (var sci = 0; sci < _lwSelectionSnapshot.clips.length; sci++) kindCount[_lwSelectionSnapshot.clips[sci].kind]++;
-    var kind = kindCount.video >= kindCount.audio ? 'video' : 'audio';
+    // wantKind ('audio'/'video') vem do caller: forca o tipo pedido em vez de deixar
+    // o empate (clip A/V linkado = 1 video + 1 audio) resolver sempre pra video.
+    var kind = wantKind || (kindCount.video >= kindCount.audio ? 'video' : 'audio');
     var trackList = (kind === 'video') ? seq.videoTracks : seq.audioTracks;
     var stdClips = [];
     var qeClips = [];
-    // Match por nodeId + start time (segurança)
-    for (var ti = 0; ti < trackList.numTracks; ti++) {
-        var tk = trackList[ti];
-        for (var ci = 0; ci < tk.clips.numItems; ci++) {
-            var c = tk.clips[ci];
-            try {
-                var cNodeId = '';
-                try { cNodeId = String(c.nodeId || ''); } catch(eN) {}
-                var cStart = 0;
-                try { cStart = parseFloat(c.start.seconds); } catch(eS) {}
-                for (var sn = 0; sn < _lwSelectionSnapshot.clips.length; sn++) {
-                    var snap = _lwSelectionSnapshot.clips[sn];
-                    if (snap.kind !== kind) continue;
-                    // Match por nodeId (mais confiável) ou start+name (fallback)
-                    if ((cNodeId && cNodeId === snap.nodeId) ||
-                        (Math.abs(cStart - snap.startSec) < 0.05 && ti === snap.trackIdx)) {
-                        stdClips.push(c);
-                        // Acha QE clip correspondente (mesmo index)
-                        try {
-                            var qeTrackList = (kind === 'video') ? qeSeq : qeSeq;
-                            var qeT = (kind === 'video') ? qeSeq.getVideoTrackAt(ti) : qeSeq.getAudioTrackAt(ti);
-                            if (qeT) {
-                                var qeC = qeT.getItemAt(ci);
-                                if (qeC) qeClips.push(qeC);
-                            }
-                        } catch(eQE) {}
-                        break;
+    // Outer = clips do SNAPSHOT (1-2 tipicamente). Se o snapshot tem trackIdx (veio do
+    // getSelection com parentTrackIndex), escaneia SO aquela track — o scan da timeline
+    // INTEIRA por clip custava ~1-2s numa timeline de 7000+ clips, EM CADA apply.
+    function _qeFind(ti2, snap2, foundClip) {
+        // Casa pelo start ATUAL do clip encontrado (ele pode ter sido movido desde o
+        // snapshot); ticks do snapshot ficam como fallback.
+        var fTicks = '', fSec = NaN;
+        try { fTicks = String(foundClip.start.ticks); } catch(eFt) {}
+        try { fSec = parseFloat(foundClip.start.seconds); } catch(eFs) {}
+        try {
+            var qeT = (kind === 'video') ? qeSeq.getVideoTrackAt(ti2) : qeSeq.getAudioTrackAt(ti2);
+            if (!qeT) return null;
+            var qN = 0; try { qN = qeT.numItems; } catch(eQN) {}
+            for (var qk = 0; qk < qN; qk++) {
+                var qit = null; try { qit = qeT.getItemAt(qk); } catch(eGi) {}
+                if (!qit) continue;
+                try { if (qit.type === 1) continue; } catch(eTy) {} // pula gaps
+                try {
+                    var qTicks = String(qit.start.ticks);
+                    var qSec = parseFloat(qit.start.seconds);
+                    if ((fTicks && qTicks === fTicks) ||
+                        (!isNaN(fSec) && !isNaN(qSec) && Math.abs(qSec - fSec) < 0.05) ||
+                        (snap2.startTicks && qTicks === snap2.startTicks) ||
+                        (!isNaN(qSec) && Math.abs(qSec - snap2.startSec) < 0.05)) {
+                        return qit;
                     }
+                } catch(eMt) {}
+            }
+        } catch(eQE) {}
+        return null;
+    }
+    for (var sn = 0; sn < _lwSelectionSnapshot.clips.length; sn++) {
+        var snap = _lwSelectionSnapshot.clips[sn];
+        if (snap.kind !== kind) continue;
+        var found = null, foundTi = -1;
+        // 1a passada: so a track do snapshot; 2a: timeline inteira (clip mudou de track)
+        for (var pass = 0; pass < 2 && !found; pass++) {
+            var tiFrom = 0, tiTo = trackList.numTracks;
+            if (pass === 0) {
+                if (typeof snap.trackIdx !== 'number' || snap.trackIdx < 0 || snap.trackIdx >= trackList.numTracks) continue;
+                tiFrom = snap.trackIdx; tiTo = snap.trackIdx + 1;
+            }
+            for (var ti = tiFrom; ti < tiTo && !found; ti++) {
+                if (pass === 1 && ti === snap.trackIdx) continue; // ja escaneada na 1a passada
+                var tk = trackList[ti];
+                for (var ci = 0; ci < tk.clips.numItems; ci++) {
+                    var c = tk.clips[ci];
+                    try {
+                        var cNodeId = '';
+                        try { cNodeId = String(c.nodeId || ''); } catch(eN) {}
+                        var cStart = 0;
+                        try { cStart = parseFloat(c.start.seconds); } catch(eS) {}
+                        // Match por nodeId (mais confiável) ou start+track (fallback)
+                        if ((cNodeId && snap.nodeId && cNodeId === snap.nodeId) ||
+                            (Math.abs(cStart - snap.startSec) < 0.05 && ti === snap.trackIdx)) {
+                            found = c; foundTi = ti; break;
+                        }
+                    } catch(eC) {}
                 }
-            } catch(eC) {}
+            }
+        }
+        if (found) {
+            // SO adiciona o PAR completo: consumidores pareiam stdClips[i] com qeClips[i]
+            // — um lado sem o outro desalinhava os arrays e o preset escrevia props no
+            // clip ERRADO (std do clip A + QE do clip B).
+            var q = _qeFind(foundTi, snap, found);
+            if (q) { stdClips.push(found); qeClips.push(q); }
         }
     }
     return { stdClips: stdClips, qeClips: qeClips, kind: kind };
@@ -2947,51 +3143,97 @@ function lwSearchGetContext() {
         // Snapshot pra reaplicar caso foco do LION SEARCH derrube selection
         var snapClips = [];
 
-        // Conta clips selecionados E captura snapshot
+        // RAPIDO: seq.getSelection() retorna SO os selecionados em ~0ms. O jeito antigo
+        // (isSelected() em CADA clip da timeline) custava ~1ms/clip — numa timeline de
+        // 7000+ clips eram ~900ms POR get-context (medido ao vivo). kind via mediaType;
+        // trackIdx via parentTrackIndex (PR 15.4+; -1 = desconhecido, recovery faz scan).
         var i, j, tk;
-        for (i = 0; i < seq.videoTracks.numTracks; i++) {
-            tk = seq.videoTracks[i];
-            for (j = 0; j < tk.clips.numItems; j++) {
-                try {
-                    if (tk.clips[j].isSelected()) {
-                        ctx.videoSelected++;
+        var usedFast = false;
+        try {
+            if (typeof seq.getSelection === 'function') {
+                var selItems = seq.getSelection();
+                if (selItems && selItems.length !== undefined) {
+                    usedFast = true;
+                    for (i = 0; i < selItems.length; i++) {
+                        var it = selItems[i];
+                        if (!it) continue;
+                        var kindF = null;
+                        try {
+                            var mt = String(it.mediaType || '').toLowerCase();
+                            if (mt.indexOf('video') >= 0) kindF = 'video';
+                            else if (mt.indexOf('audio') >= 0) kindF = 'audio';
+                        } catch(eMt) {}
+                        if (!kindF) {
+                            try { var pj = it.projectItem; kindF = (pj && pj.hasVideo && pj.hasVideo()) ? 'video' : 'audio'; } catch(ePj) { kindF = 'video'; }
+                        }
+                        if (kindF === 'video') ctx.videoSelected++; else ctx.audioSelected++;
+                        var tIdx = -1;
+                        try { if (typeof it.parentTrackIndex === 'number' && it.parentTrackIndex >= 0) tIdx = it.parentTrackIndex; } catch(eTi) {}
                         try {
                             snapClips.push({
-                                kind: 'video',
-                                trackIdx: i,
-                                nodeId: tk.clips[j].nodeId || '',
-                                startSec: parseFloat(tk.clips[j].start.seconds),
-                                endSec: parseFloat(tk.clips[j].end.seconds),
-                                name: String(tk.clips[j].name || '')
+                                kind: kindF,
+                                trackIdx: tIdx,
+                                nodeId: String(it.nodeId || ''),
+                                startSec: parseFloat(it.start.seconds),
+                                startTicks: String(it.start.ticks),
+                                endSec: parseFloat(it.end.seconds),
+                                name: String(it.name || '')
                             });
                         } catch(eSn) {}
                     }
-                } catch(e) {}
+                }
             }
-        }
-        for (i = 0; i < seq.audioTracks.numTracks; i++) {
-            tk = seq.audioTracks[i];
-            for (j = 0; j < tk.clips.numItems; j++) {
-                try {
-                    if (tk.clips[j].isSelected()) {
-                        ctx.audioSelected++;
-                        try {
-                            snapClips.push({
-                                kind: 'audio',
-                                trackIdx: i,
-                                nodeId: tk.clips[j].nodeId || '',
-                                startSec: parseFloat(tk.clips[j].start.seconds),
-                                endSec: parseFloat(tk.clips[j].end.seconds),
-                                name: String(tk.clips[j].name || '')
-                            });
-                        } catch(eSn) {}
-                    }
-                } catch(e) {}
+        } catch(eFast) { usedFast = false; ctx.videoSelected = 0; ctx.audioSelected = 0; snapClips = []; }
+        if (!usedFast) {
+            // Fallback: scan completo (Premiere velho sem getSelection)
+            for (i = 0; i < seq.videoTracks.numTracks; i++) {
+                tk = seq.videoTracks[i];
+                for (j = 0; j < tk.clips.numItems; j++) {
+                    try {
+                        if (tk.clips[j].isSelected()) {
+                            ctx.videoSelected++;
+                            try {
+                                snapClips.push({
+                                    kind: 'video',
+                                    trackIdx: i,
+                                    nodeId: tk.clips[j].nodeId || '',
+                                    startSec: parseFloat(tk.clips[j].start.seconds),
+                                    startTicks: String(tk.clips[j].start.ticks),
+                                    endSec: parseFloat(tk.clips[j].end.seconds),
+                                    name: String(tk.clips[j].name || '')
+                                });
+                            } catch(eSn2) {}
+                        }
+                    } catch(e) {}
+                }
+            }
+            for (i = 0; i < seq.audioTracks.numTracks; i++) {
+                tk = seq.audioTracks[i];
+                for (j = 0; j < tk.clips.numItems; j++) {
+                    try {
+                        if (tk.clips[j].isSelected()) {
+                            ctx.audioSelected++;
+                            try {
+                                snapClips.push({
+                                    kind: 'audio',
+                                    trackIdx: i,
+                                    nodeId: tk.clips[j].nodeId || '',
+                                    startSec: parseFloat(tk.clips[j].start.seconds),
+                                    startTicks: String(tk.clips[j].start.ticks),
+                                    endSec: parseFloat(tk.clips[j].end.seconds),
+                                    name: String(tk.clips[j].name || '')
+                                });
+                            } catch(eSn3) {}
+                        }
+                    } catch(e2) {}
+                }
             }
         }
         // Salva snapshot só se tem selection (senão preserva o anterior)
         if (snapClips.length > 0) {
-            _lwSelectionSnapshot = { clips: snapClips, capturedAt: (new Date()).getTime(), seqRef: seq };
+            var _snapSeqId = '';
+            try { _snapSeqId = String(seq.sequenceID || ''); } catch(eSqI) {}
+            _lwSelectionSnapshot = { clips: snapClips, capturedAt: (new Date()).getTime(), seqRef: seq, seqId: _snapSeqId };
         }
         if (ctx.videoSelected > 0 && ctx.audioSelected > 0) ctx.selectionType = 'mixed';
         else if (ctx.videoSelected > 0) ctx.selectionType = 'video';
@@ -3820,25 +4062,26 @@ function _lwApplyPresetInner(presetIdentifier) {
         var qeSeq = qe.project.getActiveSequence();
         if (!qeSeq) return 'ERR:no_qe_sequence';
         var seq = app.project.activeSequence;
-        var sel = _lwFindSelectedQEClips(qeSeq, true, seq);
-        var selKind = 'video';
-        if (sel.length === 0) { sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio'; }
 
-        // RECOVERY: se selection volta vazia (Premiere perdeu por causa do foco do LION SEARCH),
-        // usa snapshot capturado em lwSearchGetContext (que rodou ANTES da janela tirar foco)
-        var stdSel = [];
-        if (sel.length === 0) {
-            _lwDbgPreset('  selection vazia — tentando recovery via snapshot');
-            var rec = _lwRecoverFromSnapshot(seq, qeSeq);
-            if (rec.qeClips.length > 0) {
-                sel = rec.qeClips;
-                stdSel = rec.stdClips;
-                selKind = rec.kind;
-                _lwDbgPreset('  recovery: ' + sel.length + ' qe + ' + stdSel.length + ' std (kind=' + selKind + ', snapshot age=' + (((new Date()).getTime() - _lwSelectionSnapshot.capturedAt)/1000).toFixed(1) + 's)');
-            } else {
-                _lwDbgPreset('  recovery falhou — snapshot vazio ou stale');
+        // SNAPSHOT PRIMEIRO: o alvo e a selecao de quando a paleta ABRIU (lwSearchGetContext),
+        // nao a de agora. Preset com keyframes demora — o usuario ja esta selecionando o
+        // PROXIMO clip quando o apply roda, e a selecao viva mandava os keyframes pro clip
+        // errado. Selecao viva vira fallback (snapshot vazio/stale/clip movido).
+        var sel = [], stdSel = [], selKind = 'video';
+        var rec = _lwRecoverFromSnapshot(seq, qeSeq);
+        if (rec.qeClips.length > 0) {
+            sel = rec.qeClips;
+            stdSel = rec.stdClips;
+            selKind = rec.kind;
+            _lwDbgPreset('  alvo via SNAPSHOT: ' + sel.length + ' qe + ' + stdSel.length + ' std (kind=' + selKind + ', age=' + (((new Date()).getTime() - _lwSelectionSnapshot.capturedAt)/1000).toFixed(1) + 's)');
+        } else {
+            sel = _lwFindSelectedQEClips(qeSeq, true, seq);
+            if (sel.length === 0) { sel = _lwFindSelectedQEClips(qeSeq, false, seq); selKind = 'audio'; }
+            if (sel.length === 0) {
+                _lwDbgPreset('  sem snapshot E sem selecao viva');
                 return 'NO_CLIP_SELECTED';
             }
+            _lwDbgPreset('  alvo via selecao viva (snapshot vazio/stale)');
         }
         _lwDbgPreset('  ' + sel.length + ' QE clips (' + selKind + ')');
 
@@ -4877,6 +5120,7 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
         // Calcula duração — respeita in/out se setados
         var insertDurationSec = 0;
         var hasInOut = false;
+        var durationUncertain = false; // true = footprint do clip desconhecido -> forcar track nova
         var inSec = 0, outSec = 0;
         try {
             // Tenta múltiplos mediaType pra in/out
@@ -4911,9 +5155,12 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
             } catch(eD) { _lwDbgAudio('  fallback duration err: ' + eD); }
         }
         if (insertDurationSec <= 0) {
-            // Fallback: tenta via clip projecting.. assume 5s mínimo
+            // Nao deu pra saber a duracao real -> o footprint que o overwriteClip vai
+            // ocupar e DESCONHECIDO. Marca incerto pra FORCAR track nova (senao o
+            // overwriteClip poderia APAGAR audio existente alem da janela escaneada).
             insertDurationSec = 5;
-            _lwDbgAudio('  using 5s default duration');
+            durationUncertain = true;
+            _lwDbgAudio('  using 5s default duration (footprint INCERTO -> forcar track nova)');
         }
         _lwDbgAudio('  insertDurationSec=' + insertDurationSec + ' hasInOut=' + hasInOut);
 
@@ -4923,21 +5170,49 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
             var libIn = (_lwLibTrimIn != null && _lwLibTrimIn >= 0) ? _lwLibTrimIn : 0;
             var libOut = (_lwLibTrimOut != null && _lwLibTrimOut > 0) ? _lwLibTrimOut : insertDurationSec;
             _lwDbgAudio('  AudioLib trim: in=' + libIn + 's out=' + libOut + 's');
-            try {
-                // Cria Time objects pra set in/out — 1 sec = 254016000000 ticks
-                var TICKS_PER_SEC = 254016000000;
-                var inTime = new Time();
-                inTime.ticks = String(Math.round(libIn * TICKS_PER_SEC));
-                var outTime = new Time();
-                outTime.ticks = String(Math.round(libOut * TICKS_PER_SEC));
-                // Aplica em audio (4)
-                try { foundItem.setInPoint(inTime, 4); _lwDbgAudio('    setInPoint OK'); } catch(eSI) { _lwDbgAudio('    setInPoint err: ' + eSI); }
-                try { foundItem.setOutPoint(outTime, 4); _lwDbgAudio('    setOutPoint OK'); } catch(eSO) { _lwDbgAudio('    setOutPoint err: ' + eSO); }
-                insertDurationSec = libOut - libIn;
-                hasInOut = true;
-                _lwDbgAudio('  trim applied: insertDurationSec=' + insertDurationSec);
-            } catch(eLibTrim) { _lwDbgAudio('  AudioLib trim outer err: ' + eLibTrim); }
+            if (libOut > libIn + 0.001) {
+                try {
+                    // Cria Time objects pra set in/out — 1 sec = 254016000000 ticks
+                    var TICKS_PER_SEC = 254016000000;
+                    var inTime = new Time();
+                    inTime.ticks = String(Math.round(libIn * TICKS_PER_SEC));
+                    var outTime = new Time();
+                    outTime.ticks = String(Math.round(libOut * TICKS_PER_SEC));
+                    // Aplica em audio (4)
+                    try { foundItem.setInPoint(inTime, 4); _lwDbgAudio('    setInPoint OK'); } catch(eSI) { _lwDbgAudio('    setInPoint err: ' + eSI); }
+                    try { foundItem.setOutPoint(outTime, 4); _lwDbgAudio('    setOutPoint OK'); } catch(eSO) { _lwDbgAudio('    setOutPoint err: ' + eSO); }
+                    insertDurationSec = libOut - libIn;
+                    hasInOut = true;
+                    _lwDbgAudio('  trim applied: insertDurationSec=' + insertDurationSec);
+                } catch(eLibTrim) { _lwDbgAudio('  AudioLib trim outer err: ' + eLibTrim); }
+            } else {
+                _lwDbgAudio('  AudioLib trim IGNORADO (out<=in) — usando duracao cheia');
+            }
         }
+
+        // Footprint REAL que o overwriteClip vai OCUPAR = out-in ATUAL do item (audio), lido
+        // de VOLTA. Se o trim nao aplicou (setInPoint/Out falhou silencioso), o item mantem o
+        // range CHEIO e o overwriteClip insere ESSE range — o scan de overlap PRECISA usar esse
+        // tamanho real, senao overwriteClip APAGA audio existente alem da janela. Usa o MAIOR
+        // entre esperado e real (nunca subestima o footprint).
+        try {
+            var _rIn = null, _rOut = null, _mtR = [4, 1, 0];
+            for (var _mi = 0; _mi < _mtR.length; _mi++) {
+                try {
+                    var _pi = foundItem.getInPoint(_mtR[_mi]);
+                    var _po = foundItem.getOutPoint(_mtR[_mi]);
+                    if (_pi && _po) { _rIn = parseFloat(_pi.seconds); _rOut = parseFloat(_po.seconds); break; }
+                } catch(e_rp) {}
+            }
+            if (_rIn != null && _rOut != null && _rOut > _rIn) {
+                var _realDur = _rOut - _rIn;
+                durationUncertain = false; // agora sabemos o footprint real
+                if (_realDur > insertDurationSec + 0.001) {
+                    _lwDbgAudio('  footprint REAL=' + _realDur + 's > esperado=' + insertDurationSec + 's (trim nao aplicou?) — usando o real pro scan');
+                    insertDurationSec = _realDur;
+                }
+            }
+        } catch(eFPR) {}
 
         // Posição playhead
         var insertStartSec = 0;
@@ -4946,14 +5221,22 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
             if (pp) insertStartSec = parseFloat(pp.seconds);
         } catch(ePh) { _lwDbgAudio('  playhead err: ' + ePh); }
         var insertEndSec = insertStartSec + insertDurationSec;
-        _lwDbgAudio('  playhead=' + insertStartSec + 's | window=[' + insertStartSec + ',' + insertEndSec + ']');
+        // frameDur: o overwriteClip SNAPA inicio/fim do clip pra fronteira de frame, entao
+        // ele pode ocupar ate ~1 frame ALEM da janela crua. Padeamos o scan de overlap por
+        // 1 frame de cada lado pra nao escolher uma track onde o snap comeria audio vizinho.
+        var frameDur = 1 / 30;
+        try { var _fst = seq.getSettings(); if (_fst && _fst.videoFrameRate) { var _fd = parseFloat(_fst.videoFrameRate.seconds); if (_fd > 0) frameDur = _fd; } } catch(eFd) {}
+        _lwDbgAudio('  playhead=' + insertStartSec + 's | window=[' + insertStartSec + ',' + insertEndSec + '] frameDur=' + frameDur);
 
         // Sequence info
         _lwDbgAudio('  seq.audioTracks.numTracks=' + seq.audioTracks.numTracks);
 
-        // Encontra audio track sem overlap
+        // Encontra audio track sem overlap na janela [insertStartSec, insertEndSec).
+        // Se a duracao e INCERTA (footprint desconhecido), NAO reusa track existente —
+        // pula direto pra criar uma nova (evita overwriteClip destrutivo/apagar audio).
         var targetTrackIdx = -1;
         var EPS = 0.001;
+        if (!durationUncertain)
         for (var ti = 0; ti < seq.audioTracks.numTracks; ti++) {
             var atk = seq.audioTracks[ti];
             var hasOverlap = false;
@@ -4963,8 +5246,9 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
                 var c = atk.clips[ci];
                 var cStart = 0, cEnd = 0;
                 try { cStart = parseFloat(c.start.seconds); cEnd = parseFloat(c.end.seconds); } catch(eC) {}
-                // Overlap se [cStart, cEnd) intersecta [insertStartSec, insertEndSec)
-                if (cStart < insertEndSec - EPS && cEnd > insertStartSec + EPS) { hasOverlap = true; break; }
+                // Overlap se [cStart, cEnd) intersecta a janela PADEADA em 1 frame de cada
+                // lado (cobre o snap de frame do overwriteClip, que pode ocupar +-1 frame).
+                if (cStart < insertEndSec + frameDur - EPS && cEnd > insertStartSec - frameDur + EPS) { hasOverlap = true; break; }
             }
             _lwDbgAudio('    track A' + (ti+1) + ': clips=' + clipCount + ' overlap=' + hasOverlap);
             if (!hasOverlap) { targetTrackIdx = ti; break; }
@@ -5044,17 +5328,21 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
             var totalBefore = _totalAudioClips();
             _lwDbgAudio('  total audio clips before=' + totalBefore);
 
-            // Tenta insertClip primeiro
+            // A targetTrack foi confirmada LIVRE na janela [insertStartSec, insertEndSec)
+            // pelo scan de overlap. overwriteClip NAO faz ripple (nao empurra os clips
+            // seguintes) e, como a janela ja esta livre, nao sobrescreve nada. insertClip
+            // fazia RIPPLE e EMPURRAVA/invadia o audio existente da timeline — por isso
+            // agora overwriteClip e o metodo PRIMARIO (igual a insercao de video ja faz).
             var insertOk = false;
             var lastInsertErr = '';
             try {
-                _lwDbgAudio('  trying insertClip(foundItem, ' + insertStartSec + ')...');
-                targetTrack.insertClip(foundItem, insertStartSec);
+                _lwDbgAudio('  trying overwriteClip(foundItem, ' + insertStartSec + ')...');
+                targetTrack.overwriteClip(foundItem, insertStartSec);
                 insertOk = true;
-                _lwDbgAudio('  insertClip OK (no throw)');
-            } catch (eIns) {
-                lastInsertErr = eIns.toString();
-                _lwDbgAudio('  insertClip THREW: ' + lastInsertErr);
+                _lwDbgAudio('  overwriteClip OK (no throw)');
+            } catch (eOw) {
+                lastInsertErr = eOw.toString();
+                _lwDbgAudio('  overwriteClip THREW: ' + lastInsertErr);
             }
 
             // Premiere pode demorar 50-200ms pra atualizar clips.numItems — poll
@@ -5066,35 +5354,39 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
                 if (afterCount > beforeCount || totalAfter > totalBefore) break;
                 $.sleep(20);
             }
-            _lwDbgAudio('  clips after insertClip target=' + afterCount + '/' + beforeCount + ' total=' + totalAfter + '/' + totalBefore);
+            _lwDbgAudio('  clips after overwriteClip target=' + afterCount + '/' + beforeCount + ' total=' + totalAfter + '/' + totalBefore);
 
-            // Trust: se TOTAL aumentou (mesmo que target track count não), insert deu certo em algum lugar
             if (insertOk && afterCount === beforeCount && totalAfter === totalBefore) {
-                _lwDbgAudio('  insertClip claimed OK but NEITHER target NOR total increased — treating as fail');
+                _lwDbgAudio('  overwriteClip claimed OK but NEITHER target NOR total increased — treating as fail');
                 insertOk = false;
-                lastInsertErr = 'silent_fail (no clip count increased anywhere)';
+                lastInsertErr = 'silent_fail (overwriteClip, no clip count increased anywhere)';
             } else if (insertOk && afterCount === beforeCount && totalAfter > totalBefore) {
-                _lwDbgAudio('  insertClip went to DIFFERENT track but worked (total increased)');
+                _lwDbgAudio('  overwriteClip went to DIFFERENT track but worked (total increased)');
             }
 
-            // Fallback 1: overwriteClip (não conflita com IDs em alguns casos)
+            // Fallback 1: insertClip (RIPPLE — ultimo recurso; pode empurrar clips seguintes)
             if (!insertOk) {
                 try {
-                    _lwDbgAudio('  trying overwriteClip(foundItem, ' + insertStartSec + ')...');
-                    targetTrack.overwriteClip(foundItem, insertStartSec);
+                    _lwDbgAudio('  fallback trying insertClip(foundItem, ' + insertStartSec + ')...');
+                    targetTrack.insertClip(foundItem, insertStartSec);
                     insertOk = true;
-                    _lwDbgAudio('  overwriteClip OK');
-                } catch (eOw) {
-                    lastInsertErr += ' | overwrite: ' + eOw.toString();
-                    _lwDbgAudio('  overwriteClip THREW: ' + eOw);
+                    _lwDbgAudio('  insertClip OK');
+                } catch (eIns) {
+                    lastInsertErr += ' | insert: ' + eIns.toString();
+                    _lwDbgAudio('  insertClip THREW: ' + eIns);
                 }
-                var afterCount2 = 0;
-                try { afterCount2 = targetTrack.clips.numItems; } catch(eAC2) {}
-                _lwDbgAudio('  clips after overwriteClip=' + afterCount2);
-                if (insertOk && afterCount2 === beforeCount) {
-                    _lwDbgAudio('  overwriteClip claimed OK but clip count unchanged');
+                var afterCount2 = beforeCount, totalAfter2 = totalBefore;
+                for (var rc2 = 0; rc2 < 10; rc2++) {
+                    try { afterCount2 = targetTrack.clips.numItems; } catch(eAC2) {}
+                    totalAfter2 = _totalAudioClips();
+                    if (afterCount2 > beforeCount || totalAfter2 > totalBefore) break;
+                    $.sleep(20);
+                }
+                _lwDbgAudio('  clips after insertClip=' + afterCount2 + ' total=' + totalAfter2);
+                if (insertOk && afterCount2 === beforeCount && totalAfter2 === totalBefore) {
+                    _lwDbgAudio('  insertClip claimed OK but clip count unchanged');
                     insertOk = false;
-                    lastInsertErr += ' | overwrite_silent_fail';
+                    lastInsertErr += ' | insert_silent_fail';
                 }
             }
 
@@ -5142,11 +5434,19 @@ function _lwInsertAudioSourceImpl(nodeIdOrName) {
             // Aproveita pra capturar o newClip pra aplicar volume dB também
             var newClipRef = null;
             if (hasInOut || _lwLibVolumeDb != null) {
+                // O clip novo comeca EXATO no insertStartSec. Tolerancia apertada (~2 frames)
+                // + pega o MAIS PROXIMO — a de 0.5s antiga podia casar um clip VIZINHO
+                // (que termina logo antes do playhead) e esticar/corromper ele.
+                var bestDelta = 0.08;
                 for (var nci = targetTrack.clips.numItems - 1; nci >= 0; nci--) {
                     var nc = targetTrack.clips[nci];
                     var ncStart = 0;
                     try { ncStart = parseFloat(nc.start.seconds); } catch(eNS) {}
-                    if (Math.abs(ncStart - insertStartSec) < 0.5) { newClipRef = nc; break; }
+                    // Ancora no lado certo do playhead: o clip novo NUNCA comeca mais que ~1
+                    // frame antes do insertStartSec (evita casar um clip vizinho anterior).
+                    if (ncStart < insertStartSec - frameDur - EPS) continue;
+                    var _d = Math.abs(ncStart - insertStartSec);
+                    if (_d < bestDelta) { newClipRef = nc; bestDelta = _d; }
                 }
                 if (newClipRef && hasInOut) {
                     try { newClipRef.end = insertStartSec + insertDurationSec; _lwDbgAudio('  trimmed clip end to ' + (insertStartSec + insertDurationSec)); } catch(eEd) { _lwDbgAudio('  trim err: ' + eEd); }
@@ -5614,6 +5914,25 @@ function _rwSetMotionBlur(comp) {
     return done;
 }
 
+// Marca/desmarca o checkbox "Uniform Scale" do Transform (escala uniforme = altura e
+// largura juntas). O user pediu o Transform vindo com ele ATIVADO. So chamamos quando
+// o wiggle NAO e de escala — wiggle de escala usa "Scale Height" separado e o uniform
+// mudaria o comportamento.
+function _rwSetUniformScale(comp, val) {
+    if (!comp) return false;
+    try {
+        var props = comp.properties;
+        for (var p = 0; p < props.numItems; p++) {
+            var nm = '';
+            try { nm = String(props[p].displayName || '').toLowerCase(); } catch (e1) {}
+            if (nm.indexOf('uniform') >= 0 || nm.indexOf('uniforme') >= 0) {
+                try { props[p].setValue(val, true); return true; } catch (e2) {}
+            }
+        }
+    } catch (e) {}
+    return false;
+}
+
 function _rwClamp(target, v) {
     if (target === 'opacity') { if (v < 0) return 0; if (v > 100) return 100; }
     return v;
@@ -5660,6 +5979,10 @@ function lwPRRandomWiggle(cfgArg) {
         var interpMode = (cfg.interp === 'hold') ? 4 : 0; // 4=hold, 0=linear
         var step = (cfg.step && cfg.step > 0) ? Math.round(cfg.step) : 1;
         var applied = 0;
+        // Wiggle de escala usa "Scale Height" separado — nesse caso NAO forcamos o
+        // Uniform Scale (mudaria o comportamento). Sem escala, o Transform vem uniforme.
+        var hasScale = false;
+        for (var _hs = 0; _hs < targets.length; _hs++) { if (targets[_hs] === 'scale') { hasScale = true; break; } }
 
         // Se for pro Transform, garante que o efeito exista nos clips (adiciona via QE)
         if (component === 'transform') { _rwEnsureTransformOnSelection(seq, clips); }
@@ -5677,6 +6000,7 @@ function lwPRRandomWiggle(cfgArg) {
 
             var clipWrote = false;
             var mbDone = false;
+            var usDone = false;
 
             for (var ti = 0; ti < targets.length; ti++) {
                 var tgt = targets[ti];
@@ -5691,12 +6015,26 @@ function lwPRRandomWiggle(cfgArg) {
                 if (!prop) continue;
                 // motion blur: liga obturador 360 no Transform desse clip (1x por clip)
                 if (motionBlur && !mbDone) { try { _rwSetMotionBlur(findTransformComponent(clip)); mbDone = true; } catch (eMB) {} }
+                // Uniform Scale ativado no Transform (1x por clip) — so quando o wiggle nao e de escala
+                if (component === 'transform' && !usDone && !hasScale) { try { _rwSetUniformScale(findTransformComponent(clip), true); } catch (eUS) {} usDone = true; }
 
                 var base = null;
                 try { base = prop.getValue(); } catch (eV) {}
+                // Transform recem-adicionado: getValue() pode falhar/voltar null enquanto o
+                // component esta "stale" — poll curto igual ao da resolucao da prop.
                 if (base == null) {
-                    // default ciente da dimensao (position e 2D — nunca escalar)
-                    if (tgt === 'position') base = [seqW / 2, seqH / 2];
+                    for (var pollV = 0; pollV < 8 && base == null; pollV++) {
+                        try { $.sleep(25); } catch (eSl2) {}
+                        try { base = prop.getValue(); } catch (eV2) {}
+                    }
+                }
+                if (base == null) {
+                    // NAO chutar a base. O chute antigo pra position era em PIXELS
+                    // ([seqW/2, seqH/2]) — mas a Position do efeito Transform e NORMALIZADA
+                    // (0..1; confirmado no XML do .prfpset: "0.5:0.5"). Escrever ~960 nela
+                    // estourava "cannot allocate a buffer larger than 30000 pixels" em CADA
+                    // keyframe. Sem base confiavel, pula a propriedade (re-aplicar funciona).
+                    if (tgt === 'position') continue;
                     else if (tgt === 'opacity') base = 100;
                     else base = 0;
                 }

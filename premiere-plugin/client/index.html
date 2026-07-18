@@ -882,18 +882,12 @@
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M2 12c2 0 2-5 4-5s2 10 4 10 2-10 4-10 2 5 4 5"/>
                 </svg>
-                Random Wiggler
+                Wiggler
             </span>
             <svg id="prwChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="prwBody">
-            <div class="rw-lbl" style="margin-top:6px">Modo</div>
-            <div style="display:flex;gap:5px;margin-bottom:7px">
-                <button class="yt-q active" id="prwModeWiggle" onclick="prwSetMode('wiggle')" style="flex:1">Wiggle</button>
-                <button class="yt-q" id="prwModeRandom" onclick="prwSetMode('random')" style="flex:1">Random</button>
-            </div>
-
-            <div class="rw-lbl">Propriedades (pode marcar várias)</div>
+            <div class="rw-lbl" style="margin-top:6px">Propriedades (pode marcar várias)</div>
             <div style="display:flex;gap:4px;margin-bottom:7px;flex-wrap:wrap">
                 <button class="yt-q rw-tgt active" data-t="position" onclick="prwPickTarget(this)" style="flex:1">Posição</button>
                 <button class="yt-q rw-tgt" data-t="scale" onclick="prwPickTarget(this)" style="flex:1">Escala</button>
@@ -932,22 +926,6 @@
                 <div class="rw-lbl" style="margin-top:9px">Presets <span id="prwPresetName" style="text-transform:none;letter-spacing:0;color:#bef264"></span></div>
                 <div id="prwPresetRow" style="display:flex;gap:7px;flex-wrap:wrap;justify-content:center;align-items:center;padding:5px 6px 2px"></div>
                 <canvas id="prwPrev" width="230" height="54" style="width:100%;height:54px;margin-top:7px;border-radius:6px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.06);display:block"></canvas>
-            </div>
-
-            <!-- Params RANDOM -->
-            <div id="prwRandomParams" style="display:none">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-                    <div><div class="rw-lbl">Mín</div><input class="rw-inp" id="prwMin" type="number" step="1" value="60"></div>
-                    <div><div class="rw-lbl">Máx</div><input class="rw-inp" id="prwMax" type="number" step="1" value="100"></div>
-                    <div><div class="rw-lbl">Intervalo (s)</div><input class="rw-inp" id="prwInterval" type="number" step="0.1" value="0.5"></div>
-                    <div>
-                        <div class="rw-lbl">Interpolação</div>
-                        <div style="display:flex;gap:4px">
-                            <button class="yt-q active" id="prwInterpHold" onclick="prwSetInterp('hold')" style="flex:1;font-size:.52rem">Hold</button>
-                            <button class="yt-q" id="prwInterpLinear" onclick="prwSetInterp('linear')" style="flex:1;font-size:.52rem">Linear</button>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <button class="btn btn-go" onclick="prwApply()" style="width:100%;justify-content:center;padding:7px;font-size:.72rem;margin-top:9px;display:flex;align-items:center;gap:5px">
@@ -1553,7 +1531,7 @@
         { key: 'download', id: 'sectionDownload',  label: 'Downloader' },
         { key: 'easing',   id: 'sectionEasing',    label: 'Easing / Curvas' },
         { key: 'anchor',   id: 'sectionAnchor',    label: 'Anchor Point Pro' },
-        { key: 'prWiggle', id: 'sectionPRWiggle',  label: 'Random Wiggler' },
+        { key: 'prWiggle', id: 'sectionPRWiggle',  label: 'Wiggler' },
         { key: 'prLoop',   id: 'sectionPRLoop',    label: 'Looper' },
         { key: 'motionTracker', id: 'sectionMotionTracker', label: 'Motion Tracker' },
         { key: 'lionSearch', id: 'sectionLionSearch', label: 'Lion Search' },
@@ -2942,6 +2920,12 @@
                 try {
                     var data = JSON.parse(body);
                     if (data.commands && data.commands.length) {
+                        // Ordem no lote: get-context (captura o snapshot que o apply usa como
+                        // alvo, e e rapido) -> apply -> resto (um scan de 10-30s nao pode rodar
+                        // na frente do apply; engine ExtendScript e single-thread). Sort estavel
+                        // preserva FIFO entre comandos do mesmo tipo.
+                        var _lsPri = function(t){ return t === 'get-context' ? 0 : (t === 'apply-effect' ? 1 : 2); };
+                        data.commands.sort(function(a, b){ return _lsPri(a.type) - _lsPri(b.type); });
                         for (var i = 0; i < data.commands.length; i++) {
                             lsExecuteCommand(data.commands[i]);
                         }
@@ -3041,6 +3025,52 @@
     _lsParseDebug('debugFile=' + _lsDebugFile);
     _lsParseDebug('desktopDebug=' + _lsDesktopDebug);
 
+    // Anda a arvore de bins do .prfpset: pastas = <BinTreeItem> (com <Items>), presets =
+    // <TreeItem> folha (com <Name> + Data->FilterPresetItem). Retorna [{name, category}]
+    // — exatamente o que o painel Predefinicoes do Premiere mostra, com as pastas do user.
+    // So indexa essas 2 tags (~1k objetos num arquivo de 30MB — leve pro painel CEP).
+    function _lsParseBinTree(xml) {
+        try {
+            var nodes = {};
+            var re = /<(BinTreeItem|TreeItem)\s+ObjectID="(\d+)"[^>]*>/g, m;
+            var starts = [];
+            while ((m = re.exec(xml)) !== null) starts.push({ tag: m[1], id: m[2], idx: m.index });
+            if (!starts.length) return [];
+            for (var i = 0; i < starts.length; i++) {
+                var s = starts[i];
+                var end = xml.indexOf('</' + s.tag + '>', s.idx);
+                if (end < 0) continue;
+                nodes[s.id] = { tag: s.tag, body: xml.slice(s.idx, end) };
+            }
+            function nameOf(n) { var mm = n.body.match(/<Name>([^<]*)<\/Name>/); return mm ? _lsXmlUnescape(mm[1]).trim() : ''; }
+            function refsOf(n) {
+                var out = [], items = n.body.match(/<Items[^>]*>([\s\S]*?)<\/Items>/);
+                if (items) { var r = /<Item Index="\d+" ObjectRef="(\d+)"\/>/g, k; while ((k = r.exec(items[1])) !== null) out.push(k[1]); }
+                return out;
+            }
+            var rootId = null;
+            for (var id in nodes) { if (nodes[id].tag === 'BinTreeItem' && nameOf(nodes[id]) === 'Root') { rootId = id; break; } }
+            if (!rootId) return [];
+            var out = [], seen = {}, guard = 0;
+            (function walk(nid, path) {
+                if (guard++ > 30000) return;
+                var n = nodes[nid]; if (!n) return;
+                var nm = nameOf(n);
+                if (n.tag === 'BinTreeItem') {
+                    // 'Root' e o bin-raiz de predefinicoes (PresetsBin, nome muda com locale) nao viram pasta
+                    var skipName = (nm === 'Root' || !nm || n.body.indexOf('.PresetsBin>') >= 0);
+                    var p = skipName ? path : path.concat(nm);
+                    var kids = refsOf(n);
+                    for (var i2 = 0; i2 < kids.length; i2++) walk(kids[i2], p);
+                } else if (nm) {
+                    var key = nm + '|' + path.join('/');
+                    if (!seen[key]) { seen[key] = 1; out.push({ name: nm, category: path.join(' / ') }); }
+                }
+            })(rootId, []);
+            return out;
+        } catch (e) { _lsParseDebug('  BINTREE-ERR: ' + e.message); return []; }
+    }
+
     function lsParsePrfpset(path, callback) {
         if (_presetParsedCache[path]) { callback(_presetParsedCache[path]); return; }
         if (!_lsZlib || !_lsFs) {
@@ -3090,6 +3120,18 @@
                     _lsParseDebug('  SKIP: MaskPresets (só mask shapes)');
                     _presetParsedCache[path] = [];
                     callback([]);
+                    return;
+                }
+
+                // 1º: parser da ARVORE DE BINS (pastas = <BinTreeItem>, presets = <TreeItem>).
+                // E o que o painel de Predefinicoes do Premiere realmente mostra — nomes e
+                // pastas REAIS do usuario. O scrape de <Name> (fallback abaixo) pegava 18k+
+                // nomes de efeitos/parametros/keyframes junto (lixo).
+                var treePresets = _lsParseBinTree(xml);
+                if (treePresets.length) {
+                    _lsParseDebug('  bintree: ' + treePresets.length + ' presets reais');
+                    _presetParsedCache[path] = treePresets;
+                    callback(treePresets);
                     return;
                 }
 
@@ -3380,14 +3422,18 @@
             (function(c) {
                 lsParsePrfpset(c.matchName, function(presetNames) {
                     for (var pi = 0; pi < presetNames.length; pi++) {
-                        // Filtra nomes que são folder-stubs ou bate com o container
-                        var pn = presetNames[pi];
-                        if (pn.toLowerCase() === c.name.toLowerCase()) continue;
+                        // Entrada pode ser string (fallback <Name>) ou {name, category} (bintree,
+                        // com a PASTA REAL de dentro do arquivo)
+                        var ent = presetNames[pi];
+                        var pn = (typeof ent === 'string') ? ent : (ent && ent.name);
+                        // bintree: pasta real de dentro do arquivo (vazia = raiz -> nome do container)
+                        var pcat = (ent && typeof ent === 'object') ? (ent.category || c.name) : '';
+                        if (!pn || pn.toLowerCase() === c.name.toLowerCase()) continue;
                         expanded.push({
                             kind: 'preset',
                             name: pn,
                             matchName: c.matchName + '#' + pn, // path do container + nome
-                            category: c.category + ' / ' + c.name,
+                            category: pcat || (c.category + ' / ' + c.name),
                             audioOnly: c.audioOnly,
                             videoOnly: c.videoOnly,
                         });
@@ -3646,8 +3692,12 @@
                     _lsPlSetStatus('✓ Ativo: ' + s.registered, '#bef264');
                 } else if (s.enabled === false) {
                     _lsPlSetStatus('Desativado', '#666');
-                } else {
+                } else if (s.registerFailed) {
                     _lsPlSetStatus('Falhou ao registrar (atalho em uso?)', '#f43f5e');
+                } else {
+                    // Habilitado mas nao registrado AGORA = so pausado (Premiere fora de foco).
+                    // O atalho volta a valer quando o Premiere estiver em foco — nao e erro, nao alarma.
+                    _lsPlSetStatus('✓ Ativo: ' + (s.hotkey || 'Control+Shift+L'), '#bef264');
                 }
             } catch(e) { _lsPlSetStatus('Erro: ' + e.message, '#f87171'); }
         });
@@ -3681,8 +3731,11 @@
                     _lsPlSetStatus('Desativado', '#666');
                 } else if (r.registered) {
                     _lsPlSetStatus('✓ Registrado: ' + r.registered, '#bef264');
-                } else {
+                } else if (r.registerFailed) {
                     _lsPlSetStatus('⚠ Não conseguiu registrar (em uso?)', '#fbbf24');
+                } else {
+                    // Salvou ok, so nao registrou agora (Premiere fora de foco). Ativa quando voltar o foco.
+                    _lsPlSetStatus('✓ Ativo: ' + (r.hotkey || 'Control+Shift+L'), '#bef264');
                 }
             } catch(e) { _lsPlSetStatus('Resposta inválida', '#f87171'); }
         });
@@ -3692,9 +3745,9 @@
         var inp = document.getElementById('lsPlHotkey');
         inp._previousValue = inp.value;
         inp.value = 'Aperte a combinação...';
-        inp.style.color = '#a78bfa';
+        inp.style.color = '#fbbf24';
         _lsPlCapturing = true;
-        _lsPlSetStatus('Aguardando combinação... (Esc cancela)', '#a78bfa');
+        _lsPlSetStatus('Aguardando combinação... (Esc cancela)', '#fbbf24');
     }
 
     function lsPlReset() {
@@ -4331,13 +4384,15 @@
     function saveCurrentPreset(){
         lwPromptText({title:'Nome do preset:',placeholder:'Ex: Bounce suave',okLabel:'Salvar'},function(name){
             if(!name) return;
-            savedPresets.push({
+            var novo={
                 name:name,
                 cp1:{x:curveCP1.x,y:curveCP1.y},
                 cp2:{x:curveCP2.x,y:curveCP2.y},
                 dir:curveDir
-            });
+            };
+            savedPresets.push(novo);
             saveSavedPresets();
+            try{ _lwPresetsOp({op:'add',kind:'easing',item:novo}); }catch(e){}
             renderSavedPresets();
             showEasingMsg('Preset "'+name+'" salvo!','#22c55e');
         });
@@ -4361,6 +4416,7 @@
         var name=savedPresets[idx].name;
         savedPresets.splice(idx,1);
         saveSavedPresets();
+        try{ _lwPresetsOp({op:'remove',kind:'easing',name:name}); }catch(e){}
         renderSavedPresets();
         showEasingMsg('Preset "'+name+'" removido','#f43f5e');
     }
@@ -4590,7 +4646,6 @@
     }
 
     // ─── Random Wiggler + Looper (Premiere) ───
-    var prwMode = 'wiggle', prwInterp = 'hold';
     var prwTargets = ['position']; // multi-propriedade (estilo S_Shake)
     var prwAxisX = true, prwAxisY = true;
     var prwComponent = 'motion', prwMotionBlur = false;
@@ -4611,13 +4666,6 @@
     function prwMsg(m,c){ lwStatusRender(document.getElementById('prwMsg'), m, c); }
     function prlMsg(m,c){ lwStatusRender(document.getElementById('prlMsg'), m, c); }
 
-    function prwSetMode(m){
-        prwMode = m;
-        document.getElementById('prwModeWiggle').classList.toggle('active', m==='wiggle');
-        document.getElementById('prwModeRandom').classList.toggle('active', m==='random');
-        document.getElementById('prwWiggleParams').style.display = (m==='wiggle')?'block':'none';
-        document.getElementById('prwRandomParams').style.display = (m==='random')?'block':'none';
-    }
     function prwPickTarget(btn){
         // multi-seleção: cada clique liga/desliga a propriedade (mínimo 1 marcada)
         var t = btn.getAttribute('data-t');
@@ -4633,11 +4681,6 @@
         // eixos só fazem sentido em Posição (2D)
         var axr = document.getElementById('prwAxisRow');
         if(axr) axr.style.display = (prwTargets.indexOf('position')>=0)?'flex':'none';
-    }
-    function prwSetInterp(v){
-        prwInterp = v;
-        document.getElementById('prwInterpHold').classList.toggle('active', v==='hold');
-        document.getElementById('prwInterpLinear').classList.toggle('active', v==='linear');
     }
     function prwToggleAxis(ax){
         if(ax==='x'){ prwAxisX=!prwAxisX; document.getElementById('prwAxisX').classList.toggle('active', prwAxisX); }
@@ -4709,13 +4752,11 @@
         if(_prwBusy) return;
         if(!csInterface){ prwMsg('Ambiente do plugin indisponível','#f43f5e'); return; }
         var cfg = {
-            mode: prwMode, target: prwTargets[0], targets: prwTargets.slice(),
+            mode: 'wiggle', target: prwTargets[0], targets: prwTargets.slice(),
             component: prwComponent, motionBlur: prwMotionBlur,
             freq: _prNum('prwFreq',2), amp: _prNum('prwAmp',30),
             octaves: Math.max(1, Math.round(_prNum('prwOct',1))), ampMult: _prNum('prwMult',0.5),
-            axisX: prwAxisX, axisY: prwAxisY,
-            rmin: _prNum('prwMin',60), rmax: _prNum('prwMax',100),
-            interval: _prNum('prwInterval',0.5), interp: prwInterp
+            axisX: prwAxisX, axisY: prwAxisY
         };
         _prwBusy = true;
         prwMsg('Aplicando...','#f59e0b');
@@ -4743,22 +4784,77 @@
     try{ var _pc=JSON.parse(localStorage.getItem('lw_wiggle_presets')||'[]'); if(_pc&&_pc.length)PRW_CUSTOM=_pc; }catch(e){}
     function _prwSaveCustom(){ try{localStorage.setItem('lw_wiggle_presets',JSON.stringify(PRW_CUSTOM))}catch(e){} }
 
+    // ══ Sync de presets com o app (aba Presets) ══
+    // plugin-presets.json do app = fonte de verdade. Operacoes POR ITEM (add/remove) —
+    // NUNCA empurra o array inteiro: empurrar tudo revertia delecoes/renames feitos na aba
+    // do app enquanto o painel estava aberto (last-writer-wins destrutivo).
+    // Op falhou (app fechado)? fica numa FILA no localStorage e e reaplicada no proximo boot.
+    function _lwPendingOps(){ try{ return JSON.parse(localStorage.getItem('lw_presets_pending_ops')||'[]'); }catch(e){ return []; } }
+    function _lwSetPendingOps(a){ try{ localStorage.setItem('lw_presets_pending_ops', JSON.stringify(a)); }catch(e){} }
+    function _lwPresetsOp(op){
+        op._id='op'+Date.now()+Math.floor(Math.random()*1e6);
+        var q=_lwPendingOps(); q.push(op); _lwSetPendingOps(q); // grava ANTES do POST (fechar o painel nao perde a op)
+        LWHttp.post(API+'/plugin-presets/update', {ops:[op]}, {retries:1, timeout:4000}, function(err){
+            if(!err){ _lwSetPendingOps(_lwPendingOps().filter(function(o){return o._id!==op._id;})); }
+        });
+    }
+    function _lwApplyOpLocal(list, op, key){
+        if(op.op==='add'&&op.item&&op.item[key]){ var out=list.filter(function(x){return x&&x[key]!==op.item[key];}); out.push(op.item); return out; }
+        if(op.op==='remove'&&op.name){ return list.filter(function(x){return x&&x[key]!==op.name;}); }
+        return list;
+    }
+    function _lwSaneList(a, key){ var out=[]; (Array.isArray(a)?a:[]).forEach(function(x){ if(x&&typeof x==='object'&&typeof x[key]==='string'&&x[key]) out.push(x); }); return out; }
+    function lwPresetsSyncBoot(attempt){
+        attempt=attempt||0;
+        LWHttp.get(API+'/plugin-presets', {timeout:4000, retries:0}, function(err, st, body){
+            // app pode abrir MUITO depois do painel (Premiere fica aberto o dia todo) —
+            // insiste sem desistir: 15s, 60s, dai de 2 em 2min (o GET e baratissimo).
+            // Antes desistia apos 8 tentativas (~15min) e a migracao inicial nunca rodava.
+            if(err||!body){ if(attempt<500) setTimeout(function(){lwPresetsSyncBoot(attempt+1)}, attempt===0?15000:(attempt===1?60000:120000)); return; }
+            var server=null; try{ server=JSON.parse(body); }catch(e){ return; }
+            if(!server||typeof server!=='object') return;
+            try{ localStorage.removeItem('lw_presets_dirty'); }catch(e){} // chave de um protocolo antigo
+            if(server.initialized===false){
+                // arquivo do app ainda nao existe: primeira migracao — sobe o local inteiro
+                _lwSetPendingOps([]);
+                LWHttp.post(API+'/plugin-presets/update', {wiggler:PRW_CUSTOM, easing:(typeof savedPresets!=='undefined'&&savedPresets)||[]}, {retries:1, timeout:4000}, function(){});
+                return;
+            }
+            // adota o server (delecoes/renames da aba Presets valem aqui) + reaplica ops offline pendentes
+            var pend=_lwPendingOps();
+            PRW_CUSTOM=_lwSaneList(server.wiggler,'n');
+            if(typeof savedPresets!=='undefined') savedPresets=_lwSaneList(server.easing,'name');
+            pend.forEach(function(op){
+                if(op.kind==='wiggler') PRW_CUSTOM=_lwApplyOpLocal(PRW_CUSTOM, op, 'n');
+                else if(op.kind==='easing'&&typeof savedPresets!=='undefined') savedPresets=_lwApplyOpLocal(savedPresets, op, 'name');
+            });
+            try{localStorage.setItem('lw_wiggle_presets',JSON.stringify(PRW_CUSTOM))}catch(e){}
+            try{ if(typeof savedPresets!=='undefined') localStorage.setItem('lw_easing_presets',JSON.stringify(savedPresets)); }catch(e){}
+            try{ prwRenderPresets(); }catch(e){}
+            try{ if(typeof renderSavedPresets==='function') renderSavedPresets(); }catch(e){}
+            if(pend.length){
+                LWHttp.post(API+'/plugin-presets/update', {ops:pend}, {retries:1, timeout:4000}, function(err2){
+                    if(!err2) _lwSetPendingOps([]);
+                });
+            }
+        });
+    }
+    setTimeout(function(){ try{ lwPresetsSyncBoot(0); }catch(e){} }, 2500);
+
     function _prwMakeDot(p, isCustom){
-        var size=10+Math.round(Math.min(p.a,120)/120*10); // 10-20px conforme a amplitude
+        // bolinha simples: circulo chapado, tamanho unico (sem gradiente/gloss nem variar por amplitude)
         var d=document.createElement('div');
         d.title=p.n+' — freq '+p.f+' · amp '+p.a+(isCustom?'   (seu preset — botão direito remove)':'');
-        d.style.cssText='width:'+size+'px;height:'+size+'px;border-radius:50%;cursor:pointer;flex-shrink:0;transition:box-shadow .15s;'+
-            'background:radial-gradient(circle at 35% 30%, rgba(190,242,100,.55), rgba(190,242,100,.14) 70%);'+
-            'border:1px solid '+(isCustom?'#d9f99d':'rgba(190,242,100,.45)')+';';
-        if(isCustom) d.style.boxShadow='0 0 0 2px rgba(190,242,100,.13)';
+        var _bg=isCustom?'rgba(190,242,100,.5)':'rgba(190,242,100,.32)', _bgHover='rgba(190,242,100,.85)';
+        d.style.cssText='width:13px;height:13px;border-radius:50%;cursor:pointer;flex-shrink:0;transition:background .15s, transform .15s;'+
+            'background:'+_bg+';border:1px solid '+(isCustom?'#d9f99d':'rgba(190,242,100,.5)')+';';
         d.onmouseenter=function(){
-            _pvHover=p; _pvDot=d;
+            _pvHover=p; _pvDot=d; d.style.background=_bgHover;
             var nm=document.getElementById('prwPresetName'); if(nm) nm.textContent='· '+p.n;
             prwPrevPlay(p, d);
         };
         d.onmouseleave=function(){
-            _pvHover=null; _pvDot=null; d.style.transform='';
-            d.style.boxShadow=isCustom?'0 0 0 2px rgba(190,242,100,.13)':'';
+            _pvHover=null; _pvDot=null; d.style.transform=''; d.style.background=_bg;
             var nm=document.getElementById('prwPresetName'); if(nm) nm.textContent='';
             prwPrevStop();
         };
@@ -4768,7 +4864,7 @@
             lwConfirmBox({title:'Apagar o preset "'+p.n+'"?',sub:'Freq '+p.f+' · amp '+p.a+'. Essa ação não tem volta.',okLabel:'Apagar',danger:true},function(ok){
                 if(!ok) return;
                 var i=PRW_CUSTOM.indexOf(p);
-                if(i>=0){ PRW_CUSTOM.splice(i,1); _prwSaveCustom(); prwRenderPresets(); prwMsg('Preset "'+p.n+'" removido','#22c55e'); }
+                if(i>=0){ PRW_CUSTOM.splice(i,1); _prwSaveCustom(); try{ _lwPresetsOp({op:'remove',kind:'wiggler',name:p.n}); }catch(e){} prwRenderPresets(); prwMsg('Preset "'+p.n+'" removido','#22c55e'); }
             });
         }; }
         return d;
@@ -4783,7 +4879,7 @@
         var add=document.createElement('div');
         add.title='Salvar preset com os parâmetros atuais';
         add.textContent='+';
-        add.style.cssText='width:17px;height:17px;border-radius:50%;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#bef264;font-size:.95rem;font-weight:700;line-height:1;background:rgba(190,242,100,.06);border:1px dashed rgba(190,242,100,.4);transition:background .15s';
+        add.style.cssText='width:15px;height:15px;border-radius:50%;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#bef264;font-size:.85rem;font-weight:700;line-height:1;background:rgba(190,242,100,.06);border:1px dashed rgba(190,242,100,.4);transition:background .15s';
         add.onmouseenter=function(){ add.style.background='rgba(190,242,100,.16)'; };
         add.onmouseleave=function(){ add.style.background='rgba(190,242,100,.06)'; };
         add.onclick=prwSavePreset;
@@ -4793,8 +4889,10 @@
         var q=_pvParams(null);
         lwPromptText({title:'Nome do preset:',placeholder:'Ex: Meu shake',okLabel:'Salvar'},function(name){
             if(!name) return;
-            PRW_CUSTOM.push({n:name,f:q.f,a:q.a,o:q.o,m:q.m});
+            var novo={n:name,f:q.f,a:q.a,o:q.o,m:q.m};
+            PRW_CUSTOM.push(novo);
             _prwSaveCustom();
+            try{ _lwPresetsOp({op:'add',kind:'wiggler',item:novo}); }catch(e){}
             prwRenderPresets();
             prwMsg('Preset "'+name+'" salvo!','#22c55e');
         });
@@ -4804,7 +4902,6 @@
         document.getElementById('prwAmp').value=p.a;
         document.getElementById('prwOct').value=p.o;
         document.getElementById('prwMult').value=p.m;
-        prwSetMode('wiggle');
         prwPrevStatic();
         prwMsg('Preset "'+p.n+'" aplicado', '#22c55e');
     }

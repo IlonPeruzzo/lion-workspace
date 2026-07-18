@@ -50,6 +50,41 @@
         .tabs button:hover{color:var(--text2);background:rgba(190,242,100,.06)}
         .tabs button.active{background:linear-gradient(135deg,#bef264,#a3e635);color:#0a0a0a;box-shadow:0 4px 12px rgba(190,242,100,.35)}
         .tab-content{display:none}.tab-content.active{display:block}
+        /* Seta de dica: "Registrar serviço" leva pra Clientes e aponta pro "+" certo */
+        #regHint{position:fixed;z-index:9998;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:3px}
+        #regHint.below{flex-direction:column-reverse}
+        #regHint .rh-label{background:linear-gradient(135deg,#bef264,#a3e635);color:#0a0a0a;font-size:.76rem;font-weight:700;padding:6px 13px;border-radius:20px;box-shadow:0 8px 20px -6px rgba(190,242,100,.55);white-space:nowrap}
+        #regHint .rh-arrow{color:#bef264;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));animation:rhBounce 1s ease-in-out infinite}
+        #regHint.below .rh-arrow{animation:rhBounceUp 1s ease-in-out infinite}
+        @keyframes rhBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+        @keyframes rhBounceUp{0%,100%{transform:rotate(180deg) translateY(0)}50%{transform:rotate(180deg) translateY(6px)}}
+        .hint-pulse{animation:hintPulse 1.1s ease-in-out infinite}
+        @keyframes hintPulse{0%,100%{box-shadow:0 0 0 0 rgba(190,242,100,.55)}50%{box-shadow:0 0 0 9px rgba(190,242,100,0)}}
+        /* ── Tour de primeira vez (setinhas guiadas, estilo tutorial de jogo) ── */
+        #tourRoot{position:fixed;inset:0;z-index:100000;pointer-events:none;font-family:inherit}
+        #tourRoot .tour-catch{position:absolute;inset:0;pointer-events:auto;background:transparent;transition:background .3s}
+        #tourRoot.no-target .tour-catch{background:rgba(0,0,0,.74)}
+        #tourRoot .tour-spot{position:absolute;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.68),0 0 0 2px #bef264,0 0 22px 5px rgba(190,242,100,.45);transition:left .35s cubic-bezier(.4,0,.2,1),top .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1),height .35s cubic-bezier(.4,0,.2,1);pointer-events:none}
+        #tourRoot.no-target .tour-spot{display:none}
+        #tourRoot .tour-arrow{position:absolute;color:#bef264;pointer-events:none;filter:drop-shadow(0 3px 6px rgba(0,0,0,.55));animation:tourArrow 1s ease-in-out infinite}
+        @keyframes tourArrow{0%,100%{transform:translate(0,0)}50%{transform:var(--tourArrowBounce,translateX(-9px))}}
+        #tourRoot .tour-card{position:absolute;width:290px;max-width:calc(100vw - 24px);background:linear-gradient(160deg,#1d1d20,#161618);border:1px solid rgba(190,242,100,.22);border-radius:14px;padding:16px 18px 15px;box-shadow:0 20px 50px rgba(0,0,0,.6);pointer-events:auto;color:var(--text);animation:tourCardIn .28s cubic-bezier(.2,.8,.2,1)}
+        #tourRoot.no-target .tour-card{left:50%;top:50%;width:360px;text-align:center;transform:translate(-50%,-50%);animation:tourCardCenterIn .3s cubic-bezier(.2,.8,.2,1)}
+        @keyframes tourCardIn{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes tourCardCenterIn{from{opacity:0;transform:translate(-50%,-46%) scale(.96)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+        #tourRoot .tc-title{font-size:1rem;font-weight:800;color:#fff;margin-bottom:6px;letter-spacing:-.2px}
+        #tourRoot .tc-body{font-size:.82rem;line-height:1.55;color:var(--text2)}
+        #tourRoot .tc-foot{display:flex;align-items:center;gap:10px;margin-top:15px}
+        #tourRoot.no-target .tc-foot{justify-content:center}
+        #tourRoot .tc-dots{display:flex;gap:5px;flex:1;align-items:center}
+        #tourRoot.no-target .tc-dots{display:none}
+        #tourRoot .tc-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);transition:all .2s}
+        #tourRoot .tc-dot.on{background:#bef264;width:16px;border-radius:3px}
+        #tourRoot .tc-skip{background:none;border:none;color:var(--text3);font-size:.76rem;cursor:pointer;font-family:inherit;padding:6px 2px}
+        #tourRoot .tc-skip:hover{color:var(--text2)}
+        #tourRoot .tc-next{background:#bef264;color:#0a0a0a;border:none;border-radius:8px;padding:8px 17px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;transition:filter .15s}
+        #tourRoot .tc-next:hover{filter:brightness(1.06)}
+        @media(prefers-reduced-motion:reduce){#tourRoot .tour-arrow{animation:none}}
 
         /* Cards */
         .card{background:linear-gradient(135deg,rgba(15,15,15,.7),rgba(25,25,25,.5));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(190,242,100,.1);border-radius:var(--radius);padding:24px;margin-bottom:20px;box-shadow:var(--glow);transition:all .3s}
@@ -66,6 +101,42 @@
         .jf-vt.active{background:rgba(190,242,100,.12);border-color:rgba(190,242,100,.35);color:#bef264}
         .jf-vt-badge{background:rgba(190,242,100,.2);color:#bef264;font-size:.66rem;font-weight:800;padding:1px 7px;border-radius:20px;min-width:18px;text-align:center}
         .jf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+        /* ═══ Aba Presets ═══ */
+        .lwp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:10px}
+        .lwp-card{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06);border-radius:11px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s,transform .12s;position:relative}
+        .lwp-card:hover{border-color:rgba(190,242,100,.3);transform:translateY(-1px)}
+        .lwp-name{font-size:.8rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .lwp-sub{font-size:.64rem;color:var(--text3)}
+        .lwp-badge{font-size:.56rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#a3a3a3;background:rgba(255,255,255,.06);padding:2px 7px;border-radius:20px}
+        .lwp-badge.mine{color:#bef264;background:rgba(190,242,100,.12)}
+        .lwp-actions{position:absolute;top:8px;right:8px;display:none;gap:4px}
+        .lwp-card:hover .lwp-actions{display:flex}
+        .lwp-act{width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.5);color:var(--text2);cursor:pointer;font-size:.7rem;display:flex;align-items:center;justify-content:center;font-family:inherit;padding:0}
+        .lwp-act:hover{border-color:rgba(190,242,100,.4);color:#bef264}
+        .lwp-act.del:hover{border-color:rgba(244,63,94,.5);color:#f87171}
+        .lwp-curve{width:100%;height:56px;border-radius:8px;background:rgba(0,0,0,.35)}
+        .lwp-wigdot-wrap{height:58px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);border-radius:8px;overflow:hidden}
+        .lwp-wigdot{width:19px;height:19px;border-radius:50%;background:rgba(190,242,100,.9);box-shadow:0 0 12px rgba(190,242,100,.45);will-change:transform}
+        .lwp-empty{font-size:.74rem;color:var(--text3);padding:14px 4px}
+        .lwp-folder{border:1px solid rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;overflow:hidden}
+        .lwp-folder-head{display:flex;align-items:center;gap:8px;padding:10px 13px;cursor:pointer;background:rgba(255,255,255,.02);transition:background .15s}
+        .lwp-folder-head:hover{background:rgba(190,242,100,.05)}
+        .lwp-folder-head svg{flex-shrink:0}
+        .lwp-folder-head .lwp-chev{transition:transform .15s}
+        /* seletores FILHOS (>): abrir uma pasta nao pode abrir/rotacionar as netas */
+        .lwp-folder.open > .lwp-folder-head .lwp-chev{transform:rotate(90deg)}
+        .lwp-folder-name{font-size:.78rem;font-weight:600;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .lwp-folder-count{font-size:.62rem;color:var(--text3)}
+        .lwp-folder-body{display:none;padding:6px 8px 8px 14px}
+        .lwp-folder.open > .lwp-folder-body{display:block}
+        /* subpastas aninhadas: mais leves e com trilho de indentacao */
+        .lwp-folder.lwp-sub{margin:5px 0;border-color:rgba(255,255,255,.04);border-radius:8px}
+        .lwp-folder.lwp-sub > .lwp-folder-head{padding:8px 11px}
+        .lwp-folder.lwp-sub > .lwp-folder-head .lwp-folder-name{font-size:.74rem;font-weight:500}
+        .lwp-folder-body .lwp-folder-body{border-left:1px solid rgba(190,242,100,.08)}
+        .lwp-ppro-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;font-size:.75rem;color:var(--text2)}
+        .lwp-ppro-item:hover{background:rgba(255,255,255,.04)}
+        .lwp-ppro-item .tag{font-size:.56rem;color:var(--text3);margin-left:auto;flex-shrink:0}
         .jf-card{background:linear-gradient(135deg,rgba(18,18,18,.8),rgba(26,26,26,.5));border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:16px;display:flex;flex-direction:column;transition:border-color .2s,transform .15s;animation:jfIn .35s ease backwards}
         .jf-card:hover{border-color:rgba(190,242,100,.28);transform:translateY(-2px)}
         @keyframes jfIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -431,6 +502,11 @@
         .etapas-list{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
         .etapa-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;font-size:.8rem;font-weight:500;background:rgba(190,242,100,.08);color:var(--text2);border:1px solid rgba(190,242,100,.1)}
         .etapa-chip .x{cursor:pointer;color:var(--red);opacity:.6;font-size:.9rem}.etapa-chip .x:hover{opacity:1}
+        /* Etapas (aba Produção) — chips/lápis/x maiores; escopado pra nao afetar o mini-pipeline do modal Editar Cliente */
+        #etapasList .etapa-chip{font-size:.86rem;padding:7px 14px}
+        #etapasList .etapa-chip svg{width:15px;height:15px}
+        #etapasList .etapa-chip .x{font-size:1.2rem;opacity:.75;line-height:1}
+        #etapasList .etapa-chip .rename{cursor:pointer;opacity:.65;font-size:1.05rem;line-height:1;margin-left:1px;transition:opacity .15s}#etapasList .etapa-chip .rename:hover{opacity:1}
         .etapa-arrow{cursor:pointer;font-size:.6rem;color:var(--text3);opacity:.7;padding:1px 3px;border-radius:3px;transition:all .15s;line-height:1;user-select:none}
         .etapa-arrow:hover{opacity:1;background:rgba(190,242,100,.15);color:var(--accent)}
         .etapa-arrow.disabled{opacity:.2;cursor:default;pointer-events:none}
@@ -626,8 +702,13 @@
 
         /* Client cards */
         .client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:16px}
-        .client-card{background:linear-gradient(145deg,rgba(15,15,15,.75),rgba(25,25,25,.45));border:1px solid rgba(190,242,100,.1);border-radius:var(--radius);padding:18px;transition:all .3s}
-        .client-card:hover{border-color:rgba(190,242,100,.22);box-shadow:0 8px 30px rgba(190,242,100,.1)}
+        .client-card{background:linear-gradient(145deg,rgba(15,15,15,.75),rgba(25,25,25,.45));border:1px solid rgba(190,242,100,.1);border-radius:var(--radius);padding:18px;transition:border-color .3s,box-shadow .3s;animation:handheldShake 6s ease-in-out infinite;will-change:transform}
+        .client-card:nth-child(3n+1){animation-duration:6.2s;animation-delay:-1.1s}
+        .client-card:nth-child(3n+2){animation-duration:5.4s;animation-delay:-2.7s}
+        .client-card:nth-child(3n+3){animation-duration:6.8s;animation-delay:-.5s}
+        .client-card:hover{border-color:rgba(190,242,100,.22);box-shadow:0 8px 30px rgba(190,242,100,.1);animation-play-state:paused}
+        @keyframes handheldShake{0%{transform:translate(0,0) rotate(0deg)}9%{transform:translate(.4px,-.5px) rotate(.12deg)}18%{transform:translate(-.5px,.3px) rotate(-.1deg)}27%{transform:translate(.6px,.5px) rotate(.14deg)}36%{transform:translate(-.3px,-.4px) rotate(-.07deg)}45%{transform:translate(.5px,.2px) rotate(.1deg)}54%{transform:translate(-.6px,-.3px) rotate(-.13deg)}63%{transform:translate(.3px,.6px) rotate(.08deg)}72%{transform:translate(-.4px,-.2px) rotate(-.11deg)}81%{transform:translate(.5px,.4px) rotate(.13deg)}90%{transform:translate(-.2px,-.5px) rotate(-.06deg)}100%{transform:translate(0,0) rotate(0deg)}}
+        @media(prefers-reduced-motion:reduce){.client-card{animation:none}}
         .client-card .cc-top{display:flex;justify-content:space-between;align-items:start;margin-bottom:10px}
         .client-card .cc-name{font-size:1rem;font-weight:600}
         .client-card .cc-links{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
@@ -940,6 +1021,7 @@
 .tabs button[data-tab="audiolib"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 18V5l12-2v13'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='16' r='3'/></svg>")}
 .tabs button[data-tab="ytdownload"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='5' width='20' height='14' rx='4'/><polygon points='10 9 16 12 10 15' fill='%23a3a3a3' stroke='none'/></svg>")}
 .tabs button[data-tab="rmbg"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='17 8 12 3 7 8'/><line x1='12' y1='3' x2='12' y2='15'/></svg>")}
+.tabs button[data-tab="presets"]::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a3a3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='4' y1='21' x2='4' y2='14'/><line x1='4' y1='10' x2='4' y2='3'/><line x1='12' y1='21' x2='12' y2='12'/><line x1='12' y1='8' x2='12' y2='3'/><line x1='20' y1='21' x2='20' y2='16'/><line x1='20' y1='12' x2='20' y2='3'/><line x1='1' y1='14' x2='7' y2='14'/><line x1='9' y1='8' x2='15' y2='8'/><line x1='17' y1='16' x2='23' y2='16'/></svg>")}
 .tabs button.active::before{filter:brightness(0) saturate(100%) invert(88%) sepia(23%) saturate(1074%) hue-rotate(31deg) brightness(101%) contrast(89%)}
 .tabs::-webkit-scrollbar{width:6px}
 .tabs::-webkit-scrollbar-thumb{background:rgba(190,242,100,.15);border-radius:3px}
@@ -1172,6 +1254,8 @@ html.is-mac body::before{content:'';position:fixed;top:0;left:0;width:200px;heig
 /* Esconde/mostra sections */
 [data-cfg-section]{display:none}
 [data-cfg-section].active{display:block}
+/* Resumo tributario so na secao Tributacao (cfgV2Switch tira a classe la) */
+.cfg-tribonly-hidden{display:none!important}
 /* Ajustes de inputs pra ficarem no tema escuro */
 .cs-card input[type=text],.cs-card input[type=number],.cs-card input[type=date],.cs-card select{background:rgba(15,15,15,.7)!important;border:1px solid rgba(255,255,255,.08)!important;color:#f5f5f5!important}
 .cs-card input:focus,.cs-card select:focus{border-color:rgba(190,242,100,.4)!important;outline:none}
@@ -2406,6 +2490,9 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M11 8v6M8 11h6" opacity=".9"/></svg>
             <span>Job Finder</span>
         </button>
+        <button data-tab="presets" onclick="showTab('presets',this);lwPresetsInit()">
+            <span>Presets</span>
+        </button>
         </div>
         <!-- Navegação de configurações (aparece com animação ao abrir Configurações) -->
         <div class="sb-nav-group" id="sbConfigNav">
@@ -2485,7 +2572,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         </div>
         <div class="stats">
             <div class="stat"><div class="val" id="sVid">0</div><div class="lbl" data-i18n="dash.services_month">Serviços (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sVidDia">0</div><div class="lbl" style="font-size:.62rem" data-i18n="dash.today">Hoje</div></div></div>
-            <div class="stat" style="position:relative"><div class="val" id="sBruto">R$ 0</div><div id="sBrutoPend" style="display:none;font-size:.65rem;color:var(--orange);margin-top:2px"></div><div class="lbl" data-i18n="dash.gross_month">Bruto (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sBrutoDia">R$ 0</div><div class="lbl" style="font-size:.62rem" data-i18n="dash.today">Hoje</div></div></div>
+            <div class="stat" style="position:relative"><div class="val" id="sBruto">R$ 0</div><div id="sBrutoPend" style="display:none;font-size:.65rem;color:#f87171;margin-top:2px"></div><div class="lbl" data-i18n="dash.gross_month">Bruto (Mês)</div><div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(190,242,100,.08)"><div class="val" style="font-size:1rem" id="sBrutoDia">R$ 0</div><div class="lbl" style="font-size:.62rem" data-i18n="dash.today">Hoje</div></div></div>
             <div class="stat" style="position:relative;overflow:visible"><div class="val stat-hideable" id="sTaxas">R$ 0</div><div class="lbl" data-i18n="dash.fees">Taxas</div><div class="info-panel" id="taxasInfoPanel"></div><div class="stat-actions"><span class="stat-qbtn" onclick="showTaxasInfo();event.stopPropagation()">?</span><button class="stat-eye" id="eyeTaxas" title="Ocultar/mostrar" onclick="toggleCardBlur('sTaxas');event.stopPropagation()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
             <div class="stat" data-fiscal-only style="position:relative;overflow:visible"><div class="val stat-hideable" id="sImp">R$ 0</div><div class="lbl" data-i18n="dash.taxes">Impostos</div><div class="info-panel" id="impInfoPanel"></div><div class="stat-actions"><span class="stat-qbtn" onclick="showImpInfo();event.stopPropagation()">?</span><button class="stat-eye" id="eyeImp" title="Ocultar/mostrar" onclick="toggleCardBlur('sImp');event.stopPropagation()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
             <div class="stat" style="position:relative;overflow:visible"><div class="val stat-hideable" id="sLiq">R$ 0</div><div class="lbl" data-i18n="dash.net">Líquido</div><div class="stat-actions"><span style="flex:1"></span><button class="stat-eye" id="eyeLiq" title="Ocultar/mostrar" onclick="toggleCardBlur('sLiq');event.stopPropagation()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
@@ -2598,7 +2685,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 <div class="nd-orb"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line class="nd-b nd-b1" x1="6" y1="20" x2="6" y2="14"/><line class="nd-b nd-b2" x1="12" y1="20" x2="12" y2="7"/><line class="nd-b nd-b3" x1="18" y1="20" x2="18" y2="11"/></svg></div>
                 <div style="font-size:1rem;font-weight:800;color:var(--text);margin-top:16px;letter-spacing:-.2px">Nenhum serviço registrado ainda</div>
                 <div style="font-size:.82rem;color:var(--text3);margin-top:5px;max-width:340px;margin-left:auto;margin-right:auto;line-height:1.5">Registre seu primeiro serviço pra ver faturamento, gráficos e metas por aqui.</div>
-                <button class="onb-cta" onclick="showTab('registros',document.querySelector('[data-tab=registros]'))" style="margin-top:18px;border:none;cursor:pointer;font-family:inherit">Registrar serviço <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+                <button class="onb-cta" onclick="irRegistrarServico()" style="margin-top:18px;border:none;cursor:pointer;font-family:inherit">Registrar serviço <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
             </div>
         </div>
 
@@ -2772,6 +2859,28 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             <div id="vidsAndamentoGrid" class="kanban"></div>
         </div>
 
+        <!-- Ordem das Etapas (Per-Client) -->
+        <div class="card" style="margin-top:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <div class="card-title" style="margin:0">Ordem das Etapas</div>
+                <button class="btn btn-o" id="btnNovaEtapa" onclick="showAddEtapaUI()" style="font-size:.75rem;padding:4px 12px;gap:4px;display:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nova Etapa</button>
+            </div>
+            <div style="margin-bottom:10px">
+                <div id="etapasCliBubbles" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            </div>
+            <p style="font-size:.78rem;color:var(--text3);margin-bottom:12px">Arraste para reordenar. Clique no lapis para renomear. Cada cliente tem sua própria ordem.</p>
+            <div class="etapas-list" id="etapasList"></div>
+            <div id="addEtapaUI" style="display:none;margin-top:12px;padding:14px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1);border-radius:10px">
+                <div style="font-size:.82rem;font-weight:600;color:var(--text2);margin-bottom:8px">Nova Etapa</div>
+                <div style="display:flex;gap:8px;align-items:flex-end">
+                    <div class="fg" style="flex:1"><label>Nome</label><input type="text" id="novaEtapaNome" placeholder="Nome da etapa" style="font-size:.82rem"></div>
+                    <div class="fg" style="flex:0 0 auto"><label>Icone</label><div id="etapaIconPicker" style="display:flex;gap:4px;flex-wrap:wrap"></div></div>
+                    <button class="btn btn-a" onclick="addEtapaComIcone()" style="padding:8px 14px;font-size:.82rem">Adicionar</button>
+                    <button class="btn btn-o" onclick="document.getElementById('addEtapaUI').style.display='none'" style="padding:8px 12px;font-size:.82rem">X</button>
+                </div>
+            </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:0">
             <!-- Project Timer -->
             <div class="card">
@@ -2851,28 +2960,6 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <div style="margin-top:8px;display:flex;gap:4px;align-items:center">
                         <button class="btn btn-o" onclick="showLinkProcessModal()" style="font-size:.62rem;padding:3px 8px;width:100%" data-i18n="prod.link_app">Linkar programa por processo</button>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Ordem das Etapas (Per-Client) -->
-        <div class="card" style="margin-top:0">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                <div class="card-title" style="margin:0">Ordem das Etapas</div>
-                <button class="btn btn-o" onclick="showAddEtapaUI()" style="font-size:.75rem;padding:4px 12px;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nova Etapa</button>
-            </div>
-            <div style="margin-bottom:10px">
-                <div id="etapasCliBubbles" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-            </div>
-            <p style="font-size:.78rem;color:var(--text3);margin-bottom:12px">Arraste para reordenar. Clique no lapis para renomear. Cada cliente tem sua própria ordem.</p>
-            <div class="etapas-list" id="etapasList"></div>
-            <div id="addEtapaUI" style="display:none;margin-top:12px;padding:14px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.1);border-radius:10px">
-                <div style="font-size:.82rem;font-weight:600;color:var(--text2);margin-bottom:8px">Nova Etapa</div>
-                <div style="display:flex;gap:8px;align-items:flex-end">
-                    <div class="fg" style="flex:1"><label>Nome</label><input type="text" id="novaEtapaNome" placeholder="Nome da etapa" style="font-size:.82rem"></div>
-                    <div class="fg" style="flex:0 0 auto"><label>Icone</label><div id="etapaIconPicker" style="display:flex;gap:4px;flex-wrap:wrap"></div></div>
-                    <button class="btn btn-a" onclick="addEtapaComIcone()" style="padding:8px 14px;font-size:.82rem">Adicionar</button>
-                    <button class="btn btn-o" onclick="document.getElementById('addEtapaUI').style.display='none'" style="padding:8px 12px;font-size:.82rem">X</button>
                 </div>
             </div>
         </div>
@@ -3105,6 +3192,11 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <div style="font-size:.7rem;color:var(--text3);margin-bottom:8px">Use <code style="background:rgba(190,242,100,.1);padding:1px 5px;border-radius:4px;color:#bef264">{canal}</code> pra inserir o nome do canal automaticamente.</div>
                     <input id="jfTplSubject" type="text" placeholder="Assunto" style="width:100%;padding:9px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;outline:none;margin-bottom:8px" oninput="jfSaveTemplate()">
                     <textarea id="jfTplBody" rows="7" placeholder="Corpo do e-mail" style="width:100%;padding:10px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;outline:none;resize:vertical;line-height:1.5" oninput="jfSaveTemplate()"></textarea>
+                    <div style="font-size:.7rem;color:var(--text3);margin:12px 0 6px;display:flex;align-items:center;gap:6px">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#bef264" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        Portfólio — entra no <b style="color:var(--text2)">final de todo e-mail</b> gerado pela IA.
+                    </div>
+                    <input id="jfPortfolio" type="text" placeholder="Link do portfólio (ex: behance.net/voce, drive, seu site)" style="width:100%;padding:9px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;outline:none" oninput="jfSaveTemplate()">
                 </div>
             </div>
             <div id="jfList" class="jf-grid"></div>
@@ -3112,6 +3204,56 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 <div style="font-size:.9rem;font-weight:600;color:var(--text2)">Sua lista está vazia</div>
                 <div style="font-size:.76rem;margin-top:4px">Busque canais e clique em "Enviar para a lista".</div>
             </div>
+        </div>
+    </div>
+
+    <!-- ═══════════ PRESETS (Wiggler + Curvas + importados do Premiere) ═══════════ -->
+    <div class="tab-content" id="tab-presets">
+        <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                <div>
+                    <div class="card-title" style="margin:0">Presets</div>
+                    <div style="font-size:.76rem;color:var(--text3);margin-top:3px">Seus presets do Wiggler, curvas de easing e os presets do Premiere — tudo salvo aqui.</div>
+                </div>
+                <span id="lwpCount" style="font-size:.7rem;color:var(--text3)"></span>
+            </div>
+        </div>
+
+        <!-- Wiggler -->
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-title" style="font-size:.9rem;display:flex;align-items:center;gap:8px">
+                Wiggler
+                <span style="font-size:.64rem;color:var(--text3);font-weight:500" id="lwpWigCount"></span>
+            </div>
+            <div id="lwpWigGrid" class="lwp-grid"></div>
+        </div>
+
+        <!-- Curvas / Easing -->
+        <div class="card" style="margin-bottom:16px">
+            <div class="card-title" style="font-size:.9rem;display:flex;align-items:center;gap:8px">
+                Curvas (Easing)
+                <span style="font-size:.64rem;color:var(--text3);font-weight:500" id="lwpEaseCount"></span>
+            </div>
+            <div id="lwpEaseGrid" class="lwp-grid"></div>
+        </div>
+
+        <!-- Premiere -->
+        <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+                <div class="card-title" style="font-size:.9rem;margin:0;display:flex;align-items:center;gap:8px">
+                    Presets do Premiere
+                    <span style="font-size:.64rem;color:var(--text3);font-weight:500" id="lwpPproCount"></span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <input type="text" id="lwpPproSearch" placeholder="Buscar preset..." oninput="lwpRenderPpro()" style="padding:7px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.76rem;outline:none;width:180px">
+                    <button class="btn btn-o" onclick="lwpPproRefresh()" id="lwpPproRefreshBtn" style="padding:7px 12px;font-size:.72rem;gap:5px">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        Importar do Premiere
+                    </button>
+                </div>
+            </div>
+            <div id="lwpPproHint" style="font-size:.72rem;color:var(--text3);margin-bottom:10px"></div>
+            <div id="lwpPproFolders"></div>
         </div>
     </div>
 
@@ -3809,7 +3951,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
                 <!-- ═══ Coluna direita: Resumo tributário + Valor DAS ═══ -->
                 <div class="cs-col cs-col-right">
-                    <div class="cs-card" data-fiscal-only>
+                    <div class="cs-card cfg-tribonly-hidden" id="csResumoCard" data-fiscal-only>
                         <div class="cs-card-title" style="margin-bottom:14px;font-size:.95rem">Resumo tributário</div>
                         <div class="cs-summary-row">
                             <span class="cs-summary-label">Regime</span>
@@ -3988,7 +4130,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
 <!-- Modal Criar Fatura -->
 <div class="ov" id="modCriarFatura" onclick="if(event.target===this)fecharMod('modCriarFatura')">
-    <div class="modal" style="max-width:1100px;display:flex;gap:0;padding:0;overflow:hidden">
+    <div class="modal" id="faturaModalInner" style="max-width:1100px;display:flex;gap:0;padding:0;overflow:hidden">
         <!-- Left: Form -->
         <div style="flex:0 0 400px;padding:24px;border-right:1px solid rgba(190,242,100,.1);overflow-y:auto;max-height:85vh">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -4686,6 +4828,7 @@ function showNoSubScreen(reason) {
     const planEl = document.getElementById('nosubPlan');
     loginScreen.classList.add('hidden');
     document.getElementById('setupScreen').classList.add('hidden');
+    try{ if(typeof _tourOn!=='undefined' && _tourOn) _tourTeardown(); }catch(e){}
     if (appContainer) appContainer.style.display = 'none';
     if (reason === 'device_blocked') {
         planEl.textContent = 'Este dispositivo foi bloqueado. Entre em contato com o suporte.';
@@ -4727,6 +4870,7 @@ function showApp() {
     document.getElementById('setupScreen').classList.add('hidden');
     if (appContainer) appContainer.style.display = '';
     try { updateGreetName(); } catch (e) {}
+    try { maybeStartTour(); } catch (e) {}
 }
 
 async function updateGreetName() {
@@ -4770,6 +4914,7 @@ function updateSidebarUserCard(sess) {
 async function showLoginScreen() {
     loginScreen.classList.remove('hidden');
     if (appContainer) appContainer.style.display = 'none';
+    try{ if(typeof _tourOn!=='undefined' && _tourOn) _tourTeardown(); }catch(e){} // sessao virou invalida durante o tour
     // Termos: checa arquivo persistente (via main.js) — sobrevive a logout/reload
     var accepted = false;
     try {
@@ -5059,6 +5204,7 @@ async function showSetupScreen() {
     setupScreen.classList.remove('hidden');
     loginScreen.classList.add('hidden');
     if (appContainer) appContainer.style.display = 'none';
+    try{ if(typeof _tourOn!=='undefined' && _tourOn) _tourTeardown(); }catch(e){}
     // Aplica i18n ANTES de mostrar o setup (caso usuário tenha escolhido EN)
     try { if(typeof applyI18n==='function') applyI18n(); } catch(e){}
     // Para usuários NÃO-BR: pula direto o regime tributário (que é específico do Brasil)
@@ -5175,6 +5321,7 @@ async function finishSetup() {
     localStorage.setItem('lw_setup_done', new Date().toISOString());
     document.getElementById('setupScreen').classList.add('hidden');
     if (appContainer) appContainer.style.display = '';
+    try { maybeStartTour(); } catch (e) {}
 }
 
 // Run auth check on load
@@ -5374,13 +5521,16 @@ const JF_TPL_DEFAULT = {
     body: 'Fala, {canal}! Tudo certo?\n\nSou editor de vídeo e ando acompanhando o seu conteúdo — curti muito o trabalho de vocês. Queria me apresentar e ver se rola uma parceria pra cuidar das edições do canal (cortes, motion, thumbs, o que precisar).\n\nSe fizer sentido, posso te mandar meu portfólio. Fico no aguardo!\n\nAbraço,'
 };
 let jfTpl = JF_TPL_DEFAULT;
-try { const t = JSON.parse(localStorage.getItem('vc_jobfinder_tpl')||'null'); if (t && t.body) jfTpl = t; } catch(e) {}
+// mescla sobre o default: preserva o portfólio (e subject) mesmo se o corpo estiver vazio.
+// Antes, `if (t && t.body)` descartava o objeto inteiro quando o body era '' — o link do portfólio sumia.
+try { const t = JSON.parse(localStorage.getItem('vc_jobfinder_tpl')||'null'); if (t && typeof t === 'object') jfTpl = Object.assign({}, JF_TPL_DEFAULT, t); } catch(e) {}
 
 function jfHasKey() { return !!((typeof cfg !== 'undefined' && cfg.ytApiKey || '').trim()); }
 function jfInit() {
     document.getElementById('jfKeyHint').style.display = jfHasKey() ? 'none' : 'flex';
     document.getElementById('jfTplSubject').value = jfTpl.subject;
     document.getElementById('jfTplBody').value = jfTpl.body;
+    try { document.getElementById('jfPortfolio').value = jfTpl.portfolio || ''; } catch(e) {}
     try { jfUpdateRangeUI(); } catch(e) {}
     try { jfRenderTriggers(); } catch(e) {}
     try { jfShowQuota(); } catch(e) {}
@@ -6269,7 +6419,7 @@ function jfToggleTemplate() {
     document.getElementById('jfTplChevron').style.transform = open ? 'rotate(180deg)' : '';
 }
 function jfSaveTemplate() {
-    jfTpl = { subject: document.getElementById('jfTplSubject').value, body: document.getElementById('jfTplBody').value };
+    jfTpl = { subject: document.getElementById('jfTplSubject').value, body: document.getElementById('jfTplBody').value, portfolio: ((document.getElementById('jfPortfolio')||{}).value || '').trim() };
     try { localStorage.setItem('vc_jobfinder_tpl', JSON.stringify(jfTpl)); } catch(e) {}
 }
 
@@ -6451,26 +6601,118 @@ function jfEmailLang(p) {
     const d = ((p._desc || '') + ' ' + (p.title || '')).slice(0, 800);
     return /[ãõçâêô]|\bvocê\b|\bvídeo|\binscreva|\bcanal\b|\bconteúdo\b/i.test(d) ? 'pt' : 'en';
 }
-function jfBuildEmailPrompt(p, tone) {
+
+// Formata numeros grandes p/ o e-mail, ciente do idioma (38200000 -> "38 mi" / "38M").
+// NOME PROPRIO (jfNumL) pra NAO colidir com jfNum(n) dos cards — funcoes top-level no mesmo
+// script sofrem hoisting e a ultima declaracao venceria, quebrando a formatacao dos cards.
+function jfNumL(n, lang) {
+    n = parseInt(n, 10) || 0;
+    if (n <= 0) return '';
+    const mi = lang === 'en' ? 'M' : ' mi', mil = lang === 'en' ? 'K' : ' mil';
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.', lang === 'en' ? '.' : ',') + mi;
+    if (n >= 1e3) return Math.round(n / 1e3) + mil;
+    return String(n);
+}
+// minusculas sem acento (pra comparar nome do canal x titulo da Wikipedia)
+function jfNoAccent(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+// PESQUISA (os dois): stats do YouTube (trajetoria: idade do canal, nº de videos, views totais)
+// + Wikipedia (biografia/trajetoria de criadores notaveis, sem chave, com CORS). Tudo cacheado em p.
+async function jfChannelResearch(p, onStatus) {
+    const lang = jfEmailLang(p);
+    // 1) Stats reais do canal via API do YouTube (1 unidade de cota, cacheado)
+    if (!p._traj && p.id && jfHasKey() && !jfIsQuotaExhausted()) {
+        try {
+            if (onStatus) onStatus('Analisando a trajetória do canal…');
+            const det = await jfApi('channels', { part: 'snippet,statistics', id: p.id });
+            const it = (det.items && det.items[0]) || {};
+            const sn = it.snippet || {}, stt = it.statistics || {};
+            const yr = parseInt((sn.publishedAt || '').slice(0, 4), 10) || 0;
+            const vids = parseInt(stt.videoCount || '0', 10) || 0;
+            const views = parseInt(stt.viewCount || '0', 10) || 0;
+            p._traj = { yr: yr, vids: vids, views: views };
+            try { jfPersistList(); } catch (e2) {}
+        } catch (e) { p._traj = {}; }
+    }
+    // 2) Wikipedia — trajetoria/biografia (so aceita se claramente for um criador/personalidade)
+    if (p._wiki === undefined) {
+        try { if (onStatus) onStatus('Pesquisando a trajetória em outras fontes…'); p._wiki = await jfWikiLookup(p, lang); }
+        catch (e) { p._wiki = ''; }
+        // so persiste ACERTO real; vazio (sem página ou erro/offline transitório) fica só em memória
+        // nesta sessão e re-tenta na próxima (evita gravar '' pra sempre num hiccup de rede).
+        if (p._wiki) { try { jfPersistList(); } catch (e2) {} }
+    }
+    // Monta o bloco de texto pra IA (so o que existir de real)
+    const now = 2026; // ano corrente (evita Date pra nao quebrar cache/determinismo em harness)
+    const lines = [];
+    const tr = p._traj || {};
+    if (tr.yr && tr.yr > 2000 && tr.yr <= now) {
+        const age = now - tr.yr;
+        lines.push(lang === 'en'
+            ? ('Channel started in ' + tr.yr + (age > 0 ? (' (about ' + age + ' year' + (age > 1 ? 's' : '') + ' on YouTube)') : ''))
+            : ('Canal começou em ' + tr.yr + (age > 0 ? (' (cerca de ' + age + ' ano' + (age > 1 ? 's' : '') + ' de YouTube)') : '')));
+    }
+    if (tr.vids > 0) lines.push(lang === 'en' ? (jfNumL(tr.vids, lang) + ' videos published') : (jfNumL(tr.vids, lang) + ' vídeos publicados'));
+    if (tr.views > 0) lines.push(lang === 'en' ? (jfNumL(tr.views, lang) + ' total views') : (jfNumL(tr.views, lang) + ' de views no total'));
+    if (p._wiki) lines.push((lang === 'en' ? 'From Wikipedia (verified, use only if clearly the same creator): ' : 'Da Wikipedia (confirmado, use só se for claramente o mesmo criador): ') + p._wiki);
+    return lines.join('\n');
+}
+
+// Busca a pagina da Wikipedia do criador e devolve um resumo curto — SO se o resultado
+// parecer mesmo um criador/personalidade (evita casar com homonimo aleatorio).
+async function jfWikiLookup(p, lang) {
+    const wl = (lang === 'pt') ? 'pt' : 'en';
+    const term = String(p.title || '').replace(/\s*[-|–].*/, '').trim(); // corta sufixos "Nome - Gaming"
+    if (!term || term.length < 3) return '';
+    // opensearch acha o titulo mais provavel
+    let title = '';
+    try {
+        const u = 'https://' + wl + '.wikipedia.org/w/api.php?action=opensearch&limit=1&namespace=0&format=json&origin=*&search=' + encodeURIComponent(term);
+        const r = await fetch(u);
+        const j = await r.json();
+        title = (j && j[1] && j[1][0]) || '';
+    } catch (e) { return ''; }
+    if (!title) return '';
+    // resumo da pagina
+    let sum = null;
+    try {
+        const r2 = await fetch('https://' + wl + '.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title.replace(/ /g, '_')));
+        if (!r2.ok) return '';
+        sum = await r2.json();
+    } catch (e) { return ''; }
+    if (!sum || sum.type === 'disambiguation' || !sum.extract) return '';
+    const blob = ((sum.description || '') + ' ' + (sum.extract || '')).toLowerCase();
+    // guarda: precisa cheirar a criador/personalidade digital, senao descarta (homonimo)
+    const creatorish = /youtube|youtuber|streamer|twitch|influencer|content creator|criador de conteúdo|criador de conteudo|personalidade|apresentador|digital|tiktok|podcast|gamer|comediante|músico|musico|cantor|ator|atriz|diretor/;
+    // e o titulo tem que ter relacao com o nome do canal (evita casar "Alex" -> outra pessoa)
+    const nt = jfNoAccent(term), ntitle = jfNoAccent(title);
+    const related = ntitle.indexOf(nt) >= 0 || nt.indexOf(ntitle) >= 0 || nt.split(/\s+/).some(w => w.length > 3 && ntitle.indexOf(w) >= 0);
+    if (!creatorish.test(blob) || !related) return '';
+    return String(sum.extract).replace(/\s+/g, ' ').trim().slice(0, 480);
+}
+function jfBuildEmailPrompt(p, tone, opts) {
     const desc = (p._desc || '').replace(/\s+/g, ' ').trim().slice(0, 1000);
     const country = p.country || '';
     const isEn = jfEmailLang(p) === 'en';
     const sender = (typeof cfg !== 'undefined' && ((cfg.meusDados && cfg.meusDados.nome) || cfg.empresa)) || '';
     const subsTxt = (p.subs === -1 || p.subs == null) ? (isEn ? 'hidden' : 'ocultos') : String(p.subs);
     const isFormal = tone === 'formal';
+    const trial = !!(opts && opts.trial);        // oferecer teste gratis?
+    const research = (opts && opts.research) || ''; // trajetoria pesquisada (YouTube + Wikipedia)
     const titles = (p._vidTitles || []).filter(Boolean).slice(0, 8);
     // Canal gringo = prompt INTEIRO em inglês. Prompt em português pedindo "escreva em
     // inglês" fazia o modelo derrapar pro português (segue o idioma dominante do prompt).
     if (isEn) {
         return [
-            'You are a freelance video editor writing a short outreach email to a YouTube channel. It must read like a REAL person who watches the channel and typed it quickly. Not a bot, not a template, not spam.',
+            'You are a freelance video editor writing a short, genuine outreach email to a YouTube creator. It should read like a real person from the same industry who actually did their homework. Not a bot, not a template, not spam.',
             '',
             'REAL CHANNEL DATA (use only this, never invent anything):',
             '- Channel name: ' + p.title,
             '- Subscribers: ' + subsTxt,
             '- Country: ' + (country || 'unknown'),
             '- About/bio: ' + (desc || '(empty)'),
-            titles.length ? ('- Recent video titles: ' + titles.join(' | ')) : '- (no video list available)',
+            titles.length ? ('- Recent video topics (context only, do NOT single one out): ' + titles.join(' | ')) : '- (no video list available)',
+            research ? ('RESEARCH ON THE CREATOR (real, verified. Use it to show you know their trajectory. Weave it in naturally, never copy verbatim, never quote numbers robotically):\n' + research) : '',
             '',
             'SENDER: ' + (sender || 'a freelance video editor (name not provided)'),
             '',
@@ -6479,29 +6721,33 @@ function jfBuildEmailPrompt(p, tone) {
                 : 'CASUAL, like a DM between two people in the same industry. Light, direct, with personality.'),
             '',
             'RULES (follow ALL of them):',
-            titles.length
-                ? '- Naturally mention ONE of the recent videos/topics from the list, like someone who actually watched it (comment on the subject itself; do NOT paste the full title in quotes).'
-                : '- Mention ONE specific thing from the bio/topics that shows you know the content.',
+            '- OPEN with a specific, genuine hook about their WORK or TRAJECTORY: their niche, how they have evolved, how long they have been at it, a recurring theme, or their overall style. Make it obvious you know who they are.',
+            '- Do NOT open with "I watched your last video" / "I just saw your latest upload" / "I saw your recent video". Never single out one recent clip as if you just watched it. Talk about the body of work and their path, not one video.',
             '- Get straight to the point. No "hope you are doing well", no long intro.',
-            '- NEVER invent numbers, video names, awards, or facts that are not in the data.',
+            '- NEVER invent numbers, video names, awards, or facts that are not in the data or research.',
             '- Do NOT use em dashes (—) or loose hyphens between clauses ( - ). Separate ideas with a period or a comma. No bullet lists.',
-            '- BANNED cliche phrases: "take your videos to the next level", "I\'d love to chat", "you must be doing something right", "I\'ve been keeping up with your channel", "amazing content", "huge fan", "Dear creator". Nothing that sounds like that kind of template.',
+            '- BANNED cliche phrases: "take your videos to the next level", "I\'d love to chat", "you must be doing something right", "I\'ve been keeping up with your channel", "I watched your last video", "amazing content", "huge fan", "Dear creator". Nothing that sounds like that kind of template.',
             '- Vary the rhythm: do not start 3 sentences in a row with "I". One short sentence in the middle keeps it human.',
-            '- Body of 3 to 5 sentences. A soft CTA at the end (showing your work or trading ideas), zero sales pressure.',
+            '- Body of 3 to 5 sentences.',
+            trial
+                ? '- OFFER A FREE TRIAL: propose editing one short sample for free (a quick test edit of one of their videos) so they can see the quality with zero risk and zero cost. Keep it low-pressure and confident, never desperate.'
+                : '- Soft CTA at the end (trading ideas or a quick call). Do NOT offer free work.',
+            '- Right before the sign-off, put the portfolio on its OWN line using EXACTLY this token: [[PORTFOLIO]] . The app swaps it for the real link. Do not write the word portfolio anywhere else and do not invent a URL.',
             '- No placeholders like [name]. End with "Best,"' + (sender ? ' followed by the name "' + sender + '".' : ' with no invented name.'),
             '- Reply with ONLY valid JSON, no markdown, no backticks: {"subject":"...","body":"..."} and use \\n for line breaks inside "body".',
             '- THE ENTIRE EMAIL (subject and body) MUST BE IN ENGLISH. Not a single word in Portuguese.'
-        ].join('\n');
+        ].filter(function (x) { return x !== ''; }).join('\n');
     }
     return [
-        'Você é um editor de vídeo freelancer escrevendo um e-mail de prospecção pra um canal do YouTube. Tem que soar como uma PESSOA REAL que assiste o canal, digitando rápido. Não um robô, não um template, não spam.',
+        'Você é um editor de vídeo freelancer escrevendo um e-mail de prospecção curto e genuíno pra um criador do YouTube. Tem que soar como uma pessoa de verdade do mesmo meio que fez o dever de casa. Não um robô, não um template, não spam.',
         '',
         'DADOS REAIS DO CANAL (só use o que está aqui, não invente nada):',
         '- Nome do canal: ' + p.title,
         '- Inscritos: ' + subsTxt,
         '- País: ' + (country || 'desconhecido'),
         '- Descrição/bio: ' + (desc || '(vazio)'),
-        titles.length ? ('- Títulos dos vídeos mais recentes: ' + titles.join(' | ')) : '- (sem lista de vídeos disponível)',
+        titles.length ? ('- Temas dos vídeos recentes (só contexto, NÃO destaque um só): ' + titles.join(' | ')) : '- (sem lista de vídeos disponível)',
+        research ? ('PESQUISA SOBRE O CRIADOR (real e confirmado. Use pra mostrar que você conhece a trajetória. Encaixe naturalmente, nunca copie ao pé da letra, nunca despeje números de forma robótica):\n' + research) : '',
         '',
         'QUEM ENVIA: ' + (sender || 'um editor de vídeo freelancer (nome não informado)'),
         '',
@@ -6510,19 +6756,22 @@ function jfBuildEmailPrompt(p, tone) {
             : 'INFORMAL, como uma DM entre pessoas do mesmo meio. Leve, direto, com personalidade.'),
         '',
         'REGRAS (siga TODAS):',
-        titles.length
-            ? '- Mencione NATURALMENTE um dos vídeos/temas recentes da lista, como quem assistiu (comente algo do assunto do vídeo; NÃO cole o título inteiro entre aspas).'
-            : '- Cite UMA coisa específica da bio/temas do canal que mostre que você conhece o conteúdo.',
+        '- ABRA com um gancho específico e genuíno sobre o TRABALHO ou a TRAJETÓRIA do criador: o nicho, como ele evoluiu, há quanto tempo faz isso, um tema recorrente ou o estilo geral. Deixe claro que você sabe quem ele é.',
+        '- NÃO abra com "assisti seu último vídeo" / "vi seu vídeo mais recente" / "acabei de ver seu vídeo". Nunca destaque um vídeo recente como se tivesse acabado de assistir. Fale do conjunto do trabalho e do caminho dele, não de um vídeo só.',
         '- Vá direto ao ponto. Sem "espero que esteja bem", sem introdução longa.',
-        '- JAMAIS invente números, nomes de vídeos, prêmios ou fatos fora dos dados.',
+        '- JAMAIS invente números, nomes de vídeos, prêmios ou fatos fora dos dados ou da pesquisa.',
         '- PROIBIDO travessão (—) e hífen solto entre frases ( - ). Separe ideias com ponto ou vírgula. Sem listas com marcador.',
-        '- PROIBIDO frases prontas de IA/spam: "levar seu conteúdo pro próximo nível", "conteúdo incrível", "sou seu maior fã", "adoraria trocar uma ideia rapidinho", "Prezado(a)". Nada parecido com isso.',
+        '- PROIBIDO frases prontas de IA/spam: "levar seu conteúdo pro próximo nível", "assisti seu último vídeo", "conteúdo incrível", "sou seu maior fã", "adoraria trocar uma ideia rapidinho", "Prezado(a)". Nada parecido com isso.',
         '- Varie o ritmo: não comece 3 frases seguidas com "Eu". Uma frase curtinha no meio deixa humano.',
-        '- Corpo com 3 a 5 frases. CTA leve no fim (mostrar seu trabalho ou trocar uma ideia), sem pressão de vendas.',
+        '- Corpo com 3 a 5 frases.',
+        trial
+            ? '- OFEREÇA UM TESTE GRÁTIS: proponha editar UMA amostra curta de graça (um teste rápido de edição de um vídeo dele) pra ele ver a qualidade sem risco e sem custo. De um jeito leve e confiante, nunca desesperado.'
+            : '- CTA leve no fim (trocar uma ideia ou uma call rápida). NÃO ofereça trabalho de graça.',
+        '- Logo antes da despedida, coloque o portfólio numa linha SÓ dele usando EXATAMENTE este token: [[PORTFOLIO]] . O app troca pelo link real. Não escreva a palavra portfólio em nenhum outro lugar e não invente URL.',
         '- Sem placeholders tipo [nome]. Encerre com "Abraço,"' + (sender ? ' e o nome "' + sender + '".' : ' sem nome inventado.'),
         '- Responda SOMENTE um JSON válido, sem markdown e sem crases: {"subject":"...","body":"..."} e use \\n para quebras de linha dentro de "body".',
         '- O E-MAIL INTEIRO (assunto e corpo) TEM QUE SER EM PORTUGUÊS DO BRASIL.'
-    ].join('\n');
+    ].filter(function (x) { return x !== ''; }).join('\n');
 }
 // Limpa cacoetes de IA que escapam mesmo com o prompt (travessões, hífens de emenda,
 // indentação fantasma no início das linhas)
@@ -6540,7 +6789,25 @@ function jfHumanizeEmail(s, lang) {
     t = t.replace(/[,.]\s*(Best|Cheers|Thanks|Abraço|Abraços|Valeu)([,.]?)\s*$/i, '.\n\n$1,');
     return t;
 }
-async function jfGenEmailFor(p, tone, onStatus) {
+// Garante que o PORTFÓLIO fique SEMPRE no final: troca o token [[PORTFOLIO]] pelo link
+// configurado (ou por uma menção suave se não houver link). Se a IA esqueceu o token,
+// injeta a linha logo antes da despedida.
+function jfApplyPortfolio(body, lang) {
+    const link = (((typeof jfTpl !== 'undefined' && jfTpl.portfolio) || '')).trim();
+    const line = link
+        ? (lang === 'en' ? ('My portfolio: ' + link) : ('Meu portfólio: ' + link))
+        : (lang === 'en' ? 'Happy to send my portfolio if it helps.' : 'Se quiser, te mando meu portfólio.');
+    let t = String(body || '');
+    if (/\[\[\s*PORTFOLIO\s*\]\]/i.test(t)) {
+        return t.replace(/\[\[\s*PORTFOLIO\s*\]\]/gi, line);
+    }
+    // token sumiu — injeta antes da despedida (Best/Abraço/etc.), senão no fim
+    const signRe = /\n[ \t]*(Best|Cheers|Thanks|Regards|Abraço|Abraços|Valeu|Att)\b/i;
+    const m = t.match(signRe);
+    if (m) return t.slice(0, m.index).replace(/\s*$/, '') + '\n\n' + line + t.slice(m.index);
+    return t.replace(/\s*$/, '') + '\n\n' + line;
+}
+async function jfGenEmailFor(p, tone, onStatus, opts) {
     // Pesquisa real: puxa os títulos dos vídeos recentes do canal (1-2 de cota, cacheado)
     // pra IA comentar algo que o canal REALMENTE postou.
     if (!p._vidTitles && typeof jfChannelVideoTitles === 'function' && jfHasKey() && !jfIsQuotaExhausted()) {
@@ -6555,8 +6822,11 @@ async function jfGenEmailFor(p, tone, onStatus) {
             try { jfPersistList(); } catch (e2) {}
         } catch (e) { p._vidTitles = []; }
     }
+    // Pesquisa da trajetória (os dois): stats do YouTube + Wikipedia. Cacheado em p.
+    let research = '';
+    try { research = await jfChannelResearch(p, onStatus); } catch (e) { research = ''; }
     const lang = jfEmailLang(p);
-    const raw = await jfAICall(jfBuildEmailPrompt(p, tone), onStatus);
+    const raw = await jfAICall(jfBuildEmailPrompt(p, tone, { trial: !!(opts && opts.trial), research: research }), onStatus);
     const cleaned = String(raw || '').replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/i, '').trim();
     let obj = null;
     try { obj = JSON.parse(cleaned); } catch (e) {
@@ -6564,13 +6834,15 @@ async function jfGenEmailFor(p, tone, onStatus) {
         if (m) { try { obj = JSON.parse(m[0]); } catch (_e) {} }
     }
     if (!obj || !obj.body) { try { console.warn('[jobfinder] resposta IA inesperada:', raw); } catch (_e) {} throw new Error('A IA respondeu num formato inesperado. Tente de novo.'); }
-    return { subject: jfHumanizeEmail(obj.subject || jfTpl.subject || '', lang), body: jfHumanizeEmail(obj.body || '', lang) };
+    const body = jfApplyPortfolio(jfHumanizeEmail(obj.body || '', lang), lang);
+    return { subject: jfHumanizeEmail(obj.subject || jfTpl.subject || '', lang), body: body };
 }
 
 /* ═══════════ Modal de e-mail — prévia + editar + enviar (sem abrir Gmail) ═══════════ */
 const JF_SPARK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align:-2px"><path d="M12 2l1.6 4.9L18.5 8l-4.9 1.6L12 14.5l-1.6-4.9L5.5 8l4.9-1.1L12 2zm6.5 10l.9 2.6L22 15.5l-2.6.9L18.5 19l-.9-2.6L15 15.5l2.6-.9.9-2.6zM6 14l.7 2.1L9 16.8l-2.3.7L6 19.8l-.7-2.3L3 16.8l2.3-.7L6 14z"/></svg>';
 let jfMailCurrent = null;
 let jfMailTone = 'informal';
+let jfMailTrial = false; // oferecer teste/trial gratis no e-mail?
 let jfGenSeq = 0;
 function jfRenderToneToggle() {
     ['informal', 'formal'].forEach(t => {
@@ -6592,6 +6864,25 @@ function jfSetMailTone(t) {
     // Se ainda não gerou nada, só define o tom pro próximo clique em "Gerar com IA" — não gasta cota sozinho.
     if (p && jfHasAI() && p._aiBody && changed) jfMailGenerate();
 }
+function jfRenderTrialToggle() {
+    [['nao', false], ['sim', true]].forEach(pair => {
+        const b = document.getElementById('jfTrial' + pair[0]);
+        if (!b) return;
+        const on = jfMailTrial === pair[1];
+        b.style.background = on ? 'linear-gradient(135deg,#bef264,#a3e635)' : 'transparent';
+        b.style.color = on ? '#0a0a0a' : 'var(--text3)';
+    });
+}
+function jfSetMailTrial(v) {
+    v = !!v;
+    const changed = v !== jfMailTrial;
+    jfMailTrial = v;
+    try { cfg.jfTrial = v; localStorage.setItem('vc_config', JSON.stringify(cfg)); } catch (e) {}
+    jfRenderTrialToggle();
+    const p = jfMailCurrent;
+    // regenera só se já gerou com IA antes e realmente mudou (trial muda bastante o texto)
+    if (p && jfHasAI() && p._aiBody && changed) jfMailGenerate();
+}
 function jfEnsureMailModal() {
     if (document.getElementById('jfMailOverlay')) return;
     const inS = 'width:100%;padding:9px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.82rem;outline:none;box-sizing:border-box';
@@ -6609,6 +6900,13 @@ function jfEnsureMailModal() {
                 '<div style="display:inline-flex;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:9px;padding:2px" title="Tom do e-mail">' +
                     '<button id="jfToneinformal" onclick="jfSetMailTone(\'informal\')" style="padding:6px 13px;border:none;background:transparent;color:var(--text3);font-size:.72rem;font-weight:700;border-radius:7px;cursor:pointer;font-family:inherit">Informal</button>' +
                     '<button id="jfToneformal" onclick="jfSetMailTone(\'formal\')" style="padding:6px 13px;border:none;background:transparent;color:var(--text3);font-size:.72rem;font-weight:700;border-radius:7px;cursor:pointer;font-family:inherit">Formal</button>' +
+                '</div>' +
+                '<div style="display:inline-flex;align-items:center;gap:7px" title="Oferecer um teste grátis (amostra de edição) pra mostrar suas habilidades">' +
+                    '<span style="font-size:.72rem;color:var(--text3);font-weight:600">Trial grátis?</span>' +
+                    '<div style="display:inline-flex;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:9px;padding:2px">' +
+                        '<button id="jfTrialnao" onclick="jfSetMailTrial(false)" style="padding:6px 12px;border:none;background:transparent;color:var(--text3);font-size:.72rem;font-weight:700;border-radius:7px;cursor:pointer;font-family:inherit">Não</button>' +
+                        '<button id="jfTrialsim" onclick="jfSetMailTrial(true)" style="padding:6px 12px;border:none;background:transparent;color:var(--text3);font-size:.72rem;font-weight:700;border-radius:7px;cursor:pointer;font-family:inherit">Sim</button>' +
+                    '</div>' +
                 '</div>' +
                 '<button id="jfMailGenBtn" onclick="jfMailGenerate()" class="btn btn-a" style="padding:8px 14px;font-size:.76rem">' + JF_SPARK + ' Gerar com IA</button>' +
                 '<span id="jfMailGenHint" style="font-size:.68rem;color:var(--text3)"></span>' +
@@ -6642,11 +6940,13 @@ async function jfMailOpen(id) {
     // botões conforme tem e-mail ou não
     document.getElementById('jfMailSendBtn').style.display = hasEmail ? '' : 'none';
     document.getElementById('jfMailGmailBtn').textContent = hasEmail ? 'Abrir no Gmail' : 'Copiar e abrir rede';
-    // tom: usa o padrão salvo nas configs
+    // tom + trial: usa o padrão salvo nas configs
     jfMailTone = (typeof cfg !== 'undefined' && cfg.jfTone === 'formal') ? 'formal' : 'informal';
+    jfMailTrial = !!(typeof cfg !== 'undefined' && cfg.jfTrial);
     jfRenderToneToggle();
-    // preenche: usa o que a IA já gerou (cache do MESMO tom) ou o template como base
-    const useCache = p._aiBody && p._aiTone === jfMailTone;
+    jfRenderTrialToggle();
+    // preenche: usa o que a IA já gerou (cache do MESMO tom E mesma opção de trial) ou o template como base
+    const useCache = p._aiBody && p._aiTone === jfMailTone && !!p._aiTrial === jfMailTrial;
     const subj = useCache ? p._aiSubject : (jfTpl.subject || '').replace(/\{canal\}/g, p.title);
     const body = useCache ? p._aiBody : (jfTpl.body || '').replace(/\{canal\}/g, p.title);
     document.getElementById('jfMailSubject').value = subj;
@@ -6663,14 +6963,15 @@ async function jfMailGenerate() {
     const p = jfMailCurrent; if (!p) return;
     if (!jfHasAI()) { jfMailStatus('Adicione uma chave de IA (Groq ou Gemini) em Configurações → Integrações.', 'err'); return; }
     const tone = jfMailTone;
-    const seq = ++jfGenSeq; // só a geração mais recente pode escrever/cachear (evita race de canal E de tom)
+    const trial = jfMailTrial;
+    const seq = ++jfGenSeq; // só a geração mais recente pode escrever/cachear (evita race de canal, tom E trial)
     const btn = document.getElementById('jfMailGenBtn');
     btn.disabled = true; btn.style.opacity = '.6';
     jfMailStatus('A IA está lendo o canal e escrevendo…');
     try {
-        const out = await jfGenEmailFor(p, tone, (msg) => { if (seq === jfGenSeq && jfMailCurrent === p) jfMailStatus(msg); });
+        const out = await jfGenEmailFor(p, tone, (msg) => { if (seq === jfGenSeq && jfMailCurrent === p) jfMailStatus(msg); }, { trial: trial });
         if (seq !== jfGenSeq) return; // uma geração mais nova assumiu — descarta esta
-        p._aiSubject = out.subject; p._aiBody = out.body; p._aiTone = tone; jfPersistList();
+        p._aiSubject = out.subject; p._aiBody = out.body; p._aiTone = tone; p._aiTrial = trial; jfPersistList();
         if (jfMailCurrent !== p) return; // modal mudou de canal — não escreve por cima
         document.getElementById('jfMailSubject').value = out.subject;
         document.getElementById('jfMailBody').value = out.body;
@@ -6685,7 +6986,12 @@ async function jfMailGenerate() {
             else m = 'Limite de cota da IA atingido — provavelmente o limite diário do plano grátis. Configure a outra IA como reserva ou tente mais tarde. (Detalhe no console: F12.)';
         }
         jfMailStatus(m, 'err');
-    } finally { if (seq === jfGenSeq && jfMailCurrent === p) { btn.disabled = false; btn.style.opacity = jfHasAI() ? '1' : '.55'; } }
+    } finally {
+        // reabilita se ESTA e a geracao mais recente (a botao e compartilhado). NAO exige
+        // jfMailCurrent===p: se o usuario fechou/trocou de canal no meio, o botao ficava travado
+        // disabled pra sempre. Se ja rolou uma geracao mais nova, ela cuida do proprio estado.
+        if (seq === jfGenSeq) { const b = document.getElementById('jfMailGenBtn'); if (b) { b.disabled = false; b.style.opacity = jfHasAI() ? '1' : '.55'; } }
+    }
 }
 function jfMailMarkSent(p) {
     p._sent = true; jfPersistList();
@@ -6744,6 +7050,264 @@ function jfMailGmailFallback() {
 function jfConfirm(msg, opts) {
     try { if (typeof lwConfirm === 'function') return lwConfirm(msg, opts); } catch (e) {}
     return Promise.resolve(window.confirm(msg));
+}
+
+/* ═══════════ Aba PRESETS — Wiggler + Curvas (sync do plugin) + Premiere (catálogo) ═══════════ */
+// Built-ins (espelham o painel do Premiere — apenas leitura, sempre visíveis)
+const LWP_WIG_BUILTIN = [
+    {n:'Sutil',f:1,a:8,o:1,m:.5},{n:'Handheld',f:2,a:18,o:2,m:.55},{n:'Câmera',f:4,a:35,o:2,m:.6},
+    {n:'Ação',f:8,a:60,o:2,m:.5},{n:'Nervoso',f:16,a:22,o:1,m:.5},{n:'Terremoto',f:12,a:110,o:3,m:.7},
+];
+let lwpData = { wiggler: [], easing: [] };
+let lwpPproItems = [];
+let lwpPproCachedAt = null;
+let _lwpInited = false;
+const lwpEsc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// So os presets DA PESSOA: descarta os containers de fabrica da Adobe (Factory/Lumetri/
+// Mask) e o proprio container nao-expandido. O Lion Search continua vendo tudo — o filtro
+// e so desta aba.
+function lwpFilterUserPresets(items) {
+    const factoryRe = /(Factory Presets|Lumetri Presets|Lumetri Color Presets|MaskPresets)\.prfpset(#|$)/i;
+    return (items || []).filter(it => it && !it.isContainer && !factoryRe.test(String(it.matchName || '')));
+}
+async function lwPresetsInit() {
+    try {
+        const d = await window.lwPresets.get();
+        lwpData = { wiggler: (d && d.wiggler) || [], easing: (d && d.easing) || [] };
+    } catch (e) { lwpData = { wiggler: [], easing: [] }; }
+    try {
+        const c = await window.lwPresets.premiereCatalog();
+        lwpPproItems = lwpFilterUserPresets((c && c.items) || []);
+        lwpPproCachedAt = c && c.cachedAt;
+    } catch (e) { lwpPproItems = []; }
+    lwpRenderAll();
+    // live update: plugin salvou um preset novo → recarrega
+    if (!_lwpInited) {
+        _lwpInited = true;
+        try { window.lwPresets.onChanged(async () => {
+            try { const d = await window.lwPresets.get(); lwpData = { wiggler: d.wiggler||[], easing: d.easing||[] }; lwpRenderAll(); } catch(e){}
+        }); } catch (e) {}
+    }
+}
+function lwpRenderAll() { lwpRenderWiggler(); lwpRenderEasing(); lwpRenderPpro(); lwpUpdateCounts(); }
+function lwpUpdateCounts() {
+    const total = lwpData.wiggler.length + lwpData.easing.length + lwpPproItems.length;
+    const el = document.getElementById('lwpCount');
+    if (el) el.textContent = total ? (total + ' presets seus') : '';
+}
+
+function lwpRenderWiggler() {
+    const grid = document.getElementById('lwpWigGrid'); if (!grid) return;
+    const cnt = document.getElementById('lwpWigCount');
+    if (cnt) cnt.textContent = lwpData.wiggler.length ? ('· ' + lwpData.wiggler.length + ' seus') : '';
+    let html = '', seq = 0;
+    LWP_WIG_BUILTIN.forEach(p => { html += lwpWigCard(p, false, -1, seq++); });
+    lwpData.wiggler.forEach((p, i) => { html += lwpWigCard(p, true, i, seq++); });
+    if (!lwpData.wiggler.length) html += '<div class="lwp-empty">Salve um preset no Wiggler do painel do Premiere (botão +) e ele aparece aqui.</div>';
+    grid.innerHTML = html;
+    lwpStartWigAnim();
+}
+function lwpWigCard(p, mine, idx, seq) {
+    return '<div class="lwp-card">' +
+        (mine ? ('<div class="lwp-actions">' +
+            '<button class="lwp-act" title="Renomear" onclick="lwpRename(\'wiggler\',' + idx + ')">✎</button>' +
+            '<button class="lwp-act del" title="Apagar" onclick="lwpDelete(\'wiggler\',' + idx + ')">×</button>' +
+        '</div>') : '') +
+        '<div class="lwp-wigdot-wrap"><span class="lwp-wigdot" data-f="' + lwpEsc(p.f) + '" data-a="' + lwpEsc(p.a) + '" data-i="' + (seq || 0) + '"></span></div>' +
+        '<div class="lwp-name">' + lwpEsc(p.n) + '</div>' +
+        '<div class="lwp-sub">freq ' + lwpEsc(p.f) + ' · amp ' + lwpEsc(p.a) + ' · oct ' + lwpEsc(p.o) + '</div>' +
+        '<span class="lwp-badge' + (mine ? ' mine' : '') + '" style="align-self:flex-start">' + (mine ? 'seu' : 'padrão') + '</span>' +
+    '</div>';
+}
+// Bolinhas dos cards do Wiggler mexem de verdade: cada uma treme conforme o proprio
+// freq/amp (preview do que o preset faz). Um rAF so pra todas; para sozinho fora da aba.
+let _lwpWigRaf = null;
+function lwpStartWigAnim() {
+    if (_lwpWigRaf) { cancelAnimationFrame(_lwpWigRaf); _lwpWigRaf = null; }
+    try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) {}
+    const tick = (ts) => {
+        const tab = document.getElementById('tab-presets');
+        if (!tab || !tab.classList.contains('active')) { _lwpWigRaf = null; return; }
+        const dots = document.querySelectorAll('#lwpWigGrid .lwp-wigdot');
+        if (!dots.length) { _lwpWigRaf = null; return; }
+        dots.forEach(el => {
+            const f = Math.min(+el.dataset.f || 2, 20);
+            const a = Math.min(+el.dataset.a || 10, 120);
+            const ph = (+el.dataset.i || 0) * 1.7; // defasagem — nao mexem em uníssono
+            const t = ts / 1000 * (0.6 + f * 0.55) + ph;
+            const k = 5 + (a / 120) * 12; // excursão 5-17px
+            const x = Math.sin(t * 2.1) * Math.cos(t * 0.93) * k;
+            const y = Math.cos(t * 1.7) * Math.sin(t * 1.31) * k;
+            el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px)';
+        });
+        _lwpWigRaf = requestAnimationFrame(tick);
+    };
+    _lwpWigRaf = requestAnimationFrame(tick);
+}
+
+function lwpRenderEasing() {
+    const grid = document.getElementById('lwpEaseGrid'); if (!grid) return;
+    const cnt = document.getElementById('lwpEaseCount');
+    if (cnt) cnt.textContent = lwpData.easing.length ? ('· ' + lwpData.easing.length + ' suas') : '';
+    // SO as curvas do usuario — as padrao (Cubic/Sine/etc) ja vivem no painel do Premiere
+    let html = '';
+    lwpData.easing.forEach((p, i) => { html += lwpEaseCard(p, true, i); });
+    if (!lwpData.easing.length) html += '<div class="lwp-empty">Salve uma curva no painel Easing do Premiere ("Meus presets" → +) e ela aparece aqui.</div>';
+    grid.innerHTML = html;
+    // desenha as curvas (depois do innerHTML — os canvas existem agora)
+    grid.querySelectorAll('canvas[data-cp]').forEach(cv => {
+        try { const cp = JSON.parse(cv.dataset.cp); lwpDrawCurve(cv, cp.cp1, cp.cp2); } catch (e) {}
+    });
+}
+function lwpEaseCard(p, mine, idx) {
+    const cp = lwpEsc(JSON.stringify({ cp1: p.cp1, cp2: p.cp2 }));
+    return '<div class="lwp-card">' +
+        (mine ? ('<div class="lwp-actions">' +
+            '<button class="lwp-act" title="Renomear" onclick="lwpRename(\'easing\',' + idx + ')">✎</button>' +
+            '<button class="lwp-act del" title="Apagar" onclick="lwpDelete(\'easing\',' + idx + ')">×</button>' +
+        '</div>') : '') +
+        '<canvas class="lwp-curve" width="150" height="56" data-cp="' + cp + '"></canvas>' +
+        '<div class="lwp-name">' + lwpEsc(p.name) + (mine && p.dir ? ' <span style="font-size:.6rem;color:var(--text3)">(' + lwpEsc(p.dir) + ')</span>' : '') + '</div>' +
+        '<span class="lwp-badge' + (mine ? ' mine' : '') + '" style="align-self:flex-start">' + (mine ? 'sua' : 'padrão') + '</span>' +
+    '</div>';
+}
+function lwpDrawCurve(cv, cp1, cp2) {
+    const ctx = cv.getContext('2d'); if (!ctx) return;
+    const W = cv.width, H = cv.height, pad = 8;
+    ctx.clearRect(0, 0, W, H);
+    // curva pode passar de 0..1 (back/elastic) — mapeia y com margem
+    const X = (t) => pad + t * (W - 2 * pad);
+    const Y = (v) => H - pad - ((v + 0.6) / 2.2) * (H - 2 * pad);
+    ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(1), Y(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(0), Y(1)); ctx.lineTo(X(1), Y(1)); ctx.stroke();
+    ctx.strokeStyle = '#bef264'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(X(0), Y(0));
+    ctx.bezierCurveTo(X(cp1.x), Y(cp1.y), X(cp2.x), Y(cp2.y), X(1), Y(1));
+    ctx.stroke();
+}
+
+async function lwpRefetch() {
+    // re-le o store do disco — NUNCA escrever a partir de snapshot velho (plugin pode ter
+    // salvo algo enquanto um modal estava aberto; sobrescrever perderia o save dele)
+    try { const d = await window.lwPresets.get(); lwpData = { wiggler: (d && d.wiggler) || [], easing: (d && d.easing) || [] }; } catch (e) {}
+}
+async function lwpDelete(kind, idx) {
+    const cur = (lwpData[kind] || [])[idx]; if (!cur) return;
+    const nm = cur.n || cur.name || 'preset';
+    const ok = await jfConfirm('Apagar o preset "' + nm + '"? Some daqui e do painel do Premiere.', { title: 'Apagar preset', okLabel: 'Apagar', danger: true });
+    if (!ok) return;
+    await lwpRefetch();
+    const key = kind === 'wiggler' ? 'n' : 'name';
+    lwpData[kind] = (lwpData[kind] || []).filter(x => x && x[key] !== nm);
+    try { await window.lwPresets.set({ [kind]: lwpData[kind] }); } catch (e) {}
+    lwpRenderAll();
+    try { showToast('Preset "' + lwpEsc(nm) + '" apagado', 'success'); } catch (e) {}
+}
+// prompt() nativo NAO existe no Electron — modal proprio, Promise<string|null>
+function lwpPrompt(title, value) {
+    return new Promise((resolve) => {
+        const ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:10030;display:flex;align-items:center;justify-content:center;padding:20px';
+        ov.innerHTML = '<div class="modal modal-sm" style="width:360px;max-width:100%">' +
+            '<h3 style="margin:0 0 12px;font-size:1rem">' + lwpEsc(title) + '</h3>' +
+            '<input type="text" maxlength="80" style="width:100%;padding:9px 12px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.84rem;outline:none;box-sizing:border-box;margin-bottom:14px">' +
+            '<div class="actions"><button class="btn btn-o">Cancelar</button><button class="btn btn-a">Salvar</button></div></div>';
+        document.body.appendChild(ov);
+        const inp = ov.querySelector('input');
+        inp.value = value || '';
+        const done = (v) => { try { ov.remove(); } catch (e) {} resolve(v); };
+        ov.querySelector('.btn-o').onclick = () => done(null);
+        ov.querySelector('.btn-a').onclick = () => done(inp.value.trim() || null);
+        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') done(inp.value.trim() || null); if (ev.key === 'Escape') done(null); });
+        ov.addEventListener('click', (ev) => { if (ev.target === ov) done(null); });
+        setTimeout(() => { try { inp.focus(); inp.select(); } catch (e) {} }, 60);
+    });
+}
+async function lwpRename(kind, idx) {
+    const cur = (lwpData[kind] || [])[idx]; if (!cur) return;
+    const key = kind === 'wiggler' ? 'n' : 'name';
+    const old = cur[key];
+    const novo = await lwpPrompt('Novo nome do preset:', old);
+    if (!novo || novo === old) return;
+    await lwpRefetch();
+    const item = (lwpData[kind] || []).find(x => x && x[key] === old);
+    if (!item) { lwpRenderAll(); return; }
+    item[key] = novo.slice(0, 80);
+    try { await window.lwPresets.set({ [kind]: lwpData[kind] }); } catch (e) {}
+    lwpRenderAll();
+}
+
+let lwpFolderOpen = {}; // estado aberto/fechado por pasta — NAO ler do DOM (a busca filtra o DOM e perderia o estado)
+function lwpToggleFolder(headEl) {
+    const f = headEl.parentElement;
+    f.classList.toggle('open');
+    lwpFolderOpen[f.dataset.folder] = f.classList.contains('open');
+}
+function lwpRenderPpro() {
+    const wrap = document.getElementById('lwpPproFolders'); if (!wrap) return;
+    const hint = document.getElementById('lwpPproHint');
+    const cnt = document.getElementById('lwpPproCount');
+    const q = ((document.getElementById('lwpPproSearch') || {}).value || '').toLowerCase().trim();
+    const items = q ? lwpPproItems.filter(it => (it.name || '').toLowerCase().includes(q) || (it.category || '').toLowerCase().includes(q)) : lwpPproItems;
+    if (cnt) cnt.textContent = lwpPproItems.length ? ('· ' + lwpPproItems.length) : '';
+    if (!lwpPproItems.length) {
+        wrap.innerHTML = '';
+        if (hint) hint.textContent = 'Nenhum preset importado ainda. Abra o Premiere com o painel do Lion Workspace e clique em "Importar do Premiere".';
+        return;
+    }
+    if (hint) hint.textContent = lwpPproCachedAt ? ('Importados automaticamente do seu Premiere · última atualização ' + new Date(lwpPproCachedAt).toLocaleString('pt-BR')) : 'Importados automaticamente do seu Premiere.';
+    // ARVORE aninhada por pasta (category = "A / B / C") — a lista achatada com o
+    // caminho completo em cada linha era ilegivel com 100 pastas.
+    const root = { children: {}, items: [], total: 0 };
+    items.forEach(it => {
+        const segs = String(it.category || 'Presets').split(' / ').map(s => s.trim()).filter(Boolean);
+        let node = root;
+        segs.forEach(seg => {
+            if (!node.children[seg]) node.children[seg] = { children: {}, items: [], total: 0 };
+            node = node.children[seg];
+            node.total++;
+        });
+        node.items.push(it);
+    });
+    const CHEV = '<svg class="lwp-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>';
+    const FOLD = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+    function renderNode(node, path, depth) {
+        let inner = '';
+        Object.keys(node.children).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach(k => {
+            const child = node.children[k];
+            const cPath = path ? path + ' / ' + k : k;
+            const open = q ? true : !!lwpFolderOpen[cPath]; // buscando = abre tudo (sem gravar no estado)
+            inner += '<div class="lwp-folder' + (open ? ' open' : '') + (depth > 0 ? ' lwp-sub' : '') + '" data-folder="' + lwpEsc(cPath) + '">' +
+                '<div class="lwp-folder-head" onclick="lwpToggleFolder(this)">' +
+                    CHEV + FOLD +
+                    '<span class="lwp-folder-name">' + lwpEsc(k) + '</span>' +
+                    '<span class="lwp-folder-count">' + child.total + '</span>' +
+                '</div>' +
+                '<div class="lwp-folder-body">' + renderNode(child, cPath, depth + 1) + '</div>' +
+            '</div>';
+        });
+        inner += node.items.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'))
+            .map(it => '<div class="lwp-ppro-item"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + lwpEsc(it.name) + '</span>' +
+                (it.audioOnly ? '<span class="tag">áudio</span>' : (it.videoOnly ? '<span class="tag">vídeo</span>' : '')) + '</div>').join('');
+        return inner;
+    }
+    wrap.innerHTML = renderNode(root, '', 0);
+}
+async function lwpPproRefresh() {
+    const btn = document.getElementById('lwpPproRefreshBtn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+    try {
+        const r = await window.lwPresets.premiereRefresh();
+        lwpPproItems = (r && r.items) ? lwpFilterUserPresets(r.items) : lwpPproItems;
+        lwpPproCachedAt = (r && r.cachedAt) || lwpPproCachedAt;
+        lwpRenderPpro(); lwpUpdateCounts();
+        if (r && r.ok) showToast('Presets do Premiere atualizados (' + lwpPproItems.length + ')', 'success');
+        else if (r && (r.error === 'busy' || r.error === 'superseded_by_apply')) showToast('Lion Search ocupado aplicando um efeito — tenta de novo em alguns segundos', 'warn');
+        else showToast((r && r.error) || 'Abra o Premiere com o painel do Lion Workspace pra importar.', 'warn');
+    } catch (e) { showToast('Não deu pra atualizar: ' + (e.message || e), 'error'); }
+    finally { if (btn) { btn.disabled = false; btn.style.opacity = '1'; } }
 }
 
 let faturas = JSON.parse(localStorage.getItem('vc_faturas')||'[]');
@@ -6980,6 +7544,7 @@ function salvarFaturas(){localStorage.setItem('vc_faturas',JSON.stringify(fatura
 
 // ===== TABS =====
 function showTab(id,btn){
+    try{ if(window._regHintCleanup) window._regHintCleanup(); }catch(e){}
     if(id==='config'){
         // Anima a barra lateral trocando a nav principal pelos tópicos de configurações
         try { document.getElementById('mainTabs').classList.add('config-mode'); } catch(e){}
@@ -7009,6 +7574,169 @@ function showTab(id,btn){
     if(id==='produtividade') {renderVidsAndamento();updProjTimerSelect();renderProdHist();}
     if(id==='ytdownload') ytCheckDeps();
 }
+// "Registrar serviço" (empty state do dashboard): a aba Registros e so a TABELA de
+// servicos ja lancados — nao da pra registrar la. Registrar e sempre pelo "+" do card
+// do cliente (abrirRegistrar). Entao leva pra Clientes e aponta uma seta pro "+" certo.
+function irRegistrarServico(){
+    showTab('clientes',document.querySelector('[data-tab=clientes]'));
+    setTimeout(()=>{
+        let target=null,label='';
+        if(typeof clientes!=='undefined' && clientes.length){
+            target=document.querySelector('#clientGrid .client-card .cc-actions .btn-g');
+        }
+        if(target){
+            label='Clique no + pra registrar um serviço';
+        }else{
+            target=document.getElementById('novoCliIcon')||document.getElementById('novoCliCard');
+            label='Cadastre um cliente primeiro';
+        }
+        if(target)_mostrarRegHint(target,label);
+    },240);
+}
+function _mostrarRegHint(target,label){
+    try{ if(window._regHintCleanup) window._regHintCleanup(); }catch(e){}
+    try{ target.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+    target.classList.add('hint-pulse');
+    const hint=document.createElement('div');
+    hint.id='regHint';
+    hint.innerHTML='<div class="rh-label">'+label+'</div>'+
+        '<svg class="rh-arrow" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="17"/><polyline points="6 11 12 17 18 11"/></svg>';
+    document.body.appendChild(hint);
+    let done=false,raf=0,to=0;
+    function pos(){
+        if(!document.body.contains(target)){ cleanup(); return; }
+        const r=target.getBoundingClientRect();
+        const near=r.top<130;
+        hint.classList.toggle('below',near);
+        hint.style.left=Math.round(r.left+r.width/2)+'px';
+        hint.style.top=Math.round(near? r.bottom+6 : r.top-6)+'px';
+        hint.style.transform=near?'translate(-50%,0)':'translate(-50%,-100%)';
+    }
+    function onMove(){ pos(); }
+    function cleanup(){
+        if(done)return; done=true;
+        if(raf)cancelAnimationFrame(raf);
+        clearTimeout(to);
+        try{hint.remove()}catch(e){}
+        try{target.classList.remove('hint-pulse')}catch(e){}
+        window.removeEventListener('scroll',onMove,true);
+        window.removeEventListener('resize',onMove);
+        try{target.removeEventListener('click',cleanup)}catch(e){}
+        window._regHintCleanup=null;
+    }
+    // Segue o alvo durante o scroll suave (~1.3s), depois so em eventos
+    function tick(){ pos(); raf=requestAnimationFrame(tick); }
+    tick();
+    setTimeout(()=>{ if(raf){cancelAnimationFrame(raf);raf=0} },1300);
+    window.addEventListener('scroll',onMove,true);
+    window.addEventListener('resize',onMove);
+    target.addEventListener('click',cleanup);
+    to=setTimeout(cleanup,7000);
+    window._regHintCleanup=cleanup;
+}
+// ═══ Tour de primeira vez (tutorial guiado com setinhas) ═══
+const TOUR_STEPS = [
+    { center:true, title:'Bem-vindo ao Lion Workspace', body:'Deixa eu te mostrar o essencial rapidinho. Leva menos de um minuto.' },
+    { sel:'[data-tab="clientes"]', title:'Seus clientes', body:'É aqui que tudo começa: cadastre quem você edita, com valor por serviço e forma de pagamento.' },
+    { sel:'[data-tab="registros"]', title:'Registros', body:'Cada entrega que você marcar vira um registro aqui. É o que alimenta seu faturamento, os gráficos e as faturas.' },
+    { sel:'[data-tab="produtividade"]', title:'Produção', body:'Acompanhe suas edições no pipeline e cronometre o trabalho com o timer e o pomodoro.' },
+    { sel:'[data-tab="jobfinder"]', title:'Job Finder', body:'Precisa de mais clientes? Busque canais no YouTube e gere e-mails de prospecção prontos.' },
+    { sel:'[data-tab="rmbg"]', title:'Ferramentas', body:'Ainda tem remover fundo de imagem e vídeo, baixar do YouTube e sua biblioteca de áudios.' },
+    { sel:'.gear-btn[onclick*="config"]', title:'Configurações', body:'Seus dados, integrações e o plugin do Premiere ficam aqui na engrenagem.' },
+    { center:true, title:'Tudo pronto!', body:'Agora é com você. Bom trabalho.' },
+];
+let _tourIdx = 0, _tourOn = false;
+function _tourPlace(r){
+    const root=document.getElementById('tourRoot'); if(!root) return;
+    const spot=root.querySelector('.tour-spot'), card=root.querySelector('.tour-card'), arrow=root.querySelector('.tour-arrow'), svg=arrow.querySelector('svg');
+    const pad=8, GAP=44, VW=window.innerWidth, VH=window.innerHeight;
+    spot.style.left=(r.left-pad)+'px'; spot.style.top=(r.top-pad)+'px'; spot.style.width=(r.width+pad*2)+'px'; spot.style.height=(r.height+pad*2)+'px';
+    const cw=card.offsetWidth, ch=card.offsetHeight;
+    let dir, cx, cy;
+    if (r.right + GAP + cw <= VW-12) { dir='left';  cx=r.right+GAP;      cy=r.top+r.height/2-ch/2; }   // card à direita, seta aponta ESQUERDA
+    else if (r.left - GAP - cw >= 12){ dir='right'; cx=r.left-GAP-cw;    cy=r.top+r.height/2-ch/2; }   // card à esquerda, seta aponta DIREITA
+    else                             { dir='up';    cx=r.left+r.width/2-cw/2; cy=r.bottom+GAP; }        // card abaixo, seta aponta CIMA
+    cx=Math.max(12,Math.min(cx,VW-12-cw)); cy=Math.max(12,Math.min(cy,VH-12-ch));
+    card.style.left=cx+'px'; card.style.top=cy+'px'; card.style.transform='none';
+    arrow.style.display=''; const AS=40;
+    if (dir==='left'){ arrow.style.left=(r.right+2)+'px'; arrow.style.top=(r.top+r.height/2-AS/2)+'px'; svg.style.transform='rotate(0deg)';   arrow.style.setProperty('--tourArrowBounce','translateX(-9px)'); }
+    else if (dir==='right'){ arrow.style.left=(r.left-2-AS)+'px'; arrow.style.top=(r.top+r.height/2-AS/2)+'px'; svg.style.transform='rotate(180deg)'; arrow.style.setProperty('--tourArrowBounce','translateX(9px)'); }
+    else { arrow.style.left=(r.left+r.width/2-AS/2)+'px'; arrow.style.top=(r.bottom+2)+'px'; svg.style.transform='rotate(90deg)'; arrow.style.setProperty('--tourArrowBounce','translateY(-9px)'); }
+}
+function _tourRender(i){
+    const root=document.getElementById('tourRoot'); if(!root) return;
+    const step=TOUR_STEPS[i];
+    root.querySelector('.tc-title').textContent=step.title;
+    root.querySelector('.tc-body').textContent=step.body;
+    root.querySelector('.tc-dots').innerHTML=TOUR_STEPS.map((s,k)=>'<span class="tc-dot'+(k===i?' on':'')+'"></span>').join('');
+    const nextBtn=root.querySelector('.tc-next');
+    nextBtn.textContent = (i===0)?'Começar':((i===TOUR_STEPS.length-1)?'Concluir':'Próximo');
+    root.querySelector('.tc-skip').style.display=(i===TOUR_STEPS.length-1)?'none':'';
+    const arrow=root.querySelector('.tour-arrow');
+    let el=null;
+    if(!step.center && step.sel){ try{ el=document.querySelector(step.sel); }catch(e){} }
+    // Se o alvo (item da sidebar) estiver abaixo da dobra numa janela baixa, rola pra ele
+    if(el){ try{ el.scrollIntoView({block:'nearest'}); }catch(e){} }
+    const r0 = el ? el.getBoundingClientRect() : null;
+    // Vira card central (sem seta) se o alvo nao existe, esta oculto (display:none -> 0x0)
+    // ou esta fora da viewport (senao o spotlight sairia da tela e escureceria tudo)
+    const onScreen = r0 && r0.width>0 && r0.height>0 &&
+        r0.bottom>4 && r0.top < window.innerHeight-4 && r0.right>4 && r0.left < window.innerWidth-4;
+    if(!el || !onScreen){ root.classList.add('no-target'); arrow.style.display='none'; return; }
+    root.classList.remove('no-target');
+    _tourPlace(r0);
+}
+function _tourReposition(){ const s=TOUR_STEPS[_tourIdx]; if(!s||s.center||!s.sel) return; let el=null; try{el=document.querySelector(s.sel);}catch(e){} if(el){ const rr=el.getBoundingClientRect(); if(rr.width>0&&rr.height>0)_tourPlace(rr); } }
+function _tourKey(e){
+    if(!_tourOn) return;
+    if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); tourEnd(false); }
+    else if(e.key==='ArrowRight'||e.key==='Enter'){ e.preventDefault(); tourNext(); }
+    else if(e.key==='ArrowLeft'){ e.preventDefault(); if(_tourIdx>0){ _tourIdx--; _tourRender(_tourIdx); } }
+}
+function tourNext(){ if(_tourIdx>=TOUR_STEPS.length-1){ tourEnd(true); return; } _tourIdx++; _tourRender(_tourIdx); }
+// Desmonta o overlay + listeners SEM marcar como visto (usado quando a UI muda de
+// estado por baixo do tour — ex: revalidacao de sessao volta invalida e mostra o login).
+function _tourTeardown(){
+    _tourOn=false;
+    const r=document.getElementById('tourRoot'); if(r) r.remove();
+    window.removeEventListener('resize',_tourReposition);
+    document.removeEventListener('keydown',_tourKey,true);
+}
+function tourEnd(){
+    _tourTeardown();
+    try{ localStorage.setItem('lw_tour_done', new Date().toISOString()); }catch(e){}
+}
+function startTour(){
+    if(_tourOn || document.getElementById('tourRoot')) return;
+    _tourOn=true; _tourIdx=0;
+    const root=document.createElement('div'); root.id='tourRoot';
+    root.innerHTML =
+        '<div class="tour-catch"></div>'+
+        '<div class="tour-spot"></div>'+
+        '<div class="tour-arrow"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="20" y1="12" x2="5" y2="12"/><polyline points="11 6 5 12 11 18"/></svg></div>'+
+        '<div class="tour-card"><div class="tc-title"></div><div class="tc-body"></div>'+
+          '<div class="tc-foot"><div class="tc-dots"></div>'+
+            '<button class="tc-skip" onclick="tourEnd(false)">Pular</button>'+
+            '<button class="tc-next" onclick="tourNext()">Próximo</button></div></div>';
+    document.body.appendChild(root);
+    _tourRender(0);
+    window.addEventListener('resize',_tourReposition);
+    document.addEventListener('keydown',_tourKey,true);
+}
+function maybeStartTour(){
+    try{ if(localStorage.getItem('lw_tour_done')) return; }catch(e){ return; }
+    if(_tourOn) return;
+    // Só dispara com o app visível e sem modal de boas-vindas/setup por cima
+    setTimeout(function(){
+        try{
+            if(typeof appContainer!=='undefined' && (!appContainer || appContainer.style.display==='none')) return;
+            const fl=document.getElementById('firstLaunchModal'); if(fl && getComputedStyle(fl).display!=='none') return;
+            const ss=document.getElementById('setupScreen'); if(ss && !ss.classList.contains('hidden')) return;
+            startTour();
+        }catch(e){}
+    }, 700);
+}
+window.lwStartTour = function(){ try{ localStorage.removeItem('lw_tour_done'); }catch(e){} startTour(); };
 function fecharConfig(){document.getElementById('configPanel').classList.remove('active');try{document.getElementById('mainTabs').classList.remove('config-mode');}catch(e){}}
 // Posiciona o X do config EXATAMENTE onde a engrenagem fica na tela normal
 // (a engrenagem continua no DOM atrás do overlay — é só copiar o rect dela)
@@ -7029,6 +7757,8 @@ window.addEventListener('resize',()=>{try{if(document.getElementById('configPane
 function cfgV2Switch(section){
     document.querySelectorAll('.cs-nav-btn,.sb-cfg-btn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-cfg-nav')===section));
     document.querySelectorAll('[data-cfg-section]').forEach(s=>s.classList.toggle('active', s.getAttribute('data-cfg-section')===section));
+    // Card "Resumo tributario" (coluna direita) so aparece na secao Tributacao — nas outras poluia a tela
+    try { const rc=document.getElementById('csResumoCard'); if(rc) rc.classList.toggle('cfg-tribonly-hidden', section!=='tributacao'); } catch(e){}
     const subs={
         conta:'Suas credenciais e conexões.',
         invoice:'Dados que aparecem nas suas invoices.',
@@ -8810,6 +9540,8 @@ function updEtapasCliSel(){
             ${av}<span>${c.nome}</span>
         </div>`;
     }).join('')||`<div style="color:var(--text3);font-size:.82rem">${(typeof t==='function')?t('cli.empty'):'Nenhum cliente cadastrado.'}</div>`;
+    const _bN=document.getElementById('btnNovaEtapa');if(_bN)_bN.style.display=_etapasCli?'inline-flex':'none';
+    if(!_etapasCli){const _ae=document.getElementById('addEtapaUI');if(_ae)_ae.style.display='none';}
 }
 function selectEtapasCli(nome){
     _etapasCli=_etapasCli===nome?'':nome;
@@ -8836,9 +9568,9 @@ function renderEtapas(){
         const sc=stageColors[e.toLowerCase()]||'';
         const ds=stageStyle(e);
         const isProtected=(i===pipe.length-1);
-        const renameBtn=isProtected?'':`<span onclick="renameEtapa(${i});event.stopPropagation()" title="Renomear" style="cursor:pointer;font-size:.65rem;opacity:.5;margin-left:2px;transition:opacity .15s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.5'">&#9998;</span>`;
+        const renameBtn=isProtected?'':`<span class="rename" onclick="renameEtapa(${i});event.stopPropagation()" title="Renomear">&#9998;</span>`;
         const delBtn=isProtected?'':`<span class="x" onclick="removeEtapa(${i});event.stopPropagation()" title="Excluir">&times;</span>`;
-        return `<span class="etapa-chip ${sc}" style="gap:6px;cursor:grab;${ds}" draggable="true" ondragstart="onDragEtapa(event,${i})" ondragover="event.preventDefault();this.style.outline='2px solid var(--accent)'" ondragleave="this.style.outline=''" ondrop="onDropEtapa(event,${i});this.style.outline=''">
+        return `<span class="etapa-chip ${sc}" style="gap:8px;cursor:grab;${ds}" draggable="true" ondragstart="onDragEtapa(event,${i})" ondragover="event.preventDefault();this.style.outline='2px solid var(--accent)'" ondragleave="this.style.outline=''" ondrop="onDropEtapa(event,${i});this.style.outline=''">
             <span style="display:flex;align-items:center;gap:4px">${stageIcon(e)} ${e}</span>${renameBtn}${delBtn}
         </span>`;
     }).join('');
@@ -9466,12 +10198,19 @@ function filterFaturaVideos(){
     const vList=document.getElementById('faturaVideosList');
     const extraFields=document.getElementById('faturaExtraFields');
     const previewPanel=document.getElementById('faturaPreviewPanel');
+    const modalInner=document.getElementById('faturaModalInner');
     if(!videosNaoPagos.length){
-        vList.innerHTML='<div style="padding:14px;text-align:center;color:var(--text3);font-size:.84rem">Nenhum serviço pendente de pagamento.</div>';
+        vList.innerHTML='<div style="text-align:center;padding:26px 14px 6px;color:var(--text3)">'
+            +'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="opacity:.5;margin-bottom:10px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+            +'<div style="font-size:.9rem;font-weight:700;color:var(--text2);margin-bottom:5px">Nada pra faturar ainda</div>'
+            +'<div style="font-size:.78rem;line-height:1.5;max-width:280px;margin:0 auto">Marque um serviço como <b style="color:var(--text2)">concluído</b> e deixe-o <b style="color:var(--text2)">não pago</b> que ele aparece aqui pronto pra virar fatura.</div>'
+            +'</div>';
         document.getElementById('faturaResumo').innerHTML='';
         if(extraFields)extraFields.style.display='none';
         if(previewPanel)previewPanel.style.display='none';
+        if(modalInner)modalInner.style.maxWidth='470px';
     } else {
+        if(modalInner)modalInner.style.maxWidth='1100px';
         if(extraFields)extraFields.style.display='';
         if(previewPanel)previewPanel.style.display='';
         vList.innerHTML=`<div style="font-size:.75rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${videosNaoPagos.length} serviços pendentes</div>
