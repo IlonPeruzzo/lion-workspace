@@ -1404,9 +1404,9 @@ var I18N = {
         'setup.plugins_desc': 'Integre o Lion Workspace ao Premiere Pro e ao After Effects. Marque os que você usa.',
         'setup.detecting': 'Detectando...',
         'setup.premiere_title': 'Premiere Pro',
-        'setup.premiere_desc': 'LION SEARCH, easing e copy/paste de imagens.',
+        'setup.premiere_desc': 'Busca, easing e colar imagens.',
         'setup.ae_title': 'After Effects',
-        'setup.ae_desc': 'Ferramentas extras para o AE CC 2019+',
+        'setup.ae_desc': 'Ferramentas extras (CC 2019+).',
         'setup.skip_title': 'Pular',
         'setup.skip_desc': 'Não uso Adobe ou instalo depois',
         'setup.plugin_installed': 'Plugin já instalado',
@@ -2329,7 +2329,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 </div>
                 <div class="opt-text">
                     <h4 data-i18n="setup.premiere_title">Premiere Pro</h4>
-                    <p data-i18n="setup.premiere_desc">LION SEARCH, easing e copy/paste de imagens.</p>
+                    <p data-i18n="setup.premiere_desc">Busca, easing e colar imagens.</p>
                 </div>
                 <div class="opt-check">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -2346,7 +2346,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 </div>
                 <div class="opt-text">
                     <h4 data-i18n="setup.ae_title">After Effects</h4>
-                    <p data-i18n="setup.ae_desc">Ferramentas extras para o AE CC 2019+</p>
+                    <p data-i18n="setup.ae_desc">Ferramentas extras (CC 2019+).</p>
                 </div>
                 <div class="opt-check">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -7641,7 +7641,7 @@ const TOUR_STEPS = [
     { sel:'[data-tab="registros"]', title:'Registros', body:'Cada entrega que você marcar vira um registro aqui. É o que alimenta seu faturamento, os gráficos e as faturas.' },
     { sel:'[data-tab="produtividade"]', title:'Produção', body:'Acompanhe suas edições no pipeline e cronometre o trabalho com o timer e o pomodoro.' },
     { sel:'[data-tab="jobfinder"]', title:'Job Finder', body:'Precisa de mais clientes? Busque canais no YouTube e gere e-mails de prospecção prontos.' },
-    { sel:'[data-tab="rmbg"]', title:'Ferramentas', body:'Ainda tem remover fundo de imagem e vídeo, baixar do YouTube e sua biblioteca de áudios.' },
+    { sel:'[data-tab="rmbg"]', title:'Ferramentas', body:'Remova o fundo de imagens, baixe do YouTube e acesse sua biblioteca de áudios.' },
     { sel:'.gear-btn[onclick*="config"]', title:'Configurações', body:'Seus dados, integrações e o plugin do Premiere ficam aqui na engrenagem.' },
     { center:true, title:'Tudo pronto!', body:'Agora é com você. Bom trabalho.' },
 ];
@@ -7682,7 +7682,7 @@ function _tourRender(i){
     // ou esta fora da viewport (senao o spotlight sairia da tela e escureceria tudo)
     const onScreen = r0 && r0.width>0 && r0.height>0 &&
         r0.bottom>4 && r0.top < window.innerHeight-4 && r0.right>4 && r0.left < window.innerWidth-4;
-    if(!el || !onScreen){ root.classList.add('no-target'); arrow.style.display='none'; return; }
+    if(!el || !onScreen){ root.classList.add('no-target'); arrow.style.display='none'; const _c=root.querySelector('.tour-card'); if(_c){ _c.style.left=''; _c.style.top=''; _c.style.transform=''; } return; }
     root.classList.remove('no-target');
     _tourPlace(r0);
 }
