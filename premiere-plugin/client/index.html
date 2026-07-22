@@ -40,7 +40,7 @@
         .lw-st-success .lw-st-ring{stroke-dasharray:63;stroke-dashoffset:63;animation:lwDrawRing .4s ease .04s forwards}
         .lw-st-success .lw-st-check polyline{stroke-dasharray:22;stroke-dashoffset:22;animation:lwDraw .3s cubic-bezier(.65,0,.35,1) .34s forwards}
         .lw-st-success .lw-st-burst{transform-box:fill-box;transform-origin:center;opacity:0;animation:lwBurst .5s ease-out .46s}
-        .lw-st-loading{color:#38bdf8}
+        .lw-st-loading{color:#bef264}
         .lw-st-loading .lw-st-bar{position:relative;height:3px;border-radius:2px;background:rgba(255,255,255,.09);overflow:hidden;width:100%;max-width:170px;margin:6px auto 0}
         .lw-st-loading .lw-st-bar i{position:absolute;top:0;left:0;height:100%;width:38%;border-radius:2px;background:currentColor;animation:lwBar 1.05s ease-in-out infinite}
         @keyframes lwBar{0%{left:-42%}100%{left:100%}}
@@ -4760,7 +4760,15 @@
         };
         _prwBusy = true;
         prwMsg('Aplicando...','#f59e0b');
+        // Watchdog: se o callback do evalScript nao voltar (JSX nao recarregado, nada
+        // selecionado sem retorno, etc), nao deixa preso em "Aplicando..." pra sempre.
+        var _prwDone = false;
+        var _prwWd = setTimeout(function(){
+            if(_prwDone) return; _prwDone = true; _prwBusy = false;
+            prwMsg('Selecione um ou mais clips na timeline e tente de novo','#f43f5e');
+        }, 7000);
         csInterface.evalScript('lwPRRandomWiggle('+JSON.stringify(cfg)+')', function(result){
+            if(_prwDone) return; _prwDone = true; clearTimeout(_prwWd);
             _prwBusy = false;
             _prResult(prwMsg, result);
         });

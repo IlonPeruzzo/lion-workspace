@@ -11,6 +11,11 @@ const { createClient } = require('@supabase/supabase-js');
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 
+// Branding das notificacoes de sistema (senao o Windows mostra "electron.app.Electron").
+// IMPORTANTE: NAO usar app.setName() aqui — isso muda o caminho do userData (banco, yt-dlp,
+// configs) e quebra o app em dev. setAppUserModelId brand a notificacao SEM mover o userData.
+try { if (isWin) app.setAppUserModelId('com.lionworkspace.app'); } catch(e) {}
+
 // Global crash guards — prevent uncaught errors (antivirus locks, network, etc.)
 // from showing the ugly "A JavaScript error occurred" dialog and killing the app.
 process.on('uncaughtException', (err) => {
@@ -601,6 +606,109 @@ ipcMain.handle('open-external', (event, url) => {
     return true;
 });
 
+// ═══════ IMPORTAR PORTFOLIO DO YTJOBS ═══════
+// A API do YTJobs so libera CORS pra origem ytjobs.co, entao a busca roda AQUI (Node, sem CORS).
+// Puxa perfil + videos + reviews(clientes) e devolve o modelo de portfolio ja mapeado pro renderer.
+function _ytGet(url){
+    return new Promise((resolve) => {
+        try {
+            const https = require('https');
+            const req = https.get(url, { headers: { 'accept':'application/json', 'user-agent':'Mozilla/5.0 LionWorkspace' } }, (res) => {
+                let body = '';
+                res.on('data', c => body += c);
+                res.on('end', () => { try { resolve(JSON.parse(body)); } catch(e){ resolve(null); } });
+            });
+            req.on('error', () => resolve(null));
+            req.setTimeout(12000, () => { try{ req.destroy(); }catch(e){} resolve(null); });
+        } catch(e){ resolve(null); }
+    });
+}
+ipcMain.handle('ytjobs-import', async (event, raw) => {
+    try {
+        const s = String(raw || '').trim();
+        const m = s.match(/(\d{2,})/);            // aceita URL completa ou so o id
+        const id = m ? m[1] : '';
+        if (!id) return { ok:false, error:'Nao achei o ID do perfil no link. Cole o link do seu perfil YTJobs (ex: ytjobs.co/talent/profile/7372).' };
+        const API = 'https://app.ytjobs.co/api/talents/' + id;
+        const [main, vids, revs] = await Promise.all([ _ytGet(API), _ytGet(API+'/videos'), _ytGet(API+'/reviews') ]);
+        if (!main || !main.talent) return { ok:false, error:'Perfil nao encontrado ou API indisponivel. Confere o link.' };
+        const t = main.talent || {};
+        const stat = (vids && vids.youtubeVideos && vids.youtubeVideos.statistics) || {};
+        const data = {
+            ok: true, id,
+            name: t.name || '',
+            role: (main.professions && main.professions[0] && (main.professions[0].name || main.professions[0])) || 'Video Editor',
+            avatar: t.avatar || '',
+            bio: t.bio || t.about || (main.about) || '',
+            verified: !!t.hasVerifiedVideo,
+            skills: (main.skills || []).map(x => x && (x.name || x)).filter(Boolean).slice(0, 14),
+            categories: (main.categories || []).map(x => x && (x.name || x)).filter(Boolean).slice(0, 12),
+            stats: { videos: stat.counts || 0, views: stat.abvViews || '', likes: stat.abvLikes || '', comments: stat.abvComments || '' },
+            works: (((vids && vids.youtubeVideos && vids.youtubeVideos.videos) || []).slice(0, 12)).map(v => ({
+                title: v.title || '', url: v.videoId ? ('https://youtu.be/' + v.videoId) : (v.url || ''),
+                thumb: v.thumbnail || '', views: v.abvViews || v.views || ''
+            })),
+            clients: (((revs && revs.reviews) || []).map(r => r && r.youtubeChannel).filter(Boolean)).map(c => ({
+                name: c.name || '', avatar: c.avatar || '', subs: c.abvSubscribers || c.subscribers || ''
+            })),
+            reviews: (((revs && revs.reviews) || []).filter(r => r && (r.review || r.talentReview)).map(r => ({
+                text: r.review || r.talentReview || '',
+                author: (r.youtubeChannel && r.youtubeChannel.name) || (r.company && r.company.name) || '',
+                avatar: (r.youtubeChannel && r.youtubeChannel.avatar) || (r.company && r.company.avatar) || ''
+            }))).slice(0, 8),
+        };
+        // dedup clientes por nome
+        const seen = {}; data.clients = data.clients.filter(c => { const k=(c.name||'').toLowerCase(); if(!k||seen[k]) return false; seen[k]=1; return true; });
+        return data;
+    } catch(e) {
+        return { ok:false, error:'Falha ao importar: ' + (e && e.message || e) };
+    }
+});
+
+// ═══════ JOB FINDER — busca VAGAS em agregadores publicos (RemoteOK/Remotive/Jobicy) ═══════
+// Roda no main (Node) pra evitar CORS. Sem chave. Normaliza tudo num formato unico e filtra
+// por relevancia (edicao de video). O renderer so exibe e gera a candidatura com IA.
+// Termo forte no TÍTULO = vaga de edição/vídeo. (Basear no título evita falso-positivo:
+// antes um "Project Manager" com "video" na descrição passava.)
+const _JOB_TITLE_KW = /(v[ií]deo\s*edit|edit(or|ing)\s*(de\s*)?v[ií]deo|v[ií]deo\s*edit|motion\s*(design|graphic)|after\s*effects|premiere\s*pro|\bvfx\b|montador\s*de\s*v[ií]deo|videograph|video\s*produc|video\s*podcast|reels?\s*edit|short[-\s]?form|colorist|davinci|post[-\s]?produc)/i;
+const _JOB_KW_NEG = /(photo\s*editor|copy\s*editor|text\s*editor|code\s*editor|content\s*editor|editor[-\s]?in[-\s]?chief|news\s*editor|book\s*editor|audio\s*editor|editorial|managing\s*editor|acquisition)/i;
+function _jobStrip(html){ return String(html||'').replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/gi,' ').replace(/\s+/g,' ').trim(); }
+function _jobRelevant(j){
+    const title = j.title || '';
+    if (_JOB_KW_NEG.test(title)) return false;
+    if (_JOB_TITLE_KW.test(title)) return true;
+    // "Editor" genérico no título só conta se as tags confirmarem vídeo/edição
+    const tags = ((j.tags||[]).join(' ')).toLowerCase();
+    if (/\beditor\b/i.test(title) && /(video|vídeo|editing|motion|premiere|after\s*effects|vfx|shorts?)/i.test(tags)) return true;
+    return false;
+}
+async function _fetchJobsAll(query){
+    const q = encodeURIComponent((query||'video editor').trim() || 'video editor');
+    const [rmv, jby, rok] = await Promise.all([
+        _ytGet('https://remotive.com/api/remote-jobs?search='+q+'&limit=50'),
+        _ytGet('https://jobicy.com/api/v2/remote-jobs?count=50&tag=video'),
+        _ytGet('https://remoteok.com/api?tags=video'),
+    ]);
+    const out = [];
+    if (rmv && Array.isArray(rmv.jobs)) for (const j of rmv.jobs) out.push({ source:'Remotive', id:'rmv_'+(j.id||''), title:j.title||'', company:j.company_name||'', logo:j.company_logo||'', url:j.url||'', location:j.candidate_required_location||'', salary:j.salary||'', date:j.publication_date||'', tags:Array.isArray(j.tags)?j.tags:[], desc:_jobStrip(j.description).slice(0,500) });
+    if (jby && Array.isArray(jby.jobs)) for (const j of jby.jobs) out.push({ source:'Jobicy', id:'jby_'+(j.id||''), title:j.jobTitle||'', company:j.companyName||'', logo:j.companyLogo||'', url:j.url||'', location:(Array.isArray(j.jobGeo)?j.jobGeo.join(', '):(j.jobGeo||''))||'', salary:'', date:j.pubDate||'', tags:[].concat(j.jobType||[], j.jobLevel||[]).filter(Boolean), desc:_jobStrip(j.jobExcerpt).slice(0,500) });
+    if (Array.isArray(rok)) for (const j of rok) { if (!j || !j.position) continue; out.push({ source:'RemoteOK', id:'rok_'+(j.id||''), title:j.position||'', company:j.company||'', logo:j.company_logo||j.logo||'', url:j.url||j.apply_url||'', location:j.location||'', salary:(j.salary_min?('$'+j.salary_min+(j.salary_max?('-$'+j.salary_max):'')):''), date:j.date||'', tags:Array.isArray(j.tags)?j.tags:[], desc:_jobStrip(j.description).slice(0,500) }); }
+    let rel = out.filter(_jobRelevant);
+    // dedup por url e por titulo+empresa
+    const seen = {}; rel = rel.filter(j => { const k=(j.url||'')+'|'+(j.title||'').toLowerCase()+'|'+(j.company||'').toLowerCase(); if (seen[k]) return false; seen[k]=1; return true; });
+    rel.sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')));
+    return rel.slice(0, 60);
+}
+ipcMain.handle('jobs-fetch', async (event, opts) => {
+    try {
+        const query = (opts && opts.query) || 'video editor';
+        const jobs = await _fetchJobsAll(query);
+        return { ok:true, jobs, count: jobs.length };
+    } catch(e) {
+        return { ok:false, error:(e && e.message) || String(e), jobs:[] };
+    }
+});
+
 // ═══════ RENDER WATCH — detecta renderizacao (Media Encoder / After Effects / Premiere) ═══════
 // Estrategia: poll a cada 6s do CPU ACUMULADO por processo (PowerShell no Win, ps no Mac).
 // delta CPU / delta tempo = "nucleos em uso". Esquentou por N amostras seguidas = render comecou;
@@ -608,12 +716,16 @@ ipcMain.handle('open-external', (event, url) => {
 // AME/aerender: threshold baixo (idle usam ~0). Premiere/AE (UI): threshold alto + mais amostras,
 // pra nao confundir com playback/preview (deteccao heuristica).
 const RW_POLL_MS = 6000;
-const RW_MIN_SECS = 25; // sessao menor que isso e transiente (descarta)
+const RW_MIN_SECS = 40; // sessao menor que isso e transiente (descarta) - filtra picos curtos de edicao
+// Junta renders separados por uma pausa curta numa sessao so (evita "varios renders" enquanto edita).
+const RW_MERGE_GAP_MS = 90000; // 90s: reesquentou dentro disso = mesma renderizacao
 const RW_GROUPS = {
+    // AME/aerender = ferramentas de export de verdade (idle ~0): threshold baixo, conta cedo.
     ame:      { label: 'Media Encoder',        procs: ['adobe media encoder', 'ameencodingserver'], start: 0.7, end: 0.25, needStart: 2, needEnd: 3 },
     aerender: { label: 'After Effects (fila)', procs: ['aerender'],                                  start: 0.5, end: 0.2,  needStart: 2, needEnd: 3 },
-    ae:       { label: 'After Effects',        procs: ['afterfx'],                                   start: 2.2, end: 0.7,  needStart: 3, needEnd: 3 },
-    ppro:     { label: 'Premiere Pro',         procs: ['adobe premiere pro'],                        start: 2.2, end: 0.7,  needStart: 3, needEnd: 3 },
+    // Premiere/AE (UI): threshold ALTO + mais amostras pra nao confundir playback/preview/scrub com render.
+    ae:       { label: 'After Effects',        procs: ['afterfx'],                                   start: 3.0, end: 0.7,  needStart: 4, needEnd: 4 },
+    ppro:     { label: 'Premiere Pro',         procs: ['adobe premiere pro'],                        start: 3.0, end: 0.7,  needStart: 4, needEnd: 4 },
 };
 const _rwState = {};
 let _rwBusy = false;
@@ -658,6 +770,14 @@ function _rwActiveList() {
     return Object.keys(_rwState).filter(k => _rwState[k].active)
         .map(k => ({ app: k, label: RW_GROUPS[k].label, startedAt: _rwState[k].startedAt }));
 }
+// Fecha e loga uma sessao de render (so se passou do minimo). Chamado quando o merge gap expira.
+function _rwFinalize(key, g, st) {
+    const end = st.coolAt || Date.now();
+    const secs = Math.round((end - st.startedAt) / 1000);
+    if (secs >= RW_MIN_SECS && mainWin && !mainWin.isDestroyed()) {
+        mainWin.webContents.send('render-finished', { app: key, label: g.label, startedAt: st.startedAt, endedAt: end, secs });
+    }
+}
 function _rwTick() {
     if (_rwBusy || !mainWin || mainWin.isDestroyed()) return;
     _rwBusy = true;
@@ -670,7 +790,7 @@ function _rwTick() {
             const matches = list.filter(p => g.procs.some(n => p.name.includes(n)));
             const present = matches.length > 0;
             const cpu = matches.reduce((s, p) => s + p.cpuSec, 0);
-            const st = _rwState[key] || (_rwState[key] = { prevCpu: null, prevT: 0, hot: 0, cold: 0, active: false, startedAt: 0, lastHot: 0 });
+            const st = _rwState[key] || (_rwState[key] = { prevCpu: null, prevT: 0, hot: 0, cold: 0, active: false, startedAt: 0, lastHot: 0, pending: false, coolAt: 0 });
             let cores = 0;
             if (st.prevCpu != null && present && cpu >= st.prevCpu && now > st.prevT) {
                 cores = (cpu - st.prevCpu) / ((now - st.prevT) / 1000);
@@ -680,14 +800,30 @@ function _rwTick() {
                 if (!present || cores < g.end) {
                     st.cold++;
                     if (!present || st.cold >= g.needEnd) {
-                        const end = st.lastHot || now;
-                        const secs = Math.round((end - st.startedAt) / 1000);
-                        st.active = false; st.hot = 0; st.cold = 0; changed = true;
-                        if (secs >= RW_MIN_SECS && mainWin && !mainWin.isDestroyed()) {
-                            mainWin.webContents.send('render-finished', { app: key, label: g.label, startedAt: st.startedAt, endedAt: end, secs });
-                        }
+                        // Esfriou: NAO finaliza ainda. Entra em "cooling" e espera o merge gap.
+                        // Se reesquentar dentro do gap, e a MESMA renderizacao (mantem startedAt).
+                        st.active = false; st.pending = true; st.coolAt = st.lastHot || now; st.hot = 0; st.cold = 0; changed = true;
+                        if (!present) { _rwFinalize(key, g, st); st.pending = false; } // app fechou = nao ha merge possivel
                     }
                 } else { st.cold = 0; st.lastHot = now; }
+            } else if (st.pending) {
+                if (!present) { _rwFinalize(key, g, st); st.pending = false; st.hot = 0; changed = true; }
+                else if (cores >= g.start) {
+                    st.hot++;
+                    if (st.hot >= g.needStart) {
+                        if (now - st.coolAt <= RW_MERGE_GAP_MS) {
+                            // Reesquentou dentro do gap: continua a mesma sessao (merge).
+                            st.active = true; st.pending = false; st.lastHot = now; st.cold = 0; st.hot = 0; changed = true;
+                        } else {
+                            // Gap ja passou: finaliza a antiga e comeca uma nova.
+                            _rwFinalize(key, g, st);
+                            st.active = true; st.pending = false; st.startedAt = now - g.needStart * RW_POLL_MS; st.lastHot = now; st.cold = 0; st.hot = 0; changed = true;
+                        }
+                    }
+                } else {
+                    st.hot = 0;
+                    if (now - st.coolAt > RW_MERGE_GAP_MS) { _rwFinalize(key, g, st); st.pending = false; changed = true; } // gap expirou sem religar
+                }
             } else {
                 if (present && cores >= g.start) {
                     st.hot++;
@@ -2661,7 +2797,8 @@ function detectInstalledBrowsers() {
 // - mweb: backup
 function ytBypassArgs() {
     return [
-        '--extractor-args', 'youtube:player_client=default,web,android,mweb,tv_simply',
+        // tv_embedded/web_embedded ajudam a furar age-gate SEM login em alguns videos.
+        '--extractor-args', 'youtube:player_client=default,tv_embedded,web_embedded,web,android,mweb,tv_simply',
     ];
 }
 
@@ -2699,6 +2836,13 @@ function ytIsDpapiError(stderr) {
     if (!stderr) return false;
     return /Failed to decrypt with DPAPI|could not find|unable to open browser cookie|NoneType' object has no attribute 'decode'/i.test(stderr);
 }
+// Falha ao LER/copiar os cookies do navegador — quase sempre porque o browser esta ABERTO
+// travando o banco (SQLite lock), ou App-Bound Encryption. Nao adianta insistir no mesmo browser.
+function ytIsCookieReadError(stderr) {
+    if (!stderr) return false;
+    // "no such table: meta" = banco de Cookies do Chrome/Edge copiado incompleto (browser aberto/WAL/ABE).
+    return /Could not copy .* cookie database|Could not copy Chrome cookie|could not copy cookie|Permission denied[^\n]*[Cc]ookies|database is locked|Cookies are locked|unable to open browser cookie|no such table:\s*meta|no such table/i.test(stderr);
+}
 // Transforma o stderr cru do yt-dlp numa mensagem amigável em pt-BR pro usuário.
 function ytFriendlyError(stderr) {
     const s = String(stderr || '');
@@ -2712,6 +2856,8 @@ function ytFriendlyError(stderr) {
         return 'Vídeo com restrição de idade. Faça login no YouTube pelo navegador (no Windows, o Firefox funciona melhor) e tente de novo.';
     if (/members-only|Join this channel|member of this channel|available to this channel's members/i.test(s))
         return 'Vídeo exclusivo para membros do canal. Faça login com uma conta que seja membro.';
+    if (/Could not copy .* cookie database|Could not copy Chrome cookie|database is locked|Cookies are locked|no such table:\s*meta|no such table/i.test(s))
+        return 'Feche o Chrome e o Edge (eles travam os cookies enquanto abertos) e tente de novo. Se ainda falhar, instale o Firefox, faça login no YouTube por ele e baixe de novo.';
     if (ytIsDpapiError(s))
         return 'Não consegui ler os cookies do Chrome/Edge (proteção nova do Windows). Instale o Firefox e faça login no YouTube por ele — daí o download funciona.';
     if (/Sign in to confirm you're not a bot|not a bot/i.test(s))
@@ -2794,6 +2940,11 @@ async function runYtDlpRobust(userArgs, opts = {}) {
         if (att.browser && CHROMIUM.has(att.browser) && ytIsDpapiError(result.stderr)) {
             _dpapiHit = true;
             console.log('[yt-dlp] DPAPI em', att.browser, '— pulando os outros Chromium');
+            continue;
+        }
+        // Falhou ao LER os cookies desse browser (aberto/travado): NAO aborta — tenta o proximo.
+        if (att.browser && ytIsCookieReadError(result.stderr)) {
+            console.log('[yt-dlp] nao consegui ler cookies de', att.browser, '— proxima estrategia');
             continue;
         }
         // Precisa de cookies (idade/membros/login/bot/indisponível-sem-auth): tenta o próximo browser.
@@ -3424,11 +3575,18 @@ function _cltPresent() {
     } catch (e) { _cltPresentCache = false; }
     return _cltPresentCache;
 }
+// Paths onde o winget (per-user) instala o Python. O PATH do processo Electron NAO
+// atualiza no meio da sessao, entao precisamos apontar direto pro python.exe recem-instalado.
+function _winWingetPyPaths() {
+    const la = process.env.LOCALAPPDATA || '';
+    if (!la) return [];
+    return ['313', '312', '311', '310'].map(v => path.join(la, 'Programs', 'Python', 'Python' + v, 'python.exe'));
+}
 async function _findPython() {
     if (_cachedPython) return _cachedPython;
     let candidates;
     if (isWin) {
-        candidates = [_mtVenvPython(), 'py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe'];
+        candidates = [_mtVenvPython(), ..._winWingetPyPaths(), 'py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe'];
     } else {
         candidates = [_mtVenvPython(), '/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/Library/Frameworks/Python.framework/Versions/Current/bin/python3'];
         if (_cltPresent()) candidates.push('/usr/bin/python3', 'python3', 'python');
@@ -3453,7 +3611,7 @@ async function _findPython() {
 async function _findBasePython() {
     let candidates;
     if (isWin) {
-        candidates = ['py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe'];
+        candidates = [..._winWingetPyPaths(), 'py -3', 'python', 'python3', 'C:\\Python313\\python.exe', 'C:\\Python312\\python.exe', 'C:\\Python311\\python.exe', 'C:\\Python310\\python.exe'];
     } else {
         candidates = ['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/Library/Frameworks/Python.framework/Versions/Current/bin/python3'];
         if (_cltPresent()) candidates.push('/usr/bin/python3', 'python3');
@@ -3464,6 +3622,18 @@ async function _findBasePython() {
         if (r.code === 0) return cmd;
     }
     return null;
+}
+// Instala o Python automaticamente no Windows via winget (App Installer, ja vem no Win10/11).
+// Silencioso, escopo do usuario (sem UAC). Retorna {ok, code, log}.
+async function _wingetInstallPython() {
+    if (!isWin) return { ok: false, code: -1, log: 'winget so no Windows' };
+    const args = ['install', '--id', 'Python.Python.3.12', '-e', '--silent', '--scope', 'user',
+        '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'];
+    const r = await _pyRun('winget', args, 900000); // ate 15min (download + instalacao + antivirus)
+    const log = ((r.err || '') + (r.out || '')).slice(-1800);
+    // code 0 = ok; winget usa -1978335189 (0x8A15002B) pra "no applicable upgrade/ja instalado"
+    const ok = (r.code === 0) || /already installed|no available upgrade|nenhuma atualiza/i.test(log);
+    return { ok, code: r.code, log };
 }
 // Roda um comando python (pip/venv) e resolve {code, out, err} — nunca rejeita.
 // SEM shell: "py -3" vira spawn('py', ['-3', ...]). Com shell, o kill do timeout
@@ -4985,7 +5155,20 @@ function toggleLoop(){
                     }
                     _mtInstallInFlight = true;
                     try {
-                        const py = await _findBasePython();
+                        let py = await _findBasePython();
+                        // Sem Python: no Windows, instala automaticamente via winget e re-detecta.
+                        if (!py && isWin) {
+                            console.log('[motion-tracker] Python ausente — instalando via winget...');
+                            const wg = await _wingetInstallPython();
+                            _cachedPython = null; _cltPresentCache = null;
+                            py = await _findBasePython();
+                            if (!py) {
+                                res.writeHead(500, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ ok: false, error: 'Nao consegui instalar o Python automaticamente (winget ' + wg.code + '). Instale manual: https://python.org/downloads/', log: (wg.log || '').slice(-1500) }));
+                                return;
+                            }
+                            console.log('[motion-tracker] Python instalado via winget:', py);
+                        }
                         if (!py) {
                             res.writeHead(400, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ ok: false, error: 'Python nao encontrado. Instale Python 3.10+ primeiro: https://python.org/downloads/' }));

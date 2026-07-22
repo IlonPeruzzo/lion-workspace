@@ -834,32 +834,33 @@ function showPythonBanner(info) {
     banner.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" stroke-width="2"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg><span style="flex:1;color:#fca5a5">' +
         (info.netError ? 'Nao consegui verificar as dependencias — o app Lion Workspace esta aberto?'
             : info.pythonFound ? 'Python OK, mas falta <b>opencv-contrib-python</b> e <b>numpy</b>.'
-            : 'Python <b>nao instalado</b>. Motion Tracker usa Python+OpenCV nativo.') +
+            : (IS_MAC ? 'Python <b>nao instalado</b>. Motion Tracker usa Python 3 + OpenCV.'
+                      : 'Python <b>nao instalado</b>. Clique pra instalar <b>Python + OpenCV</b> automaticamente.')) +
         '</span><button id="installPyBtn" style="background:var(--accent);color:#0a0a0a;border:0;padding:6px 14px;border-radius:5px;font-weight:700;cursor:pointer">' +
         (info.netError ? 'Tentar de novo' : 'Instalar agora') + '</button>';
     document.body.appendChild(banner);
     document.getElementById('installPyBtn').addEventListener('click', async () => {
         const btn = document.getElementById('installPyBtn');
         if (info.netError) { banner.remove(); checkPython(); return; }
-        if (!info.pythonFound) {
-            setStatus(IS_MAC
-                ? 'Instale o Python 3 primeiro em https://python.org/downloads/ e reabra o Motion Tracker.'
-                : 'Instale Python 3.10+ primeiro: https://python.org/downloads/ (marque "Add Python to PATH")', 'err');
-            // Re-checa: se o usuario acabou de instalar o Python, o banner novo ja vem com "Instalar agora"
+        // No Mac nao ha winget: sem Python, orienta instalacao manual. No Windows, o handler
+        // instala o Python (via winget) + OpenCV automaticamente — nao precisa baixar nada manual.
+        if (!info.pythonFound && IS_MAC) {
+            setStatus('Instale o Python 3 primeiro em https://python.org/downloads/ e reabra o Motion Tracker.', 'err');
             banner.remove(); checkPython();
             return;
         }
-        btn.disabled = true; btn.textContent = 'Instalando… (pode levar minutos)';
+        btn.disabled = true;
+        btn.textContent = info.pythonFound ? 'Instalando OpenCV…' : 'Instalando Python + OpenCV… (pode levar alguns minutos)';
         try {
             const r = await fetch(API + '/motion-tracker/install-deps', { method: 'POST', headers: authHeaders() });
             const body = await r.json();
             if (body.ok) {
                 pythonOk = true;
                 banner.remove();
-                setStatus('Dependencias instaladas! Pronto pra trackear.', 'ok');
+                setStatus(info.pythonFound ? 'Dependencias instaladas! Pronto pra trackear.' : 'Tudo pronto! Python e OpenCV instalados.', 'ok');
             } else {
                 btn.disabled = false; btn.textContent = 'Tentar de novo';
-                setStatus('Falha pip: ' + (body.log || body.error || '').slice(-300), 'err');
+                setStatus('Falha na instalacao: ' + (body.error || body.log || '').slice(-300), 'err');
             }
         } catch (e) {
             btn.disabled = false; btn.textContent = 'Tentar de novo';

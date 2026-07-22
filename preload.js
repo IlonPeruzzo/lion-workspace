@@ -17,7 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     copyImageToClipboard: (arrayBuf) => ipcRenderer.invoke('copy-image-to-clipboard', arrayBuf),
     saveInvoicePdf: (html, filename) => ipcRenderer.invoke('invoice:save-pdf', { html, filename }),
-    removeBgImage: (buffer, ext) => ipcRenderer.invoke('bg-remove-image', { buffer, ext })
+    removeBgImage: (buffer, ext) => ipcRenderer.invoke('bg-remove-image', { buffer, ext }),
+    ytjobsImport: (urlOrId) => ipcRenderer.invoke('ytjobs-import', urlOrId),
+    jobsFetch: (opts) => ipcRenderer.invoke('jobs-fetch', opts)
 });
 
 // Render Watch: deteccao de renderizacao (AME/AE/Premiere) feita no main via CPU dos processos
