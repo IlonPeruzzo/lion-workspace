@@ -1,6 +1,6 @@
 {
   "name": "lion-workspace",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "description": "Lion Workspace - Gestao para Editores de Video",
   "main": "main.js",
   "scripts": {
