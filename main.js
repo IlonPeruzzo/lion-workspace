@@ -325,20 +325,9 @@ function destroyOverlays() {
 ipcMain.handle('focus-start', () => {
     if (focusActive) return true;
     focusActive = true;
-
-    if (mainWin && !mainWin.isDestroyed()) {
-        originalBounds = mainWin.getBounds();
-        if (isMac) {
-            // Mac: use simpleFullScreen to avoid Spaces animation conflict
-            mainWin.setSimpleFullScreen(true);
-            mainWin.setAlwaysOnTop(true, 'floating');
-        } else {
-            mainWin.setAlwaysOnTop(true, 'screen-saver');
-            mainWin.setFullScreen(true);
-        }
-    }
-    createOverlays();
-    focusInterval = setInterval(checkForegroundWindow, 1200);
+    // Modo foco NAO invade mais a tela: nada de fullscreen, overlay em outros monitores nem
+    // always-on-top nivel screen-saver (isso cobria o Premiere e "tomava a tela" do usuario).
+    // O pomodoro continua rodando normal; a tela fica livre pra editar.
     return true;
 });
 
@@ -461,11 +450,9 @@ ipcMain.handle('focus-start-external', () => {
     if (focusActive) return true;
     focusActive = true;
     focusExternal = true;
-
-    if (mainWin && !mainWin.isDestroyed()) {
-        originalBounds = mainWin.getBounds();
-    }
-    createOverlays();
+    // NAO cria mais as telas pretas "FOCO" nos outros monitores (isso "invadia a tela" do editor,
+    // que precisa do Premiere/referencias visiveis). O modo foco agora so minimiza gentilmente os
+    // apps fora da whitelist — e so quando a pessoa liga o foco (checkbox desligado por padrao).
     focusInterval = setInterval(checkForegroundWindow, 1200);
     return true;
 });
@@ -3003,6 +2990,9 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
     url = cleanYtUrl(url);
     if (!ytDlpReady()) return { error: 'yt-dlp não disponível' };
     if (ytDownloadProc) return { error: 'Download já em andamento' };
+    // Sem ffmpeg, "best" cai no mp4 single-file do YouTube (360p). Garante o ffmpeg
+    // pra poder juntar video+audio separados e pegar a resolucao cheia (1080p/4K).
+    if (format !== 'mp3' && !ffmpegReady()) { try { await ensureFfmpeg(); } catch (e) {} }
 
     const outputPath = outputDir || (isWin ? path.join(os.homedir(), 'Downloads') : path.join(os.homedir(), 'Downloads'));
     const args = [
@@ -3086,7 +3076,9 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
     runYtDlpRobust(args, {
         onProc: (proc) => { ytDownloadProc = proc; },
         onStdoutLine,
-        onStderrLine: (line) => { if (line.trim()) ytProgress.error = line.trim(); },
+        // NAO expor stderr cru do yt-dlp pro usuario (ex "Could not copy Chrome cookie database...").
+        // O erro final vira mensagem amigavel via ytFriendlyError quando a tentativa falha de vez.
+        onStderrLine: (line) => { if (line.trim()) console.log('[yt-dlp]', line.trim()); },
     }).then(result => {
         ytDownloadProc = null;
         const code = result.code;
@@ -3169,9 +3161,17 @@ ipcMain.handle('yt-cancel', () => {
 ipcMain.handle('yt-progress', () => ytProgress);
 
 ipcMain.handle('yt-open-folder', (event, folderPath) => {
-    const dir = folderPath || (isWin ? path.join(os.homedir(), 'Downloads') : path.join(os.homedir(), 'Downloads'));
-    if (isWin) exec(`explorer.exe "${dir}"`, { windowsHide: true });
-    else exec(`open "${dir}"`);
+    const downloads = path.join(os.homedir(), 'Downloads');
+    try {
+        if (folderPath && fs.existsSync(folderPath)) {
+            const st = fs.statSync(folderPath);
+            if (st.isFile()) { shell.showItemInFolder(folderPath); return true; } // revela o arquivo destacado (Win+Mac)
+            if (st.isDirectory()) { if (isWin) exec(`explorer.exe "${folderPath}"`, { windowsHide: true }); else exec(`open "${folderPath}"`); return true; }
+        }
+    } catch (e) {}
+    // Fallback: pasta Downloads
+    if (isWin) exec(`explorer.exe "${downloads}"`, { windowsHide: true });
+    else exec(`open "${downloads}"`);
     return true;
 });
 
@@ -4668,7 +4668,9 @@ function toggleLoop(){
                         runYtDlpRobust(dlArgs, {
                             onProc: (proc) => { ytDownloadProc = proc; },
                             onStdoutLine: onStdoutLine2,
-                            onStderrLine: (line) => { if (line.trim()) ytProgress.error = line.trim(); },
+                            // NAO expor stderr cru do yt-dlp pro usuario (ex "Could not copy Chrome cookie database...").
+        // O erro final vira mensagem amigavel via ytFriendlyError quando a tentativa falha de vez.
+        onStderrLine: (line) => { if (line.trim()) console.log('[yt-dlp]', line.trim()); },
                         }).then(rdl => {
                             ytDownloadProc = null;
                             const code = rdl.code;
@@ -6669,8 +6671,10 @@ function savePluginPresets(p) {
 const DEFAULT_LION_HOTKEY = 'Control+Shift+L';
 
 function loadLionSearchSettings() {
+    let fileExisted = false;
     try {
         const raw = fs.readFileSync(LION_SEARCH_SETTINGS_FILE, 'utf8');
+        fileExisted = true;
         const j = JSON.parse(raw);
         let hotkey = j.hotkey || DEFAULT_LION_HOTKEY;
         if (hotkey === 'Alt+Space') {
@@ -6684,7 +6688,12 @@ function loadLionSearchSettings() {
             useLibraryOnly: j.useLibraryOnly !== false, // default TRUE
         };
     } catch (e) {
-        return { hotkey: DEFAULT_LION_HOTKEY, enabled: true, sfxFolder: '', useLibraryOnly: true };
+        const defaults = { hotkey: DEFAULT_LION_HOTKEY, enabled: true, sfxFolder: '', useLibraryOnly: true };
+        // Primeiro boot (arquivo nao existe): grava o default AGORA pra "travar" a tecla em disco.
+        // Assim, se num update futuro o DEFAULT_LION_HOTKEY mudar, quem ja rodou o app mantem a
+        // mesma tecla — nunca mais "muda sozinha" a cada atualizacao (esse era o bug).
+        if (!fileExisted) { try { saveLionSearchSettings(defaults); } catch(_) {} }
+        return defaults;
     }
 }
 function saveLionSearchSettings(s) {
@@ -7137,6 +7146,19 @@ ipcMain.handle('lion-search:pick-sfx-folder', async () => {
         return { ok: true, folder: result.filePaths[0] };
     } catch (e) { return { ok: false, error: e.message }; }
 });
+// IPC: escolher pasta de destino dos downloads (YT downloader do app)
+ipcMain.handle('yt-choose-folder', async () => {
+    try {
+        const { dialog } = require('electron');
+        const result = await dialog.showOpenDialog({
+            properties: ['openDirectory', 'createDirectory'],
+            title: 'Escolher pasta de destino dos downloads',
+        });
+        if (result.canceled || !result.filePaths || !result.filePaths.length) return { ok: false, canceled: true };
+        return { ok: true, folder: result.filePaths[0] };
+    } catch (e) { return { ok: false, error: e.message }; }
+});
+
 ipcMain.handle('lion-search:open', () => { openLionSearch(true); return { ok: true }; }); // testar manual = bypass FG check
 
 // IPC: resize da janela (chamado pela lion-search.html quando troca empty/typing)

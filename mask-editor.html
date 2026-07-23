@@ -53,7 +53,11 @@
         overflow:hidden; display:flex; align-items:center; justify-content:center;
         -webkit-app-region:no-drag;
     }
-    .brand img { width:100%; height:100%; object-fit:cover; display:block; }
+    .brand img {
+        width:100%; height:100%; object-fit:cover; display:block;
+        /* logo e' so identidade visual: nao pode ser arrastada pra fora nem "salvar imagem" */
+        -webkit-user-drag:none; user-select:none; pointer-events:none;
+    }
     .brand img[src=""], .brand img:not([src]) { display:none; }
     .spacer { flex:1; }
     .meta {
@@ -61,6 +65,9 @@
         font-family:'JetBrains Mono', ui-monospace, monospace;
         letter-spacing:-.2px;
     }
+    /* meta (dimensoes + zoom) agrupada a direita pra deixar o titulo limpo na esquerda */
+    .topmeta { display:flex; align-items:center; gap:8px; margin-right:8px; }
+    .meta-sep { color:var(--text3); opacity:.4; font-size:.7rem; user-select:none; }
     /* Window controls (minimizar/maximizar/fechar) */
     .win-controls {
         display:flex;
@@ -244,12 +251,15 @@
 <body>
     <div class="topbar">
         <div class="brand-lock">
-            <div class="brand"><img id="brandLogo" alt=""></div>
+            <div class="brand"><img id="brandLogo" alt="" draggable="false"></div>
             <h1>Editor de <span>Máscara</span></h1>
         </div>
-        <span class="meta" id="dims">—</span>
         <div class="spacer"></div>
-        <span class="meta" id="zoomMeta" style="margin-right:6px">100%</span>
+        <div class="topmeta">
+            <span class="meta" id="dims">—</span>
+            <span class="meta-sep">·</span>
+            <span class="meta" id="zoomMeta">100%</span>
+        </div>
         <div class="win-controls">
             <button class="win-btn" id="winMinimize" title="Minimizar">
                 <svg viewBox="0 0 12 12"><line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" stroke-width="1.2"/></svg>

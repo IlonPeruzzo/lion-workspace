@@ -234,6 +234,7 @@ function lwTrackerApplyKeyframes(jsonStr) {
         var baseY = current && current.length >= 2 ? current[1] : (isNormalized ? 0.5 : seqH/2);
         var added = 0;
         var skipped = 0;
+        var maxAbsDx = 0, maxAbsDy = 0; // maior deslocamento — usado pro scale-up do estabilizar
 
         for (var hi = 0; hi < data.history.length; hi++) {
             var h = data.history[hi];
@@ -253,6 +254,8 @@ function lwTrackerApplyKeyframes(jsonStr) {
             if (mode === 'stabilize') {
                 var dx = h.x - refX;
                 var dy = h.y - refY;
+                if (Math.abs(dx) > maxAbsDx) maxAbsDx = Math.abs(dx);
+                if (Math.abs(dy) > maxAbsDy) maxAbsDy = Math.abs(dy);
                 if (isNormalized) {
                     val = [baseX - dx / data.videoWidth, baseY - dy / data.videoHeight];
                 } else {
@@ -274,6 +277,31 @@ function lwTrackerApplyKeyframes(jsonStr) {
                     _trDbg('  kf[' + hi + '] frame=' + h.frame + ' srcTicks=' + Math.round(srcTicks) + ' val=' + val.join(','));
                 }
             } catch(eKf) { _trDbg('  kf[' + hi + '] err: ' + eKf); }
+        }
+
+        // ESTABILIZAR: amplia a escala pra esconder as bordas pretas reveladas pelo
+        // contra-movimento (igual o Warp/Transform Stabilizer do After). Escala fixa
+        // dimensionada pro pior deslocamento do track.
+        if (mode === 'stabilize' && (maxAbsDx > 0 || maxAbsDy > 0)) {
+            try {
+                var fracX = maxAbsDx / (data.videoWidth || 1);
+                var fracY = maxAbsDy / (data.videoHeight || 1);
+                var kScale = (1 + 2 * Math.max(fracX, fracY)) * 1.06; // +6% de margem
+                if (kScale > 1.6) kScale = 1.6; // teto de seguranca (nao estoura o zoom)
+                if (kScale > 1.005) {
+                    var scaleProp = null;
+                    for (var siP = 0; siP < props.numItems; siP++) {
+                        var spN = ''; try { spN = String(props[siP].displayName || ''); } catch(eSpn) {}
+                        if (spN === 'Scale' || spN === 'Escala' || spN === 'Uniform Scale' || spN === 'Escala uniforme') { scaleProp = props[siP]; break; }
+                    }
+                    if (scaleProp) {
+                        var curS = null; try { curS = scaleProp.getValue(); } catch(eGs) {}
+                        var baseS = (typeof curS === 'number') ? curS : (curS && curS.length ? curS[0] : 100);
+                        if (!baseS || baseS <= 0) baseS = 100;
+                        try { scaleProp.setValue(baseS * kScale, true); _trDbg('stabilize scale ' + baseS + ' -> ' + (baseS * kScale).toFixed(1)); } catch(eSs) { _trDbg('setScale err: ' + eSs); }
+                    } else { _trDbg('no Scale prop pra estabilizar'); }
+                }
+            } catch(eScale) { _trDbg('scale-up err: ' + eScale); }
         }
 
         _trDbg('DONE mode=' + mode + ' added=' + added + ' skipped=' + skipped);

@@ -191,10 +191,13 @@ body.is-mac .win-btns{display:none}
 
 .progress-wrap{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:8px}
 .progress-bar{height:100%;background:linear-gradient(90deg,#22c55e,var(--accent));width:0%;transition:width .2s}
+/* Barra indeterminada: uma faixa verde que desliza sem parar (mostra que ta rodando) */
+.progress-bar.indet{width:42%!important;transition:none;background:linear-gradient(90deg,transparent,#22c55e,var(--accent),transparent);animation:mtIndet 1s ease-in-out infinite}
+@keyframes mtIndet{0%{transform:translateX(-110%)}100%{transform:translateX(240%)}}
 
 #statusEl{font-size:.7rem;color:var(--text2);text-align:center;line-height:1.4;min-height:14px}
 .status-err{color:var(--red)!important}
-.status-warn{color:var(--orange)!important}
+.status-warn{color:#f87171!important}
 .status-ok{color:var(--green)!important}
 
 .point-info{
@@ -396,9 +399,9 @@ body.is-mac .win-btns{display:none}
         <!-- Edição de pontos + salvar (aparece depois do tracking) -->
         <div class="panel-section" id="editSection" style="display:none">
             <div class="panel-title">Editar pontos</div>
-            <div class="panel-info" style="margin-bottom:8px">Arraste qualquer ponto do path pra corrigir. Os vizinhos acompanham suavemente.</div>
+            <div class="panel-info" style="margin-bottom:8px">Arraste um ponto pra corrigir. Os frames ao redor acompanham junto.</div>
             <div class="row">
-                <label>Suavizar vizinhos <span style="opacity:.5;font-size:.65rem">(frames)</span></label>
+                <label>Suavizar frames ao redor</label>
                 <input type="number" id="editFalloff" value="4" min="0" max="30" step="1">
             </div>
             <button class="btn btn-primary" id="saveTrackBtn" style="margin-top:4px">
@@ -885,8 +888,10 @@ function setStatus(txt, cls) {
     if (cls) statusEl.classList.add('status-' + cls);
 }
 function setProgress(pct) {
-    if (pct == null) { progressWrap.style.display = 'none'; return; }
+    if (pct == null) { progressWrap.style.display = 'none'; progressBar.classList.remove('indet'); return; }
     progressWrap.style.display = 'block';
+    if (pct === 'indet') { progressBar.classList.add('indet'); progressBar.style.width = ''; return; }
+    progressBar.classList.remove('indet');
     progressBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
 }
 
@@ -1061,8 +1066,24 @@ function seekToTimelineX(clientX) {
 
 // === Play/pause ===
 playBtn.addEventListener('click', () => { if (vid.paused) vid.play(); else vid.pause(); });
-vid.addEventListener('play', () => playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>');
-vid.addEventListener('pause', () => playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>');
+// Durante o play, redesenha o ponto a cada frame da tela (rAF ~60fps). O evento 'timeupdate'
+// do video dispara so ~4x/s, o que fazia o ponto pular de ~7 em 7 frames (lag no preview).
+let _playRaf = null;
+function _playDrawLoop() {
+    if (vid.paused || vid.ended) { _playRaf = null; return; }
+    updateTimeDisplay();
+    drawPath();
+    _playRaf = requestAnimationFrame(_playDrawLoop);
+}
+vid.addEventListener('play', () => {
+    playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+    if (!_playRaf) _playRaf = requestAnimationFrame(_playDrawLoop);
+});
+vid.addEventListener('pause', () => {
+    playBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+    if (_playRaf) { cancelAnimationFrame(_playRaf); _playRaf = null; }
+    scheduleDraw();
+});
 
 // === Frame step (clamp ao range do clip) ===
 function seekClamped(targetSec) {
@@ -1090,7 +1111,7 @@ canvas.addEventListener('click', e => {
     if (_editMode) {
         if (_hitTestPoint(e) !== null) return; // clique num ponto do path = interação de edição
         _exitEditMode(); // área nova = novo alvo: descarta o track e re-marca já
-        setStatus('Novo ponto marcado — track anterior descartado. Use os botões de análise.', 'warn');
+        setStatus('Ponto remarcado. Clique nas setas pra rastrear de novo.', 'ok');
     }
     const r = canvas.getBoundingClientRect();
     const x = (e.clientX - r.left) * (videoMeta.width / r.width);
@@ -1180,8 +1201,8 @@ async function runAnalyze(mode) {
 
     _analyzing = true;
     anBtns.forEach(b => b && b.classList.add('busy'));
-    setStatus('Analisando...', 'warn');
-    setProgress(12);
+    setStatus('', '');
+    setProgress('indet');
 
     // Suavização vem do slider: 0 = crua ('none'), >0 = filtro escolhido no Avançado com lambda mapeado
     const lam = _smoothLambda();
@@ -1216,7 +1237,7 @@ async function runAnalyze(mode) {
     if (mode === 'fwd1') seekClamped((curFrame + 1) / FPS);
     else if (mode === 'back1') seekClamped((curFrame - 1) / FPS);
     setProgress(100);
-    setStatus('✓ ' + _trackHistory.length + ' frames no track.', 'ok');
+    setStatus(_trackHistory.length + ' frames rastreados', 'ok');
     setTimeout(() => setProgress(null), 700);
     _endAnalyze();
 }

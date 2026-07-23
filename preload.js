@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('ytDownloader', {
     cancel: () => ipcRenderer.invoke('yt-cancel'),
     getProgress: () => ipcRenderer.invoke('yt-progress'),
     openFolder: (dir) => ipcRenderer.invoke('yt-open-folder', dir),
+    chooseFolder: () => ipcRenderer.invoke('yt-choose-folder'),
     onProgress: (cb) => ipcRenderer.on('yt-progress', (event, data) => cb(data))
 });
 

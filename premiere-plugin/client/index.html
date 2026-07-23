@@ -966,9 +966,7 @@
 
             <div class="rw-lbl">Tipo de Loop</div>
             <div style="display:flex;gap:5px;margin-bottom:7px">
-                <button class="yt-q prl-type active" data-ty="cycle" onclick="prlPickType(this)" style="flex:1">Ciclo</button>
-                <button class="yt-q prl-type" data-ty="pingpong" onclick="prlPickType(this)" style="flex:1">Ping-Pong</button>
-                <button class="yt-q prl-type" data-ty="offset" onclick="prlPickType(this)" style="flex:1">Offset</button>
+                <button class="yt-q prl-type active" data-ty="pingpong" onclick="prlPickType(this)" style="flex:1">Ping-Pong</button>
             </div>
 
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
@@ -1178,21 +1176,9 @@
             <svg id="lionSearchChev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="lionSearchBody">
-            <div style="font-size:.58rem;color:#666;margin-bottom:8px;text-align:center;line-height:1.4">
-                Busca rápida de efeitos, presets e transições · funciona em qualquer programa
-            </div>
-
-            <!-- Toggle ativo -->
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.05);border-radius:6px;margin-bottom:6px">
-                <div style="display:flex;flex-direction:column;gap:2px">
-                    <span style="font-size:.66rem;color:#ddd;font-weight:600">Atalho ativo</span>
-                    <span style="font-size:.5rem;color:#666">Liga/desliga o atalho global</span>
-                </div>
-                <label style="position:relative;display:inline-block;width:32px;height:18px;flex-shrink:0;cursor:pointer">
-                    <input type="checkbox" id="lsPlEnabled" onchange="lsPlSave()" style="opacity:0;width:0;height:0">
-                    <span id="lsPlEnabledSlider" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#2a2a2a;border-radius:18px;transition:.2s"></span>
-                </label>
-            </div>
+            <!-- Atalho global SEMPRE ativo — descricao e toggle removidos; inputs ocultos mantem o JS funcionando -->
+            <input type="checkbox" id="lsPlEnabled" checked onchange="lsPlSave()" style="display:none">
+            <span id="lsPlEnabledSlider" style="display:none"></span>
 
             <!-- Hotkey display + edit -->
             <div style="margin-bottom:6px">
@@ -2394,6 +2380,7 @@
     // Multi-platform Downloader
     var ytPluginFormat='best';
     var ytPluginPolling=false;
+    var _ytPluginQueue=[]; // fila de downloads: baixa um atras do outro (empilha)
     var ytPluginLoc_='project'; // 'project' or 'downloads'
     var ytPluginInfo=null;
     var ytProjFolder='';
@@ -2732,6 +2719,15 @@
         if(!url){showMsg('Cole uma URL!');return}
         var v=ytValidateMediaUrl(url);
         if(!v.ok){showMsg(v.msg);return}
+        // FILA: se ja tem um download rolando, empilha e sai — baixa quando o atual terminar
+        if(ytPluginPolling){
+            _ytPluginQueue.push({url:url,format:ytPluginFormat,info:ytPluginInfo,
+                startT:document.getElementById('ytStartTime').value.trim(),
+                endT:document.getElementById('ytEndTime').value.trim()});
+            showMsg('Na fila ('+_ytPluginQueue.length+') — baixa quando o atual terminar');
+            document.getElementById('ytUrlPlugin').value='';
+            return;
+        }
         var btn=document.getElementById('ytPluginBtn');
         btn.disabled=true;
 
@@ -2778,6 +2774,7 @@
     function ytPluginCancel(){
         LWHttp.post(API+'/yt/cancel',{},{retries:1},function(){});
         ytPluginPolling=false;
+        _ytPluginQueue=[]; // cancelar limpa a fila
         document.getElementById('ytPluginBtn').disabled=false;
         document.getElementById('ytPluginStat').textContent='Cancelado';
         document.getElementById('ytPluginStat').style.color='#f43f5e';
@@ -2787,6 +2784,17 @@
 
     function ytPluginCloseProgress(){
         document.getElementById('ytPluginProgress').style.display='none';
+    }
+
+    // Dispara o proximo download da fila (chamado quando o atual termina/falha)
+    function _ytPluginStartNext(){
+        if(!_ytPluginQueue.length) return;
+        var item=_ytPluginQueue.shift();
+        document.getElementById('ytUrlPlugin').value=item.url;
+        ytPluginInfo=item.info; ytPluginFormat=item.format;
+        document.getElementById('ytStartTime').value=item.startT||'';
+        document.getElementById('ytEndTime').value=item.endT||'';
+        setTimeout(ytPluginDownload, 500); // pequeno delay pro backend liberar o slot
     }
 
     function ytPluginImport(filePath){
@@ -2872,10 +2880,10 @@
                 bar.style.width=Math.min(p.percent||0,100)+'%';
                 pct.textContent=Math.round(p.percent||0)+'%';
                 spd.textContent=p.speed||'';
-                if(p.status==='merging'){stat.textContent='Mesclando...';stat.style.color='#f59e0b'}
+                if(p.status==='merging'){stat.textContent='Finalizando...';stat.style.color='#a3a3a3'}
                 else if(p.status==='done'){
-                    stat.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" style="vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="11" fill="#22c55e" opacity="0.15"/><circle cx="12" cy="12" r="11" stroke="#22c55e" stroke-width="1.5" fill="none"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="vertical-align:middle">Concluído!</span>';
-                    stat.style.color='#22c55e';
+                    stat.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#4ade80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><polyline points="20 6 9 17 4 12"/></svg><span style="vertical-align:middle">Pronto</span>';
+                    stat.style.color='#4ade80';
                     bar.style.width='100%';pct.textContent='100%';
                     document.getElementById('ytPluginBtn').disabled=false;
                     ytPluginPolling=false;
@@ -2884,16 +2892,19 @@
                     ytLastFile=p.file||'';
                     if(ytLastFile) ytPluginImport(ytLastFile);
                     else showMsg('Download OK mas caminho do arquivo vazio');
+                    _ytPluginStartNext(); // proximo da fila
                 }else if(p.status==='error'){
-                    stat.textContent=p.error?'Erro: '+p.error.substring(0,40):'Erro';stat.style.color='#f43f5e';
+                    stat.textContent=p.error?'Erro: '+p.error.substring(0,160):'Erro';stat.style.color='#f43f5e';
                     document.getElementById('ytPluginBtn').disabled=false;
                     ytPluginPolling=false;
                     document.getElementById('ytCancelBtn').style.display='none';
                     document.getElementById('ytCloseBtn').style.display='';
+                    _ytPluginStartNext(); // um erro nao trava a fila — segue o proximo
                 }else if(p.status==='cancelled'){
                     stat.textContent='Cancelado';stat.style.color='#f43f5e';
                     document.getElementById('ytPluginBtn').disabled=false;
                     ytPluginPolling=false;
+                    _ytPluginQueue=[]; // cancelar limpa a fila
                     document.getElementById('ytCancelBtn').style.display='none';
                     document.getElementById('ytCloseBtn').style.display='';
                 }else{
@@ -3684,7 +3695,7 @@
             try {
                 var s = JSON.parse(body);
                 _lsPlCurrent = s;
-                document.getElementById('lsPlEnabled').checked = s.enabled !== false;
+                document.getElementById('lsPlEnabled').checked = true; // atalho sempre ativo (toggle removido)
                 _lsPlUpdateSlider();
                 document.getElementById('lsPlHotkey').value = s.hotkey || 'Control+Shift+L';
                 document.getElementById('lsPlHotkey').style.color = '#bef264';
@@ -4649,7 +4660,7 @@
     var prwTargets = ['position']; // multi-propriedade (estilo S_Shake)
     var prwAxisX = true, prwAxisY = true;
     var prwComponent = 'motion', prwMotionBlur = false;
-    var prlTarget = 'position', prlType = 'cycle', prlComponent = ''; // '' = auto-detecta
+    var prlTarget = 'position', prlType = 'pingpong', prlComponent = ''; // '' = auto-detecta
     var _prwBusy = false, _prlBusy = false;
 
     function _prNum(id, def){

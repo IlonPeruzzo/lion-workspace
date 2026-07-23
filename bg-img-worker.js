@@ -22,7 +22,13 @@ async function ensureModel() {
     const MODEL_ID = 'onnx-community/BiRefNet_lite-ONNX';
     if (!model) {
         // fp32: a variante q8 nao existe pra esse modelo (404) — fp32 e' o que funciona (~6s).
-        model = await mod.AutoModel.from_pretrained(MODEL_ID, { dtype: 'fp32' });
+        // session_options: usa TODOS os nucleos + otimizacao de grafo (ajuda bastante em CPU fraca,
+        // onde o onnxruntime-node as vezes usa poucas threads por padrao).
+        const _cores = Math.max(2, (require('os').cpus() || []).length || 4);
+        model = await mod.AutoModel.from_pretrained(MODEL_ID, {
+            dtype: 'fp32',
+            session_options: { graphOptimizationLevel: 'all', intraOpNumThreads: _cores, enableCpuMemArena: true }
+        });
     }
     if (!processor) {
         processor = await mod.AutoProcessor.from_pretrained(MODEL_ID);

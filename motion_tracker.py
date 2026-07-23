@@ -102,7 +102,7 @@ def _redetect(gray, template, last_bbox, lost_streak, width, height):
         _, max_val, _, max_loc = cv2.minMaxLoc(resmap)
     except Exception:
         return None
-    if max_val < 0.60:
+    if max_val < 0.52:
         return None
     return (x0 + max_loc[0], y0 + max_loc[1], float(max_val))
 
@@ -557,9 +557,9 @@ def main():
     p.add_argument('--smoothing', default='whittaker', choices=['whittaker', 'kalman', 'supersmoother', 'none'])
     p.add_argument('--bbox-width', type=int, default=40)
     p.add_argument('--bbox-height', type=int, default=40)
-    p.add_argument('--confidence-threshold', type=float, default=0.3)
+    p.add_argument('--confidence-threshold', type=float, default=0.22)
     p.add_argument('--max-lost-frames', type=int, default=5)
-    p.add_argument('--search-window-scale', type=float, default=2.0)
+    p.add_argument('--search-window-scale', type=float, default=2.8)
     p.add_argument('--whittaker-lambda', type=float, default=100.0)
     p.add_argument('--kalman-process-noise', type=float, default=0.5)
     p.add_argument('--kalman-measurement-noise', type=float, default=1.0)

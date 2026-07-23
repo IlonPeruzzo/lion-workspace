@@ -252,7 +252,7 @@
         .alert strong{color:#fbbf24}
 
         /* Stats */
-        .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+        .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px;margin-bottom:20px}
         /* Meta + Faturamento lado a lado (Faturamento mais largo) */
         #metaFatRow{display:grid;grid-template-columns:1.75fr minmax(250px,1fr);gap:20px;align-items:stretch;margin-bottom:20px}
         #metaFatRow.solo{grid-template-columns:1fr}
@@ -1634,7 +1634,7 @@ var I18N = {
         'prod.folders':'Pastas',
         // Pomodoro
         'pomo.focus_min':'Foco (min)','pomo.break_min':'Pausa (min)','pomo.focus':'FOCO',
-        'pomo.focus_mode':'Modo foco','pomo.focus_mode_desc':'Bloqueia apps de distração durante o ciclo',
+        'pomo.focus_mode':'Modo foco','pomo.focus_mode_desc':'Minimiza apps de distração durante o ciclo',
         'btn.start':'Iniciar','btn.pause':'Pausar','btn.stop':'Parar','btn.reset':'Resetar',
         // YouTube
         'yt.new_download':'Novo Download','yt.checking':'Verificando...','yt.url_placeholder_app':'Cole a URL aqui...',
@@ -2755,7 +2755,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
             </div>
         </div>
 
-        <div id="dashChartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div id="dashChartsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
             <div class="chart-card">
                 <h3 id="chartCliTitle" style="margin:0 0 12px 0" data-i18n="chart.services_by_client">Serviços por Cliente</h3>
                 <canvas id="chartCli" style="max-height:220px"></canvas>
@@ -2843,7 +2843,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     <select id="cliMoeda" onchange="onCliMoedaChange()"><option value="BRL">BRL (R$)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option><option value="GBP">GBP (£)</option><option value="CAD">CAD (C$)</option><option value="AUD">AUD (A$)</option></select>
                 </div>
                 <div class="fg"><label data-i18n="cli.billing_type">Tipo de Cobrança</label><select id="cliTipoCobranca" onchange="onTipoCobrancaChange()"><option value="por_video" data-i18n="cli.per_service">Por serviço</option><option value="por_hora" data-i18n="cli.per_hour">Por hora trabalhada</option></select></div>
-                <div class="fg"><label id="lblCliValor" data-i18n="cli.value_per_service">Valor por Serviço</label><input type="number" id="cliValorPadrão" placeholder="Ex: 150.00" min="1" step="0.01"></div>
+                <div class="fg"><label id="lblCliValor" data-i18n="cli.value_per_service">Valor por Serviço</label><input type="number" id="cliValorPadrão" placeholder="Ex: 150" min="1" step="1"></div>
                 <div class="fg" style="max-width:120px">
                     <label data-i18n="cli.pay_day">Dia Pag.</label>
                     <input type="number" id="cliDiaPag" min="1" max="31" placeholder="15">
@@ -3037,9 +3037,9 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     </span>
                     <span class="ft-text">
                         <span class="ft-title" data-i18n="pomo.focus_mode">Modo foco</span>
-                        <span class="ft-sub" data-i18n="pomo.focus_mode_desc">Bloqueia apps de distração durante o ciclo</span>
+                        <span class="ft-sub" data-i18n="pomo.focus_mode_desc">Minimiza apps de distração durante o ciclo</span>
                     </span>
-                    <input type="checkbox" id="pomoFocusEnabled" checked onchange="savePomoFocusPref()">
+                    <input type="checkbox" id="pomoFocusEnabled" onchange="savePomoFocusPref()">
                     <span class="ft-switch"></span>
                 </label>
                 <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(190,242,100,.08)">
@@ -3124,22 +3124,39 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     </div>
                 </div>
             </div>
-            <!-- Time range (trim) -->
-            <div id="ytAppTrimSection" style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px">
-                <div style="font-size:.7rem;color:var(--text3);font-weight:600;white-space:nowrap">Cortar</div>
-                <input type="text" id="ytAppStartTime" placeholder="00:00" title="Inicio (ex: 1:30)" style="width:70px;padding:6px 8px;font-size:.78rem;text-align:center;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;outline:none">
-                <span style="color:var(--text3);font-size:.72rem">ate</span>
-                <input type="text" id="ytAppEndTime" placeholder="Fim" title="Fim (ex: 3:45)" style="width:70px;padding:6px 8px;font-size:.78rem;text-align:center;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;outline:none">
-                <span id="ytAppTrimInfo" style="font-size:.66rem;color:var(--text3);white-space:nowrap"></span>
+            <!-- Time range (trim) — slider visual igual ao plugin -->
+            <div id="ytAppTrimSection" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid rgba(190,242,100,.06);border-radius:8px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <div style="font-size:.7rem;color:var(--text3);font-weight:600">Cortar</div>
+                    <span id="ytAppTrimDuration" style="font-size:.68rem;color:#bef264;font-weight:600"></span>
+                </div>
+                <div id="ytAppRangeWrap" style="position:relative;height:34px;background:rgba(255,255,255,.03);border:1px solid rgba(190,242,100,.08);border-radius:7px;margin-bottom:8px;cursor:pointer;overflow:hidden" onmousedown="ytAppRangeDown(event)">
+                    <div id="ytAppRangeFill" style="position:absolute;top:0;bottom:0;background:rgba(190,242,100,.12);border-left:2px solid #bef264;border-right:2px solid #bef264;pointer-events:none"></div>
+                    <div id="ytAppRangeStart" style="position:absolute;top:0;bottom:0;width:12px;background:#bef264;border-radius:3px;cursor:ew-resize;z-index:2;opacity:.9" onmousedown="ytAppHandleDown(event,'start')"></div>
+                    <div id="ytAppRangeEnd" style="position:absolute;top:0;bottom:0;width:12px;background:#bef264;border-radius:3px;cursor:ew-resize;z-index:2;opacity:.9" onmousedown="ytAppHandleDown(event,'end')"></div>
+                    <div id="ytAppTimeMarkers" style="position:absolute;bottom:2px;left:0;right:0;display:flex;justify-content:space-between;padding:0 5px;pointer-events:none"></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <input type="text" id="ytAppStartTime" placeholder="00:00" title="Início (ex: 1:30)" oninput="ytAppTimeInputChanged()" style="width:76px;padding:6px 8px;font-size:.78rem;text-align:center;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;outline:none">
+                    <div style="flex:1;height:1px;background:rgba(190,242,100,.1)"></div>
+                    <input type="text" id="ytAppEndTime" placeholder="Fim" title="Fim (ex: 3:45)" oninput="ytAppTimeInputChanged()" style="width:76px;padding:6px 8px;font-size:.78rem;text-align:center;border-radius:6px;border:1px solid rgba(190,242,100,.1);background:rgba(255,255,255,.04);color:var(--text);font-family:inherit;outline:none">
+                </div>
             </div>
             <div style="display:flex;gap:8px;margin-top:14px">
                 <button class="btn btn-a" id="ytDownloadBtn" onclick="ytStartDownload()" style="flex:1;justify-content:center;padding:12px">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Baixar
                 </button>
-                <button class="btn btn-o" onclick="ytOpenFolder()" title="Abrir pasta de downloads" style="padding:12px 14px">
+                <button class="btn btn-o" onclick="ytChooseFolder()" title="Escolher pasta de destino" style="padding:12px 14px">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 </button>
+            </div>
+            <!-- Pasta de destino -->
+            <div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.66rem;color:var(--text3)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span style="flex-shrink:0">Salvar em:</span>
+                <span id="ytDestPath" onclick="ytChooseFolder()" title="Clique pra trocar a pasta" style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(190,242,100,.3);text-underline-offset:2px">Downloads (padrão)</span>
+                <button onclick="ytOpenFolder()" title="Abrir a pasta" style="flex-shrink:0;background:none;border:none;color:#bef264;cursor:pointer;padding:2px 4px;font-size:.66rem;font-weight:600">abrir</button>
             </div>
         </div>
 
@@ -3147,6 +3164,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         <div id="ytProgressPanel" class="card" style="display:none">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                 <span id="ytProgressTitle" style="font-size:.85rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></span>
+                <span id="ytQueueBadge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:8px;background:rgba(190,242,100,.12);color:#bef264;font-weight:600;flex-shrink:0;margin-left:8px"></span>
                 <button class="btn btn-r" onclick="ytCancelDownload()" id="ytCancelBtn" style="font-size:.7rem;padding:5px 12px;flex-shrink:0;margin-left:10px">Cancelar</button>
             </div>
             <div style="background:rgba(255,255,255,.06);border-radius:8px;height:10px;overflow:hidden;margin-bottom:10px">
@@ -3557,6 +3575,14 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
             <!-- Loading -->
             <div id="rmbgLoading" style="display:none;margin-top:14px;padding:14px;background:rgba(190,242,100,.04);border:1px solid rgba(190,242,100,.12);border-radius:10px;text-align:center">
+                <!-- Preview "escaneando" a imagem enquanto a IA processa -->
+                <div id="rmbgScanBox" class="rmbg-scanbox">
+                    <img id="rmbgScanImg" alt="">
+                    <div class="rmbg-scangrid"></div>
+                    <div class="rmbg-scanline"></div>
+                    <span class="rmbg-corner tl"></span><span class="rmbg-corner tr"></span>
+                    <span class="rmbg-corner bl"></span><span class="rmbg-corner br"></span>
+                </div>
                 <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px">
                     <div style="width:16px;height:16px;border:2.5px solid rgba(190,242,100,.2);border-top-color:#bef264;border-radius:50%;animation:rmbg-spin .7s linear infinite"></div>
                     <span id="rmbgLoadingTxt" style="font-size:.85rem;color:var(--text);font-weight:600">Processando...</span>
@@ -3578,8 +3604,9 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                     </div>
                     <div>
                         <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px;font-weight:600">Sem fundo</div>
-                        <div style="border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.05);aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;background-image:linear-gradient(45deg,#2a2a2a 25%,transparent 25%),linear-gradient(-45deg,#2a2a2a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2a2a2a 75%),linear-gradient(-45deg,transparent 75%,#2a2a2a 75%);background-size:14px 14px;background-position:0 0,0 7px,7px -7px,7px 0;background-color:#1a1a1a">
+                        <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.05);aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;background-image:linear-gradient(45deg,#2a2a2a 25%,transparent 25%),linear-gradient(-45deg,#2a2a2a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#2a2a2a 75%),linear-gradient(-45deg,transparent 75%,#2a2a2a 75%);background-size:14px 14px;background-position:0 0,0 7px,7px -7px,7px 0;background-color:#1a1a1a">
                             <img id="rmbgImgResult" style="max-width:100%;max-height:100%;object-fit:contain">
+                            <div id="rmbgScan" class="rmbg-scan"></div>
                         </div>
                     </div>
                 </div>
@@ -3604,8 +3631,28 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
 
         <style>
             @keyframes rmbg-spin{to{transform:rotate(360deg)}}
+            #tab-rmbg{position:relative}
             #rmbgDropZone:hover{background:rgba(190,242,100,.06);border-color:rgba(190,242,100,.45)}
             #rmbgDropZone.dragover{background:rgba(190,242,100,.12);border-color:#bef264;border-style:solid}
+            /* Reveal do resultado (tipo remove.bg): fade-in com flash + linha de scan verde varrendo */
+            #rmbgImgResult.rmbg-reveal-in{animation:rmbgRevealIn .85s cubic-bezier(.22,1,.36,1) 1}
+            @keyframes rmbgRevealIn{0%{opacity:0;filter:brightness(1.6) saturate(.6);transform:scale(1.02)}100%{opacity:1;filter:none;transform:none}}
+            .rmbg-scan{position:absolute;left:0;right:0;top:-56px;height:56px;pointer-events:none;opacity:0;background:linear-gradient(180deg,transparent,rgba(190,242,100,.55),transparent);box-shadow:0 0 26px rgba(190,242,100,.45)}
+            .rmbg-scan.play{animation:rmbgScan 1s cubic-bezier(.4,0,.2,1) 1}
+            @keyframes rmbgScan{0%{opacity:1;top:-56px}92%{opacity:1}100%{opacity:0;top:100%}}
+            /* Preview "escaneando" a imagem durante o processamento (feel de analise) */
+            .rmbg-scanbox{position:relative;width:100%;max-width:270px;aspect-ratio:1/1;margin:0 auto 14px;border-radius:12px;overflow:hidden;background:#101010;border:1px solid rgba(190,242,100,.18)}
+            .rmbg-scanbox img{width:100%;height:100%;object-fit:contain;display:block}
+            .rmbg-scanline{position:absolute;left:0;right:0;height:40px;top:-40px;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(190,242,100,.6),transparent);box-shadow:0 0 22px rgba(190,242,100,.5);animation:rmbgScanLoop 1.6s linear infinite}
+            @keyframes rmbgScanLoop{0%{top:-40px}100%{top:100%}}
+            .rmbg-scangrid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(190,242,100,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(190,242,100,.05) 1px,transparent 1px);background-size:20px 20px}
+            .rmbg-corner{position:absolute;width:15px;height:15px;border:2px solid rgba(190,242,100,.75);pointer-events:none}
+            .rmbg-corner.tl{top:8px;left:8px;border-right:0;border-bottom:0}
+            .rmbg-corner.tr{top:8px;right:8px;border-left:0;border-bottom:0}
+            .rmbg-corner.bl{bottom:8px;left:8px;border-right:0;border-top:0}
+            .rmbg-corner.br{bottom:8px;right:8px;border-left:0;border-top:0}
+            /* Overlay de "arraste pra trocar" sobre o preview */
+            #tab-rmbg.rmbg-drag::after{content:'Solte pra trocar a imagem';position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;font-weight:700;color:#bef264;background:rgba(10,10,10,.72);border:2px dashed rgba(190,242,100,.5);border-radius:16px;backdrop-filter:blur(3px);pointer-events:none}
         </style>
     </div>
 
@@ -4368,7 +4415,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
                 <select id="editMoeda" onchange="onEditMoedaChange()"><option value="BRL">BRL (R$)</option><option value="USD">USD ($)</option><option value="EUR">EUR (€)</option><option value="GBP">GBP (£)</option><option value="CAD">CAD (C$)</option><option value="AUD">AUD (A$)</option></select>
             </div>
             <div class="fg"><label>Tipo de Cobranca</label><select id="editTipoCobranca" onchange="onEditTipoCobrancaChange()"><option value="por_video">Por serviço</option><option value="por_hora">Por hora trabalhada</option></select></div>
-            <div class="fg"><label id="lblEditValor">Valor por Serviço</label><input type="number" id="editValor" placeholder="150.00" min="0" step="0.01"></div>
+            <div class="fg"><label id="lblEditValor">Valor por Serviço</label><input type="number" id="editValor" placeholder="150" min="0" step="1"></div>
         </div>
         <div class="fr" style="margin-top:8px">
             <div class="fg"><label data-i18n="cli.payment_day">Dia do Pagamento</label><input type="number" id="editDiaPag" min="1" max="31" placeholder="Ex: 15"></div>
@@ -10938,7 +10985,7 @@ function updStats(){
         if(txt.startsWith('Serviços')||txt.startsWith('Serviços')||txt.startsWith('Services')||dataI==='dash.services_month')el.textContent=_lblServ+' ('+(isCurMonth?_lblMonth:mLabel)+')';
         else if(txt.startsWith('Bruto')||txt.startsWith('Gross')||dataI==='dash.gross_month')el.textContent=_lblGross+' ('+(isCurMonth?_lblMonth:mLabel)+')';
     });
-    let tv=0,tb=0,ti=0,tl=0,ttx=0,pendB=0;
+    let tv=0,tb=0,ti=0,tl=0,ttx=0,pendB=0,tlAll=0;
     mesRegs.forEach(r=>{
         const b=getRegBruto(r);
         const rcl=getCl(r.cliente);
@@ -10956,6 +11003,8 @@ function updStats(){
         // Taxas/Impostos/Líquido: SÓ do que já foi PAGO (dinheiro que entrou de verdade).
         // Nada recebido = nada de taxa/imposto/líquido (evita "calcular imposto sem ter recebido").
         if(r.pago){ ttx+=txBRL; ti+=impBRL; tl+=liqBRL; }
+        // Liquido PREVISTO do mes (pago + a receber) — usado pela Meta Mensal
+        tlAll+=liqBRL;
         // "A receber": bruto do mês ainda NÃO pago
         if(!r.pago)pendB+=bBRL;
     });
@@ -10967,7 +11016,7 @@ function updStats(){
     });
     document.getElementById('sVid').textContent=tv;
     document.getElementById('sVidDia').textContent=dvid;
-    _statVals={bruto:tb,brutoDia:dbruto,taxas:ttx,imp:ti,liq:tl,pendB};
+    _statVals={bruto:tb,brutoDia:dbruto,taxas:ttx,imp:ti,liq:tl,liqAll:tlAll,pendB};
     renderStatValues();
     document.getElementById('sCli').textContent=clientes.length;
     renderCliAvatars();
@@ -11209,8 +11258,9 @@ function updMeta(){
     const sMeta=(moedaSymbols[metaMoeda]||'R$')+' ';
     const sAtual=(moedaSymbols[_metaAtualMoeda]||'R$')+' ';
     const usd=cotacao.usd||5.0;
-    // Usa o mesmo valor líquido da dashboard (já convertido pra BRL) pra garantir consistência
-    let atualBRL=_statVals.liq;
+    // Meta conta o liquido PREVISTO do mes: o que ja foi pago + o que esta a receber.
+    // (Os cards Taxas/Impostos/Liquido continuam so com o pago; a meta olha o mes inteiro.)
+    let atualBRL=(_statVals.liqAll!=null)?_statVals.liqAll:_statVals.liq;
     let atual=_metaAtualMoeda==='USD'?atualBRL/usd:atualBRL;
     // Meta target conversion for progress bar
     let metaValBRL=metaMoeda==='USD'?metaVal*usd:metaVal;
@@ -12233,7 +12283,7 @@ async function startProjTimer(skipWorkCheck, trackMode){
     document.getElementById('workBar').style.display='flex';
     document.getElementById('workBarText').textContent=proj;
     lastActivity=Date.now();
-    localStorage.setItem('vc_prod_active',JSON.stringify({project:proj,start:projT.start,trackMode:mode,regId:regId}));
+    _saveProjActive();
     // Auto-pause por foreground em modo premiere ou after, com o modo correto
     if(mode==='premiere'||mode==='after') startTimerFgCheck(mode);
     else stopTimerFgCheck();
@@ -12247,6 +12297,7 @@ function pauseProjTimer(){
     document.getElementById('btnProjPause').textContent='Retomar';
     document.getElementById('btnProjPause').onclick=resumeProjTimer;
     document.getElementById('projTimerStatus').textContent='Pausado';
+    _saveProjActive();
 }
 
 function resumeProjTimer(){
@@ -12262,6 +12313,7 @@ function resumeProjTimer(){
     document.getElementById('inactivityNotice').style.display='none';
     if(projT.trackMode==='app') stopTimerFgCheck();
     else startTimerFgCheck(projT.trackMode);
+    _saveProjActive();
 }
 
 function stopProjTimer(){
@@ -12297,11 +12349,31 @@ function stopProjTimer(){
     renderProdHist();
 }
 
+// Tempo REAL contado neste instante (elapsed acumulado + delta da fase ativa se rodando)
+function _liveProjElapsed(){
+    if(!projT.running) return 0;
+    let t=projT.elapsed||0;
+    if(!projT.paused && projT.start) t+=Math.floor((Date.now()-projT.start)/1000);
+    return t;
+}
+// Persiste o tempo JA CONTADO (numero congelado), NUNCA um timestamp de inicio.
+// Assim, ao reabrir o app, o tempo que ele ficou fechado nao entra na conta.
+function _saveProjActive(){
+    if(!projT.running){ localStorage.removeItem('vc_prod_active'); return; }
+    try{
+        localStorage.setItem('vc_prod_active', JSON.stringify({
+            project:projT.project, regId:projT.regId, trackMode:projT.trackMode,
+            elapsed:_liveProjElapsed(), paused:projT.paused
+        }));
+    }catch(e){}
+}
+
 function updateProjDisplay(){
     if(!projT.running||projT.paused)return;
     const total=projT.elapsed+Math.floor((Date.now()-projT.start)/1000);
     document.getElementById('projTimerDisplay').textContent=fmtDurFull(total);
     document.getElementById('workBarTime').textContent=fmtDurFull(total);
+    _saveProjActive(); // persiste o tempo real contado a cada segundo (nao um timestamp)
 }
 
 // Inactivity, only triggers when fg check is NOT running
@@ -12877,7 +12949,7 @@ async function _rmbgProcessHQ(blob, onProgress) {
     if (!(window.electronAPI && window.electronAPI.removeBgImage)) {
         throw new Error('Removedor indisponível, feche e reabra o app');
     }
-    if (onProgress) onProgress('compute', 'Processando IA local (pode demorar na 1ª vez)…', 45);
+    if (onProgress) onProgress('compute', 'Removendo o fundo com IA…', 45);
     const ab = await blob.arrayBuffer();
     const ext = (blob.type && blob.type.indexOf('/') >= 0) ? blob.type.split('/')[1] : 'png';
     const res = await window.electronAPI.removeBgImage(ab, ext);
@@ -12895,24 +12967,47 @@ function rmbgPickFile(files){
 }
 
 async function rmbgProcess(blobOrFile){
+    if (window._rmbgBusy) return;            // evita duplo processamento (drop na dropzone + no tab)
+    if (!blobOrFile || !blobOrFile.type || !blobOrFile.type.startsWith('image/')) return;
+    window._rmbgBusy = true;
     _rmbgOriginalBlob = blobOrFile;
     document.getElementById('rmbgPreview').style.display='none';
     document.getElementById('rmbgDropZone').style.display='none';
 
-    // Show original immediately
+    // Show original immediately (no preview final E no box de scan durante o processamento)
     const reader = new FileReader();
-    reader.onload = (e) => { document.getElementById('rmbgImgOriginal').src = e.target.result; };
+    reader.onload = (e) => {
+        document.getElementById('rmbgImgOriginal').src = e.target.result;
+        const si = document.getElementById('rmbgScanImg');
+        if (si) si.src = e.target.result;
+    };
     reader.readAsDataURL(blobOrFile);
 
+    // "Primeira vez" = modelo ainda nao foi baixado nesse PC (guardado por flag no disco)
+    const firstEver = !localStorage.getItem('rmbg_first_done');
+
     try {
-        // Sempre usa BiRefNet (HQ), modelo único, melhor qualidade
         document.getElementById('rmbgLoading').style.display='block';
-        document.getElementById('rmbgFirstTime').style.display = _rmbgHqModel ? 'none' : 'block';
-        const hqProg = (key, txt, pct) => {
-            document.getElementById('rmbgLoadingTxt').textContent = txt;
-            document.getElementById('rmbgProgress').style.width = Math.max(5, Math.min(99, pct)) + '%';
-        };
+        document.getElementById('rmbgFirstTime').style.display = firstEver ? 'block' : 'none';
+        document.getElementById('rmbgLoadingTxt').textContent = firstEver ? 'Baixando o modelo de IA…' : 'Removendo o fundo…';
+        // Barra sobe SUAVE (creep assintotico) — nao ha progresso real do worker durante a inferencia,
+        // entao a barra sempre sobe em vez de travar na metade.
+        const bar = document.getElementById('rmbgProgress');
+        bar.style.width = '0%';
+        let _p = 0;
+        clearInterval(window._rmbgCreep);
+        window._rmbgCreep = setInterval(() => {
+            _p += Math.max(0.5, (92 - _p) * 0.035); // rapido no comeco, desacelera perto de 92%
+            if (_p > 92) _p = 92;
+            bar.style.width = _p.toFixed(1) + '%';
+        }, 110);
+
+        const hqProg = (key, txt, pct) => { document.getElementById('rmbgLoadingTxt').textContent = txt; };
         const resultBlob = await _rmbgProcessHQ(blobOrFile, hqProg);
+
+        clearInterval(window._rmbgCreep);
+        bar.style.width = '100%';
+        localStorage.setItem('rmbg_first_done', '1');   // modelo ja baixado — proxima vez sem "1ª vez"
         _rmbgResultBlob = resultBlob;
         const resultUrl = URL.createObjectURL(resultBlob);
         document.getElementById('rmbgImgResult').src = resultUrl;
@@ -12920,17 +13015,28 @@ async function rmbgProcess(blobOrFile){
         document.getElementById('rmbgLoading').style.display='none';
         document.getElementById('rmbgFirstTime').style.display='none';
         document.getElementById('rmbgPreview').style.display='block';
+        _rmbgPlayReveal();   // animacao de fundo sendo removido (tipo remove.bg)
         document.getElementById('rmbgStatus').textContent='Pronto';
         document.getElementById('rmbgStatus').style.background='rgba(34,197,94,.1)';
         document.getElementById('rmbgStatus').style.color='#22c55e';
         showToast('Fundo removido!', 'ok');
     } catch (e) {
         console.error('rmbg error:', e);
+        clearInterval(window._rmbgCreep);
         document.getElementById('rmbgLoading').style.display='none';
         document.getElementById('rmbgFirstTime').style.display='none';
         document.getElementById('rmbgDropZone').style.display='block';
         showToast('Erro: ' + (e.message || e), 'err');
+    } finally {
+        window._rmbgBusy = false;
     }
+}
+// Animacao de reveal (fundo sendo removido) — linha de scan verde + fade-in do resultado
+function _rmbgPlayReveal(){
+    const img = document.getElementById('rmbgImgResult');
+    const scan = document.getElementById('rmbgScan');
+    if (img) { img.classList.remove('rmbg-reveal-in'); void img.offsetWidth; img.classList.add('rmbg-reveal-in'); }
+    if (scan) { scan.classList.remove('play'); void scan.offsetWidth; scan.classList.add('play'); }
 }
 
 function rmbgDownload(){
@@ -12987,6 +13093,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!dz) return;
     ['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('dragover'); }));
     ['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('dragover'); }));
+    // Trocar imagem arrastando POR CIMA do preview (sem precisar clicar em "Nova imagem")
+    const rmbgTab = document.getElementById('tab-rmbg');
+    if (rmbgTab) {
+        let _dd = 0;
+        const previewOn = () => document.getElementById('rmbgPreview').style.display === 'block';
+        rmbgTab.addEventListener('dragenter', e => {
+            if (!previewOn()) return; // sem imagem ainda, a dropzone ja cuida
+            if (!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'))) return;
+            e.preventDefault(); _dd++; rmbgTab.classList.add('rmbg-drag');
+        });
+        rmbgTab.addEventListener('dragover', e => { if (previewOn()) e.preventDefault(); });
+        rmbgTab.addEventListener('dragleave', () => { _dd--; if (_dd <= 0) { _dd = 0; rmbgTab.classList.remove('rmbg-drag'); } });
+        rmbgTab.addEventListener('drop', e => {
+            _dd = 0; rmbgTab.classList.remove('rmbg-drag');
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); rmbgPickFile(e.dataTransfer.files); }
+        });
+    }
     dz.addEventListener('drop', e => { rmbgPickFile(e.dataTransfer.files); });
     // Paste from clipboard
     window.addEventListener('paste', e => {
@@ -13136,10 +13259,14 @@ async function ytFetchInfo(){
         const mm=Math.floor(dur/60),ss=dur%60;
         const durStr=mm+':'+(ss<10?'0':'')+ss;
         document.getElementById('ytDuration').textContent=durStr;
-        document.getElementById('ytAppEndTime').placeholder=durStr;
-        document.getElementById('ytAppTrimInfo').textContent='Total: '+durStr;
-        document.getElementById('ytAppTrimSection').style.display=(_ytAppPlatform==='instagram')?'none':'flex';
+        _ytUpdateDestDisplay();
         document.getElementById('ytInfoPanel').style.display='';
+        // painel visivel ANTES de montar o slider (senao offsetWidth=0 e os handles saem errados)
+        if(_ytAppPlatform==='instagram'){
+            document.getElementById('ytAppTrimSection').style.display='none';
+        } else {
+            ytAppInitRange(dur);
+        }
     }catch(e){showToast(e&&e.message?e.message:'Erro ao buscar','error')}
     _resetBtn();
 }
@@ -13157,6 +13284,17 @@ async function ytStartDownload(){
     const v=ytValidateMediaUrl(url);
     if(!v.ok){showToast(v.msg,'warn');return}
     if(!window.ytDownloader){showToast('Downloader indisponível','warn');return}
+    // FILA: se ja tem um download rolando, empilha e sai — baixa quando o atual terminar
+    if(_ytAppBusy){
+        _ytAppQueue.push({url:url, format:_ytFmt, info:(_ytInfo&&_ytInfo._url===url)?_ytInfo:null,
+            startT:(document.getElementById('ytAppStartTime').value||'').trim(),
+            endT:(document.getElementById('ytAppEndTime').value||'').trim()});
+        showToast('Na fila ('+_ytAppQueue.length+') — baixa quando o atual terminar','ok');
+        _ytUpdateQueueBadge();
+        document.getElementById('ytUrl').value='';
+        return;
+    }
+    _ytAppBusy=true;
     const btn=document.getElementById('ytDownloadBtn');
     btn.disabled=true;
     document.getElementById('ytProgressPanel').style.display='';
@@ -13178,19 +13316,133 @@ async function ytStartDownload(){
     const startT=(document.getElementById('ytAppStartTime').value||'').trim();
     const endT=(document.getElementById('ytAppEndTime').value||'').trim();
     const opts={url:url,format:_ytFmt};
+    if(_ytDownloadDir) opts.outputDir=_ytDownloadDir;
     if(startT) opts.startTime=startT;
     if(endT) opts.endTime=endT;
-    try{await window.ytDownloader.download(opts)}catch(e){showToast('Erro ao iniciar','error');btn.disabled=false}
+    try{await window.ytDownloader.download(opts)}catch(e){showToast('Erro ao iniciar','error');btn.disabled=false;_ytAppBusy=false;_ytAppStartNext()}
 }
 
 function ytCancelDownload(){
     if(window.ytDownloader)window.ytDownloader.cancel();
+    _ytAppQueue=[]; _ytAppBusy=false; _ytUpdateQueueBadge();   // cancelar limpa a fila
     document.getElementById('ytDownloadBtn').disabled=false;
     const st=document.getElementById('ytProgressStatus');
     st.style.display='';st.textContent='Cancelado';st.style.color='var(--red)';
 }
 
-function ytOpenFolder(){if(window.ytDownloader)window.ytDownloader.openFolder()}
+function ytOpenFolder(){if(window.ytDownloader)window.ytDownloader.openFolder(_ytDownloadDir||undefined)}
+
+/* ═══════ Pasta de destino do download ═══════ */
+let _ytDownloadDir = localStorage.getItem('yt_download_dir') || '';
+function _ytUpdateDestDisplay(){
+    const el=document.getElementById('ytDestPath');
+    if(!el)return;
+    if(_ytDownloadDir){el.textContent=_ytDownloadDir;el.title=_ytDownloadDir}
+    else{el.textContent='Downloads (padrão)';el.title='Pasta Downloads do sistema'}
+}
+async function ytChooseFolder(){
+    if(!window.ytDownloader||!window.ytDownloader.chooseFolder){showToast('Indisponível','warn');return}
+    try{
+        const r=await window.ytDownloader.chooseFolder();
+        if(r&&r.ok&&r.folder){
+            _ytDownloadDir=r.folder;
+            localStorage.setItem('yt_download_dir',_ytDownloadDir);
+            _ytUpdateDestDisplay();
+            showToast('Pasta de destino definida','ok');
+        }
+    }catch(e){showToast('Erro ao escolher pasta','error')}
+}
+
+/* ═══════ Trim: slider visual (igual ao do plugin) ═══════ */
+let ytAppTotalDuration=0, ytAppRangeStartPct=0, ytAppRangeEndPct=1, ytAppRangeDragging=null;
+function ytAppSecsToTime(s){s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;if(h>0)return h+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0');return m+':'+String(ss).padStart(2,'0')}
+function ytAppTimeToSecs(t){if(!t)return 0;const p=String(t).split(':').map(Number);if(p.length===3)return p[0]*3600+p[1]*60+p[2];if(p.length===2)return p[0]*60+p[1];return p[0]||0}
+function ytAppInitRange(duration){
+    ytAppTotalDuration=duration||0;
+    ytAppRangeStartPct=0; ytAppRangeEndPct=1;
+    document.getElementById('ytAppStartTime').value='';
+    document.getElementById('ytAppEndTime').value='';
+    document.getElementById('ytAppTrimSection').style.display='';
+    if(duration>0){
+        document.getElementById('ytAppEndTime').placeholder=ytAppSecsToTime(duration);
+        const markers=document.getElementById('ytAppTimeMarkers');
+        const count=duration>300?5:duration>60?4:3;
+        let html='';
+        for(let i=0;i<count;i++){const pct=i/(count-1);const t=Math.round(pct*duration);html+='<span style="font-size:.56rem;color:var(--text3)">'+ytAppSecsToTime(t)+'</span>'}
+        markers.innerHTML=html;
+    }
+    ytAppUpdateRange();
+}
+function ytAppUpdateRange(){
+    const wrap=document.getElementById('ytAppRangeWrap');
+    if(!wrap)return;
+    const w=wrap.offsetWidth-12; // largura do handle
+    const sl=Math.round(ytAppRangeStartPct*w);
+    const el=Math.round(ytAppRangeEndPct*w);
+    document.getElementById('ytAppRangeStart').style.left=sl+'px';
+    document.getElementById('ytAppRangeEnd').style.left=el+'px';
+    const fill=document.getElementById('ytAppRangeFill');
+    fill.style.left=(sl+6)+'px';
+    fill.style.width=Math.max(0,el-sl)+'px';
+    const startSecs=Math.round(ytAppRangeStartPct*ytAppTotalDuration);
+    const endSecs=Math.round(ytAppRangeEndPct*ytAppTotalDuration);
+    document.getElementById('ytAppTrimDuration').textContent=ytAppSecsToTime(startSecs)+' → '+ytAppSecsToTime(endSecs)+' ('+ytAppSecsToTime(endSecs-startSecs)+')';
+}
+function ytAppHandleDown(e,which){e.preventDefault();e.stopPropagation();ytAppRangeDragging=which;document.addEventListener('mousemove',ytAppRangeMove);document.addEventListener('mouseup',ytAppRangeUp)}
+function ytAppRangeDown(e){
+    const wrap=document.getElementById('ytAppRangeWrap');
+    const rect=wrap.getBoundingClientRect();
+    const pct=Math.max(0,Math.min(1,(e.clientX-rect.left-6)/(rect.width-12)));
+    if(Math.abs(pct-ytAppRangeStartPct)<Math.abs(pct-ytAppRangeEndPct)){ytAppRangeStartPct=Math.min(pct,ytAppRangeEndPct-0.01);ytAppRangeDragging='start'}
+    else{ytAppRangeEndPct=Math.max(pct,ytAppRangeStartPct+0.01);ytAppRangeDragging='end'}
+    ytAppSyncInputsFromRange();ytAppUpdateRange();
+    document.addEventListener('mousemove',ytAppRangeMove);document.addEventListener('mouseup',ytAppRangeUp);
+}
+function ytAppRangeMove(e){
+    if(!ytAppRangeDragging)return;
+    const wrap=document.getElementById('ytAppRangeWrap');
+    const rect=wrap.getBoundingClientRect();
+    const pct=Math.max(0,Math.min(1,(e.clientX-rect.left-6)/(rect.width-12)));
+    if(ytAppRangeDragging==='start'){ytAppRangeStartPct=Math.min(pct,ytAppRangeEndPct-0.01)}
+    else{ytAppRangeEndPct=Math.max(pct,ytAppRangeStartPct+0.01)}
+    ytAppSyncInputsFromRange();ytAppUpdateRange();
+}
+function ytAppRangeUp(){ytAppRangeDragging=null;document.removeEventListener('mousemove',ytAppRangeMove);document.removeEventListener('mouseup',ytAppRangeUp)}
+function ytAppSyncInputsFromRange(){
+    const startSecs=Math.round(ytAppRangeStartPct*ytAppTotalDuration);
+    const endSecs=Math.round(ytAppRangeEndPct*ytAppTotalDuration);
+    document.getElementById('ytAppStartTime').value=startSecs>0?ytAppSecsToTime(startSecs):'';
+    document.getElementById('ytAppEndTime').value=endSecs<ytAppTotalDuration?ytAppSecsToTime(endSecs):'';
+}
+function ytAppTimeInputChanged(){
+    if(!ytAppTotalDuration)return;
+    const sv=(document.getElementById('ytAppStartTime').value||'').trim();
+    const ev=(document.getElementById('ytAppEndTime').value||'').trim();
+    if(sv){ytAppRangeStartPct=Math.max(0,Math.min(1,ytAppTimeToSecs(sv)/ytAppTotalDuration))}else{ytAppRangeStartPct=0}
+    if(ev){ytAppRangeEndPct=Math.max(ytAppRangeStartPct+0.01,Math.min(1,ytAppTimeToSecs(ev)/ytAppTotalDuration))}else{ytAppRangeEndPct=1}
+    ytAppUpdateRange();
+}
+
+/* ═══════ Fila de downloads (empilha, baixa um atrás do outro — igual ao plugin) ═══════ */
+let _ytAppQueue=[], _ytAppBusy=false;
+function _ytUpdateQueueBadge(){
+    const b=document.getElementById('ytQueueBadge');
+    if(!b)return;
+    if(_ytAppQueue.length>0){b.style.display='';b.textContent='Fila: '+_ytAppQueue.length}
+    else b.style.display='none';
+}
+function _ytAppStartNext(){
+    _ytUpdateQueueBadge();
+    if(!_ytAppQueue.length)return;
+    const item=_ytAppQueue.shift();
+    document.getElementById('ytUrl').value=item.url;
+    _ytFmt=item.format||_ytFmt;
+    _ytInfo=item.info||null;
+    document.getElementById('ytAppStartTime').value=item.startT||'';
+    document.getElementById('ytAppEndTime').value=item.endT||'';
+    _ytUpdateQueueBadge();
+    setTimeout(ytStartDownload, 500); // pequeno delay pro backend liberar o slot
+}
 
 function ytOnProgress(p){
     if(!p)return;
@@ -13204,11 +13456,11 @@ function ytOnProgress(p){
     pct.textContent=Math.round(p.percent||0)+'%';
     spd.textContent=p.speed||'';
     eta.textContent=p.eta?'ETA '+p.eta:'';
-    if(p.status==='merging'){st.style.display='';st.textContent='Mesclando audio e video...';st.style.color='var(--orange)'}
+    if(p.status==='merging'){st.style.display='';st.textContent='Finalizando…';st.style.color='var(--text2)'}
     else if(p.status==='done'){
         st.style.display='';
-        st.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" style="vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="11" fill="#22c55e" opacity="0.15"/><circle cx="12" cy="12" r="11" stroke="#22c55e" stroke-width="1.5" fill="none"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span style="vertical-align:middle">Download concluído!</span>';
-        st.style.color='#22c55e';
+        st.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#4ade80" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><polyline points="20 6 9 17 4 12"/></svg><span style="vertical-align:middle">Pronto</span>';
+        st.style.color='#4ade80';
         bar.style.width='100%';pct.textContent='100%';
         document.getElementById('ytDownloadBtn').disabled=false;
         const _curUrl=(document.getElementById('ytUrl')?.value||'').trim();
@@ -13230,17 +13482,21 @@ function ytOnProgress(p){
             duration:_duration,
             url:_effUrl,
             date:new Date().toISOString(),
-            format:_ytFmt
+            format:_ytFmt,
+            filePath:(p&&p.file)?p.file:''
         });
         if(_ytHistory.length>30)_ytHistory=_ytHistory.slice(0,30);
         localStorage.setItem('vc_yt_history',JSON.stringify(_ytHistory));
         ytRenderHistory();
+        _ytAppBusy=false; _ytAppStartNext();   // libera e dispara o proximo da fila
     }else if(p.status==='error'){
         st.style.display='';st.textContent='Erro: '+(p.error||'falha');st.style.color='var(--red)';
         document.getElementById('ytDownloadBtn').disabled=false;
+        _ytAppBusy=false; _ytAppStartNext();   // um erro nao trava a fila, segue o proximo
     }else if(p.status==='cancelled'){
         st.style.display='';st.textContent='Cancelado';st.style.color='var(--red)';
         document.getElementById('ytDownloadBtn').disabled=false;
+        _ytAppBusy=false;   // a fila ja foi limpa no ytCancelDownload
     }
 }
 
@@ -13270,8 +13526,13 @@ function ytRenderHistory(){
                     <span style="font-size:.6rem;color:var(--text3)">${d}</span>
                 </div>
             </div>
-            <div style="display:flex;align-items:center;flex-shrink:0;opacity:.3">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+                <button title="Abrir a pasta do arquivo" onclick="event.stopPropagation();ytOpenLocation(${i})" style="background:transparent;border:0;color:var(--text3);cursor:pointer;padding:6px;border-radius:6px;display:flex;align-items:center;transition:all .15s" onmouseenter="this.style.color='#bef264';this.style.background='rgba(190,242,100,.1)'" onmouseleave="this.style.color='var(--text3)';this.style.background='transparent'">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <button title="Copiar link" onclick="event.stopPropagation();ytCopyLink(${i})" style="background:transparent;border:0;color:var(--text3);cursor:pointer;padding:6px;border-radius:6px;display:flex;align-items:center;transition:all .15s" onmouseenter="this.style.color='#bef264';this.style.background='rgba(190,242,100,.1)'" onmouseleave="this.style.color='var(--text3)';this.style.background='transparent'">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                </button>
             </div>
         </div>`;
     }).join('');
@@ -13281,6 +13542,18 @@ function ytRedownload(idx){
     const h=_ytHistory[idx];if(!h||!h.url)return;
     document.getElementById('ytUrl').value=h.url;
     ytFetchInfo();
+}
+// Abre a pasta do arquivo baixado (revela o arquivo destacado no Explorer/Finder;
+// se não souber o caminho, abre a pasta Downloads). Funciona no Windows e no Mac.
+function ytOpenLocation(idx){
+    const h=_ytHistory[idx];if(!h)return;
+    try{ if(window.ytDownloader&&window.ytDownloader.openFolder) window.ytDownloader.openFolder(h.filePath||''); }catch(e){}
+}
+// Copia o link do vídeo pro clipboard.
+function ytCopyLink(idx){
+    const h=_ytHistory[idx];if(!h||!h.url)return;
+    try{ navigator.clipboard.writeText(h.url); if(typeof showToast==='function')showToast('Link copiado!'); }
+    catch(e){ const t=document.createElement('textarea');t.value=h.url;document.body.appendChild(t);t.select();try{document.execCommand('copy')}catch(e2){}t.remove(); if(typeof showToast==='function')showToast('Link copiado!'); }
 }
 
 function ytClearHistory(){
@@ -13925,10 +14198,11 @@ function init(){
     if(prodState.pomoWork)document.getElementById('pomoWork').value=prodState.pomoWork;
     if(prodState.pomoBreak)document.getElementById('pomoBreak').value=prodState.pomoBreak;
     pomoT.remaining=(prodState.pomoWork||25)*60;updatePomoUI();
-    // Restaura preferência do foco no Pomodoro (default: ligado)
+    // Restaura preferência do foco no Pomodoro (default: DESLIGADO — pomodoro é só timer,
+    // o modo foco que minimiza apps é opt-in pra não "invadir a tela" de quem não pediu)
     try{
         const saved=localStorage.getItem('vc_pomo_focus_enabled');
-        if(saved==='0') document.getElementById('pomoFocusEnabled').checked=false;
+        if(saved==='1') document.getElementById('pomoFocusEnabled').checked=true;
     }catch(e){}
     // App catalog & whitelist
     renderAppButtons();renderWhitelist();
@@ -13966,7 +14240,9 @@ function init(){
     // Recover active session (non-blocking)
     const active=JSON.parse(localStorage.getItem('vc_prod_active')||'null');
     if(active&&active.project){
-        const elapsed=Math.floor((Date.now()-active.start)/1000);
+        // Usa o tempo REAL ja contado que foi salvo — NAO soma o tempo que o app ficou fechado.
+        // (active.elapsed=null = formato antigo com timestamp: descarta a sessao, evita o bug de somar)
+        const elapsed=(active.elapsed!=null)?Math.max(0,Math.floor(active.elapsed)):0;
         if(elapsed>0&&elapsed<24*3600){
             projT={running:true,paused:true,start:Date.now(),elapsed:elapsed,project:active.project,regId:active.regId||null,currentRegId:active.regId||null,autoPauses:0,autoPaused:false,trackMode:active.trackMode||'premiere'};
             ['btnProjStartPremiere','btnProjStartAfter','btnProjStartApp'].forEach(id=>{
