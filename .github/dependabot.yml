@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Mantem as GitHub Actions atualizadas mesmo estando fixadas por SHA (abre PR pra bumpar o SHA
+  # quando sai versao nova). Assim o pin por seguranca nao "congela" patches da action.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

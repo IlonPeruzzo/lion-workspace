@@ -88,9 +88,26 @@ jobs:
       - name: List artifacts
         run: ls -la dist/
 
-      - name: Create GitHub Release
-        # Action de TERCEIRO fixada por SHA (nao por tag movel) — evita supply-chain se o tag v2 for movido/comprometido. Dependabot atualiza o SHA.
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+      # ── Publica no repo de RELEASES (o feed novo que o v1.5.8+ procura) ──
+      # Precisa do secret RELEASES_TOKEN (PAT fine-grained com contents:write no
+      # repo lion-workspace-releases). continue-on-error: se o PAT ainda nao foi
+      # configurado, NAO derruba o release — a ponte abaixo ainda publica no repo antigo.
+      - name: Publish to releases repo (novo feed)
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA pin — supply-chain)
+        continue-on-error: true
+        with:
+          repository: IlonPeruzzo/lion-workspace-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          files: dist/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+      # ── PONTE TEMPORARIA: publica tambem no repo antigo (lion-workspace), pra quem
+      #    ainda esta no v1.5.7 achar o update. REMOVER este step quando todos ja
+      #    estiverem no v1.5.8+ (da pra ver a versao de cada um no log do Discord).
+      - name: Ponte - publica no repo antigo (temporario)
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA pin)
         with:
           files: dist/*
           draft: false

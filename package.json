@@ -1,6 +1,6 @@
 {
   "name": "lion-workspace",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "description": "Lion Workspace - Gestao para Editores de Video",
   "main": "main.js",
   "scripts": {
@@ -21,7 +21,7 @@
       {
         "provider": "github",
         "owner": "IlonPeruzzo",
-        "repo": "lion-workspace",
+        "repo": "lion-workspace-releases",
         "releaseType": "release"
       }
     ],
@@ -91,6 +91,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "preset-scanner.js",
       "index.html",
       "mask-editor.html",
       "bg-video-worker.html",

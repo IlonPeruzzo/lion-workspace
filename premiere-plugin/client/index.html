@@ -2105,10 +2105,15 @@
             var isCurrent=s.name===pipe.etapa;
             var css=s.css||'background:rgba(190,242,100,.08);color:#bef264';
             if(!css)css='background:rgba(190,242,100,.08);color:#bef264';
-            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+esc(s.name)+'</span>';
+            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" data-stage="'+esc(s.name)+'" onclick="setStageEl(this,'+pipe.regId+')">'+esc(s.name)+'</span>';
         }).join('');
     }
 
+    // Passa o nome da etapa por data-attribute (esc() escapa "&<>") e le com getAttribute,
+    // em vez de embutir no onclick. Assim o nome NUNCA entra em contexto JS/HTML executavel:
+    // antes so escapava ', entao uma etapa "x\"><img onerror=...>" virava XSS -> RCE (o painel
+    // CEP roda child_process powershell).
+    function setStageEl(el,regId){ setStage(regId, (el && el.getAttribute('data-stage')) || ''); }
     function setStage(regId,etapa){
         LWConnection.resetPollRate();
         LWHttp.post(API+'/timer/set-stage',{regId:regId,etapa:etapa},{retries:1},function(){});
@@ -3321,6 +3326,7 @@
             if (!fpRefs.length) return null;
 
             var effects = [];
+            var _seenAudioMatch = {}; // dedup de variantes de canal (mono/estereo/5.1) de efeito de audio
             for (var f = 0; f < fpRefs.length; f++) {
                 var fp = objBlock(fpRefs[f]);
                 if (!fp) continue;
@@ -3335,6 +3341,11 @@
                 if (!comp) continue;
                 var dispName = (childText(comp.text, 'DisplayName') || '').trim();
                 var matchName = (childText(comp.text, 'MatchName') || fMatch).trim();
+                // Efeito de AUDIO: o Premiere salva o preset com 1 FilterPreset por config de
+                // canal (mono/estereo/5.1), TODOS com o mesmo matchName. Aplicar os 3 metia 3
+                // copias do efeito no clip (ex: "kiply studio reverb" -> 3x Studio Reverb).
+                // Marca pra deduplicar embaixo — o Premiere ja escolhe a variante de canal certa.
+                var isAudioFx = /AudioComponent/.test(comp.text);
 
                 var paramRefs = [];
                 var pRe = /<Param\s+Index="(\d+)"\s+ObjectRef="(\d+)"/g;
@@ -3384,8 +3395,16 @@
                     if ((prevN && scaleFam[prevN]) || (nextN && scaleFam[nextN])) ppI.Name = 'Uniform Scale';
                 }
                 if (matchName || props.length) {
-                    effects.push({ matchName: matchName, name: dispName, props: props,
-                        _anchor: { AnchorInPoint: anchorIn, AnchorOutPoint: anchorOut, Type: presetType } });
+                    // Audio: colapsa as variantes de canal repetidas (mesmo matchName) num efeito so.
+                    // Video nunca cai aqui (isAudioFx=false), entao stacks de video ficam intactos.
+                    var _dk = matchName || dispName;
+                    if (isAudioFx && _dk && _seenAudioMatch[_dk]) {
+                        _lsParseDebug('  audio dup pulado (variante de canal): ' + _dk);
+                    } else {
+                        if (isAudioFx && _dk) _seenAudioMatch[_dk] = 1;
+                        effects.push({ matchName: matchName, name: dispName, props: props,
+                            _anchor: { AnchorInPoint: anchorIn, AnchorOutPoint: anchorOut, Type: presetType } });
+                    }
                 }
             }
             _lsParseDebug('prfpsetFull: "' + presetName + '" → ' + effects.length + ' efeitos');
@@ -3540,6 +3559,9 @@
                     containerPath = p.matchName;
                     presetName = p.name || '';
                 }
+                // So .prfpset: o containerPath vai direto pro readFileSync do parser; sem esse
+                // guard, um comando do servidor :9847 podia mandar ler um arquivo arbitrario do disco.
+                if (containerPath && !/\.prfpset$/i.test(containerPath)) containerPath = '';
                 var presetData = null;
                 var presetSrc = '';
                 if (containerPath) {
@@ -5423,9 +5445,10 @@
             // Adiciona GUID curto pra evitar colisão se 2 pastes acontecem no mesmo ms
             var guid = crypto.randomBytes(4).toString('hex'); // 8 chars
             var out = uniquePath(path.join(dir, 'lw-paste-' + ts + '-' + (i+1) + '-' + guid + '-' + name + '.png'));
-            // sips: re-encoda preservando dimensões, gera PNG limpo
-            var cmd = 'sips -s format png "' + src.replace(/"/g, '\\"') + '" --out "' + out.replace(/"/g, '\\"') + '"';
-            child_process.exec(cmd, { maxBuffer: 4*1024*1024 }, function(err){
+            // sips: re-encoda preservando dimensões, gera PNG limpo. execFile (sem shell) —
+            // passa src/out como argv, imune a $(cmd)/backtick no nome do arquivo (nome vindo
+            // do clipboard/dialog podia injetar comando no /bin/sh do exec antigo).
+            child_process.execFile('sips', ['-s', 'format', 'png', src, '--out', out], { maxBuffer: 4*1024*1024 }, function(err){
                 if (!err) results[i] = out;
                 if (--pending === 0) callback(results);
             });
@@ -5460,7 +5483,9 @@
             }
             var url = API + '/clipboard/read-image';
             if (saveDir) url += '?dir=' + encodeURIComponent(saveDir);
-            LWHttp.get(url, { timeout: 5000, retries: 0 }, function(err, status, body){
+            // timeout alto: quando a imagem vem so como URL (ex: Google Imagens), o server
+            // baixa a imagem antes de responder — pode passar de 5s em CDN lento.
+            LWHttp.get(url, { timeout: 20000, retries: 0 }, function(err, status, body){
                 if (err || status !== 200 || !body) { callback(null); return; }
                 try {
                     var j = JSON.parse(body);

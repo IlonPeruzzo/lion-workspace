@@ -1408,10 +1408,15 @@
             var isCurrent=s.name===pipe.etapa;
             var css=s.css||'background:rgba(190,242,100,.08);color:#bef264';
             if(!css)css='background:rgba(190,242,100,.08);color:#bef264';
-            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" onclick="setStage('+pipe.regId+',\''+s.name.replace(/'/g,"\\'")+'\')">'+esc(s.name)+'</span>';
+            return '<span class="pipe-chip'+(isCurrent?' current':'')+'" style="'+css+'" data-stage="'+esc(s.name)+'" onclick="setStageEl(this,'+pipe.regId+')">'+esc(s.name)+'</span>';
         }).join('');
     }
 
+    // Passa o nome da etapa por data-attribute (esc() escapa "&<>") e le com getAttribute,
+    // em vez de embutir no onclick. Assim o nome NUNCA entra em contexto JS/HTML executavel:
+    // antes so escapava ', entao uma etapa "x\"><img onerror=...>" virava XSS -> RCE (o painel
+    // CEP roda child_process powershell).
+    function setStageEl(el,regId){ setStage(regId, (el && el.getAttribute('data-stage')) || ''); }
     function setStage(regId,etapa){
         LWConnection.resetPollRate();
         LWHttp.post(API+'/timer/set-stage',{regId:regId,etapa:etapa},{retries:1},function(){});

@@ -406,20 +406,22 @@ ipcMain.handle('list-running-processes', () => {
 });
 
 // Launch app by executable path
-ipcMain.handle('launch-by-path', (event, exePath) => {
-    if (!exePath) return false;
-    // Sanitize path
-    const safePath = exePath.replace(/[;|`$()&]/g, '');
-    if (isWin) {
-        exec(`start "" "${safePath}"`, { windowsHide: true });
-    } else if (isMac) {
-        // On Mac, detect .app bundles vs executables
-        if (safePath.endsWith('.app')) {
-            exec(`open -a "${safePath}"`);
+ipcMain.handle('launch-by-path', async (event, exePath) => {
+    if (!exePath || typeof exePath !== 'string') return false;
+    // Nao dar ao renderer a primitiva de "execute este caminho" (amplifica qualquer XSS):
+    // rejeita UNC (\\host\share, que roda binario da rede) e exige o arquivo existir local.
+    // Usa shell.openPath (sem shell) em vez de exec('start ...') — nao ha metacaractere pra injetar.
+    if (/^\\\\/.test(exePath) || /^\/\//.test(exePath)) return false;
+    try { if (!fs.existsSync(exePath)) return false; } catch (e) { return false; }
+    try {
+        const { shell } = require('electron');
+        if (isMac && exePath.endsWith('.app')) {
+            require('child_process').execFile('open', ['-a', exePath]); // execFile: sem shell
         } else {
-            exec(`open "${safePath}"`);
+            const openErr = await shell.openPath(exePath); // abre/executa via ShellExecute, sem shell
+            if (openErr) return false;
         }
-    }
+    } catch (e) { return false; }
     if (focusActive) {
         const wasActive = focusActive;
         focusActive = false;
@@ -848,6 +850,68 @@ ipcMain.handle('copy-image-to-clipboard', (event, arrayBuf) => {
     }
 });
 
+// Baixa uma imagem de uma URL (usado no paste do plugin quando o navegador copia
+// SO a URL/HTML da imagem, ex: Google Imagens — o clipboard nao tem bitmap). Segue
+// redirects, valida que o content-type e' de imagem e limita o tamanho. Chama
+// cb(outPath) no sucesso ou cb(null, erro) na falha.
+function cpDownloadImageUrl(url, saveDir, cb, _depth) {
+    _depth = _depth || 0;
+    let done = false;
+    const finish = (p, e) => { if (!done) { done = true; try { cb(p, e); } catch (_) {} } };
+    if (_depth > 5) return finish(null, 'too-many-redirects');
+    let mod, origin = '';
+    try { mod = url.indexOf('https:') === 0 ? require('https') : require('http'); }
+    catch (e) { return finish(null, 'bad-url'); }
+    try { origin = new URL(url).origin + '/'; } catch (e) {}
+    try {
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+            'Accept': 'image/avif,image/webp,image/png,image/*,*/*',
+        };
+        // Referer da propria origem da imagem: contorna protecao anti-hotlink de varios CDNs.
+        if (origin) headers['Referer'] = origin;
+        const req = mod.get(url, { headers, timeout: 15000 }, (resp) => {
+            // Segue redirect (Google/CDN costumam redirecionar)
+            if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+                resp.resume();
+                let next = resp.headers.location;
+                try { next = new URL(next, url).href; } catch (e) {}
+                return cpDownloadImageUrl(next, saveDir, cb, _depth + 1);
+            }
+            if (resp.statusCode !== 200) { resp.resume(); return finish(null, 'http-' + resp.statusCode); }
+            const ct = String(resp.headers['content-type'] || '').toLowerCase().split(';')[0].trim();
+            const extMap = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp', 'image/avif': 'avif' };
+            let ext = extMap[ct];
+            if (ct.indexOf('image/') !== 0) {
+                // Alguns servem imagem com content-type generico; tenta pela extensao da URL
+                const um = url.split('?')[0].match(/\.(png|jpe?g|webp|gif|bmp|avif)$/i);
+                if (um) ext = um[1].toLowerCase().replace('jpeg', 'jpg');
+                else { resp.resume(); return finish(null, 'not-image:' + ct); }
+            }
+            ext = ext || 'png';
+            const chunks = []; let size = 0; const MAX = 30 * 1024 * 1024;
+            resp.on('data', (c) => {
+                size += c.length;
+                if (size > MAX) { try { resp.destroy(); } catch (_) {} return finish(null, 'too-large'); }
+                chunks.push(c);
+            });
+            resp.on('end', () => {
+                if (done) return;
+                const buf = Buffer.concat(chunks);
+                if (!buf.length) return finish(null, 'empty-body');
+                try {
+                    const outPath = path.join(saveDir, `lw-clip-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`);
+                    fs.writeFileSync(outPath, buf);
+                    finish(outPath);
+                } catch (e) { finish(null, String(e.message || e)); }
+            });
+            resp.on('error', (e) => finish(null, String(e.message || e)));
+        });
+        req.on('timeout', () => { try { req.destroy(); } catch (_) {} finish(null, 'timeout'); });
+        req.on('error', (e) => finish(null, String(e.message || e)));
+    } catch (e) { finish(null, String(e.message || e)); }
+}
+
 ipcMain.handle('open-folder', () => {
     if (focusActive) {
         const wasActive = focusActive;
@@ -1021,6 +1085,10 @@ async function _runTamperChecks() {
         const payload = {
             action: 'tamper_alert',
             detections,
+            // sync_token = prova real (segredo do servidor) de que o alerta veio de um
+            // usuario logado. A Edge Function so pinga @here se ele bater; sem isso,
+            // qualquer um forjava alerta de crack e pingava o servidor inteiro.
+            sync_token: session ? session.sync_token : undefined,
             session_info: session ? {
                 discord_user_id: session.discord_user_id,
                 username: session.username,
@@ -2732,12 +2800,16 @@ async function ensureFfmpeg() {
 // Strip playlist/index params from YouTube URLs — keep only the video ID
 function cleanYtUrl(raw) {
     try {
-        const u = new URL(raw);
+        const u = new URL(String(raw));
+        // SO http(s): bloqueia file:/data: e qualquer valor que comece com '-' (new URL()
+        // ja lanca pra "-..."). Sem isso, uma "URL" tipo --config-location=\\host\evil.conf
+        // virava FLAG do yt-dlp e podia carregar config com --exec CMD (RCE). Invalido -> null.
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
         if (u.hostname.includes('youtube.com') && u.searchParams.has('v')) {
             return u.origin + u.pathname + '?v=' + u.searchParams.get('v');
         }
-    } catch (e) {}
-    return raw;
+        return u.href;
+    } catch (e) { return null; }
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -2955,10 +3027,11 @@ ipcMain.handle('yt-ensure-deps', async () => {
 
 ipcMain.handle('yt-get-info', async (event, url) => {
     url = cleanYtUrl(url);
+    if (!url) return { error: 'URL inválida' };
     if (!ytDlpReady()) { const ok = await ensureYtDlp(); if (!ok) return { error: 'yt-dlp não disponível' }; }
     const args = ['--no-download', '--print-json', '--no-warnings', '--no-playlist'];
     if (ffmpegReady()) args.push('--ffmpeg-location', path.dirname(ffmpegBin));
-    args.push(url);
+    args.push('--', url); // '--' encerra as flags: a url nunca e' interpretada como opcao
     const result = await runYtDlpRobust(args, { timeout: 45000 });
     if (result.code !== 0) return { error: ytFriendlyError(result.stderr) };
     try {
@@ -2988,6 +3061,7 @@ ipcMain.handle('yt-get-info', async (event, url) => {
 
 ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime, endTime }) => {
     url = cleanYtUrl(url);
+    if (!url) return { error: 'URL inválida' };
     if (!ytDlpReady()) return { error: 'yt-dlp não disponível' };
     if (ytDownloadProc) return { error: 'Download já em andamento' };
     // Sem ffmpeg, "best" cai no mp4 single-file do YouTube (360p). Garante o ffmpeg
@@ -3041,7 +3115,7 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
             args.push('-f', 'best[ext=mp4]/best');
         }
     }
-    args.push(url);
+    args.push('--', url); // '--' encerra as flags: a url nunca e' interpretada como opcao
 
     ytProgress = { active: true, percent: 0, speed: '', eta: '', title: '', status: 'downloading', error: '', outputDir: outputPath };
 
@@ -3261,6 +3335,67 @@ function loadLionCatalogFromDisk() {
 // Carrega imediatamente na boot do main.js
 loadLionCatalogFromDisk();
 
+// ═══════════════════════════════════════════════════════════════════
+// PRESETS: scaneados pelo PROPRIO app (Node, fora da engine do Premiere).
+// Antes so o plugin achava os presets (lento, e preset novo so aparecia
+// reabrindo o painel). Agora o app le os .prfpset direto:
+//   - no BOOT (catalogo pronto na hora, 1a vez rapida)
+//   - fs.watch + re-scan periodico (preset novo aparece sozinho, ~1s)
+// Os presets do app SUBSTITUEM os do plugin no catalogo (mesmo formato de
+// matchName, entao o apply do plugin continua identico). ~100ms pra 1000 presets.
+// ═══════════════════════════════════════════════════════════════════
+let appScannedPresets = [];
+let _lastPresetKey = '';
+function _mergePresetsIntoCatalog() {
+    const nonPreset = lionSearchEffectsCache.filter(x => x && x.kind !== 'preset');
+    lionSearchEffectsCache = nonPreset.concat(appScannedPresets);
+    lionSearchEffectsCachedAt = Date.now();
+    saveLionCatalogToDisk();
+}
+function refreshAppPresets(reason, force) {
+    try {
+        const scanner = require('./preset-scanner');
+        const files = scanner.findPrfpsetFiles();
+        // chave barata (so stat, sem ler/parsear): se nada mudou, nao re-parseia
+        const key = files.map(f => f.file + ':' + Math.round(f.mtimeMs) + ':' + f.size).join('|');
+        if (!force && key === _lastPresetKey) return;
+        _lastPresetKey = key;
+        const seen = {}, items = [];
+        for (const f of files) {
+            for (const it of scanner.parsePresetFile(f)) {
+                const k = (it.name + '|' + it.category).toLowerCase();
+                if (seen[k]) continue; seen[k] = 1; items.push(it);
+            }
+        }
+        appScannedPresets = items;
+        _mergePresetsIntoCatalog();
+        console.log('[lion-search] presets (app scan): ' + items.length + ' de ' + files.length + ' arquivo(s) · ' + reason);
+        // avisa a janela do lion-search (se aberta) — inofensivo se ela nao escutar
+        try { if (lionSearchWin && !lionSearchWin.isDestroyed()) lionSearchWin.webContents.send('lion-search:catalog-updated'); } catch(e) {}
+    } catch(e) { console.warn('[lion-search] preset scan falhou: ' + (e && e.message)); }
+}
+let _presetWatchers = [];
+let _presetWatchDebounce = null;
+function _setupPresetWatch() {
+    try {
+        const scanner = require('./preset-scanner');
+        _presetWatchers.forEach(w => { try { w.close(); } catch(e) {} });
+        _presetWatchers = [];
+        for (const f of scanner.findPrfpsetFiles()) {
+            try {
+                const w = fs.watch(f.file, () => {
+                    clearTimeout(_presetWatchDebounce);
+                    _presetWatchDebounce = setTimeout(() => { refreshAppPresets('preset salvo'); _setupPresetWatch(); }, 1200);
+                });
+                _presetWatchers.push(w);
+            } catch(e) {}
+        }
+    } catch(e) {}
+}
+// Boot deferido (nao trava o startup) + rede de seguranca periodica (pega arquivo novo)
+setImmediate(() => { refreshAppPresets('boot', true); _setupPresetWatch(); });
+setInterval(() => refreshAppPresets('periodico'), 60000);
+
 // Enfilera um comando pro plugin executar via JSX, retorna Promise com resultado
 function queuePluginCommand(type, payload, timeoutMs = 15000) {
     const commandId = crypto.randomBytes(6).toString('hex');
@@ -3391,21 +3526,60 @@ let _isNotifying = false;
 
 // IPC: mostra notificação nativa SÓ pra erros (sucesso é silencioso —
 // o plugin/UI já dá feedback visual de "inserido", não precisa toast Windows).
+// Toast flutuante semi-transparente PERTO DO CURSOR — feedback do apply do Lion Search sem
+// segurar a telinha aberta (ela fecha na hora = instantaneo). Nao rouba foco (showInactive),
+// e click-through, some sozinho em ~1.8s. Substitui a notificacao nativa (que quase nunca aparecia).
+let _lionToastWin = null;
+function showLionCursorToast(body, success) {
+    try {
+        if (_lionToastWin && !_lionToastWin.isDestroyed()) { try { _lionToastWin.close(); } catch(e){} }
+        _lionToastWin = null;
+        const pt = screen.getCursorScreenPoint();
+        const wa = screen.getDisplayNearestPoint(pt).workArea;
+        const W = 250, H = 44;
+        let x = Math.round(pt.x - W / 2);
+        let y = Math.round(pt.y - H - 18); // acima do cursor
+        x = Math.max(wa.x + 4, Math.min(x, wa.x + wa.width - W - 4));
+        y = Math.max(wa.y + 4, Math.min(y, wa.y + wa.height - H - 4));
+        const win = new BrowserWindow({
+            x, y, width: W, height: H, show: false,
+            frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
+            focusable: false, resizable: false, movable: false, hasShadow: false,
+            webPreferences: { nodeIntegration: false, contextIsolation: true },
+        });
+        _lionToastWin = win;
+        try { win.setAlwaysOnTop(true, 'screen-saver'); } catch(e) {}
+        try { win.setIgnoreMouseEvents(true); } catch(e) {}
+        const color = success ? '#bef264' : '#fca5a5';
+        const bg = success ? 'rgba(16,30,6,0.80)' : 'rgba(40,12,12,0.82)';
+        const bd = success ? 'rgba(190,242,100,0.45)' : 'rgba(252,165,165,0.45)';
+        const icon = success ? '&#10003;' : '&#10007;';
+        const safe = String(body || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const html = '<!doctype html><meta charset="utf-8"><style>'
+            + 'html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif}'
+            + '.pill{box-sizing:border-box;height:100%;display:flex;align-items:center;gap:8px;padding:0 14px;'
+            + 'background:' + bg + ';border:1px solid ' + bd + ';border-radius:12px;color:' + color + ';'
+            + 'font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+            + 'animation:i .12s ease-out, o .35s ease-in 1.35s forwards}'
+            + '.ic{font-size:15px;flex-shrink:0}'
+            + '@keyframes i{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}'
+            + '@keyframes o{to{opacity:0;transform:translateY(-6px)}}'
+            + '</style><div class="pill"><span class="ic">' + icon + '</span><span>' + safe + '</span></div>';
+        win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+        const _show = () => { try { if (win && !win.isDestroyed() && !win.isVisible()) win.showInactive(); } catch(e) {} };
+        win.once('ready-to-show', _show);
+        setTimeout(_show, 150); // fallback: janela transparente as vezes nao dispara ready-to-show
+        setTimeout(() => { try { if (win && !win.isDestroyed()) win.close(); } catch(e){} if (_lionToastWin === win) _lionToastWin = null; }, 1850);
+    } catch(e) { /* nao-critico */ }
+}
+
 ipcMain.on('lion-search:notify', (event, payload) => {
     try {
-        if (payload?.success === true) return; // skip sucesso
         _isNotifying = true;
         setTimeout(() => { _isNotifying = false; }, 1500);
-        const { Notification } = require('electron');
-        if (Notification.isSupported()) {
-            const n = new Notification({
-                title: payload?.title || 'LION SEARCH',
-                body: payload?.body || '',
-                urgency: 'normal',
-            });
-            n.show();
-        }
-    } catch(e) { console.warn('[lion-search] notif fail:', e); }
+        const ok = payload?.success === true;
+        showLionCursorToast(payload?.body || (ok ? 'Aplicado' : 'Erro ao aplicar'), ok);
+    } catch(e) { console.warn('[lion-search] toast fail:', e); }
 });
 // Backward compat com old name
 ipcMain.on('lion-search:show-error', (event, payload) => {
@@ -3720,6 +3894,26 @@ function startSyncServer() {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        // ═══ Blindagem contra "drive-by" de site malicioso ═══
+        // O server escuta so em 127.0.0.1, mas o NAVEGADOR da propria vitima alcanca isso.
+        // Um site sempre manda um Origin http(s) REAL nas requisicoes fetch/XHR e o JS dele
+        // NAO consegue forjar nem remover esse header. O plugin CEP roda em file:// e manda
+        // Origin "null"/ausente. Entao: rejeita Origin de site remoto (fecha o roubo de token
+        // via /auth/local-session) e valida o Host (barra DNS-rebinding: dominio do atacante
+        // que resolve pra 127.0.0.1 manda Host != localhost). Nao afeta o plugin nem o app.
+        {
+            const _origin = String(req.headers['origin'] || '');
+            const _host = String(req.headers['host'] || '').toLowerCase();
+            const _hostOk = _host === '' || /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(_host);
+            const _originRemote = /^https?:\/\//i.test(_origin)
+                && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(_origin);
+            if (!_hostOk || _originRemote) {
+                res.writeHead(403, { 'Content-Type': 'text/plain' });
+                res.end('forbidden');
+                return;
+            }
+        }
 
         if (req.method === 'OPTIONS') {
             res.writeHead(200);
@@ -4301,8 +4495,7 @@ function toggleLoop(){
                     }
                 }
 
-                // 2) Fallback: clipboard.readBuffer('FileNameW') on Win or NSPasteboard via clipboard.read
-                // Electron já normaliza isso via readImage, mas tentamos texto como path
+                // 2) Fallback: texto do clipboard como path de arquivo local
                 const txt = clipboard.readText();
                 if (txt && txt.length < 32768) {
                     const lines = txt.split(/[\r\n]+/).map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
@@ -4312,6 +4505,41 @@ function toggleLoop(){
                         res.end(JSON.stringify({ type: 'files', paths: valid }));
                         return;
                     }
+                }
+
+                // 3) Fallback Google Imagens / navegador: o clipboard traz SO o HTML/URL da
+                //    imagem (sem bitmap). Extrai a URL (ou data-URI) e baixa.
+                let imgUrl = '';
+                try {
+                    const html = clipboard.readHTML() || '';
+                    const m = html.match(/<img[^>]+\bsrc\s*=\s*["'](data:image\/[a-zA-Z0-9.+-]+;base64,[^"']+)["']/i)
+                           || html.match(/<img[^>]+\bsrc\s*=\s*["'](https?:\/\/[^"']+)["']/i);
+                    if (m) imgUrl = m[1];
+                } catch (e) {}
+                if (!imgUrl && txt) {
+                    const t = txt.trim();
+                    if (/^data:image\//i.test(t) || /^https?:\/\/\S+$/i.test(t)) imgUrl = t;
+                }
+
+                if (imgUrl && /^data:image\//i.test(imgUrl)) {
+                    try {
+                        const buf = Buffer.from(imgUrl.slice(imgUrl.indexOf(',') + 1), 'base64');
+                        if (buf && buf.length > 0) {
+                            const outPath = path.join(saveDir, `lw-clip-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.png`);
+                            fs.writeFileSync(outPath, buf);
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ type: 'image', paths: [outPath] }));
+                            return;
+                        }
+                    } catch (e) {}
+                } else if (imgUrl) {
+                    // URL http(s): baixa (async — a resposta sai no callback)
+                    cpDownloadImageUrl(imgUrl, saveDir, (outPath, err) => {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        if (outPath) res.end(JSON.stringify({ type: 'image', paths: [outPath] }));
+                        else res.end(JSON.stringify({ type: 'empty', reason: 'url-download-failed', detail: String(err || '') }));
+                    });
+                    return;
                 }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -4523,11 +4751,14 @@ function toggleLoop(){
                             }
                         }
                         const mergedAudio = Object.values(audioMap);
-                        lionSearchEffectsCache = [...newRest, ...mergedAudio];
+                        // Presets vem do SCAN DO APP (rapido/fresco), nao do plugin — ignora os
+                        // presets que o plugin mandar e usa os do app (appScannedPresets).
+                        const newEffects = newRest.filter(x => x.kind !== 'preset');
+                        lionSearchEffectsCache = [...newEffects, ...appScannedPresets, ...mergedAudio];
                         lionSearchEffectsCachedAt = Date.now();
                         lionSearchCatalogDebug = String(data.debug || '');
                         lionSearchCatalogError = String(data.error || '');
-                        console.log('[lion-search] catálogo: total=' + lionSearchEffectsCache.length + ' (effects=' + newRest.length + ', audio LIB-only=' + mergedAudio.length + ')');
+                        console.log('[lion-search] catálogo: total=' + lionSearchEffectsCache.length + ' (effects=' + newEffects.length + ', presets(app)=' + appScannedPresets.length + ', audio LIB-only=' + mergedAudio.length + ')');
                         // Persiste no disco — disponível na próxima boot do app
                         saveLionCatalogToDisk();
                     }
@@ -5721,7 +5952,15 @@ ipcMain.handle('cloud-sync-push', async (_e, sections) => _cloudSyncCall('sync_p
 /* ═══════ Discord Auth IPC ═══════ */
 ipcMain.handle('discord:get-config', () => loadDiscordConfig());
 ipcMain.handle('discord:save-config', (_, cfg) => saveDiscordConfigFile(cfg));
-ipcMain.handle('discord:get-session', () => loadDiscordSession());
+ipcMain.handle('discord:get-session', () => {
+    // NAO expor o sync_token ao renderer (least-privilege): ele e o bearer permanente de
+    // toda a nuvem do usuario e o renderer nunca precisa dele (a sync roda aqui no main via
+    // cloud-sync-pull/push). Assim, mesmo que um XSS rode no renderer, nao rouba esse token.
+    const s = loadDiscordSession();
+    if (!s || typeof s !== 'object') return s;
+    const { sync_token, ...safe } = s;
+    return safe;
+});
 ipcMain.handle('discord:logout', () => {
     clearDiscordSession();
     // Derruba o plugin junto: invalida todos os tokens de plugin (senao o plugin
@@ -6821,7 +7060,23 @@ function preloadLionSearchWindow() {
     });
 }
 
+// Logado = sessao Discord valida (com grace) OU sessao legada por e-mail (snapshot em memoria).
+// Lion Search e recurso pago: nao deve abrir/funcionar deslogado.
+function _lionSearchLoggedIn() {
+    try {
+        const s = loadDiscordSession();
+        if (s && s.discord_user_id && !(s.expires_at && Date.now() > s.expires_at + DISCORD_SESSION_GRACE_MS)) return true;
+    } catch(e) {}
+    try { if (currentAppUser) return true; } catch(e) {}
+    return false;
+}
+
 function openLionSearch(forceOpen) {
+    // Bloqueia se o app nao estiver logado (Lion Search e recurso pago)
+    if (!_lionSearchLoggedIn()) {
+        console.log('[lion-search] bloqueado — app nao esta logado');
+        return;
+    }
     // Garante janela existe (pré-criada no boot, mas se foi destruída por algum motivo, recria)
     if (!lionSearchWin || lionSearchWin.isDestroyed()) {
         preloadLionSearchWindow();

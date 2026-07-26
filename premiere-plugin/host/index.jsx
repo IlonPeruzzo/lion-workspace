@@ -2,6 +2,20 @@
 // LW_DEBUG: liga writes de trace/debug em disco (sincronos, travam o apply) — OFF em producao
 var LW_DEBUG = false;
 
+// Parse seguro de JSON vindo do client. Substitui o antigo eval('('+x+')'):
+// valida com a regex do json2 (Crockford) que a string contem SO tokens de JSON
+// e so entao avalia. Para JSON valido (saida de JSON.stringify) o resultado e
+// identico ao eval antigo; qualquer coisa que nao seja JSON puro -> lanca (sem
+// executar codigo), entao os try/catch que ja existiam nos callers pegam igual.
+function _lwSafeParse(text) {
+    var s = String(text == null ? '' : text);
+    var t = s.replace(/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g, '@')
+             .replace(/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g, ']')
+             .replace(/(?:^|:|,)(?:\s*\[)+/g, '');
+    if (!(/^[\],:{}\s]*$/).test(t)) throw new Error('LW_UNSAFE_JSON');
+    return eval('(' + s + ')');
+}
+
 // ════════════════════════════════════════════════════════════════════
 // MOTION TRACKER — JSX functions
 // ════════════════════════════════════════════════════════════════════
@@ -130,7 +144,7 @@ function lwTrackerApplyKeyframes(jsonStr) {
     _trDbg('═══ lwTrackerApplyKeyframes called, jsonStr.length=' + (jsonStr ? jsonStr.length : 0));
     try {
         var data = null;
-        try { data = eval('(' + jsonStr + ')'); } catch(eJ) { _trDbg('JSON parse err: ' + eJ); return 'ERR:json_parse:' + eJ; }
+        try { data = _lwSafeParse(jsonStr); } catch(eJ) { _trDbg('JSON parse err: ' + eJ); return 'ERR:json_parse:' + eJ; }
         if (!data || !data.history || data.history.length === 0) { _trDbg('no_data'); return 'ERR:no_data'; }
         _trDbg('history.length=' + data.history.length + ' fps=' + data.fps + ' videoWidth=' + data.videoWidth + ' videoHeight=' + data.videoHeight + ' clipInPointTicks=' + data.clipInPointTicks);
         _trDbg('history[0]=' + JSON.stringify(data.history[0]) + ' history[end]=' + JSON.stringify(data.history[data.history.length-1]));
@@ -1232,7 +1246,7 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
     try {
         if (!app.project) return 'NO_PROJECT';
         var filePaths = null;
-        try { filePaths = eval('(' + filePathsJson + ')'); } catch (e) { return 'PARSE_ERROR'; }
+        try { filePaths = _lwSafeParse(filePathsJson); } catch (e) { return 'PARSE_ERROR'; }
         if (!filePaths || filePaths.length === 0) return 'NO_FILES';
 
         var seq = app.project.activeSequence;
@@ -1657,7 +1671,7 @@ function lwBgImportAndPlace(filePath, srcInfoJson) {
         if (!f.exists) return "FILE_NOT_FOUND";
 
         var info = null;
-        try { info = eval("(" + srcInfoJson + ")"); } catch(e) {}
+        try { info = _lwSafeParse(srcInfoJson); } catch(e) {}
 
         // Importa o PNG
         var beforeIds = {};
@@ -5980,7 +5994,7 @@ function _rwAmpFor(cfg, target, dim, isNorm, seqW, seqH) {
 //        rmin, rmax, interval, interp:'hold'|'linear', step }
 function lwPRRandomWiggle(cfgArg) {
     try {
-        var cfg = (typeof cfgArg === 'string') ? eval('(' + cfgArg + ')') : cfgArg;
+        var cfg = (typeof cfgArg === 'string') ? _lwSafeParse(cfgArg) : cfgArg;
         var seq = app.project.activeSequence;
         if (!seq) return 'NO_SEQUENCE';
         var clips = getSelectedClips();
@@ -6182,7 +6196,7 @@ function _rwResolvePropWithKeys(clip, target, prefComponent) {
 //        component?:'motion'|'transform'|'vector' (opcional; senao auto-detecta) }
 function lwPRLoop(cfgArg) {
     try {
-        var cfg = (typeof cfgArg === 'string') ? eval('(' + cfgArg + ')') : cfgArg;
+        var cfg = (typeof cfgArg === 'string') ? _lwSafeParse(cfgArg) : cfgArg;
         var seq = app.project.activeSequence;
         if (!seq) return 'NO_SEQUENCE';
         var clips = getSelectedClips();
