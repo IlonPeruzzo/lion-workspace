@@ -2,9 +2,9 @@ name: Build Mac
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
+  # NAO roda mais em tag: o release.yml ja builda Windows + Mac e publica tudo.
+  # Rodar os dois em tag causava race publicando a MESMA release no repo de releases
+  # (v1.5.8 saiu incompleta por isso). Deixa manual (workflow_dispatch) se precisar so-Mac.
 
 # Least-privilege: o workflow todo e read-only. So o job de publish (em tag) ganha
 # contents:write — assim o token de escrita NAO fica exposto durante `npm ci`

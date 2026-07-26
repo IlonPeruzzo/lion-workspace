@@ -101,7 +101,9 @@ jobs:
           files: dist/*
           draft: false
           prerelease: false
-          generate_release_notes: true
+          # generate_release_notes FALSE aqui: o repo de releases nao tem historico de
+          # codigo (so instaladores), entao gerar notas dava erro 'Invalid target_commitish'.
+          generate_release_notes: false
 
       # ── PONTE TEMPORARIA: publica tambem no repo antigo (lion-workspace), pra quem
       #    ainda esta no v1.5.7 achar o update. REMOVER este step quando todos ja
