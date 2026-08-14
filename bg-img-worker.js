@@ -25,9 +25,13 @@ async function ensureModel() {
         // session_options: usa TODOS os nucleos + otimizacao de grafo (ajuda bastante em CPU fraca,
         // onde o onnxruntime-node as vezes usa poucas threads por padrao).
         const _cores = Math.max(2, (require('os').cpus() || []).length || 4);
+        // enableCpuMemArena: FALSE de proposito. Com a arena LIGADA o onnxruntime reserva um pool
+        // proporcional a RAM/nucleos da maquina e NUNCA devolve pro SO: medido 11,1 GB de RSS numa
+        // maquina de 32 nucleos depois da 1a remocao de fundo. Com ela desligada: 394 MB (-96%),
+        // com saida bit-identica e sem diferenca de tempo perceptivel. Era a causa da "RAM alta".
         model = await mod.AutoModel.from_pretrained(MODEL_ID, {
             dtype: 'fp32',
-            session_options: { graphOptimizationLevel: 'all', intraOpNumThreads: _cores, enableCpuMemArena: true }
+            session_options: { graphOptimizationLevel: 'all', intraOpNumThreads: _cores, enableCpuMemArena: false }
         });
     }
     if (!processor) {

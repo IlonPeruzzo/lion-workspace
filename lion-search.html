@@ -377,6 +377,10 @@ ipcRenderer.on('lion-search:reset', () => {
         busy = false;
         _lastTyping = null;
         $palette.classList.remove('typing');
+        // checkPluginAlive ANTES do fetchContext: o fetchContext enfileira um comando, e
+        // despachar comando remove o long-poll estacionado do plugin. Perguntar "ta vivo?"
+        // logo depois disso via fila vazia = falso "plugin nao responde".
+        try { checkPluginAlive(); } catch(e) {}
         // Refetch context (selectionType pode ter mudado entre opens)
         try { fetchContext(); } catch(e) {}
         // Usa CACHE (não força refresh — TTL de 30s cobre renames recentes).
@@ -407,8 +411,28 @@ function showToast(msg, kind) {
     setTimeout(() => $toast.classList.remove('show'), 2200);
 }
 
+// Painel CEP fechado no Premiere = NADA aplica. Tem prioridade sobre qualquer
+// outro estado do badge, porque e a unica coisa que o usuario precisa resolver.
+let pluginOffline = false;
+let _aliveRecheck = null;
+function checkPluginAlive(isRecheck) {
+    ipcRenderer.invoke('lion-search:plugin-alive').then(alive => {
+        pluginOffline = !alive;
+        updateBadge();
+        // Nunca deixa o aviso GRUDAR por uma leitura ruim: se deu offline, confirma uma vez
+        // 1.5s depois (tempo de sobra pro plugin reestacionar o long-poll). Só fica vermelho
+        // se as duas leituras concordarem.
+        clearTimeout(_aliveRecheck);
+        if (!alive && !isRecheck) _aliveRecheck = setTimeout(() => checkPluginAlive(true), 1500);
+    }).catch(() => {});
+}
+
 function updateBadge() {
-    if (!booted && !bootError) {
+    if (pluginOffline) {
+        $badge.textContent = '⚠ plugin não responde';
+        $badge.className = 'catalog-badge error';
+        $badge.title = 'Feche e reabra o painel no Premiere: Janela > Extensões > Lion Workspace';
+    } else if (!booted && !bootError) {
         if (bootAttempts <= 1) $badge.textContent = '⟳ procurando catálogo…';
         else if (bootAttempts === 2) $badge.textContent = '⟳ tentando de novo…';
         else $badge.textContent = '⚠ aguardando plugin…';
@@ -463,11 +487,183 @@ function isCompatibleWithSelection(item) {
     return true;
 }
 
+// ─── Nomes em INGLES dos efeitos (Premiere traduz a interface) ───────────────
+// Num Premiere em portugues o "Studio Reverb" aparece como "Reverberacao de estudio", entao
+// quem digita o nome em ingles (tutorial e' quase tudo em ingles) nao achava NADA. Aqui mapeamos
+// pt -> en pra busca casar dos dois jeitos. So o NOME de busca muda; o apply continua usando o
+// nome que o Premiere local conhece.
+const FX_EN = {
+    "3d basico": "basic 3d",
+    "abertura linear (herdada)": "linear wipe (legacy)",
+    "agudos": "treble",
+    "ajustar alfa": "alpha adjust",
+    "alta frequencia": "highpass",
+    "ampliar": "magnify",
+    "ampliar (herdado)": "magnify (legacy)",
+    "amplificar": "amplify",
+    "anomalia digital para vr": "vr digital glitch",
+    "aprimorador de voz": "vocal enhancer",
+    "atraso": "delay",
+    "atraso analogico": "analog delay",
+    "atraso multitap": "multitap delay",
+    "baixa frequencia": "lowpass",
+    "brilho para vr": "vr glow",
+    "compactador de banda simples": "single band compressor",
+    "compactador de multibanda": "multiband compressor",
+    "compactador modelado em tubo": "tube modeled compressor",
+    "configuracoes da origem red": "red source settings",
+    "configuracoes de desenvolvimento de arriraw": "arriraw develop settings",
+    "configuracoes de desenvolvimento de mxf/arriraw": "mxf/arriraw develop settings",
+    "configuracoes de fonte de cinemadng": "cinemadng source settings",
+    "configuracoes de origem da canon cinema raw light": "canon cinema raw light source settings",
+    "configuracoes de origem de cineon": "cineon source settings",
+    "configuracoes de origem de mpeg": "mpeg source settings",
+    "configuracoes de origem de prores raw": "prores raw source settings",
+    "configuracoes de origem de sony raw mxf": "sony raw mxf source settings",
+    "configuracoes de origem raw da sony": "sony raw source settings",
+    "conformidade com sdr": "sdr conform",
+    "conjunto de guitarras": "guitar suite",
+    "conversor de cineon": "cineon converter",
+    "cor de lumetri": "lumetri color",
+    "cores para transmissao": "broadcast colors",
+    "coro/flanger": "chorus/flanger",
+    "correcao gama": "gamma correction",
+    "cortar": "crop",
+    "degrade": "ramp",
+    "desfoque bokeh": "bokeh blur",
+    "desfoque composto": "compound blur",
+    "desfoque da camera": "camera blur",
+    "desfoque de canal": "channel blur",
+    "desfoque de movimento de pixel": "pixel motion blur",
+    "desfoque direcional": "directional blur",
+    "desfoque direcional (herdado)": "directional blur (legacy)",
+    "desfoque gaussiano": "gaussian blur",
+    "desfoque gaussiano (herdado)": "gaussian blur (legacy)",
+    "desfoque para vr": "vr blur",
+    "desfoque rapido": "fast blur",
+    "deslocador de tom": "pitch shifter",
+    "deslocamento": "offset",
+    "deslocamento com turbulencia": "turbulent displace",
+    "desreverberacao": "dereverb",
+    "desvios cromaticos para vr": "vr chromatic aberrations",
+    "difusao de borda": "edge feather",
+    "dinamica": "dynamics",
+    "dissolver em bloco": "block dissolve",
+    "distorcao": "distortion",
+    "distorcao de lente": "lens distortion",
+    "distorcao ondulada": "wave warp",
+    "divisao de rgb": "rgb split",
+    "dobra": "bend",
+    "eco": "echo",
+    "efeito flanger": "flanger",
+    "efeitos de iluminacao": "lighting effects",
+    "eliminar ruido": "denoise",
+    "eq parametrico simples": "simple parametric eq",
+    "equalizador grafico (10 faixas)": "graphic equalizer (10 bands)",
+    "equalizador grafico (20 faixas)": "graphic equalizer (20 bands)",
+    "equalizador grafico (30 faixas)": "graphic equalizer (30 bands)",
+    "equalizador parametrico": "parametric equalizer",
+    "equilibrio": "balance",
+    "equilibrio de cor (rgb)": "color balance (rgb)",
+    "equilibrio de cores (hls)": "color balance (hls)",
+    "esfera de rotacao para vr": "vr rotate sphere",
+    "esferizacao": "spherize",
+    "espelho": "mirror",
+    "estabilizador de distorcao": "warp stabilizer",
+    "expansor de estereo": "stereo expander",
+    "extrair": "extract",
+    "filtro cientifico": "scientific filter",
+    "filtro de fenda simples": "simple notch filter",
+    "filtro de fft": "fft filter",
+    "filtro de fissuras": "notch filter",
+    "flash de lente": "lens flare",
+    "forma": "shape",
+    "garbage matte de dezesseis pontos": "sixteen point garbage matte",
+    "garbage matte de oito pontos": "eight point garbage matte",
+    "garbage matte de quatro pontos": "four point garbage matte",
+    "gradiente": "gradient",
+    "gradiente de 4 cores": "4 color gradient",
+    "gradientes de cores para vr": "vr color gradients",
+    "graves": "bass",
+    "iluminacao alfa": "alpha glow",
+    "inversao horizontal": "horizontal flip",
+    "inversao vertical": "vertical flip",
+    "inverter": "invert",
+    "limitador de video": "video limiter",
+    "limitador pesado": "hard limiter",
+    "localizar bordas": "find edges",
+    "luz estroboscopica": "strobe light",
+    "mascara de nitidez": "unsharp mask",
+    "masterizacao": "mastering",
+    "mistura de canais": "channel mixer",
+    "misturador de canais": "channel mixer",
+    "mosaico": "mosaic",
+    "mosaico (herdado)": "mosaic (legacy)",
+    "movimento": "motion",
+    "movimento do vetor": "vector motion",
+    "mudo": "mute",
+    "nitidez": "sharpen",
+    "nitidez para vr": "vr sharpen",
+    "niveis": "levels",
+    "nome do clipe": "clip name",
+    "opacidade": "opacity",
+    "passagem de banda": "bandpass",
+    "passagem de cor": "color pass",
+    "pino de vertice": "corner pin",
+    "plano para esfera para vr": "vr plane to sphere",
+    "posterizar": "posterize",
+    "posterizar tempo": "posterize time",
+    "preenchimento da direita com a esquerda": "fill right with left",
+    "preenchimento de esquerda com a direita": "fill left with right",
+    "preto e branco": "black & white",
+    "processamento dinamico": "dynamics processing",
+    "projecao de vr": "vr projection",
+    "raios volumetricos": "volumetric rays",
+    "redemoinho": "twirl",
+    "reducao de ruido adaptavel": "adaptive noise reduction",
+    "reducao de ruidos para vr": "vr denoise",
+    "reduzir cintilacao de entrelacamento": "reduce interlace flicker",
+    "reestruturacao automatica": "auto reframe",
+    "relampago": "lightning",
+    "removedor de clique automatico": "automatic click remover",
+    "reparo do efeito rolling shutter": "rolling shutter repair",
+    "replicar": "replicate",
+    "reverberacao de convolucao": "convolution reverb",
+    "reverberacao de estudio": "studio reverb",
+    "reverberacao de surround": "surround reverb",
+    "ruido": "noise",
+    "ruido (herdado)": "noise (legacy)",
+    "ruido fractal para vr": "vr fractal noise",
+    "sombra longa": "long shadow",
+    "sombra projetada": "drop shadow",
+    "substituicao de cor": "color replace",
+    "texto": "text",
+    "texto simples": "simple text",
+    "tonalidade": "tint",
+    "tornar bordas asperas": "roughen edges",
+    "tracado": "stroke",
+    "tracados de pincel": "brush strokes",
+    "transformacao do espaco da cor": "color space transform",
+    "transformar": "transform",
+    "tremulacao de camera": "camera shake",
+    "trocar canais": "swap channels",
+    "vazamentos de luz": "light leaks",
+    "vinheta": "vignette",
+    "volume do canal": "channel volume",
+};
+
 // Normaliza string pra busca: minúsculo + trata _ e - como espaço
 // (assim "kiply pov" casa com "kiply_pov", "kiply-pov", "Kiply POV")
 function _normSearch(s) {
     if (!s) return '';
-    return String(s).toLowerCase().replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    // Remove ACENTOS: "Reverberação" passa a casar com "reverberacao" (quase ninguem digita
+    // acento na busca). Query e nome passam os dois por aqui, entao vale nos dois sentidos.
+    // Faixa ̀-ͯ = combining diacritical marks (escapada de proposito: caractere
+    // literal aqui ja corrompeu em pipeline de encoding antes).
+    var _DIACRITICOS = new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g');
+    return String(s)
+        .normalize('NFD').replace(_DIACRITICOS, '')
+        .toLowerCase().replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function score(item, query) {
@@ -478,6 +674,14 @@ function score(item, query) {
     if (name === q) return 1000;
     if (name.startsWith(q)) return 500 - (name.length - q.length);
     if (name.includes(q)) return 200;
+    // Nome em INGLES do mesmo efeito (Premiere em pt-BR): "studio reverb" acha
+    // "Reverberacao de estudio". Pontua um pouco abaixo do match direto no nome.
+    const en = FX_EN[name];
+    if (en) {
+        if (en === q) return 900;
+        if (en.startsWith(q)) return 450 - (en.length - q.length);
+        if (en.includes(q)) return 180;
+    }
     if (cat.includes(q)) return 50;
     let pos = 0;
     for (let c of q) { pos = name.indexOf(c, pos); if (pos < 0) return 0; pos++; }
@@ -710,6 +914,11 @@ async function apply() {
     const verb = it.kind === 'audio-source' ? 'Inserindo' : 'Aplicando';
     showToast(verb + ' ' + it.name + '…');
 
+    // Painel fechado no Premiere: o main rejeita NA HORA, entao da tempo de segurar a
+    // janela aberta e mostrar a instrucao aqui dentro (nao so na notificacao do Windows).
+    let holdOpen = false, didClose = false;
+    const closeUnlessHeld = () => { if (!holdOpen && !didClose) { didClose = true; close(); } };
+
     // Fire-and-forget: dispara o apply em background
     ipcRenderer.invoke('lion-search:apply', {
         kind: it.kind, matchName: it.matchName, name: it.name,
@@ -723,7 +932,14 @@ async function apply() {
             try { ipcRenderer.send('lion-search:notify', { title: '✓ ' + it.name, body: successMsg, success: true }); } catch(e) {}
         } else {
             let msg = '';
-            if (r?.error) msg = r.error;
+            if (r?.error === 'PLUGIN_OFFLINE') {
+                // Cobre painel fechado E painel que "parece" aberto mas cujo motor CEP morreu
+                // (a aba continua na tela, sem nada atras). Fechar/reabrir resolve os dois.
+                msg = 'Plugin nao responde. Feche e reabra o painel no Premiere (Janela > Extensoes)';
+                holdOpen = true; busy = false;
+                if (!didClose) showToast('Plugin nao responde: feche e reabra o painel no Premiere', 'error');
+            }
+            else if (r?.error) msg = r.error;
             else if (result === 'NO_CLIP_SELECTED') msg = 'Selecione um clip na timeline primeiro';
             else if (result === 'NO_SEQUENCE') msg = 'Abra uma sequência no Premiere primeiro';
             else if (result.startsWith('ERR:transitions_not_implemented')) msg = 'Transições ainda não — arraste no plugin';
@@ -740,7 +956,7 @@ async function apply() {
     });
 
     // Fecha quase instantâneo — notificação nativa cobre o feedback completo
-    setTimeout(close, 60);
+    setTimeout(closeUnlessHeld, 60);
 }
 
 $input.addEventListener('input', filter);
@@ -828,6 +1044,7 @@ async function _applyResult(r, isFresh) {
 async function boot() {
     bootAttempts++;
     updateBadge();
+    checkPluginAlive(); // antes do fetchContext (que consome o long-poll do plugin)
     fetchContext();
     // Estratégia: 1) cache (instantâneo se existir). 2) Se cache vazio, força refresh.
     // Refresh "barato" (renames de projeto) fica pro setInterval em background.

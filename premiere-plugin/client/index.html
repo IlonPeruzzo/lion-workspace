@@ -2926,12 +2926,15 @@
        servidor segura conexão até comando chegar e empurra na hora (~0ms latência).
        Quando o long-poll volta (com ou sem comando), abre outro imediatamente. */
     var _lsBusy = false;
+    var _lsLastPollAt = Date.now(); // prova de vida do loop, lida pelo watchdog abaixo
     function lsPollPendingCommands() {
         if (_lsBusy) return;
         _lsBusy = true;
+        _lsLastPollAt = Date.now();
         // timeout 30s pra long-poll (servidor segura até 25s, +5s margem)
         LWHttp.get(API + '/lion-search/pop-pending?wait=1', { timeout: 30000, retries: 0 }, function(err, st, body) {
             _lsBusy = false;
+            _lsLastPollAt = Date.now();
             if (!err && body) {
                 try {
                     var data = JSON.parse(body);
@@ -2954,6 +2957,25 @@
     }
     // Inicia long-poll loop (não precisa de setInterval — auto-reabre)
     setTimeout(lsPollPendingCommands, 100);
+
+    // WATCHDOG do loop de comandos.
+    // O loop so se re-arma de DENTRO do proprio callback. Se esse callback nunca vier
+    // (excecao no interceptor de 401, XHR que morre sem disparar handler, etc), _lsBusy
+    // fica travado em true PRA SEMPRE: o painel continua na tela, o app continua rodando,
+    // e nenhum efeito/preset/som aplica mais, sem nenhum erro. Nem reiniciar o app salva,
+    // porque nada do lado do app chama esta funcao. So reabrir o painel ressuscitava.
+    // Este setInterval e independente: se o loop ficar mudo, ele destrava e reanima.
+    // Limite 45s: o servidor segura ate 25s e o XHR estoura em 30s, entao um loop
+    // saudavel toca _lsLastPollAt bem antes disso.
+    setInterval(function () {
+        try {
+            if (Date.now() - _lsLastPollAt < 45000) return;
+            LWLog.warn('lion-search', 'loop de comandos travado, reanimando');
+            _lsBusy = false;
+            _lsLastPollAt = Date.now(); // evita reanimar em rajada se o app estiver fora
+            lsPollPendingCommands();
+        } catch (e) {}
+    }, 10000);
 
     // Pega SFX folder da config + chama lwSearchListAllExtended com ela
     // E busca a Audio Library do user (que substitui o scan se useLibraryOnly=true)
@@ -3220,6 +3242,22 @@
             .replace(/&amp;/g, '&');
     }
     function _lsReEsc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+    // Prepara uma string pra ir DENTRO de um literal "..." de codigo ExtendScript montado a mao.
+    // Ordem importa: barra invertida ANTES das aspas (senao path do Windows quebra).
+    // Non-ASCII vira \uXXXX porque o evalScript do CEP nao entrega acento intacto pro
+    // ExtendScript — nome de efeito traduzido ("Reverberacao de estudio") chegava corrompido
+    // e a busca do efeito falhava sem erro claro. Com \uXXXX o canal fica 100% ASCII.
+    // Faixa non-ASCII montada em runtime: caractere literal na fonte ja corrompeu no pipeline.
+    var _LS_NON_ASCII = new RegExp('[' + String.fromCharCode(0x80) + '-' + String.fromCharCode(0xffff) + ']', 'g');
+    function _lsJsxStr(s) {
+        return String(s == null ? '' : s)
+            .replace(/\\/g, '\\\\')
+            .replace(/"/g, '\\"')
+            .replace(_LS_NON_ASCII, function (ch) {
+                return '\\u' + ('0000' + ch.charCodeAt(0).toString(16)).slice(-4);
+            });
+    }
 
     // Cache do parse: ler + gunzip + indexar o .prfpset inteiro A CADA apply era
     // parte da demora. Cacheia o resultado por arquivo+preset ate o arquivo mudar.
@@ -3513,8 +3551,11 @@
             var p = cmd.payload || {};
             // CRÍTICO: escapa backslashes ANTES de aspas. Senão paths Windows
             // (C:\Users\...) viram C:Users... porque \U etc são escape chars JS.
-            var jsxKind = (p.kind || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            var jsxMatch = (p.matchName || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            // E TUDO que nao e ASCII vira \uXXXX: o evalScript do CEP corrompe acento no
+            // caminho ate o ExtendScript, entao "Reverberacao de estudio" (com acento) chegava
+            // com lixo e o getAudioEffectByName nunca achava -> "nao aplica" em Premiere pt-BR.
+            var jsxKind = _lsJsxStr(p.kind);
+            var jsxMatch = _lsJsxStr(p.matchName);
 
             // AUDIO LIBRARY: matchName="LIB:<id>" → busca item na biblioteca, troca
             // matchName por "FS:<path>" e passa trim in/out separadamente pro JSX.
@@ -3530,7 +3571,7 @@
                         }, { retries: 0 }, function(){});
                         return;
                     }
-                    var jsxPath = String(libItem.path).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    var jsxPath = _lsJsxStr(libItem.path);
                     var inSec = (libItem.inSec != null) ? parseFloat(libItem.inSec) : -1;
                     var outSec = (libItem.outSec != null) ? parseFloat(libItem.outSec) : -1;
                     var volDb = (libItem.volumeDb != null) ? parseFloat(libItem.volumeDb) : 0;
@@ -3576,8 +3617,8 @@
                     LWLog.info('lion-search', 'Aplicando preset "' + presetName + '" via ' + presetSrc + ' (' + presetData.length + ' efeitos)');
                     // Escapa o JSON pra string JSX
                     var jsonStr = JSON.stringify(presetData);
-                    var jsxJson = jsonStr.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '');
-                    var jsxPresetName = presetName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                    var jsxJson = _lsJsxStr(jsonStr).replace(/\n/g, '\\n').replace(/\r/g, '');
+                    var jsxPresetName = _lsJsxStr(presetName);
                     var script2 = 'lwApplyPresetData("' + jsxPresetName + '", "' + jsxJson + '")';
                     csInterface.evalScript(script2, function(result) {
                         LWHttp.post(API + '/lion-search/command-result', {
@@ -6757,11 +6798,18 @@
                     var imp = parts[0] || '0';
                     var ins = parts[1] || '0';
                     var fail = Number(parts[2] || 0);
-                    var msg = imp + ' importado' + (Number(imp) > 1 ? 's' : '');
-                    if (Number(ins) > 0) msg += ' · ' + ins + ' na timeline';
-                    if (fail > 0) msg += ' (' + fail + ' falhou)';
-                    cpShowStatus(msg, '#22c55e');
-                    if (Number(imp) > 0) lwConfetti(document.getElementById('cpPasteBtn')); // confetti ao confirmar
+                    // Status pela realidade: antes era SEMPRE verde, entao "0 importado" e
+                    // falhas apareciam como sucesso — era isso que dizia "colou" sem colar nada.
+                    if (Number(imp) === 0) {
+                        cpShowStatus('Não consegui importar. Copie de novo e tente.', '#f43f5e');
+                    } else {
+                        var msg = imp + ' importado' + (Number(imp) > 1 ? 's' : '');
+                        if (Number(ins) > 0) msg += ' · ' + ins + ' na timeline';
+                        else if (cpFlags.insertAtPlayhead) msg += ' · no projeto (não coube na timeline)';
+                        if (fail > 0) msg += ' · ' + fail + ' falhou';
+                        cpShowStatus(msg, fail > 0 ? '#f59e0b' : '#22c55e');
+                        lwConfetti(document.getElementById('cpPasteBtn')); // confetti ao confirmar
+                    }
                 } else if (r === 'NO_PROJECT') {
                     cpShowStatus('Abra um projeto primeiro', '#f43f5e');
                 } else if (r === 'NO_FILES') {

@@ -3482,7 +3482,9 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
         </div>
         <div class="pb-top-actions">
           <button class="btn btn-g" onclick="pbOpenImport()" style="padding:8px 16px">↧ Importar do YTJobs</button>
-          <button class="btn btn-a" onclick="pbPublish()" style="padding:8px 18px">Publicar</button>
+          <button id="pbLiveLink" class="btn btn-g" style="display:none;padding:8px 14px" onclick="pbOpenLive()" title="Abrir a página publicada no navegador">Ver no ar ↗</button>
+          <button id="pbUnpubBtn" class="btn btn-g" style="display:none;padding:8px 14px" onclick="pbUnpublish()">Despublicar</button>
+          <button id="pbPubBtn" class="btn btn-a" onclick="pbPublish()" style="padding:8px 18px">Publicar</button>
         </div>
       </div>
 
@@ -3509,7 +3511,7 @@ document.addEventListener('DOMContentLoaded', refreshLangBtns);
               <div class="pb-field"><label>Instagram</label><input id="pbLinkInstagram" placeholder="https://instagram.com/voce" oninput="pbProfile()"></div>
               <div class="pb-field"><label>X / Twitter</label><input id="pbLinkX" placeholder="https://x.com/voce" oninput="pbProfile()"></div>
               <div class="pb-field"><label>Idioma</label><div class="pb-chips" id="pbLangs"></div></div>
-              <div class="pb-field"><label>Seu link</label><div class="pb-url"><span>lionwork.com.br/p/</span><input id="pbSlug" spellcheck="false" oninput="pbSlug()"></div></div>
+              <div class="pb-field"><label>Seu link</label><div class="pb-url"><span>lionwork.com.br/p/</span><input id="pbSlug" spellcheck="false" oninput="pbSlug()"></div><div id="pbSlugStatus" style="font-size:.72rem;min-height:14px;color:var(--text3)"></div></div>
             </div>
           </div>
           <!-- TEMA -->
@@ -13363,6 +13365,20 @@ function ytAppInitRange(duration){
     document.getElementById('ytAppStartTime').value='';
     document.getElementById('ytAppEndTime').value='';
     document.getElementById('ytAppTrimSection').style.display='';
+    // Sem duracao confiavel (live, metadata incompleta) o slider fica INERTE: arrastar
+    // calcula 0s e grava '' nos campos, entao o download saia inteiro sem avisar nada.
+    // Nesse caso esconde a barra e deixa so os campos de tempo, que funcionam digitando.
+    const _wrap=document.getElementById('ytAppRangeWrap');
+    const _mk=document.getElementById('ytAppTimeMarkers');
+    if(!(duration>0)){
+        if(_wrap)_wrap.style.display='none';
+        if(_mk)_mk.innerHTML='';
+        document.getElementById('ytAppTrimDuration').textContent='digite os tempos';
+        document.getElementById('ytAppStartTime').placeholder='00:00';
+        document.getElementById('ytAppEndTime').placeholder='Fim';
+        return;
+    }
+    if(_wrap)_wrap.style.display='';
     if(duration>0){
         document.getElementById('ytAppEndTime').placeholder=ytAppSecsToTime(duration);
         const markers=document.getElementById('ytAppTimeMarkers');
@@ -13377,6 +13393,9 @@ function ytAppUpdateRange(){
     const wrap=document.getElementById('ytAppRangeWrap');
     if(!wrap)return;
     const w=wrap.offsetWidth-12; // largura do handle
+    // Se a largura ainda nao foi resolvida pelo layout (offsetWidth 0), w fica negativo e o
+    // handle do FIM ia pra left:-12px — fora da tela, impossivel de arrastar. Tenta no proximo frame.
+    if(w<=0){requestAnimationFrame(ytAppUpdateRange);return}
     const sl=Math.round(ytAppRangeStartPct*w);
     const el=Math.round(ytAppRangeEndPct*w);
     document.getElementById('ytAppRangeStart').style.left=sl+'px';
@@ -15432,7 +15451,7 @@ function manualCheckUpdate() {
   }
 
   /* ============ HANDLERS GLOBAIS ============ */
-  window.lwPortfInit=function(){ load(); fillProfile(); fillTheme(); fillBlocks(); renderNow(); };
+  window.lwPortfInit=function(){ load(); fillProfile(); fillTheme(); fillBlocks(); renderNow(); pbSyncPubUI(); pbSlug(true); };
   window.pbProfile=function(){ const p=data.profile;
     p.name=$('pbName').value; p.handle=$('pbHandle').value.replace(/[^a-zA-Z0-9_.-]/g,''); if($('pbHandle').value!==p.handle)$('pbHandle').value=p.handle;
     p.role=$('pbRole').value; p.bio=$('pbBio').value;
@@ -15440,13 +15459,140 @@ function manualCheckUpdate() {
     if(!p.photo){ $('pbPhotoPrev').textContent=(p.name.trim()[0]||'E').toUpperCase(); }
     render();
   };
-  window.pbSlug=function(){ let v=$('pbSlug').value.toLowerCase().replace(/[^a-z0-9-]/g,''); if(v!==$('pbSlug').value)$('pbSlug').value=v; data.slug=v; save(); };
-  window.pbPhoto=function(ev){ const f=ev.target.files&&ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ data.profile.photo=r.result; const pv=$('pbPhotoPrev'); pv.style.backgroundImage='url('+data.profile.photo+')'; pv.textContent=''; renderNow(); save(); }; r.readAsDataURL(f); ev.target.value=''; };
+  // Checagem de disponibilidade ao vivo enquanto digita (debounce). quiet=true no init:
+  // só consulta, sem mexer no input.
+  let _slugTimer=null;
+  window.pbSlug=function(quiet){
+    let v=$('pbSlug').value.toLowerCase().replace(/[^a-z0-9-]/g,'');
+    if(quiet!==true){ if(v!==$('pbSlug').value)$('pbSlug').value=v; data.slug=v; save(); }
+    else v=data.slug||'';
+    const st=$('pbSlugStatus');
+    clearTimeout(_slugTimer);
+    if(!window.portfolio||!window.portfolio.checkSlug){ if(st)st.textContent=''; return; }
+    if(!v){ if(st)st.textContent=''; return; }
+    if(v.length<3){ if(st){st.style.color='var(--text3)'; st.textContent='mínimo 3 caracteres';} return; }
+    if(st){ st.style.color='var(--text3)'; st.textContent='verificando…'; }
+    _slugTimer=setTimeout(async()=>{
+      try{
+        const r=await window.portfolio.checkSlug(v);
+        if((data.slug||'')!==v||!st) return; // usuário continuou digitando
+        if(!r||!r.ok){ st.textContent=''; return; } // offline/deslogado: não atrapalha
+        if(r.status==='free'){ st.style.color='#22c55e'; st.textContent='✓ disponível'; }
+        else if(r.status==='mine'){ st.style.color='#22c55e'; st.textContent='✓ esse link já é seu'; }
+        else if(r.status==='taken'){ st.style.color='#f87171'; st.textContent='✗ já está em uso, escolhe outro'; }
+        else if(r.status==='reserved'){ st.style.color='#f87171'; st.textContent='✗ esse link é reservado'; }
+        else { st.style.color='#f87171'; st.textContent='formato inválido'; }
+      }catch(e){ if(st)st.textContent=''; }
+    },500);
+  };
+  // Redimensiona no canvas antes de guardar: foto de 4MB virava data URI de ~5,4MB e
+  // estourava a quota do localStorage em silêncio (o save() engole o erro). 512px em
+  // webp fica ~40-120KB e ainda sobra qualidade pro avatar da página.
+  window.pbPhoto=function(ev){ const f=ev.target.files&&ev.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      const img=new Image();
+      const apply=(uri)=>{ data.profile.photo=uri; const pv=$('pbPhotoPrev'); pv.style.backgroundImage='url('+uri+')'; pv.textContent=''; renderNow(); save(); };
+      img.onload=()=>{
+        try{
+          const MAX=512, s=Math.min(1, MAX/Math.max(img.width||1, img.height||1));
+          const w=Math.max(1,Math.round((img.width||1)*s)), h=Math.max(1,Math.round((img.height||1)*s));
+          const c=document.createElement('canvas'); c.width=w; c.height=h;
+          c.getContext('2d').drawImage(img,0,0,w,h);
+          let out=''; try{ out=c.toDataURL('image/webp',0.85); }catch(e){}
+          if(!out||out.indexOf('data:image/webp')!==0) out=c.toDataURL('image/jpeg',0.85);
+          apply(out);
+        }catch(e){ apply(r.result); }
+      };
+      img.onerror=()=>apply(r.result);
+      img.src=r.result;
+    };
+    r.readAsDataURL(f); ev.target.value='';
+  };
   window.pbClearPhoto=function(){ data.profile.photo=''; const pv=$('pbPhotoPrev'); pv.style.backgroundImage=''; pv.textContent=(data.profile.name.trim()[0]||'E').toUpperCase(); renderNow(); save(); };
   window.pbFont=function(ev){ const f=ev.target.files&&ev.target.files[0]; if(!f) return; if(f.size>3*1024*1024){ try{showToast&&showToast('Fonte muito grande (max 3MB).','warn');}catch(e){} ev.target.value=''; return; }
     const r=new FileReader(); r.onload=()=>{ data.theme.customFonts=data.theme.customFonts||[]; const fam='LWCF'+data.theme.customFonts.length+'_'+Date.now(); data.theme.customFonts.push({name:f.name,family:fam,url:r.result}); data.theme.fd="'"+fam+"'"; data.theme.fb="'"+fam+"'"; fillTheme(); renderNow(); save(); }; r.readAsDataURL(f); ev.target.value=''; };
   window.pbToggleAddMenu=function(){ const am=$('pbAddMenu'); am.style.display=am.style.display==='none'?'flex':'none'; };
-  window.pbPublish=function(){ save(); const url='lionwork.com.br/p/'+(data.slug||'voce'); try{ if(typeof showToast==='function'){ showToast('Portfólio salvo. Em breve no ar em '+url+' (backend ainda vem).'); return; } }catch(e){} alert('Salvo! Seu link: '+url); };
+  /* ---- PUBLICAR (lionwork.com.br/p/<slug>) ---- */
+  function pbToast(msg,warn){ try{ if(typeof showToast==='function'){ showToast(msg, warn?'warn':undefined); return; } }catch(e){} alert(msg); }
+  function splitDataUri(uri){ const m=/^data:([^;,]+);base64,(.+)$/.exec(String(uri||'')); return m?{mime:m[1],b64:m[2]}:null; }
+  // O mime do FileReader pra fonte varia por SO (application/octet-stream é comum);
+  // o servidor valida por mime, então derivamos da extensão do arquivo.
+  function mimeForFont(name){ const n=String(name||'').toLowerCase();
+    if(n.endsWith('.otf'))return'font/otf'; if(n.endsWith('.woff2'))return'font/woff2';
+    if(n.endsWith('.woff'))return'font/woff'; return'font/ttf'; }
+  function pbSyncPubUI(){ const live=$('pbLiveLink'), ub=$('pbUnpubBtn'); const pub=data&&data.published;
+    if(live) live.style.display=(pub&&pub.url)?'':'none';
+    if(ub) ub.style.display=(pub&&pub.url)?'':'none'; }
+  window.pbOpenLive=function(){ const pub=data&&data.published; if(!pub||!pub.url) return;
+    try{ window.electronAPI.openExternal(pub.url); }catch(e){} };
+
+  window.pbPublish=async function(){
+    save();
+    const btn=$('pbPubBtn');
+    const slug=String(data.slug||'').trim();
+    if(slug.length<3){ pbToast('Escolhe um link com pelo menos 3 caracteres (campo "Seu link").',true); return; }
+    if(!window.portfolio||!window.portfolio.publish){ pbToast('Publicar só funciona no app instalado.',true); return; }
+    btn.disabled=true; const oldLabel=btn.textContent; btn.textContent='Publicando…';
+    try{
+      // 1) Fontes: só sobem as que o tema USA (o array acumula uploads antigos).
+      const usedFonts=(data.theme.customFonts||[]).filter(f=>f&&f.family&&(
+        String(data.theme.fd||'').indexOf(f.family)>=0||String(data.theme.fb||'').indexOf(f.family)>=0)).slice(-2);
+      // 2) Mídia que ainda é data URI vira arquivo no Storage (página leve; o data URI
+      //    inflaria o HTML em megabytes e cada visita baixaria tudo).
+      const files=[];
+      const ph=splitDataUri(data.profile.photo);
+      if(ph) files.push({key:'photo',mime:ph.mime,b64:ph.b64});
+      usedFonts.forEach((f,i)=>{ const d=splitDataUri(f.url); if(d) files.push({key:'font'+i,mime:mimeForFont(f.name),b64:d.b64}); });
+      let urls={};
+      if(files.length){
+        const um=await window.portfolio.uploadMedia(files);
+        if(!um||!um.ok){
+          if(um&&um.error==='not_logged_in'){ pbToast('Faça login com Discord no app pra publicar.',true); return; }
+          pbToast('Não consegui enviar as imagens: '+((um&&(um.message||um.error))||'erro'),true); return;
+        }
+        urls=um.urls||{};
+        if(ph&&!urls.photo){ pbToast('A foto não subiu. Tenta enviar a foto de novo.',true); return; }
+      }
+      // 3) Cópia pra publicar, com URLs no lugar dos data URIs
+      const pub=JSON.parse(JSON.stringify(data));
+      delete pub.published;
+      if(urls.photo) pub.profile.photo=urls.photo;
+      pub.theme.customFonts=usedFonts.map((f,i)=>({name:f.name,family:f.family,url:urls['font'+i]||f.url}))
+        .filter(f=>!String(f.url||'').startsWith('data:')); // fonte que não subiu fica de fora (não incha o HTML)
+      if(!pub.theme.customFonts.length){ /* tema cai no fallback de fonte do preset */ }
+      // 4) HTML final: buildDoc() lê a global `data` — troca temporária
+      const orig=data; let html='';
+      try{ data=pub; html=buildDoc(); } finally { data=orig; }
+      if(!html||html.length>900000){ pbToast('Portfólio grande demais pra publicar. Remove alguma fonte custom.',true); return; }
+      // 5) Publica
+      const r=await window.portfolio.publish({slug:slug, data:pub, html:html});
+      if(r&&r.ok){
+        data.published={slug:r.slug,url:r.url,at:Date.now()}; save(); pbSyncPubUI(); pbSlug(true);
+        pbToast('No ar! '+r.url);
+      } else if(r&&(r.error==='slug_taken'||r.error==='slug_reserved'||r.error==='invalid_slug')){
+        pbToast(r.message||'Esse link não está disponível. Escolhe outro.',true);
+      } else if(r&&r.error==='not_logged_in'){
+        pbToast('Faça login com Discord no app pra publicar.',true);
+      } else if(r&&r.error==='rate_limited'){
+        pbToast('Muitas publicações seguidas. Espera uns minutos.',true);
+      } else {
+        pbToast('Não consegui publicar: '+((r&&(r.message||r.error))||'sem resposta do servidor'),true);
+      }
+    }catch(e){ pbToast('Erro ao publicar: '+(e&&e.message||e),true); }
+    finally{ btn.disabled=false; btn.textContent=oldLabel; }
+  };
+
+  window.pbUnpublish=async function(){
+    if(!window.portfolio||!window.portfolio.unpublish) return;
+    const b=$('pbUnpubBtn'); b.disabled=true;
+    try{
+      const r=await window.portfolio.unpublish();
+      if(r&&r.ok){ delete data.published; save(); pbSyncPubUI(); pbToast('Portfólio fora do ar.'); }
+      else pbToast('Não consegui despublicar: '+((r&&(r.message||r.error))||'erro'),true);
+    }catch(e){ pbToast('Erro: '+(e&&e.message||e),true); }
+    finally{ b.disabled=false; }
+  };
 
   // ---- IMPORT YTJOBS ----
   window.pbOpenImport=function(){ $('pbImpStatus').textContent=''; $('pbImportModal').style.display='flex'; setTimeout(()=>{try{$('pbYtUrl').focus();}catch(e){}},50); };

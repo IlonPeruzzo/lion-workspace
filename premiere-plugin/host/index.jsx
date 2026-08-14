@@ -1242,6 +1242,20 @@ function _cpFindItemByPath(filePath) {
 
 // Importa lista de arquivos pra Premiere, opcionalmente em um bin, opcionalmente insere no playhead
 // filePathsJson: string JSON de array de caminhos
+// Espera o item REALMENTE aparecer no projeto. O importFiles do Premiere e' assincrono e a
+// PRIMEIRA importacao da sessao demora MUITO mais (ele ainda esta subindo o importador daquele
+// tipo de midia) — com espera fixa de 300ms a 1a colagem falhava e a 2a, ja aquecida, funcionava.
+function _cpWaitForItem(fp, maxMs) {
+    var waited = 0;
+    while (waited < maxMs) {
+        var it = _cpFindItemByPath(fp);
+        if (it) return it;
+        $.sleep(150);
+        waited += 150;
+    }
+    return _cpFindItemByPath(fp);
+}
+
 function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
     try {
         if (!app.project) return 'NO_PROJECT';
@@ -1274,18 +1288,17 @@ function cpImportFiles(filePathsJson, insertAtPlayhead, useBin, binName) {
                         app.project.importFiles([fp]);
                     }
                 } catch (e1) {}
-                $.sleep(300);
-                var okImport = !!_cpFindItemByPath(fp);
+                // Espera ATE 5s (antes: 300ms fixos). Reimportar cedo demais tambem criava
+                // item DUPLICADO quando o 1o import so estava lento, nao falho.
+                var okImport = !!_cpWaitForItem(fp, 5000);
                 // Fallback SÓ se item realmente não está no projeto
                 if (!okImport) {
                     try { app.project.importFiles([fp]); } catch (e2) {}
-                    $.sleep(300);
-                    okImport = !!_cpFindItemByPath(fp);
+                    okImport = !!_cpWaitForItem(fp, 3000);
                 }
 
                 if (!okImport) { failed++; continue; }
                 imported++;
-                $.sleep(500);
 
                 // Insere no playhead (smart track: encontra track LIVRE pelo período
                 // INTEIRO do clip — não só no ponto do playhead. Antes verificava só
@@ -2340,6 +2353,174 @@ function lwApplyPresetData(presetName, dataJsonStr) {
     try { return _lwApplyPresetDataInner(presetName, dataJsonStr); }
     finally { _lwFlushPresetDbg(); }
 }
+// Nome dos efeitos em PT-BR (o Premiere traduz a interface). Um .prfpset guarda o nome do
+// efeito em INGLES ('Transform'), mas num Premiere pt-BR o efeito se chama 'Transformar' —
+// entao getVideoEffectByName('Transform') nao achava e o preset (ex: Impact Shake) nao
+// aplicava. Aqui a gente tenta tambem o nome local. Valores em \uXXXX de proposito: acento
+// literal neste arquivo corrompe no pipeline do ExtendScript.
+var LW_FX_PT = {
+    '4-color gradient': 'Gradiente de 4 cores',
+    'adaptive noise reduction': 'Redu\u00e7\u00e3o de ru\u00eddo adapt\u00e1vel',
+    'alpha adjust': 'Ajustar alfa',
+    'alpha glow': 'Ilumina\u00e7\u00e3o alfa',
+    'amplify': 'Amplificar',
+    'analog delay': 'Atraso anal\u00f3gico',
+    'arriraw develop settings': 'Configura\u00e7\u00f5es de desenvolvimento de ARRIRAW',
+    'auto reframe': 'Reestrutura\u00e7\u00e3o autom\u00e1tica',
+    'automatic click remover': 'Removedor de clique autom\u00e1tico',
+    'balance': 'Equil\u00edbrio',
+    'bandpass': 'Passagem de banda',
+    'basic 3d': '3D b\u00e1sico',
+    'bass': 'Graves',
+    'bend': 'Dobra',
+    'black & white': 'Preto e branco',
+    'block dissolve': 'Dissolver em bloco',
+    'bokeh blur': 'Desfoque Bokeh',
+    'broadcast colors': 'Cores para transmiss\u00e3o',
+    'brush strokes': 'Tra\u00e7ados de pincel',
+    'camera blur': 'Desfoque da c\u00e2mera',
+    'camera shake': 'Tremula\u00e7\u00e3o de c\u00e2mera',
+    'canon cinema raw light source settings': 'Configura\u00e7\u00f5es de origem da Canon Cinema RAW Light',
+    'channel blur': 'Desfoque de canal',
+    'channel mixer': 'Misturador de canais',
+    'channel volume': 'Volume do canal',
+    'chorus/flanger': 'Coro/Flanger',
+    'cinemadng source settings': 'Configura\u00e7\u00f5es de fonte de CinemaDNG',
+    'cineon converter': 'Conversor de Cineon',
+    'cineon source settings': 'Configura\u00e7\u00f5es de origem de Cineon',
+    'clip name': 'Nome do clipe',
+    'color balance (hls)': 'Equil\u00edbrio de cores (HLS)',
+    'color balance (rgb)': 'Equil\u00edbrio de cor (RGB)',
+    'color pass': 'Passagem de cor',
+    'color replace': 'Substitui\u00e7\u00e3o de cor',
+    'color space transform': 'Transforma\u00e7\u00e3o do espa\u00e7o da cor',
+    'compound blur': 'Desfoque composto',
+    'convolution reverb': 'Reverbera\u00e7\u00e3o de convolu\u00e7\u00e3o',
+    'corner pin': 'Pino de v\u00e9rtice',
+    'crop': 'Cortar',
+    'delay': 'Atraso',
+    'denoise': 'Eliminar ru\u00eddo',
+    'dereverb': 'Desreverbera\u00e7\u00e3o',
+    'directional blur': 'Desfoque direcional',
+    'directional blur (legacy)': 'Desfoque direcional (herdado)',
+    'distortion': 'Distor\u00e7\u00e3o',
+    'drop shadow': 'Sombra projetada',
+    'dynamics': 'Din\u00e2mica',
+    'dynamics processing': 'Processamento din\u00e2mico',
+    'echo': 'Eco',
+    'edge feather': 'Difus\u00e3o de borda',
+    'eight-point garbage matte': 'Garbage Matte de oito pontos',
+    'extract': 'Extrair',
+    'fast blur': 'Desfoque r\u00e1pido',
+    'fft filter': 'Filtro de FFT',
+    'fill left with right': 'Preenchimento de esquerda com a direita',
+    'fill right with left': 'Preenchimento da direita com a esquerda',
+    'find edges': 'Localizar bordas',
+    'flanger': 'Efeito Flanger',
+    'four-point garbage matte': 'Garbage Matte de quatro pontos',
+    'gamma correction': 'Corre\u00e7\u00e3o gama',
+    'gaussian blur': 'Desfoque gaussiano',
+    'gaussian blur (legacy)': 'Desfoque Gaussiano (herdado)',
+    'gradient': 'Gradiente',
+    'graphic equalizer (10 bands)': 'Equalizador gr\u00e1fico (10 faixas)',
+    'graphic equalizer (20 bands)': 'Equalizador gr\u00e1fico (20 faixas)',
+    'graphic equalizer (30 bands)': 'Equalizador gr\u00e1fico (30 faixas)',
+    'guitar suite': 'Conjunto de guitarras',
+    'hard limiter': 'Limitador pesado',
+    'highpass': 'Alta frequ\u00eancia',
+    'horizontal flip': 'Invers\u00e3o horizontal',
+    'invert': 'Inverter',
+    'lens distortion': 'Distor\u00e7\u00e3o de lente',
+    'lens flare': 'Flash de lente',
+    'levels': 'N\u00edveis',
+    'light leaks': 'Vazamentos de luz',
+    'lighting effects': 'Efeitos de ilumina\u00e7\u00e3o',
+    'lightning': 'Rel\u00e2mpago',
+    'linear wipe (legacy)': 'Abertura linear (herdada)',
+    'long shadow': 'Sombra longa',
+    'lowpass': 'Baixa frequ\u00eancia',
+    'lumetri color': 'Cor de Lumetri',
+    'magnify': 'Ampliar',
+    'magnify (legacy)': 'Ampliar (herdado)',
+    'mastering': 'Masteriza\u00e7\u00e3o',
+    'mirror': 'Espelho',
+    'mosaic': 'Mosaico',
+    'mosaic (legacy)': 'Mosaico (herdado)',
+    'motion': 'Movimento',
+    'mpeg source settings': 'Configura\u00e7\u00f5es de origem de MPEG',
+    'multiband compressor': 'Compactador de multibanda',
+    'multitap delay': 'Atraso Multitap',
+    'mute': 'Mudo',
+    'mxf/arriraw develop settings': 'Configura\u00e7\u00f5es de desenvolvimento de MXF/ARRIRAW',
+    'noise': 'Ru\u00eddo',
+    'noise (legacy)': 'Ru\u00eddo (herdado)',
+    'notch filter': 'Filtro de fissuras',
+    'offset': 'Deslocamento',
+    'opacity': 'Opacidade',
+    'parametric equalizer': 'Equalizador param\u00e9trico',
+    'pitch shifter': 'Deslocador de tom',
+    'pixel motion blur': 'Desfoque de movimento de pixel',
+    'posterize': 'Posterizar',
+    'posterize time': 'Posterizar tempo',
+    'prores raw source settings': 'Configura\u00e7\u00f5es de origem de PRORES RAW',
+    'ramp': 'Degrad\u00ea',
+    'red source settings': 'Configura\u00e7\u00f5es da origem RED',
+    'reduce interlace flicker': 'Reduzir cintila\u00e7\u00e3o de entrela\u00e7amento',
+    'replicate': 'Replicar',
+    'rgb split': 'Divis\u00e3o de RGB',
+    'rolling shutter repair': 'Reparo do efeito rolling shutter',
+    'roughen edges': 'Tornar bordas \u00e1speras',
+    'scientific filter': 'Filtro cient\u00edfico',
+    'sdr conform': 'Conformidade com SDR',
+    'shape': 'Forma',
+    'sharpen': 'Nitidez',
+    'simple notch filter': 'Filtro de fenda simples',
+    'simple parametric eq': 'EQ param\u00e9trico simples',
+    'simple text': 'Texto simples',
+    'single-band compressor': 'Compactador de banda simples',
+    'sixteen-point garbage matte': 'Garbage Matte de dezesseis pontos',
+    'sony raw mxf source settings': 'Configura\u00e7\u00f5es de origem de Sony RAW MXF',
+    'sony raw source settings': 'Configura\u00e7\u00f5es de origem Raw da Sony',
+    'spherize': 'Esferiza\u00e7\u00e3o',
+    'stereo expander': 'Expansor de est\u00e9reo',
+    'strobe light': 'Luz estrobosc\u00f3pica',
+    'stroke': 'Tra\u00e7ado',
+    'studio reverb': 'Reverbera\u00e7\u00e3o de est\u00fadio',
+    'surround reverb': 'Reverbera\u00e7\u00e3o de surround',
+    'swap channels': 'Trocar canais',
+    'text': 'Texto',
+    'tint': 'Tonalidade',
+    'transform': 'Transformar',
+    'treble': 'Agudos',
+    'tube-modeled compressor': 'Compactador modelado em tubo',
+    'turbulent displace': 'Deslocamento com turbul\u00eancia',
+    'twirl': 'Redemoinho',
+    'unsharp mask': 'M\u00e1scara de nitidez',
+    'vector motion': 'Movimento do vetor',
+    'vertical flip': 'Invers\u00e3o vertical',
+    'video limiter': 'Limitador de v\u00eddeo',
+    'vignette': 'Vinheta',
+    'vocal enhancer': 'Aprimorador de voz',
+    'volumetric rays': 'Raios volum\u00e9tricos',
+    'vr blur': 'Desfoque para VR',
+    'vr chromatic aberrations': 'Desvios crom\u00e1ticos para VR',
+    'vr color gradients': 'Gradientes de cores para VR',
+    'vr denoise': 'Redu\u00e7\u00e3o de ru\u00eddos para VR',
+    'vr digital glitch': 'Anomalia digital para VR',
+    'vr fractal noise': 'Ru\u00eddo fractal para VR',
+    'vr glow': 'Brilho para VR',
+    'vr plane to sphere': 'Plano para esfera para VR',
+    'vr projection': 'Proje\u00e7\u00e3o de VR',
+    'vr rotate sphere': 'Esfera de rota\u00e7\u00e3o para VR',
+    'vr sharpen': 'Nitidez para VR',
+    'warp stabilizer': 'Estabilizador de distor\u00e7\u00e3o',
+    'wave warp': 'Distor\u00e7\u00e3o ondulada',
+};
+function _lwFxLocalName(n) {
+    if (!n) return '';
+    try { return LW_FX_PT[String(n).toLowerCase()] || ''; } catch (e) { return ''; }
+}
+
 function _lwApplyPresetDataInner(presetName, dataJsonStr) {
     try {
         _lwDbgPreset('═══ ApplyData: ' + presetName + ' ═══');
@@ -2626,6 +2807,11 @@ function _lwApplyPresetDataInner(presetName, dataJsonStr) {
                         if (mnModern && legacyNm && _fxListHas(legacyNm)) tries.push(legacyNm);
                         tries.push(nm);
                         if (!mnModern && legacyNm && _fxListHas(legacyNm)) tries.push(legacyNm);
+                        // Nome LOCAL (Premiere traduzido): 'Transform' -> 'Transformar'
+                        var ptNm = _lwFxLocalName(nm);
+                        if (ptNm) tries.push(ptNm);
+                        var ptLeg = _lwFxLocalName(legacyNm);
+                        if (ptLeg) tries.push(ptLeg);
                     }
                     if (humanNm && humanNm !== nm) {
                         tries.push(humanNm);

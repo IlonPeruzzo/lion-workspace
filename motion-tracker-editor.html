@@ -1193,11 +1193,15 @@ async function runAnalyze(mode) {
 
     const lastFrame = Math.round(OUT_SEC * FPS);
     let start = curFrame, end;
-    if (mode === 'fwdAll') end = lastFrame;
+    // "Rastrear tudo pra frente": manda -1 = ate o FIM REAL do arquivo (o Python resolve com
+    // o frame_count do proprio video). Antes mandava OUT_SEC*FPS: quando o FPS informado pelo
+    // Premiere nao batia com o do arquivo (sequencia 30 x midia 60, VFR, etc) esse numero saia
+    // curto e o track parava no meio do clip — era o "so rastreia 15 segundos".
+    if (mode === 'fwdAll') end = -1;
     else if (mode === 'backAll') end = 0;
     else if (mode === 'fwd1') end = Math.min(lastFrame, curFrame + 1);
     else if (mode === 'back1') end = Math.max(0, curFrame - 1);
-    if (end === start) { setStatus('Já está no limite do clip.', 'warn'); return; }
+    if (end !== -1 && end === start) { setStatus('Já está no limite do clip.', 'warn'); return; }
 
     _analyzing = true;
     anBtns.forEach(b => b && b.classList.add('busy'));

@@ -65,6 +65,14 @@ contextBridge.exposeInMainWorld('cloudSync', {
     push: (sections) => ipcRenderer.invoke('cloud-sync-push', sections),
 });
 
+// Portfólio público — publica a página em lionwork.com.br/p/<slug>
+contextBridge.exposeInMainWorld('portfolio', {
+    checkSlug: (slug) => ipcRenderer.invoke('portfolio:check-slug', slug),
+    uploadMedia: (files) => ipcRenderer.invoke('portfolio:upload-media', files),
+    publish: (payload) => ipcRenderer.invoke('portfolio:publish', payload),
+    unpublish: () => ipcRenderer.invoke('portfolio:unpublish'),
+});
+
 contextBridge.exposeInMainWorld('auth', {
     login: (email, password) => ipcRenderer.invoke('auth-login', email, password),
     signup: (email, password, fullName) => ipcRenderer.invoke('auth-signup', email, password, fullName),

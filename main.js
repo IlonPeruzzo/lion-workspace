@@ -297,23 +297,50 @@ function checkForegroundWindow() {
     });
 }
 
-function createOverlays() {
-    const displays = screen.getAllDisplays();
-    const primary = screen.getPrimaryDisplay();
+let _overlayScreenHooked = false;
 
-    displays.forEach(display => {
-        if (display.id === primary.id) return;
+function createOverlays() {
+    // Sempre recria do zero: sobra de overlay com bounds velhos era o que "invadia a tela"
+    // depois de mudar a escala do monitor.
+    destroyOverlays();
+
+    const primary = screen.getPrimaryDisplay();
+    screen.getAllDisplays().forEach(display => {
+        if (display.id === primary.id) return; // monitor principal NUNCA e' coberto
+        const b = display.bounds;
+        if (!b || b.width <= 0 || b.height <= 0) return;
         const overlay = new BrowserWindow({
-            x: display.bounds.x, y: display.bounds.y,
-            width: display.bounds.width, height: display.bounds.height,
+            x: b.x, y: b.y, width: b.width, height: b.height,
             frame: false, transparent: true, alwaysOnTop: true,
             skipTaskbar: true, focusable: false, resizable: false,
             webPreferences: { nodeIntegration: false, contextIsolation: true }
         });
+        // setBounds explicito DEPOIS de criar: com escala/DPI diferente entre monitores o
+        // Electron as vezes cria a janela no lugar errado (era o bug de "foi pro monitor principal").
+        try { overlay.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height }); } catch (e) {}
         overlay.loadURL(`data:text/html,<html><body style="margin:0;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;user-select:none"><div style="text-align:center;color:rgba(190,242,100,.5)"><div style="font-size:4rem;font-weight:800;letter-spacing:4px">FOCO</div><div style="font-size:1.2rem;margin-top:12px;opacity:.5">Pomodoro em andamento</div><div style="margin-top:20px;font-size:.85rem;opacity:.3">Apenas apps de trabalho permitidos</div></div></body></html>`);
         overlay.setAlwaysOnTop(true, 'screen-saver');
         overlays.push(overlay);
     });
+
+    // Monitor mudou (escala, resolucao, cabo) -> recria com os bounds NOVOS. Sem isso o
+    // overlay ficava com a geometria antiga e sobrava por cima do monitor principal.
+    if (!_overlayScreenHooked) {
+        _overlayScreenHooked = true;
+        // Debounce: mudar a escala dispara display-metrics-changed varias vezes seguidas;
+        // sem isso recriava as janelas em rajada (flicker).
+        let rebuildT = null;
+        const rebuild = () => {
+            if (rebuildT) clearTimeout(rebuildT);
+            rebuildT = setTimeout(() => {
+                rebuildT = null;
+                if (focusActive) { try { createOverlays(); } catch (e) {} }
+            }, 400);
+        };
+        screen.on('display-metrics-changed', rebuild);
+        screen.on('display-added', rebuild);
+        screen.on('display-removed', rebuild);
+    }
 }
 
 function destroyOverlays() {
@@ -325,9 +352,9 @@ function destroyOverlays() {
 ipcMain.handle('focus-start', () => {
     if (focusActive) return true;
     focusActive = true;
-    // Modo foco NAO invade mais a tela: nada de fullscreen, overlay em outros monitores nem
-    // always-on-top nivel screen-saver (isso cobria o Premiere e "tomava a tela" do usuario).
-    // O pomodoro continua rodando normal; a tela fica livre pra editar.
+    // Escurece so os monitores SECUNDARIOS. O principal NAO leva fullscreen nem always-on-top
+    // (isso cobria o Premiere e "tomava a tela"); fica livre pra editar.
+    createOverlays();
     return true;
 });
 
@@ -452,9 +479,10 @@ ipcMain.handle('focus-start-external', () => {
     if (focusActive) return true;
     focusActive = true;
     focusExternal = true;
-    // NAO cria mais as telas pretas "FOCO" nos outros monitores (isso "invadia a tela" do editor,
-    // que precisa do Premiere/referencias visiveis). O modo foco agora so minimiza gentilmente os
-    // apps fora da whitelist — e so quando a pessoa liga o foco (checkbox desligado por padrao).
+    // Telas "FOCO" nos monitores SECUNDARIOS (o principal fica livre pro Premiere/referencias).
+    // Recriadas automaticamente se a escala/resolucao do monitor mudar — era isso que antes
+    // fazia o overlay sobrar por cima do monitor principal.
+    createOverlays();
     focusInterval = setInterval(checkForegroundWindow, 1200);
     return true;
 });
@@ -899,11 +927,28 @@ function cpDownloadImageUrl(url, saveDir, cb, _depth) {
                 if (done) return;
                 const buf = Buffer.concat(chunks);
                 if (!buf.length) return finish(null, 'empty-body');
+                const stem = path.join(saveDir, `lw-clip-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+                // WebP/AVIF (o que o Google mais serve) o Premiere NAO importa, e o sanitizador
+                // do plugin usa System.Drawing/GDI+, que tambem nao le esses formatos: ele lancava,
+                // caia no catch e devolvia o arquivo original -> "colou" mas nada aparecia na
+                // timeline. Converte pra PNG aqui na origem (sharp ja e dependencia do app).
+                const needsConvert = (ext !== 'png' && ext !== 'jpg');
+                if (!needsConvert) {
+                    try { fs.writeFileSync(stem + '.' + ext, buf); finish(stem + '.' + ext); }
+                    catch (e) { finish(null, String(e.message || e)); }
+                    return;
+                }
                 try {
-                    const outPath = path.join(saveDir, `lw-clip-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`);
-                    fs.writeFileSync(outPath, buf);
-                    finish(outPath);
-                } catch (e) { finish(null, String(e.message || e)); }
+                    require('sharp')(buf).png().toFile(stem + '.png', (err) => {
+                        if (!err) return finish(stem + '.png');
+                        // sharp falhou: grava o original pra nao perder o paste
+                        try { fs.writeFileSync(stem + '.' + ext, buf); finish(stem + '.' + ext); }
+                        catch (e2) { finish(null, String(e2.message || e2)); }
+                    });
+                } catch (e) {
+                    try { fs.writeFileSync(stem + '.' + ext, buf); finish(stem + '.' + ext); }
+                    catch (e2) { finish(null, String(e2.message || e2)); }
+                }
             });
             resp.on('error', (e) => finish(null, String(e.message || e)));
         });
@@ -1259,13 +1304,18 @@ async function _discordGetGuildMember(accessToken, guildId) {
 }
 function _discordBuildAuthUrl(state, cfg) {
     const scope = ['identify', 'guilds', 'guilds.members.read'].join(' ');
+    // SEM prompt:'none'. Esse builder e usado no login INTERATIVO ("Entrar com Discord").
+    // prompt=none manda o Discord NAO mostrar tela nenhuma: se o usuario nao estiver logado
+    // no Discord no navegador (ou nunca autorizou o app), ele devolve erro silencioso em vez
+    // da tela de login/consent — e o usuario clica e "nao acontece nada". Todo cliente novo,
+    // ou quem nao usa Discord no navegador, ficava trancado pra fora. O default (sem prompt)
+    // mostra login/consent quando precisa e redireciona rapido quando ja esta tudo ok.
     const p = new URLSearchParams({
         client_id: cfg.client_id,
         response_type: 'code',
         redirect_uri: DISCORD_REDIRECT_URI,
         scope,
         state,
-        prompt: 'none',
     }).toString();
     return 'https://discord.com/api/oauth2/authorize?' + p;
 }
@@ -2663,6 +2713,65 @@ async function ensureYtDlp() {
     } catch (e) { console.error('yt-dlp download failed:', e.message); return false; }
 }
 
+// ─── AUTO-UPDATE do yt-dlp ───────────────────────────────────────────────
+// O YouTube muda com frequencia; yt-dlp velho perde acesso aos formatos DASH de alta
+// resolucao e cai no formato legado 18 (640x360) — era a causa de "baixou em 360p".
+// Antes o binario era baixado UMA vez e nunca mais atualizado (ensureYtDlp sai cedo se
+// o arquivo existe), entao a qualidade degradava com o tempo em toda a base instalada.
+const YTDLP_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000; // 10 dias
+let _ytDlpUpdateTried = false;
+
+function ytDlpAgeMs() {
+    try { return Date.now() - fs.statSync(ytDlpBin).mtimeMs; } catch (e) { return Infinity; }
+}
+
+// Baixa a versao nova num arquivo TEMP, valida que executa, e so entao troca.
+// NUNCA usa downloadBinary direto no binario real: ele apaga o destino antes de baixar,
+// e uma falha de rede deixaria o usuario sem yt-dlp nenhum.
+async function maybeUpdateYtDlp() {
+    if (_ytDlpUpdateTried) return false;
+    if (!ytDlpReady()) return false;                 // sem binario: quem resolve e' o ensureYtDlp
+    if (ytDlpAgeMs() < YTDLP_MAX_AGE_MS) return false; // recente o bastante
+    if (ytDownloadProc) return false;                // download rolando: binario em uso, tenta depois
+    _ytDlpUpdateTried = true;
+    const url = isWin
+        ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+        : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos';
+    const tmp = ytDlpBin + '.new';
+    try {
+        await downloadBinary(url, tmp);
+        if (!isWin) { try { fs.chmodSync(tmp, '755'); } catch (e) {} }
+        // Valida ANTES de trocar: binario corrompido/incompleto quebraria o downloader inteiro
+        const runs = await new Promise((resolve) => {
+            try {
+                const p = spawn(tmp, ['--version'], { stdio: ['ignore', 'ignore', 'ignore'], windowsHide: true });
+                const t = setTimeout(() => { try { p.kill(); } catch (e) {} resolve(false); }, 20000);
+                p.on('close', c => { clearTimeout(t); resolve(c === 0); });
+                p.on('error', () => { clearTimeout(t); resolve(false); });
+            } catch (e) { resolve(false); }
+        });
+        if (!runs) { safeRm(tmp); console.warn('[yt-dlp] update baixado nao executa — mantendo o atual'); return false; }
+        // Swap. No Windows nao da pra sobrescrever exe em uso: renomeia o antigo primeiro.
+        const old = ytDlpBin + '.old';
+        safeRm(old);
+        try { fs.renameSync(ytDlpBin, old); } catch (e) {
+            safeRm(tmp); console.warn('[yt-dlp] em uso, update fica pra proxima vez'); return false;
+        }
+        try { fs.renameSync(tmp, ytDlpBin); }
+        catch (e) { try { fs.renameSync(old, ytDlpBin); } catch (e2) {} safeRm(tmp); return false; }
+        safeRm(old);
+        console.log('[yt-dlp] atualizado pra ultima versao');
+        return true;
+    } catch (e) {
+        safeRm(tmp);
+        console.warn('[yt-dlp] update falhou (segue com o atual):', e.message);
+        return false;
+    }
+}
+
+// Checa update do yt-dlp 25s apos o boot (fora do caminho critico de abertura do app).
+setTimeout(() => { maybeUpdateYtDlp().catch(() => {}); }, 25000);
+
 function ffprobeReady() { return fs.existsSync(ffprobeBin); }
 
 // O binario EXECUTA? (Apple Silicon sem Rosetta: o x86_64 da evermeet existe mas da EBADARCH)
@@ -3022,6 +3131,9 @@ async function runYtDlpRobust(userArgs, opts = {}) {
 ipcMain.handle('yt-ensure-deps', async () => {
     const yt = await ensureYtDlp();
     const ff = ffmpegReady() || await ensureFfmpeg();
+    // Update do yt-dlp em background (nao espera — nao atrasa o downloader abrindo).
+    // Vale pra quem deixa o app aberto por dias e nunca passa pelo timer do boot.
+    maybeUpdateYtDlp().catch(() => {});
     return { ytdlp: yt, ffmpeg: ff };
 });
 
@@ -3049,10 +3161,22 @@ ipcMain.handle('yt-get-info', async (event, url) => {
                 hasVideo: f.vcodec !== 'none',
                 hasAudio: f.acodec !== 'none'
             }));
+        // Duracao com fallback: se vier 0/null o slider de corte fica INERTE (arrastar grava
+        // campo vazio e o video baixa inteiro). Tenta duration -> duration_string -> formats.
+        let dur = Number(info.duration) || 0;
+        if (!dur && info.duration_string) {
+            const p = String(info.duration_string).split(':').map(Number);
+            if (p.length === 3) dur = p[0] * 3600 + p[1] * 60 + p[2];
+            else if (p.length === 2) dur = p[0] * 60 + p[1];
+            else dur = p[0] || 0;
+        }
+        if (!dur) {
+            for (const f of (info.formats || [])) { const d = Number(f.duration) || 0; if (d) { dur = d; break; } }
+        }
         return {
             title: info.title || '',
             thumbnail: info.thumbnail || '',
-            duration: info.duration || 0,
+            duration: Math.round(dur) || 0,
             uploader: info.uploader || '',
             formats: formats
         };
@@ -3176,6 +3300,9 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
 
                 const ext = path.extname(lastFile);
                 const trimmed = lastFile.replace(ext, '_cut' + ext);
+                // -ss/-to DEPOIS do -i (output seeking) de proposito: medido em mp4 real do
+                // YouTube, e' o unico que da a duracao exata (0:30->1:00 = 30.03s). Passar
+                // -ss antes do -i (input seek) gruda no keyframe anterior e erra (32.63s).
                 const ffArgs = ['-y', '-i', lastFile];
                 if (trimStart && trimStart !== '0') ffArgs.push('-ss', trimStart);
                 if (trimEnd) ffArgs.push('-to', trimEnd);
@@ -3183,7 +3310,14 @@ ipcMain.handle('yt-download', async (event, { url, outputDir, format, startTime,
 
                 const ffProc = spawn(ffmpegBin, ffArgs, { windowsHide: true });
                 ffProc.on('close', fc => {
+                    // So troca o original pelo corte se o corte parecer VALIDO. Guard porque um
+                    // corte quebrado (poucos KB) antes apagava o download bom e ficava o lixo.
+                    let cutOk = false;
                     if (fc === 0 && fs.existsSync(trimmed)) {
+                        try { cutOk = fs.statSync(trimmed).size > 50 * 1024; } catch (e) { cutOk = false; }
+                        if (!cutOk) { try { fs.unlinkSync(trimmed); } catch (e) {} }
+                    }
+                    if (cutOk) {
                         // Replace original with trimmed
                         try { fs.unlinkSync(lastFile); } catch (e) {}
                         try { fs.renameSync(trimmed, lastFile); } catch (e) { lastFile = trimmed; }
@@ -3396,10 +3530,35 @@ function _setupPresetWatch() {
 setImmediate(() => { refreshAppPresets('boot', true); _setupPresetWatch(); });
 setInterval(() => refreshAppPresets('periodico'), 60000);
 
+// Última vez que o painel CEP bateu no /lion-search/pop-pending.
+// O plugin reabre o long-poll ~10ms depois de cada resposta, então um plugin VIVO
+// tem sempre um waiter estacionado (buraco de milissegundos). Sem waiter + sem poll
+// recente = painel fechado no Premiere.
+let lionLastPluginPollAt = 0;
+let lionUnauthPollCount = 0; // polls do plugin barrados no gate de auth (sessao expirada)
+// 40s, NAO 6s. Um plugin vivo fica ESTACIONADO num long-poll por ate 25s sem falar nada,
+// entao "ultimo poll ha 20s" e o normal saudavel, nao sinal de morte. Pior: _notifyLongPollWaiters
+// faz shift() no waiter ao despachar um comando, entao logo depois de qualquer comando a fila
+// fica vazia COM timestamp velho. Com 6s isso acusava offline num plugin perfeito.
+// Plugin vivo reabre o poll em ~10ms depois de cada resposta, e o servidor responde em no
+// maximo 25s: logo, 40s sem NENHUM poll so acontece se ele estiver realmente morto.
+const PLUGIN_OFFLINE_AFTER_MS = 40000;
+
+function isPluginOffline() {
+    if (lionLongPollWaiters.length > 0) return false; // tem alguém escutando agora
+    return (Date.now() - lionLastPluginPollAt) > PLUGIN_OFFLINE_AFTER_MS;
+}
+
 // Enfilera um comando pro plugin executar via JSX, retorna Promise com resultado
 function queuePluginCommand(type, payload, timeoutMs = 15000) {
     const commandId = crypto.randomBytes(6).toString('hex');
     return new Promise((resolve, reject) => {
+        // Painel fechado: falha NA HORA com instrução, em vez de pendurar 15-30s e o
+        // usuário achar que o efeito simplesmente "não foi".
+        if (isPluginOffline()) {
+            reject(new Error('PLUGIN_OFFLINE'));
+            return;
+        }
         // APPLY tem prioridade ABSOLUTA. A engine ExtendScript e single-thread: um scan de
         // catalogo (10-30s) na frente da fila fazia o apply do usuario "demorar um seculo".
         // Scans enfileirados sao descartados (quem pediu recebe 'superseded' e usa o cache).
@@ -3491,6 +3650,10 @@ ipcMain.handle('lion-search:list-effects', async (event, opts) => {
         return { error: 'Abra o Premiere com o plugin Lion Workspace (Window → Extensions) e faça login.' };
     }
 });
+
+// IPC pra lion-search.html avisar, ANTES do usuario tentar, que o painel CEP
+// nao esta aberto no Premiere (senao ele busca, aperta Enter e nada acontece).
+ipcMain.handle('lion-search:plugin-alive', () => !isPluginOffline());
 
 // IPC pra lion-search.html chamar: aplica efeito
 ipcMain.handle('lion-search:apply', async (event, payload) => {
@@ -3683,6 +3846,27 @@ function _ensureBgWorker() {
     return _bgWorker;
 }
 
+// Traduz o erro cru do onnxruntime pra algo acionavel. O onnxruntime-node 1.24 (usado pelo
+// @huggingface/transformers) NAO traz binario pra Mac Intel: so darwin/arm64. Quem esta num
+// Apple Silicon mas instalou o DMG "x64" cai no mesmo erro, porque o Electron roda via Rosetta
+// e procura darwin/x64. Sem isso o usuario via um "Cannot find module .../onnxruntime_binding.node".
+function _bgFriendlyError(msg) {
+    const s = String(msg || '');
+    if (!/onnxruntime_binding\.node|Cannot find module .*napi-v/.test(s)) return s;
+    if (process.platform === 'darwin' && process.arch === 'x64') {
+        let rosetta = false;
+        try {
+            rosetta = require('child_process')
+                .execSync('sysctl -in sysctl.proc_translated', { encoding: 'utf8', timeout: 3000 }).trim() === '1';
+        } catch (e) {}
+        if (rosetta) {
+            return 'Este é o instalador Intel rodando num Mac Apple Silicon. Baixe a versão "arm64" do Lion Workspace para usar o removedor de fundo.';
+        }
+        return 'O removedor de fundo por IA não é compatível com Mac de processador Intel (a biblioteca de IA só tem versão para Apple Silicon).';
+    }
+    return 'Componente de IA não encontrado nesta instalação. Reinstale o Lion Workspace.';
+}
+
 // Processa imagem via BiRefNet no worker. Retorna Buffer PNG com alpha.
 async function _removeBgBiRefNet(imagePath) {
     _ensureBgWorker();
@@ -3692,7 +3876,8 @@ async function _removeBgBiRefNet(imagePath) {
         _bgPending.set(reqId, resolve);
         _bgWorker.postMessage({ reqId, imagePath, outputPath });
     });
-    if (!result.ok) throw new Error(result.error || 'worker failed');
+    _scheduleBgWorkerIdleShutdown();
+    if (!result.ok) throw new Error(_bgFriendlyError(result.error) || 'worker failed');
     try {
         const buf = fs.readFileSync(result.outputPath);
         try { fs.unlinkSync(result.outputPath); } catch(e) {}
@@ -3700,6 +3885,26 @@ async function _removeBgBiRefNet(imagePath) {
     } catch (e) {
         throw new Error('worker output missing: ' + e.message);
     }
+}
+
+// Encerra o worker do removedor de fundo depois de ocioso, devolvendo ao SO a RAM do modelo
+// (~400 MB). O _ensureBgWorker recria sob demanda — o custo e' so recarregar o modelo na
+// proxima remocao. Guard em _bgPending.size: NUNCA mata com requisicao em voo (o handler
+// 'exit' rejeitaria as pendentes com "worker exited").
+const BG_WORKER_IDLE_MS = 3 * 60 * 1000;
+let _bgIdleTimer = null;
+function _scheduleBgWorkerIdleShutdown() {
+    if (_bgIdleTimer) { clearTimeout(_bgIdleTimer); _bgIdleTimer = null; }
+    _bgIdleTimer = setTimeout(() => {
+        _bgIdleTimer = null;
+        if (_bgPending.size > 0) { _scheduleBgWorkerIdleShutdown(); return; } // ocupado: adia
+        if (_bgWorker) {
+            try { _bgWorker.terminate(); } catch (e) {}
+            _bgWorker = null;
+            console.log('[bg-worker] encerrado por ociosidade (RAM devolvida)');
+        }
+    }, BG_WORKER_IDLE_MS);
+    if (_bgIdleTimer.unref) _bgIdleTimer.unref(); // nao segura o app aberto
 }
 
 // ═══ Removedor de fundo do APP (renderer) → roda no worker Node (onnxruntime NATIVO) ═══
@@ -4449,8 +4654,31 @@ function toggleLoop(){
             return;
         }
 
+        // Diagnostico da ponte app<->plugin. Fica ANTES do gate de auth de proposito:
+        // o /pop-pending e autenticado, entao um token invalido deixa o plugin mudo pro app.
+        // Se este endpoint tambem exigisse token, ele nao conseguiria diagnosticar justamente
+        // o caso que mais importa. So devolve contadores, nenhum dado sensivel.
+        if (req.method === 'GET' && req.url === '/lion-search/bridge-debug') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                waiters: lionLongPollWaiters.length,
+                lastPollMsAgo: lionLastPluginPollAt ? (Date.now() - lionLastPluginPollAt) : null,
+                thresholdMs: PLUGIN_OFFLINE_AFTER_MS,
+                offline: isPluginOffline(),
+                queued: pendingPluginCommands.length,
+                unauthPolls: lionUnauthPollCount,
+                sessions: pluginSessions.size,
+            }));
+            return;
+        }
+
         // === All other routes require authentication ===
         const pluginSession = authenticatePluginRequest(req);
+        if (!pluginSession && req.url.indexOf('/lion-search/pop-pending') === 0) {
+            // Plugin ESTA vivo e batendo, so nao tem token valido. Sem isso o app confundiria
+            // "sessao expirada" com "painel morto" e mandaria o usuario reabrir o painel a toa.
+            lionUnauthPollCount++;
+        }
         if (!pluginSession) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'unauthorized', message: 'Faça login no plugin.' }));
@@ -4581,6 +4809,7 @@ function toggleLoop(){
             // Fallback rápido se não tiver ?wait — comportamento antigo
             const u = new URL(req.url, 'http://localhost');
             const wait = u.searchParams.get('wait') === '1';
+            lionLastPluginPollAt = Date.now(); // prova de vida do painel CEP
             if (!wait || pendingPluginCommands.length > 0) {
                 const cmds = pendingPluginCommands.splice(0, pendingPluginCommands.length);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -4700,7 +4929,11 @@ function toggleLoop(){
                         return;
                     }
                     const oldHotkey2 = _lionSettings.hotkey;
-                    _lionSettings = { hotkey: newHotkey, enabled: newEnabled, sfxFolder: newSfxFolder };
+                    // Object.assign preserva o resto (ex: useLibraryOnly) — antes o objeto era
+                    // SUBSTITUIDO e essa preferencia era perdida a cada save vindo do plugin.
+                    _lionSettings = Object.assign({}, _lionSettings, {
+                        hotkey: newHotkey, enabled: newEnabled, sfxFolder: newSfxFolder,
+                    });
                     saveLionSearchSettings(_lionSettings);
                     let regResult = { ok: true };
                     if (oldHotkey2 !== newHotkey || !newEnabled) {
@@ -4803,6 +5036,7 @@ function toggleLoop(){
                 }
                 // Plugin reporta resultado de uma execução pendente
                 if (command === 'lion-search/command-result' && data.commandId) {
+                    lionLastPluginPollAt = Date.now(); // resultado chegando = plugin vivo agora
                     const pending = lionSearchPendingResults.get(data.commandId);
                     if (pending) {
                         clearTimeout(pending.timeout);
@@ -4924,6 +5158,7 @@ function toggleLoop(){
 
                                     const ext = path.extname(lastFile);
                                     const trimmed = lastFile.replace(ext, '_cut' + ext);
+                                    // -ss/-to DEPOIS do -i (output seeking) — ver comentario no handler yt-download
                                     const ffArgs = ['-y', '-i', lastFile];
                                     if (trimStart && trimStart !== '0') ffArgs.push('-ss', trimStart);
                                     if (trimEnd) ffArgs.push('-to', trimEnd);
@@ -4931,7 +5166,13 @@ function toggleLoop(){
 
                                     const ffProc = spawn(ffmpegBin, ffArgs, { windowsHide: true });
                                     ffProc.on('close', fc => {
+                                        // Guard: corte quebrado (poucos KB) NAO substitui o download bom
+                                        let cutOk = false;
                                         if (fc === 0 && fs.existsSync(trimmed)) {
+                                            try { cutOk = fs.statSync(trimmed).size > 50 * 1024; } catch (e) { cutOk = false; }
+                                            if (!cutOk) { try { fs.unlinkSync(trimmed); } catch (e) {} }
+                                        }
+                                        if (cutOk) {
                                             try { fs.unlinkSync(lastFile); } catch (e) {}
                                             try { fs.renameSync(trimmed, lastFile); } catch (e) { lastFile = trimmed; }
                                         }
@@ -5948,6 +6189,17 @@ async function _cloudSyncCall(action, extra = {}) {
 }
 ipcMain.handle('cloud-sync-pull', async () => _cloudSyncCall('sync_pull'));
 ipcMain.handle('cloud-sync-push', async (_e, sections) => _cloudSyncCall('sync_push', { sections }));
+
+/* ═══════ Portfólio público (lionwork.com.br/p/<slug>) ═══════
+   Mesmas credenciais do cloud sync — o sync_token nunca sai do main. */
+ipcMain.handle('portfolio:check-slug', async (_e, slug) => _cloudSyncCall('portfolio_check_slug', { slug: String(slug || '') }));
+ipcMain.handle('portfolio:upload-media', async (_e, files) => _cloudSyncCall('portfolio_upload_media', { files: Array.isArray(files) ? files : [] }));
+ipcMain.handle('portfolio:publish', async (_e, p) => _cloudSyncCall('portfolio_publish', {
+    slug: String((p && p.slug) || ''),
+    data: (p && p.data) || null,
+    html: String((p && p.html) || ''),
+}));
+ipcMain.handle('portfolio:unpublish', async () => _cloudSyncCall('portfolio_unpublish'));
 
 /* ═══════ Discord Auth IPC ═══════ */
 ipcMain.handle('discord:get-config', () => loadDiscordConfig());
@@ -7028,6 +7280,18 @@ function preloadLionSearchWindow() {
         },
     });
     lionSearchWin.setMenuBarVisibility(false);
+    if (isMac) {
+        // Faz a janela pertencer a TODOS os Spaces e poder aparecer por cima de app em tela
+        // cheia. Sem isso, com o Premiere em FULLSCREEN (que vira um Space proprio) o macOS
+        // TROCAVA de Space pra mostrar a janela — a animacao de troca e' o "demora 2s pra abrir".
+        // skipTransformProcessType evita o app piscar no Dock ao alternar.
+        try {
+            lionSearchWin.setVisibleOnAllWorkspaces(true, {
+                visibleOnFullScreen: true,
+                skipTransformProcessType: true,
+            });
+        } catch (e) {}
+    }
     lionSearchWin.loadFile(path.join(__dirname, 'lion-search.html'));
     // 'closed' só dispara em close() real — não em hide()
     lionSearchWin.on('closed', () => { lionSearchWin = null; });
@@ -7285,7 +7549,13 @@ ipcMain.handle('lion-search:get-settings', () => _lionSettings);
 ipcMain.handle('lion-search:set-settings', (event, settings) => {
     const oldHotkey = _lionSettings.hotkey;
     _lionSettings = {
-        hotkey: settings?.hotkey || DEFAULT_LION_HOTKEY,
+        // NUNCA cai no DEFAULT quando o payload vem SEM hotkey: mantem o que o usuario tem.
+        // Era o bug do "atalho reseta sozinho" — a sync da nuvem (e telas que salvam so
+        // sfxFolder/useLibraryOnly) mandam settings parciais; o "|| DEFAULT" apagava a tecla
+        // escolhida a cada boot/update/reabertura.
+        hotkey: (settings && typeof settings.hotkey === 'string' && settings.hotkey.trim())
+            ? settings.hotkey.trim()
+            : (_lionSettings.hotkey || DEFAULT_LION_HOTKEY),
         enabled: settings?.enabled !== false,
         sfxFolder: settings?.sfxFolder !== undefined ? String(settings.sfxFolder || '') : (_lionSettings.sfxFolder || ''),
         useLibraryOnly: settings?.useLibraryOnly !== undefined ? !!settings.useLibraryOnly : (_lionSettings.useLibraryOnly !== false),
