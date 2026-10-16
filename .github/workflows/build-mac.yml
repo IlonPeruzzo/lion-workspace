@@ -54,7 +54,7 @@ jobs:
       # Publica no repo de RELEASES novo (via PAT RELEASES_TOKEN). continue-on-error:
       # se o PAT nao existir ainda, nao derruba — a ponte abaixo ainda publica.
       - name: Publish to releases repo (novo feed)
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA pin — supply-chain)
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v2 (SHA pin — supply-chain)
         continue-on-error: true
         with:
           repository: IlonPeruzzo/lion-workspace-releases
@@ -65,7 +65,7 @@ jobs:
 
       # PONTE TEMPORARIA: publica tambem no repo antigo (remover quando todos no v1.5.8+)
       - name: Ponte - publica no repo antigo (temporario)
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2 (SHA pin)
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v2 (SHA pin)
         with:
           files: |
             dist/*.dmg
